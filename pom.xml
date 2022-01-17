@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>dk.di.ku.dms.vms</groupId>
+  <artifactId>vms-runtime-java</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <description>A runtime for execution of virtual microservices written in Java</description>
+  <name>vms-runtime-java</name>
+  <url>rnlaigner.github.io/vms</url>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <java.version>1.8</java.version>
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
+
+    <!-- projects -->
+    <junit.version>4.12</junit.version>
+    <slf4j.version>1.7.22</slf4j.version>
+    <gson.version>2.8.9</gson.version>
+    <kotlin.version>1.6.0-RC</kotlin.version>
+  </properties>
+
+  <dependencies>
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Logging -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>${slf4j.version}</version>
+      <!--      <scope>compile</scope>-->
+    </dependency>
+
+<!--    <dependency>-->
+<!--      <groupId>org.slf4j</groupId>-->
+<!--      <artifactId>slf4j-simple</artifactId>-->
+<!--      <version>${slf4j.version}</version>-->
+<!--    </dependency>-->
+
+    <dependency>
+      <groupId>javax.validation</groupId>
+      <artifactId>validation-api</artifactId>
+      <version>2.0.1.Final</version>
+    </dependency>
+
+    <dependency>
+      <groupId>javax.persistence</groupId>
+      <artifactId>javax.persistence-api</artifactId>
+      <version>2.2</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+<!--      <version>1.4.200</version>-->
+        <version>2.0.202</version>
+    </dependency>
+
+    <!-- TODO These should be configured as a plugin dependency to remove it from the classpath -->
+    <dependency>
+      <groupId>org.hibernate</groupId>
+      <artifactId>hibernate-core</artifactId>
+      <version>4.3.1.Final</version>
+      <scope>test</scope>
+        <!--        <scope>compile</scope>-->
+    </dependency>
+
+    <dependency>
+      <groupId>org.reflections</groupId>
+      <artifactId>reflections</artifactId>
+      <version>0.9.8</version>
+<!--      <scope>test</scope>-->
+        <scope>compile</scope>
+    </dependency>
+
+      <!-- TODO This should be in another project to alleviate the core -->
+<!--    <dependency>-->
+<!--      <groupId>redis.clients</groupId>-->
+<!--      <artifactId>jedis</artifactId>-->
+<!--      <version>2.10.2</version>-->
+<!--    </dependency>-->
+
+    <dependency>
+      <groupId>org.javatuples</groupId>
+      <artifactId>javatuples</artifactId>
+      <version>1.2</version>
+      <scope>compile</scope>
+    </dependency>
+
+    <!-- Kotlin runtime -->
+<!--    <dependency>-->
+<!--      <groupId>org.jetbrains.kotlin</groupId>-->
+<!--      <artifactId>kotlin-stdlib-jdk8</artifactId>-->
+<!--      <version>${kotlin.version}</version>-->
+<!--    </dependency>-->
+
+<!--    <dependency>-->
+<!--      <groupId>org.jetbrains.kotlin</groupId>-->
+<!--      <artifactId>kotlin-test</artifactId>-->
+<!--      <version>${kotlin.version}</version>-->
+<!--      <scope>test</scope>-->
+<!--    </dependency>-->
+
+<!--    <dependency>-->
+<!--      <groupId>org.jetbrains.kotlinx</groupId>-->
+<!--      <artifactId>kotlinx-coroutines-core</artifactId>-->
+<!--      <version>${kotlin.version}</version>-->
+<!--    </dependency>-->
+
+  </dependencies>
+
+  <build>
+  </build>
+
+</project>
