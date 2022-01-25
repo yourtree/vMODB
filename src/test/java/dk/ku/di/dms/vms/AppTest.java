@@ -2,8 +2,8 @@ package dk.ku.di.dms.vms;
 
 import static org.junit.Assert.assertTrue;
 
+import dk.ku.di.dms.vms.database.api.modb.RepositoryFacade;
 import dk.ku.di.dms.vms.operational.DataOperationExecutor;
-import dk.ku.di.dms.vms.database.H2RepositoryFacade;
 import dk.ku.di.dms.vms.event.EventRepository;
 import dk.ku.di.dms.vms.eShopOnContainers.events.AddProductRequest;
 import dk.ku.di.dms.vms.eShopOnContainers.logic.LogicDummyTest;
@@ -25,7 +25,7 @@ public class AppTest
         IProductRepository proxyInstance = (IProductRepository) Proxy.newProxyInstance(
                 AppTest.class.getClassLoader(),
                 new Class[] { IProductRepository.class },
-                new H2RepositoryFacade( IProductRepository.class ));
+                new RepositoryFacade( IProductRepository.class ));
 
         LogicDummyTest logic = new LogicDummyTest(proxyInstance);
 
@@ -55,19 +55,19 @@ public class AppTest
         Thread.sleep(100000);
     }
 
-    @Test
-    public void testExport() {
-
-        try {
-            HibernateExporter exporter =
-                    new HibernateExporter("org.hibernate.dialect.H2Dialect", "dk.ku.di.dms.vms");
-            exporter.exportToConsole();
-            exporter.export(new File("schema.sql"),true,false);
-        }
-        catch(Exception e){
-            System.out.println(e.getMessage());
-        }
-
-    }
+//    @Test
+//    public void testExport() {
+//
+//        try {
+//            HibernateExporter exporter =
+//                    new HibernateExporter("org.hibernate.dialect.H2Dialect", "dk.ku.di.dms.vms");
+//            exporter.exportToConsole();
+//            exporter.export(new File("schema.sql"),true,false);
+//        }
+//        catch(Exception e){
+//            System.out.println(e.getMessage());
+//        }
+//
+//    }
 
 }

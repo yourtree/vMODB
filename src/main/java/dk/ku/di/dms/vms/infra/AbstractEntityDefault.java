@@ -1,15 +1,16 @@
 package dk.ku.di.dms.vms.infra;
 
 import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.MappedSuperclass;
 
 @MappedSuperclass
-public abstract class PersistentEntity {
+public abstract class AbstractEntityDefault extends AbstractEntity<Long> {
 
     @Id
-    @GeneratedValue
-    protected Long id;
+    @GeneratedValue(strategy = GenerationType.SEQUENCE)
+    public Long id;
 
     public Long getId() {
         return id;

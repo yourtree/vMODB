@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.metadata;
 import dk.ku.di.dms.vms.annotations.Inbound;
 import dk.ku.di.dms.vms.annotations.Outbound;
 import dk.ku.di.dms.vms.annotations.Transactional;
-import dk.ku.di.dms.vms.database.H2RepositoryFacade;
+import dk.ku.di.dms.vms.database.api.modb.RepositoryFacade;
 import dk.ku.di.dms.vms.event.IEvent;
 import dk.ku.di.dms.vms.exception.MappingException;
 import dk.ku.di.dms.vms.operational.DataOperationSignature;
@@ -79,7 +79,7 @@ public class MetadataLoader {
                         Object proxyInstance = Proxy.newProxyInstance(
                                 MetadataLoader.class.getClassLoader(),
                                 new Class[]{parameterType},
-                                new H2RepositoryFacade(parameterType));
+                                new RepositoryFacade(parameterType));
                         repositoryList.add(proxyInstance);
                     } catch (Exception e){
                         logger.error(e.getMessage());

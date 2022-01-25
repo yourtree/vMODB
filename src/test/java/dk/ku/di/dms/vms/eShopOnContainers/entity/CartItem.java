@@ -1,12 +1,12 @@
 package dk.ku.di.dms.vms.eShopOnContainers.entity;
 
-import dk.ku.di.dms.vms.infra.PersistentEntity;
+import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
 
 @Entity
 @Table(name="cart_items")
-public class CartItem extends PersistentEntity {
+public class CartItem extends AbstractEntity {
 
     @ManyToOne
     @JoinColumn(name = "product_id")

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.infra;
+package dk.ku.di.dms.vms.database.api.modb;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

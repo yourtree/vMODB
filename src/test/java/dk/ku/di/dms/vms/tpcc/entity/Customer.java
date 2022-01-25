@@ -1,12 +1,19 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.infra.AbstractEntity;
+
 import javax.persistence.*;
 import java.io.Serializable;
 
 @Entity
 @Table(name="customer")
 @IdClass(Customer.CustomerId.class)
-public class Customer {
+public class Customer extends AbstractEntity<Customer.CustomerId> {
+
+//    @Override
+//    public CustomerId primaryKey() {
+//        return new CustomerId(c_id,c_d_id,c_w_id);
+//    }
 
     public class CustomerId implements Serializable {
         public Long c_id;
@@ -45,7 +52,5 @@ public class Customer {
 
     @Column
     public Float c_ytd_payment;
-
-    public Customer(){}
 
 }

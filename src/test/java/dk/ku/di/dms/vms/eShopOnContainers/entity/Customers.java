@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.eShopOnContainers.entity;
 
-import dk.ku.di.dms.vms.infra.PersistentEntity;
+import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.Entity;
 import javax.persistence.JoinColumn;
@@ -10,7 +10,7 @@ import java.util.List;
 
 @Entity
 @Table(name="customers")
-public class Customers extends PersistentEntity {
+public class Customers extends AbstractEntity {
 
     public Customers() {
 

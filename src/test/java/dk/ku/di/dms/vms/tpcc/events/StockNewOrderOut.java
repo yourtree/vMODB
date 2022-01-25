@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.tpcc.events;
 
 import dk.ku.di.dms.vms.event.TransactionalEvent;
-import org.javatuples.Pair;
+import dk.ku.di.dms.vms.utils.Pair;
 
 import java.util.Map;
 

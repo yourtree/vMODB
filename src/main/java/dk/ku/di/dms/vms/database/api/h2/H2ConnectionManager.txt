@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database;
+package dk.ku.di.dms.vms.database.h2;
 
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.h2.jdbcx.JdbcDataSource;

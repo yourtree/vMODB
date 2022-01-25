@@ -10,7 +10,7 @@ import dk.ku.di.dms.vms.tpcc.events.*;
 import dk.ku.di.dms.vms.tpcc.repository.INewOrderRepository;
 import dk.ku.di.dms.vms.tpcc.repository.IOrderLineRepository;
 import dk.ku.di.dms.vms.tpcc.repository.IOrderRepository;
-import org.javatuples.Pair;
+import dk.ku.di.dms.vms.utils.Pair;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -44,6 +44,7 @@ public class OrderService {
         ExecutorService exec = Executors.newFixedThreadPool(n);
         CompletableFuture<?>[] futures = new CompletableFuture[n+1];
 
+        // the developer should be sure about the semantics
         futures[n] = CompletableFuture.runAsync(() -> {
 
             Order orderToInsert = new Order(

@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.annotations.Query;
 import dk.ku.di.dms.vms.annotations.Repository;
 import dk.ku.di.dms.vms.infra.IRepository;
 import dk.ku.di.dms.vms.tpcc.entity.District;
-import org.javatuples.Pair;
+import dk.ku.di.dms.vms.utils.Pair;
 
 @Repository
 public interface IDistrictRepository extends IRepository<District.DistrictId, District> {

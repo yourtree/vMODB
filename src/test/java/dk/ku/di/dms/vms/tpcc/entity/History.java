@@ -1,14 +1,12 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.infra.AbstractEntityDefault;
+
 import javax.persistence.*;
 
 @Entity
 @Table(name="history")
-public class History {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE)
-    public Long id;
+public class History extends AbstractEntityDefault {
 
     @Column
     public Integer h_c_id;

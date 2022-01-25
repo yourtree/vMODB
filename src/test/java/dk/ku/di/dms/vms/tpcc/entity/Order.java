@@ -1,12 +1,14 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.infra.AbstractEntity;
+
 import javax.persistence.*;
 import java.io.Serializable;
 
 @Entity
 @Table(name="orders")
 @IdClass(Order.OrderId.class)
-public class Order {
+public class Order extends AbstractEntity<Order.OrderId> {
 
     public class OrderId implements Serializable {
 
@@ -53,6 +55,7 @@ public class Order {
         this.o_w_id = o_w_id;
         this.o_c_id = o_c_id;
         this.o_ol_cnt = o_ol_cnt;
+        // super(new OrderId(o_id,o_d_id,o_w_id));
     }
 
 }

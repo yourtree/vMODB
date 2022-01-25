@@ -3,12 +3,15 @@ package dk.ku.di.dms.vms.tpcc.service;
 import dk.ku.di.dms.vms.annotations.Inbound;
 import dk.ku.di.dms.vms.annotations.Microservice;
 import dk.ku.di.dms.vms.annotations.Transactional;
-import dk.ku.di.dms.vms.infra.QueryBuilder;
-import dk.ku.di.dms.vms.infra.QueryBuilderFactory;
+import dk.ku.di.dms.vms.database.query.parse.Statement;
+import dk.ku.di.dms.vms.database.api.modb.QueryBuilder;
+import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.tpcc.events.StockNewOrderIn;
 import dk.ku.di.dms.vms.tpcc.repository.IStockRepository;
 
 import java.util.concurrent.*;
+
+import static dk.ku.di.dms.vms.database.query.parse.ExpressionEnum.EQUALS;
 
 // https://stackoverflow.com/questions/1250643/how-to-wait-for-all-threads-to-finish-using-executorservice
 
@@ -33,10 +36,10 @@ public class StockService {
             futures[finalI] = CompletableFuture.runAsync(() -> {
 
                 QueryBuilder builder = QueryBuilderFactory.init();
-                String sql = builder.select("s_quantity")
+                Statement sql = builder.select("s_quantity")
                         .from("stock")
-                        .where("s_i_id = ", in.itemsIds.get(finalI))
-                        .and("s_w_id = ", in.supware.get(finalI))
+                        .where("s_i_id", EQUALS, in.itemsIds.get(finalI))
+                        .and("s_w_id", EQUALS, in.supware.get(finalI))
                         .build();
 
                 Integer s_quantity = (Integer) stockRepository.fetch(sql);
@@ -48,10 +51,10 @@ public class StockService {
                     s_quantity = s_quantity - ol_quantity + 91;
                 }
 
-                String update = builder.update("stock")
-                        .set("s_quantity = ",s_quantity)
-                        .where("s_i_id = ", in.itemsIds.get(finalI))
-                        .and("s_w_id = ", in.supware.get(finalI))
+                Statement update = builder.update("stock")
+                        .set("s_quantity",s_quantity)
+                        .where("s_i_id", EQUALS, in.itemsIds.get(finalI))
+                        .and("s_w_id", EQUALS, in.supware.get(finalI))
                         .build();
 
                 stockRepository.fetch(update);
@@ -63,7 +66,5 @@ public class StockService {
         //exec.shutdown();
 
     }
-
-
 
 }

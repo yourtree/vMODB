@@ -4,15 +4,18 @@ import dk.ku.di.dms.vms.annotations.Inbound;
 import dk.ku.di.dms.vms.annotations.Microservice;
 import dk.ku.di.dms.vms.annotations.Outbound;
 import dk.ku.di.dms.vms.annotations.Transactional;
-import dk.ku.di.dms.vms.infra.QueryBuilder;
-import dk.ku.di.dms.vms.infra.QueryBuilderFactory;
+import dk.ku.di.dms.vms.database.api.modb.QueryBuilder;
+import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
+import dk.ku.di.dms.vms.database.query.parse.ExpressionEnum;
 import dk.ku.di.dms.vms.tpcc.events.WareDistNewOrderIn;
 import dk.ku.di.dms.vms.tpcc.events.WareDistNewOrderOut;
 import dk.ku.di.dms.vms.tpcc.repository.waredist.IDistrictRepository;
 import dk.ku.di.dms.vms.tpcc.repository.waredist.IWarehouseRepository;
-import org.javatuples.Pair;
+import dk.ku.di.dms.vms.utils.Pair;
 
 import java.util.concurrent.*;
+
+import static dk.ku.di.dms.vms.database.query.parse.ExpressionEnum.EQUALS;
 
 @Microservice("warehouse")
 public class WareDistService {
@@ -55,8 +58,8 @@ public class WareDistService {
 
         WareDistNewOrderOut out = new WareDistNewOrderOut(
                 tax,
-                getNextOidAndTax.getValue1(),
-                getNextOidAndTax.getValue0(),
+                getNextOidAndTax.getSecond(),
+                getNextOidAndTax.getFirst(),
                 in.d_w_id,
                 in.d_id
         );
@@ -81,13 +84,13 @@ public class WareDistService {
         Pair<Integer,Float> districtData = districtRepository
                 .getNextOidAndTax(districtUpdateRequest.d_w_id, districtUpdateRequest.d_id);
 
-        Integer nextOid = districtData.getValue0();
+        Integer nextOid = districtData.getFirst();
 
         QueryBuilder builder = QueryBuilderFactory.init();
         String sql = builder.update("district")
-                .set("d_next_o_id = ",nextOid+1)
-                .where("d_w_id = ", districtUpdateRequest.d_w_id)
-                .and("d_id = ", districtUpdateRequest.d_id)
+                .set("d_next_o_id",nextOid+1)
+                .where("d_w_id", EQUALS, districtUpdateRequest.d_w_id)
+                .and("d_id", EQUALS, districtUpdateRequest.d_id)
                 .build();
 
         districtRepository.fetch( sql );

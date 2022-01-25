@@ -1,13 +1,13 @@
 package dk.ku.di.dms.vms.eShopOnContainers.entity;
 
-import dk.ku.di.dms.vms.infra.PersistentEntity;
+import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
 import javax.validation.constraints.NotNull;
 
 @Entity
 @Table(name="products")
-public class Product extends PersistentEntity {
+public class Product extends AbstractEntity {
 
     @Column
     private Double price;
