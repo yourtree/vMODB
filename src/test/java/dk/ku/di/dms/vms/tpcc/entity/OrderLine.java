@@ -1,12 +1,14 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.infra.AbstractEntity;
+
 import javax.persistence.*;
 import java.io.Serializable;
 
 @Entity
 @Table(name="order_line")
 @IdClass(OrderLine.OrderLineId.class)
-public class OrderLine {
+public class OrderLine extends AbstractEntity<OrderLine.OrderLineId> {
 
     public class OrderLineId implements Serializable {
         public Integer ol_o_id;

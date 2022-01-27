@@ -1,12 +1,12 @@
-package dk.ku.di.dms.vms.database.query.parse;
+package dk.ku.di.dms.vms.database.query.parser.stmt;
 
 public enum StatementEnum {
 
     SELECT("SELECT"),
 
-    JOIN("JOIN"),
+    INSERT_INTO("INSERT INTO"),
 
-    INSERT("INSERT"),
+    VALUES("VALUES"),
 
     DELETE("DELETE"),
 

@@ -1,31 +1,34 @@
 package dk.ku.di.dms.vms.database.api.modb;
 
-import dk.ku.di.dms.vms.database.query.parse.*;
+import dk.ku.di.dms.vms.database.api.IQueryBuilder;
+import dk.ku.di.dms.vms.database.query.parser.stmt.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 
-// TODO make it private and create an interface (IQueryBuilder) with these methods
-public final class QueryBuilder {
+/**
+ * Bypassing the parsing from strings
+ */
 
-    // to avoid casting
+// TODO make it private and create an interface (IQueryBuilder) with these methods
+public final class QueryBuilder implements IQueryBuilder {
+
+    // a statement for each to avoid casting
     private SelectStatement selectStmt;
 
     private UpdateStatement updateStmt;
 
-    // TODO throw exception if two consecutive invalid declarations are used
-    // e.g., FROM and FROM, SELECT and SELECT
-    // private Op lastOp;
+    // private IStatement statement;
 
-//        private QueryBuilder() {
-//            this.query = new StringBuilder();
-//        }
+    // Select
 
-    public QueryBuilder select(String param) {
+    public QueryBuilder select(String param) throws BuilderException {
+
+        if(updateStmt != null) throw new BuilderException("This builder is building an update statement.");
 
         this.selectStmt = new SelectStatement();
         String[] projection = param.split(",");
-        this.selectStmt.projection = new ArrayList<>(Arrays.asList(projection));
+        this.selectStmt.columns = new ArrayList<>(Arrays.asList(projection));
 
         return this;
     }
@@ -37,6 +40,57 @@ public final class QueryBuilder {
 
         return this;
     }
+
+    private String tempJoinTable;
+    private JoinEnum tempJoinType;
+
+    public QueryBuilder join(String param) {
+        this.tempJoinTable = param;
+        this.tempJoinType = JoinEnum.JOIN;
+        return this;
+    }
+
+    public QueryBuilder on(String param1, ExpressionEnum expression, String param2) throws BuilderException {
+        String[] param2Array = param2.split(".");
+
+        // cannot be the same table. two tables can have the same column name on join e.g., o_id
+        // tableLeft == tableRight throw exception
+//        if(tempJoinTable.equalsIgnoreCase( param2Array[0] )) {
+//            throw new BuilderException("Cannot join the same tables?"); // actually we can do it
+//        }
+
+        if(param2Array.length != 2)
+            throw new BuilderException("Should contain a table and a column following the pattern <table>.<column>");
+
+        JoinClauseElement joinClauseElement = new JoinClauseElement(tempJoinTable,param1,tempJoinType, expression, param2Array[0],param2Array[1]);
+        if (this.selectStmt.joinClause == null) this.selectStmt.joinClause = new ArrayList<>();
+        this.selectStmt.joinClause.add(joinClauseElement);
+        this.tempJoinTable = null;
+        this.tempJoinType = null;
+        return this;
+    }
+
+    // Update
+
+    public QueryBuilder update(String param) throws BuilderException {
+
+        if(selectStmt != null) throw new BuilderException("This builder is building a select statement.");
+
+        this.updateStmt = new UpdateStatement();
+        this.updateStmt.table = param;
+
+        return this;
+    }
+
+    public QueryBuilder set(String param, Object value) {
+
+        SetClauseElement setClauseElement = new SetClauseElement( param, value );
+        this.updateStmt.setClause.add(setClauseElement);
+
+        return this;
+    }
+
+    // Found in both select and update
 
     public QueryBuilder where(final String param, final ExpressionEnum expr, final Object value) {
         this.selectStmt.whereClause = new ArrayList<>();
@@ -57,36 +111,10 @@ public final class QueryBuilder {
         return this;
     }
 
-    public QueryBuilder join(String param, Object value) {
-        // query.append(" JOIN ").append(param).append(" ON ").append(value);
-        return this;
-    }
-
-    public QueryBuilder update(String param) {
-        // query.append("UPDATE ").append(param);
-
-        this.updateStmt = new UpdateStatement();
-        this.updateStmt.table = param;
-
-        return this;
-    }
-
-    public QueryBuilder set(String param, Object value) {
-        // query.append(" SET ").append(param).append(value);
-
-        SetClauseElement setClauseElement = new SetClauseElement( param, value );
-
-        this.updateStmt.setClause.add(setClauseElement);
-
-        return this;
-    }
-
-    public Statement build() {
+    public IStatement build() {
 
         // TODO check syntax
         // TODO check if tables and columns do exist
-
-
 
         return selectStmt != null ? selectStmt : updateStmt;
     }

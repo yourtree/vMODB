@@ -1,8 +1,9 @@
-package dk.ku.di.dms.vms.database.query.parse;
+package dk.ku.di.dms.vms.database.store;
 
+import dk.ku.di.dms.vms.database.store.AbstractIndex;
 import dk.ku.di.dms.vms.database.store.Column;
 
-public class SingleColumnIndex extends dk.ku.di.dms.vms.store.AbstractIndex {
+public class SingleColumnIndex extends AbstractIndex {
 
     public Column column;
 

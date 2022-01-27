@@ -4,9 +4,10 @@ import dk.ku.di.dms.vms.annotations.Inbound;
 import dk.ku.di.dms.vms.annotations.Microservice;
 import dk.ku.di.dms.vms.annotations.Outbound;
 import dk.ku.di.dms.vms.annotations.Transactional;
-import dk.ku.di.dms.vms.database.api.modb.QueryBuilder;
+import dk.ku.di.dms.vms.database.api.IQueryBuilder;
+import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
-import dk.ku.di.dms.vms.database.query.parse.ExpressionEnum;
+import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.tpcc.events.WareDistNewOrderIn;
 import dk.ku.di.dms.vms.tpcc.events.WareDistNewOrderOut;
 import dk.ku.di.dms.vms.tpcc.repository.waredist.IDistrictRepository;
@@ -15,7 +16,7 @@ import dk.ku.di.dms.vms.utils.Pair;
 
 import java.util.concurrent.*;
 
-import static dk.ku.di.dms.vms.database.query.parse.ExpressionEnum.EQUALS;
+import static dk.ku.di.dms.vms.database.query.parser.stmt.ExpressionEnum.EQUALS;
 
 @Microservice("warehouse")
 public class WareDistService {
@@ -69,7 +70,7 @@ public class WareDistService {
 
     @Inbound(values = "waredist-new-order-in")
     @Transactional
-    public void processDistrictUpdate(WareDistNewOrderIn districtUpdateRequest){
+    public void processDistrictUpdate(WareDistNewOrderIn districtUpdateRequest) throws BuilderException {
 
         // repository query, much simpler
         /*
@@ -86,14 +87,14 @@ public class WareDistService {
 
         Integer nextOid = districtData.getFirst();
 
-        QueryBuilder builder = QueryBuilderFactory.init();
-        String sql = builder.update("district")
+        IQueryBuilder builder = QueryBuilderFactory.init();
+        IStatement sql = builder.update("district")
                 .set("d_next_o_id",nextOid+1)
                 .where("d_w_id", EQUALS, districtUpdateRequest.d_w_id)
                 .and("d_id", EQUALS, districtUpdateRequest.d_id)
                 .build();
 
-        districtRepository.fetch( sql );
+        districtRepository.fetch(sql);
 
         return;
 

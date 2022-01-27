@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.infra;
 
-import dk.ku.di.dms.vms.database.query.parse.Statement;
+import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 
 import java.io.Serializable;
 import java.util.List;
@@ -21,6 +21,6 @@ public interface IRepository<PK extends Serializable,T extends AbstractEntity> {
     public List<T> query(Qualification qualification);
     public T lookupByKey(PK key);
 
-    public Object fetch(Statement sql);
+    public Object fetch(IStatement sql);
 
 }

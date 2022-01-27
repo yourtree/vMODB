@@ -1,8 +1,8 @@
-package dk.ku.di.dms.vms.database.query.parse;
+package dk.ku.di.dms.vms.database.query.parser.stmt;
 
 import java.util.List;
 
-public class UpdateStatement implements Statement {
+public class UpdateStatement implements IStatement {
 
     public String table;
 

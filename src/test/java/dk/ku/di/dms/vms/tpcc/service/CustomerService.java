@@ -4,7 +4,9 @@ import dk.ku.di.dms.vms.annotations.Inbound;
 import dk.ku.di.dms.vms.annotations.Microservice;
 import dk.ku.di.dms.vms.annotations.Outbound;
 import dk.ku.di.dms.vms.annotations.Transactional;
-import dk.ku.di.dms.vms.database.query.parse.Statement;
+import dk.ku.di.dms.vms.database.api.IQueryBuilder;
+import dk.ku.di.dms.vms.database.api.modb.BuilderException;
+import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilder;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderOut;
@@ -12,7 +14,7 @@ import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderIn;
 import dk.ku.di.dms.vms.tpcc.repository.ICustomerRepository;
 import dk.ku.di.dms.vms.utils.Triplet;
 
-import static dk.ku.di.dms.vms.database.query.parse.ExpressionEnum.EQUALS;
+import static dk.ku.di.dms.vms.database.query.parser.stmt.ExpressionEnum.EQUALS;
 
 @Microservice("customer")
 public class CustomerService {
@@ -27,10 +29,10 @@ public class CustomerService {
     @Inbound(values = {"customer-new-order-in"})
     @Outbound("customer-new-order-out")
     @Transactional
-    public CustomerNewOrderOut provideCustomerDataToOrder(CustomerNewOrderIn in){
+    public CustomerNewOrderOut provideCustomerDataToOrder(CustomerNewOrderIn in) throws BuilderException {
 
-        QueryBuilder builder = QueryBuilderFactory.init();
-        Statement sql = builder.select("c_discount, c_last, c_credit")
+        IQueryBuilder builder = QueryBuilderFactory.init();
+        IStatement sql = builder.select("c_discount, c_last, c_credit")
                             .from("customer")
                             .where("c_w_id", EQUALS, in.c_w_id)
                             .and("c_d_id", EQUALS, in.c_d_id)

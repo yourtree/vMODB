@@ -1,5 +1,9 @@
-package dk.ku.di.dms.vms.database.query.parse;
+package dk.ku.di.dms.vms.database.query.parser;
 
+import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
+import dk.ku.di.dms.vms.database.query.parser.stmt.StatementEnum;
+
+// subsequent subsystem that reads a statement
 public class Parser {
 
 
@@ -7,8 +11,8 @@ public class Parser {
     // 2 - read string and break into operator nodes
     // 3 - build query tree
 
-    // TODO leave it for later. just rely on a query API
-    public Statement parse(String sql){
+    // TODO leave standard SQL input it for later. just rely on a query API
+    public IStatement parse(String sql){
 
         String[] tokens = sql.split(" ");
         String curr;

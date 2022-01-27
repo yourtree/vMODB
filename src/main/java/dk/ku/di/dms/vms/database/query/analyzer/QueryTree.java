@@ -1,0 +1,29 @@
+package dk.ku.di.dms.vms.database.query.analyzer;
+
+// A statement type with application define types
+
+import dk.ku.di.dms.vms.database.store.ColumnReference;
+import dk.ku.di.dms.vms.database.store.Table;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class QueryTree {
+
+    public List<ColumnReference> columns;
+
+    public Map<String,Table> tables;
+
+    public List<JoinClause> joinClauses;
+
+    public List<WhereClause> whereClauses;
+
+    public QueryTree() {
+        this.columns = new ArrayList<>();
+        this.tables = new HashMap<>();
+        this.joinClauses = new ArrayList<>();
+    }
+
+}
