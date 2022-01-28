@@ -1,7 +1,7 @@
-package dk.ku.di.dms.vms.database.query.analyzer;
+package dk.ku.di.dms.vms.database.query.analyzer.clause;
 
-import dk.ku.di.dms.vms.database.query.parser.stmt.ExpressionEnum;
-import dk.ku.di.dms.vms.database.query.parser.stmt.JoinEnum;
+import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
+import dk.ku.di.dms.vms.database.query.parser.enums.JoinEnum;
 import dk.ku.di.dms.vms.database.store.ColumnReference;
 
 public class JoinClause {

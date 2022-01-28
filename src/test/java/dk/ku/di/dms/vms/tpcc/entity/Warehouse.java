@@ -1,10 +1,12 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.infra.AbstractEntity;
+
 import javax.persistence.*;
 
 @Entity
 @Table(name="warehouse")
-public class Warehouse {
+public class Warehouse extends AbstractEntity<Integer> {
 
     @Id
     @GeneratedValue

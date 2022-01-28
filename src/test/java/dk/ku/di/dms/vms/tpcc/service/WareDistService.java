@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.annotations.Inbound;
 import dk.ku.di.dms.vms.annotations.Microservice;
 import dk.ku.di.dms.vms.annotations.Outbound;
 import dk.ku.di.dms.vms.annotations.Transactional;
-import dk.ku.di.dms.vms.database.api.IQueryBuilder;
+import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
 import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
@@ -16,7 +16,7 @@ import dk.ku.di.dms.vms.utils.Pair;
 
 import java.util.concurrent.*;
 
-import static dk.ku.di.dms.vms.database.query.parser.stmt.ExpressionEnum.EQUALS;
+import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum.EQUALS;
 
 @Microservice("warehouse")
 public class WareDistService {

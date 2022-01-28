@@ -1,12 +1,9 @@
 package dk.ku.di.dms.vms.database.query.analyzer;
 
-import dk.ku.di.dms.vms.database.api.modb.QueryBuilder;
-import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.database.catalog.Catalog;
-import dk.ku.di.dms.vms.database.query.parser.stmt.JoinClauseElement;
-import dk.ku.di.dms.vms.database.query.parser.stmt.SelectStatement;
-import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
-import dk.ku.di.dms.vms.database.query.parser.stmt.UpdateStatement;
+import dk.ku.di.dms.vms.database.query.analyzer.clause.JoinClause;
+import dk.ku.di.dms.vms.database.query.analyzer.clause.WhereClause;
+import dk.ku.di.dms.vms.database.query.parser.stmt.*;
 import dk.ku.di.dms.vms.database.store.Column;
 import dk.ku.di.dms.vms.database.store.ColumnReference;
 import dk.ku.di.dms.vms.database.store.Table;
@@ -14,26 +11,26 @@ import dk.ku.di.dms.vms.database.store.Table;
 import java.util.List;
 import java.util.Map;
 
-import static dk.ku.di.dms.vms.database.query.parser.stmt.ExpressionEnum.EQUALS;
-
-
-public class Analyzer {
+public final class Analyzer {
 
     public final Catalog catalog;
 
-    public Analyzer(Catalog catalog){
+    public Analyzer(final Catalog catalog){
         this.catalog = catalog;
     }
 
     // basically transforms the raw input into known and safe metadata, e.g., whether a table, column exists
-    public QueryTree parse(IStatement statement) throws Exception {
+    public QueryTree analyze(final IStatement statement) throws Exception {
 
-        QueryTree queryTree = new QueryTree();
+        final QueryTree queryTree = new QueryTree();
 
         if(statement instanceof SelectStatement){
 
+            final SelectStatement select = (SelectStatement) statement;
+
+            // from
             // obtain the tables to look for the columns in projection first
-            List<String> fromClause = ((SelectStatement) statement).fromClause;
+            List<String> fromClause = select.fromClause;
 
             for(String tableStr : fromClause){
                 Table table = catalog.tableMap.getOrDefault(tableStr,null);
@@ -41,7 +38,7 @@ public class Analyzer {
             }
 
             // join
-            List<JoinClauseElement> joinClauseElements = ((SelectStatement) statement).joinClause;
+            List<JoinClauseElement> joinClauseElements = select.joinClause;
             for(JoinClauseElement join : joinClauseElements){
                 // TODO an optimization is iterating through the foreign keys of the table to find the match faster
 
@@ -70,12 +67,13 @@ public class Analyzer {
 
             }
 
+            // projection
             // columns in projection may come from join
-            List<String> columns = ((SelectStatement) statement).columns;
+            List<String> columns = select.columns;
             // cannot allow same column name without AS from multiple tables
             for(String columnStr : columns){
                 // TODO check if table name is included in string,
-                //  that would make find the column ref faster
+                //  that would make find the column reference faster
                 ColumnReference columnReference = findColumnReference(columnStr, queryTree.tables);
                 if(columnReference != null){
                     queryTree.columns.add(columnReference);
@@ -83,20 +81,58 @@ public class Analyzer {
             }
 
             // where
-            // queryTree
-            // TODO FINISH
+            List<WhereClauseElement> where = select.whereClause;
+            for(WhereClauseElement currWhere : where){
+
+                // TODO column has table reference?
+//                if( whereClauseElement.column.contains(".") ){
+//
+//                } else {
+//
+//                }
+
+                ColumnReference columnReference = findColumnReference(currWhere.column, queryTree.tables);
+                WhereClause whereClause;
+                switch(columnReference.column.type){
+                    case INT: whereClause =
+                                new WhereClause<>(columnReference,currWhere.expression,(Integer)currWhere.value);
+                                break;
+                    case STRING: whereClause =
+                                    new WhereClause<>(columnReference,currWhere.expression,(String)currWhere.value);
+                                    break;
+                    case CHAR: whereClause =
+                                new WhereClause<>(columnReference,currWhere.expression,(Character) currWhere.value);
+                                break;
+                    case LONG: whereClause =
+                                new WhereClause<>(columnReference,currWhere.expression,(Long) currWhere.value);
+                                break;
+                    case DOUBLE: whereClause =
+                            new WhereClause<>(columnReference,currWhere.expression,(Double) currWhere.value);
+                        break;
+                    default: throw new Exception("Type not recognized");
+                }
+
+                queryTree.whereClauses.add(whereClause);
+
+            }
+
+            // TODO FINISH sort, group by
 
         } else if(statement instanceof UpdateStatement){
+
+            final UpdateStatement select = (UpdateStatement) statement;
+
             // TODO FINISH
+
         } else {
             throw new Exception("Unknown statement type.");
         }
 
-        return null;
+        return queryTree;
 
     }
 
-    private ColumnReference findColumnReference(String columnStr, Map<String,Table> tables) {
+    private ColumnReference findColumnReference(String columnStr, Map<String,? extends Table> tables) {
         for(Table tbl : tables.values()){
             Column column = (Column) tbl.columnMap.get(columnStr);
             if(column != null){

@@ -1,5 +1,8 @@
 package dk.ku.di.dms.vms.database.query.parser.stmt;
 
+import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
+import dk.ku.di.dms.vms.database.query.parser.enums.JoinEnum;
+
 public class JoinClauseElement {
 
     public final String tableLeft;

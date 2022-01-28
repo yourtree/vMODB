@@ -1,11 +1,13 @@
 package dk.ku.di.dms.vms.database.query.parser.stmt;
 
+import dk.ku.di.dms.vms.database.query.parser.enums.SortEnum;
+
 public class SortClauseElement {
 
     public final String column;
-    public final SortOperationEnum expression;
+    public final SortEnum expression;
 
-    public SortClauseElement(String column, SortOperationEnum expression) {
+    public SortClauseElement(String column, SortEnum expression) {
         this.column = column;
         this.expression = expression;
     }

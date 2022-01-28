@@ -1,7 +1,6 @@
-package dk.ku.di.dms.vms.database.api;
+package dk.ku.di.dms.vms.database.api.modb;
 
-import dk.ku.di.dms.vms.database.api.modb.BuilderException;
-import dk.ku.di.dms.vms.database.query.parser.stmt.ExpressionEnum;
+import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 
 public interface IQueryBuilder {
@@ -14,9 +13,11 @@ public interface IQueryBuilder {
 
     public IQueryBuilder and(String param, final ExpressionEnum expr, final Object value);
 
+    public IQueryBuilder join(String param);
+
     public IQueryBuilder or(String param, final ExpressionEnum expr, final Object value);
 
-    public IQueryBuilder join(String param);
+
 
     public IQueryBuilder update(String param) throws BuilderException;
 

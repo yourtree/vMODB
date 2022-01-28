@@ -1,5 +1,7 @@
 package dk.ku.di.dms.vms.database.query.parser.stmt;
 
+import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
+
 public class WhereClauseElement {
 
     public final String column;

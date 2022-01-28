@@ -2,6 +2,8 @@ package dk.ku.di.dms.vms.database.query.analyzer;
 
 // A statement type with application define types
 
+import dk.ku.di.dms.vms.database.query.analyzer.clause.JoinClause;
+import dk.ku.di.dms.vms.database.query.analyzer.clause.WhereClause;
 import dk.ku.di.dms.vms.database.store.ColumnReference;
 import dk.ku.di.dms.vms.database.store.Table;
 
@@ -24,6 +26,7 @@ public class QueryTree {
         this.columns = new ArrayList<>();
         this.tables = new HashMap<>();
         this.joinClauses = new ArrayList<>();
+        this.whereClauses = new ArrayList<>();
     }
 
 }

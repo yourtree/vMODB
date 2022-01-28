@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import java.io.Serializable;
 import java.util.List;
 
-public interface IRepository<PK extends Serializable,T extends AbstractEntity> {
+public interface IRepository<PK extends Serializable,T extends AbstractEntity<PK>> {
 
     public T insert(T object);
     public T insertAll(List<T> objects);

@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.parser;
 
-import dk.ku.di.dms.vms.database.query.parser.stmt.StatementEnum;
+import dk.ku.di.dms.vms.database.query.parser.enums.StatementEnum;
 
 import java.util.HashSet;
 import java.util.Set;

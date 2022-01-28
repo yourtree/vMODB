@@ -12,6 +12,4 @@ public enum ColumnType {
 
     DOUBLE;
 
-
-
 }

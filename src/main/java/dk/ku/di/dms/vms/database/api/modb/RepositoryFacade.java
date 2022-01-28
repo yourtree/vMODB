@@ -11,7 +11,7 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 
-public class RepositoryFacade implements InvocationHandler {
+public final class RepositoryFacade implements InvocationHandler {
 
     private static Logger LOGGER = LoggerFactory.getLogger(DynamicInvocationHandler.class);
 

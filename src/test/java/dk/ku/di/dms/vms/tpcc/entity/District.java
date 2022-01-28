@@ -10,9 +10,9 @@ import java.io.Serializable;
 @IdClass(District.DistrictId.class)
 public class District extends AbstractEntity<District.DistrictId> {
 
-    public class DistrictId implements Serializable {
-        public Integer d_id;
-        public Integer d_w_id;
+    public static class DistrictId implements Serializable {
+        public final Integer d_id;
+        public final Integer d_w_id;
 
         public DistrictId(Integer d_id, Integer d_w_id) {
             this.d_id = d_id;

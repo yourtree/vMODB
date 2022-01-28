@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.tpcc.service;
 import dk.ku.di.dms.vms.annotations.Inbound;
 import dk.ku.di.dms.vms.annotations.Microservice;
 import dk.ku.di.dms.vms.annotations.Transactional;
-import dk.ku.di.dms.vms.database.api.IQueryBuilder;
+import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
 import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
@@ -12,7 +12,7 @@ import dk.ku.di.dms.vms.tpcc.repository.IStockRepository;
 
 import java.util.concurrent.CompletableFuture;
 
-import static dk.ku.di.dms.vms.database.query.parser.stmt.ExpressionEnum.EQUALS;
+import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum.EQUALS;
 
 // https://stackoverflow.com/questions/1250643/how-to-wait-for-all-threads-to-finish-using-executorservice
 
