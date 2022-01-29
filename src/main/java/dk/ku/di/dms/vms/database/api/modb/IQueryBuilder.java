@@ -11,13 +11,13 @@ public interface IQueryBuilder {
 
     public IQueryBuilder where(final String param, final ExpressionEnum expr, final Object value);
 
+    public IQueryBuilder where(final String param1, final ExpressionEnum expr, final String param2);
+
     public IQueryBuilder and(String param, final ExpressionEnum expr, final Object value);
 
     public IQueryBuilder join(String param);
 
     public IQueryBuilder or(String param, final ExpressionEnum expr, final Object value);
-
-
 
     public IQueryBuilder update(String param) throws BuilderException;
 

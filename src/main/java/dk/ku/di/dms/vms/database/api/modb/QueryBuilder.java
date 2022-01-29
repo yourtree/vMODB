@@ -47,9 +47,9 @@ public final class QueryBuilder implements IQueryBuilder {
 
     public QueryBuilder on(String param1, ExpressionEnum expression, String param2) throws BuilderException {
         String[] param2Array = param2.split(".");
-        if(param2Array.length != 2)
+        if(param2Array.length != 2) {
             throw new BuilderException("Should contain a table and a column following the pattern <table>.<column>");
-
+        }
         this.statement.on(param1,expression,param2Array[0],param2Array[1]);
         return this;
     }
@@ -76,6 +76,11 @@ public final class QueryBuilder implements IQueryBuilder {
 
     public QueryBuilder where(final String param, final ExpressionEnum expr, final Object value) {
         this.statement.where( param, expr, value );
+        return this;
+    }
+
+    public QueryBuilder where(String param1, ExpressionEnum expr, String param2) {
+        this.statement.where( param1, expr, param2 );
         return this;
     }
 

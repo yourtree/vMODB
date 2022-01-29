@@ -5,7 +5,10 @@ import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
+import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
+import dk.ku.di.dms.vms.database.query.planner.PlanTree;
+import dk.ku.di.dms.vms.database.query.planner.Planner;
 import dk.ku.di.dms.vms.database.store.Table;
 import dk.ku.di.dms.vms.tpcc.entity.District;
 import org.junit.Test;
@@ -32,7 +35,7 @@ public class QueryTest {
     }
 
     @Test
-    public void testQueryParsing() throws BuilderException {
+    public void testQueryParsing() throws Exception {
 
         buildCatalog();
 
@@ -49,11 +52,10 @@ public class QueryTest {
 
         Analyzer analyzer = new Analyzer(catalog);
 
-        try {
-            analyzer.analyze(sql);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        QueryTree queryTree = analyzer.analyze(sql);
+
+        Planner planner = new Planner();
+        PlanTree planTree = planner.plan(queryTree);
 
         assert(true);
 

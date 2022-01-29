@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.store;
+package dk.ku.di.dms.vms.database.store.index;
 
 public abstract class AbstractIndex {
 
@@ -6,6 +6,9 @@ public abstract class AbstractIndex {
     // https://stackoverflow.com/questions/8504288/java-bitwise-comparison-of-a-byte/8504393
     public abstract int hashCode();
 
-    // clustered inde does not make sense in mmdbs
+    // clustered index does not make sense in mmdbs?
+
+    // default is hash
+    public IndexEnum indexType = IndexEnum.HASH;
 
 }

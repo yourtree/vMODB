@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.tpcc.entity;
+package dk.ku.di.dms.vms.eShopOnContainers.entity;
 
 import dk.ku.di.dms.vms.eShopOnContainers.entity.Product;
 

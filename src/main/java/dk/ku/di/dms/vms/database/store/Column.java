@@ -2,13 +2,18 @@ package dk.ku.di.dms.vms.database.store;
 
 public class Column {
 
-    public String name;
+    public final String name;
+    public final ColumnType type;
+    public final int hashCode;
 
-    public ColumnType type;
+    public Column(String name, ColumnType type, int hashCode) {
+        this.name = name;
+        this.type = type;
+        this.hashCode = hashCode;
+    }
 
     @Override
     public int hashCode() {
-        // TODO return number based on ASCII
-        return super.hashCode();
+        return hashCode;
     }
 }

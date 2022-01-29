@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.database.query.parser.stmt;
 
-
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
 import dk.ku.di.dms.vms.database.query.parser.enums.JoinEnum;
 
@@ -9,25 +8,31 @@ import java.util.List;
 
 public abstract class AbstractStatement implements IStatement {
 
-    public List<WhereClauseElement> whereClause;
+    public List<WhereClauseElement<?>> whereClause;
 
     public List<JoinClauseElement> joinClause;
     private String tempJoinTable;
     private JoinEnum tempJoinType;
 
     public void where(final String param, final ExpressionEnum expr, final Object value) {
-        this.whereClause = new ArrayList<>();
-        WhereClauseElement element = new WhereClauseElement(param,expr,value);
+        if (this.whereClause == null) this.whereClause = new ArrayList<>();
+        WhereClauseElement<Object> element = new WhereClauseElement<>(param,expr,value);
+        this.whereClause.add( element );
+    }
+
+    public void where(String param1, ExpressionEnum expr, String param2){
+        if (this.whereClause == null) this.whereClause = new ArrayList<>();
+        WhereClauseElement<String> element = new WhereClauseElement<>(param1,expr,param2);
         this.whereClause.add( element );
     }
 
     public void and(String param, final ExpressionEnum expr, final Object value) {
-        WhereClauseElement element = new WhereClauseElement(param,expr,value);
+        WhereClauseElement<Object> element = new WhereClauseElement<>(param,expr,value);
         this.whereClause.add( element );
     }
 
     public void or(String param, final ExpressionEnum expr, final Object value) {
-        WhereClauseElement element = new WhereClauseElement(param,expr,value);
+        WhereClauseElement<Object> element = new WhereClauseElement<>(param,expr,value);
         this.whereClause.add( element );
     }
 

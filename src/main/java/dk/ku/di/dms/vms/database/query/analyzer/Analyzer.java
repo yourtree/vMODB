@@ -3,6 +3,8 @@ package dk.ku.di.dms.vms.database.query.analyzer;
 import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.clause.JoinClause;
 import dk.ku.di.dms.vms.database.query.analyzer.clause.WhereClause;
+import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
+import dk.ku.di.dms.vms.database.query.parser.enums.JoinEnum;
 import dk.ku.di.dms.vms.database.query.parser.stmt.*;
 import dk.ku.di.dms.vms.database.store.Column;
 import dk.ku.di.dms.vms.database.store.ColumnReference;
@@ -33,7 +35,7 @@ public final class Analyzer {
             List<String> fromClause = select.fromClause;
 
             for(String tableStr : fromClause){
-                Table table = catalog.tableMap.getOrDefault(tableStr,null);
+                Table<?,?> table = catalog.tableMap.getOrDefault(tableStr,null);
                 if(table != null) queryTree.tables.put(tableStr,table);
             }
 
@@ -42,19 +44,29 @@ public final class Analyzer {
             for(JoinClauseElement join : joinClauseElements){
                 // TODO an optimization is iterating through the foreign keys of the table to find the match faster
 
-                Table tableLeft = queryTree.tables.getOrDefault(join.tableLeft,null);
+                Table<?,?> tableLeft = queryTree.tables.getOrDefault(join.tableLeft,null);
+
+                // find in catalog if not found in query yet
                 if(tableLeft == null){
                     tableLeft = catalog.tableMap.getOrDefault(join.tableLeft,null);
-                    if(tableLeft != null) queryTree.tables.put(join.tableLeft,tableLeft);
+                    if(tableLeft != null) {
+                        queryTree.tables.put(join.tableLeft, tableLeft);
+                    } else {
+                        throw new Exception("Unknown " + join.tableLeft + " table.");
+                    }
                 }
 
                 // find left column
-                ColumnReference columnLeftReference = findColumnReference(join.columnRight, tableLeft);
+                ColumnReference columnLeftReference = findColumnReference(join.columnLeft, tableLeft);
 
-                Table tableRight = queryTree.tables.getOrDefault(join.tableRight,null);
+                Table<?,?> tableRight = queryTree.tables.getOrDefault(join.tableRight,null);
                 if(tableRight == null){
                     tableRight = catalog.tableMap.getOrDefault(join.tableRight,null);
-                    if(tableRight != null) queryTree.tables.put(join.tableRight,tableRight);
+                    if(tableRight != null) {
+                        queryTree.tables.put(join.tableRight,tableRight);
+                    } else {
+                        throw new Exception("Unknown " + join.tableRight + " table.");
+                    }
                 }
 
                 // find right column
@@ -81,38 +93,98 @@ public final class Analyzer {
             }
 
             // where
-            List<WhereClauseElement> where = select.whereClause;
-            for(WhereClauseElement currWhere : where){
+            List<WhereClauseElement<?>> where = select.whereClause;
+            for(WhereClauseElement<?> currWhere : where){
 
-                // TODO column has table reference?
-//                if( whereClauseElement.column.contains(".") ){
-//
-//                } else {
-//
-//                }
-
-                ColumnReference columnReference = findColumnReference(currWhere.column, queryTree.tables);
-                WhereClause whereClause;
-                switch(columnReference.column.type){
-                    case INT: whereClause =
-                                new WhereClause<>(columnReference,currWhere.expression,(Integer)currWhere.value);
-                                break;
-                    case STRING: whereClause =
-                                    new WhereClause<>(columnReference,currWhere.expression,(String)currWhere.value);
-                                    break;
-                    case CHAR: whereClause =
-                                new WhereClause<>(columnReference,currWhere.expression,(Character) currWhere.value);
-                                break;
-                    case LONG: whereClause =
-                                new WhereClause<>(columnReference,currWhere.expression,(Long) currWhere.value);
-                                break;
-                    case DOUBLE: whereClause =
-                            new WhereClause<>(columnReference,currWhere.expression,(Double) currWhere.value);
-                        break;
-                    default: throw new Exception("Type not recognized");
+                if( currWhere.value == null ) {
+                    throw new Exception("Parameter of where clause cannot be null value");
                 }
 
-                queryTree.whereClauses.add(whereClause);
+                ColumnReference columnReference;
+
+                String tableName;
+                String columnName;
+
+                if( currWhere.column.contains(".") ){
+                    String[] split = currWhere.column.split(".");
+                    tableName = split[0];
+                    columnName = split[1];
+                    Table<?,?> table = catalog.tableMap.getOrDefault(tableName,null);
+                    if(table != null) {
+                        columnReference = findColumnReference(columnName, table);
+                    } else {
+                        throw new Exception("Unknown table: "+tableName);
+                    }
+                } else {
+                    columnReference = findColumnReference(currWhere.column, queryTree.tables);
+                }
+
+                if(columnReference == null) {
+                    throw new Exception("Unknown column: "+currWhere.column);
+                }
+
+                // is it a reference to a table or a char? e.g., "'something'"
+                // FIXME for now I am considering all strings are joins
+
+                // check if there is some inner join. i.e., the object is a literal?
+                if( currWhere.value instanceof String ){
+
+                    ColumnReference columnReference1;
+                    String value = (String) currWhere.value;
+
+                    if( value.contains(".") ){
+                        String[] split = value.split(".");
+                        tableName = split[0];
+                        columnName = split[1];
+                        Table<?,?> table = catalog.tableMap.getOrDefault(tableName,null);
+                        if(table != null) {
+                            columnReference1 = findColumnReference(columnName, table);
+                        } else {
+                            throw new Exception("Unknown table: "+tableName);
+                        }
+                    } else {
+                        columnReference1 = findColumnReference(currWhere.column, queryTree.tables);
+                    }
+
+                    if(columnReference1 == null) {
+                        throw new Exception("Unknown column: "+value);
+                    }
+
+                    // build typed join clause
+                    JoinClause joinClause = new JoinClause(columnReference, columnReference1, currWhere.expression, JoinEnum.INNER_JOIN);
+
+                    queryTree.joinClauses.add(joinClause);
+
+                } else {
+
+                    WhereClause<?> whereClause;
+                    switch (columnReference.column.type) {
+                        case INT:
+                            whereClause =
+                                    new WhereClause<>(columnReference, currWhere.expression, (Integer) currWhere.value);
+                            break;
+                        case STRING:
+                            whereClause =
+                                    new WhereClause<>(columnReference, currWhere.expression, currWhere.value);
+                            break;
+                        case CHAR:
+                            whereClause =
+                                    new WhereClause<>(columnReference, currWhere.expression, (Character) currWhere.value);
+                            break;
+                        case LONG:
+                            whereClause =
+                                    new WhereClause<>(columnReference, currWhere.expression, (Long) currWhere.value);
+                            break;
+                        case DOUBLE:
+                            whereClause =
+                                    new WhereClause<>(columnReference, currWhere.expression, (Double) currWhere.value);
+                            break;
+                        default:
+                            throw new Exception("Unknown type of where clause.");
+                    }
+
+                    queryTree.whereClauses.add(whereClause);
+                }
 
             }
 
@@ -132,22 +204,20 @@ public final class Analyzer {
 
     }
 
-    private ColumnReference findColumnReference(String columnStr, Map<String,? extends Table> tables) {
-        for(Table tbl : tables.values()){
-            Column column = (Column) tbl.columnMap.get(columnStr);
+    private ColumnReference findColumnReference(String columnStr, Map<String,? extends Table<?,?>> tables) {
+        for(Table<?,?> tbl : tables.values()){
+            Column column = tbl.columnMap.get(columnStr);
             if(column != null){
-                ColumnReference columnReference = new ColumnReference(column, tbl);
-                return columnReference;
+                return new ColumnReference(column, tbl);
             }
         }
         return null;
     }
 
-    private ColumnReference findColumnReference(String columnStr, Table table) {
-        Column column = (Column) table.columnMap.get(columnStr);
+    private ColumnReference findColumnReference(String columnStr, Table<?,?> table) {
+        Column column = table.columnMap.get(columnStr);
         if(column != null){
-            ColumnReference columnReference = new ColumnReference(column, table);
-            return columnReference;
+            return new ColumnReference(column, table);
         }
         return null;
     }

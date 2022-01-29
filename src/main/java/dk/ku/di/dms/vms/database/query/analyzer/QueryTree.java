@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.database.query.analyzer;
 
-// A statement type with application define types
-
 import dk.ku.di.dms.vms.database.query.analyzer.clause.JoinClause;
 import dk.ku.di.dms.vms.database.query.analyzer.clause.WhereClause;
 import dk.ku.di.dms.vms.database.store.ColumnReference;
@@ -16,11 +14,13 @@ public class QueryTree {
 
     public List<ColumnReference> columns;
 
-    public Map<String,Table> tables;
+    public Map<String,Table<?,?>> tables;
 
     public List<JoinClause> joinClauses;
 
-    public List<WhereClause> whereClauses;
+    public List<WhereClause<?>> whereClauses;
+
+    // TODO sort and group clauses
 
     public QueryTree() {
         this.columns = new ArrayList<>();
