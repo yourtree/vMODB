@@ -11,4 +11,5 @@ public class ColumnReference {
         this.column = column;
         this.table = table;
     }
+
 }

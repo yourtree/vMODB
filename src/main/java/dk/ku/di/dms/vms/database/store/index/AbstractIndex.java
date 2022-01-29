@@ -9,6 +9,6 @@ public abstract class AbstractIndex {
     // clustered index does not make sense in mmdbs?
 
     // default is hash
-    public IndexEnum indexType = IndexEnum.HASH;
+    public IndexEnum indexType;
 
 }

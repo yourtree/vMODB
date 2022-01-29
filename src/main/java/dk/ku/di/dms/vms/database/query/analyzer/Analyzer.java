@@ -109,11 +109,11 @@ public final class Analyzer {
                     String[] split = currWhere.column.split(".");
                     tableName = split[0];
                     columnName = split[1];
-                    Table<?,?> table = catalog.tableMap.getOrDefault(tableName,null);
+                    Table<?,?> table = queryTree.tables.getOrDefault(tableName,null);
                     if(table != null) {
                         columnReference = findColumnReference(columnName, table);
                     } else {
-                        throw new Exception("Unknown table: "+tableName);
+                        throw new Exception("Table not defined in the query: "+tableName);
                     }
                 } else {
                     columnReference = findColumnReference(currWhere.column, queryTree.tables);
@@ -136,11 +136,11 @@ public final class Analyzer {
                         String[] split = value.split(".");
                         tableName = split[0];
                         columnName = split[1];
-                        Table<?,?> table = catalog.tableMap.getOrDefault(tableName,null);
+                        Table<?,?> table = queryTree.tables.getOrDefault(tableName,null);
                         if(table != null) {
                             columnReference1 = findColumnReference(columnName, table);
                         } else {
-                            throw new Exception("Unknown table: "+tableName);
+                            throw new Exception("Table not defined in the query: "+tableName);
                         }
                     } else {
                         columnReference1 = findColumnReference(currWhere.column, queryTree.tables);
