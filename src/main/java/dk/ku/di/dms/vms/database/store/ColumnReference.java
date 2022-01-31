@@ -2,12 +2,12 @@ package dk.ku.di.dms.vms.database.store;
 
 public class ColumnReference {
 
-    public Column column;
-    public Table<?,?> table;
+    public final Column column;
+    public final Table<?,?> table;
 
-    // rename? we dont need this for now, unless it is a dto....
+    // rename? we don't need this for now, unless it is a dto....
 
-    public ColumnReference(Column column, Table<?,?> table) {
+    public ColumnReference(final Column column, final Table<?,?> table) {
         this.column = column;
         this.table = table;
     }

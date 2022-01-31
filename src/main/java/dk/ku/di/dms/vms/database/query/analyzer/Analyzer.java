@@ -156,33 +156,8 @@ public final class Analyzer {
                     queryTree.joinClauses.add(joinClause);
 
                 } else {
-
-                    WhereClause<?> whereClause;
-                    switch (columnReference.column.type) {
-                        case INT:
-                            whereClause =
-                                    new WhereClause<>(columnReference, currWhere.expression, (Integer) currWhere.value);
-                            break;
-                        case STRING:
-                            whereClause =
-                                    new WhereClause<>(columnReference, currWhere.expression, currWhere.value);
-                            break;
-                        case CHAR:
-                            whereClause =
-                                    new WhereClause<>(columnReference, currWhere.expression, (Character) currWhere.value);
-                            break;
-                        case LONG:
-                            whereClause =
-                                    new WhereClause<>(columnReference, currWhere.expression, (Long) currWhere.value);
-                            break;
-                        case DOUBLE:
-                            whereClause =
-                                    new WhereClause<>(columnReference, currWhere.expression, (Double) currWhere.value);
-                            break;
-                        default:
-                            throw new Exception("Unknown type of where clause.");
-                    }
-
+                    // simple where
+                    WhereClause whereClause = new WhereClause(columnReference, currWhere.expression, currWhere.value);
                     queryTree.whereClauses.add(whereClause);
                 }
 

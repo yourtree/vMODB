@@ -18,7 +18,7 @@ public class QueryTree {
 
     public List<JoinClause> joinClauses;
 
-    public List<WhereClause<?>> whereClauses;
+    public List<WhereClause> whereClauses;
 
     // TODO sort and group clauses
 

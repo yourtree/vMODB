@@ -2,16 +2,16 @@ package dk.ku.di.dms.vms.database.query.planner;
 
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.clause.WhereClause;
-import dk.ku.di.dms.vms.database.query.planner.node.Filter;
-import dk.ku.di.dms.vms.database.query.planner.node.SequentialScan;
+import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
+import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
+import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
 import dk.ku.di.dms.vms.database.store.Column;
-import dk.ku.di.dms.vms.database.store.ColumnReference;
 import dk.ku.di.dms.vms.database.store.Table;
-import dk.ku.di.dms.vms.utils.Pair;
 
+import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class Planner {
@@ -64,7 +64,7 @@ public class Planner {
                         Collectors.mapping( WhereClause::getColumn, Collectors.toList()))
                 );
 
-        Map<Table<?,?>,List<WhereClause<?>>> whereClauseGroupedByTable =
+        Map<Table<?,?>,List<WhereClause>> whereClauseGroupedByTable =
                 queryTree
                         .whereClauses.stream()
                         .collect(
@@ -88,15 +88,26 @@ public class Planner {
         // TODO FINISH
 
         // TODO are we automatically creating indexes for foreign key? probably not
-        for( Map.Entry<Table<?, ?>, List<WhereClause<?>>> entry : whereClauseGroupedByTable.entrySet() ){
+
+
+        for( Map.Entry<Table<?,?>, List<WhereClause>> entry : whereClauseGroupedByTable.entrySet() ){
 
             Table<?,?> currTable = entry.getKey();
+            List<IFilter<?>> filterList = new ArrayList<>();
 
-            for( WhereClause<?> whereClause : entry.getValue() ){
-                Filter filter = new Filter();
+            for(WhereClause whereClause : entry.getValue() ){
+
+                IFilter<?> filter =
+                        FilterBuilder.build( whereClause );
+
+                 filterList.add(filter);
+
             }
+
+            // a sequential scan for each table
+
             // TODO think about parallel seq scan
-            SequentialScan sequentialScan = new SequentialScan();
+            SequentialScan sequentialScan = new SequentialScan( filterList );
 
         }
 
