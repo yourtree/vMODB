@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.database.query.analyzer;
 
-import dk.ku.di.dms.vms.database.query.analyzer.clause.JoinClause;
-import dk.ku.di.dms.vms.database.query.analyzer.clause.WhereClause;
+import dk.ku.di.dms.vms.database.query.analyzer.clause.JoinOperation;
+import dk.ku.di.dms.vms.database.query.analyzer.clause.WherePredicate;
 import dk.ku.di.dms.vms.database.store.ColumnReference;
 import dk.ku.di.dms.vms.database.store.Table;
 
@@ -12,21 +12,24 @@ import java.util.Map;
 
 public class QueryTree {
 
-    public List<ColumnReference> columns;
+    // projection
+    public List<ColumnReference> projections;
 
     public Map<String,Table<?,?>> tables;
 
-    public List<JoinClause> joinClauses;
+    // join operations
+    public List<JoinOperation> joinOperations;
 
-    public List<WhereClause> whereClauses;
+    // predicates
+    public List<WherePredicate> wherePredicates;
 
     // TODO sort and group clauses
 
     public QueryTree() {
-        this.columns = new ArrayList<>();
+        this.projections = new ArrayList<>();
         this.tables = new HashMap<>();
-        this.joinClauses = new ArrayList<>();
-        this.whereClauses = new ArrayList<>();
+        this.joinOperations = new ArrayList<>();
+        this.wherePredicates = new ArrayList<>();
     }
 
 }

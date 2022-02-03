@@ -17,6 +17,8 @@ public interface IQueryBuilder {
 
     public IQueryBuilder join(String param);
 
+    public IQueryBuilder on(String param1, ExpressionEnum expression, String param2);
+
     public IQueryBuilder or(String param, final ExpressionEnum expr, final Object value);
 
     public IQueryBuilder update(String param) throws BuilderException;

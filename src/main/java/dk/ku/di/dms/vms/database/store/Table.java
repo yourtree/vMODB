@@ -30,6 +30,4 @@ public class Table<PK extends Serializable,TYPE extends AbstractEntity<PK>> {
         this.generationType = generationType;
     }
 
-
-
 }

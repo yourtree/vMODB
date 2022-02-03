@@ -5,13 +5,13 @@ import dk.ku.di.dms.vms.database.store.Column;
 import dk.ku.di.dms.vms.database.store.ColumnReference;
 import dk.ku.di.dms.vms.database.store.Table;
 
-public class WhereClause {
+public class WherePredicate {
 
     public final ColumnReference columnReference;
     public final ExpressionEnum expression;
     public final Object value;
 
-    public WhereClause(ColumnReference columnReference, ExpressionEnum expression, Object value) {
+    public WherePredicate(ColumnReference columnReference, ExpressionEnum expression, Object value) {
         this.columnReference = columnReference;
         this.expression = expression;
         this.value = value;

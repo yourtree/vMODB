@@ -22,7 +22,8 @@ public abstract class Filter<V extends Serializable> implements IFilter<Abstract
         // TODO how can I access a column value without reflection? i would need to
         //  store the fields in the table definition somehow to decrease the cost of accessing the fled dynamically
         // yes, but I need to change the metadata loader for that
-        // Field field = entity.getClass().getField("");
+        // Field field = entity.getClass().getField("c_id");
+
         V value = (V) this.field.get( entity );
         return this.predicate.test( value );
     }

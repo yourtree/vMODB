@@ -1,26 +1,25 @@
 package dk.ku.di.dms.vms.database.query.planner;
 
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
-import dk.ku.di.dms.vms.database.query.analyzer.clause.WhereClause;
+import dk.ku.di.dms.vms.database.query.analyzer.clause.JoinOperation;
+import dk.ku.di.dms.vms.database.query.analyzer.clause.WherePredicate;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
 import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
-import dk.ku.di.dms.vms.database.store.Column;
 import dk.ku.di.dms.vms.database.store.Table;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class Planner {
+public final class Planner {
 
     // https://www.interdb.jp/pg/pgsql03.html
     // "The planner receives a query tree from the rewriter and generates a (query)
     // plan tree that can be processed by the executor most effectively."
 
-
+    // plan and optimize in the same step
     public PlanTree plan(final QueryTree queryTree){
 
         // https://github.com/hyrise/hyrise/tree/master/src/lib/operators
@@ -56,19 +55,19 @@ public class Planner {
 
         // group the where clauses by table
         // https://stackoverflow.com/questions/40172551/static-context-cannot-access-non-static-in-collectors
-        Map<Table<?,?>,List<Column>> columnsWhereClauseGroupedByTable =
-                queryTree
-                .whereClauses.stream()
-                .collect(
-                        Collectors.groupingBy( WhereClause::getTable,
-                        Collectors.mapping( WhereClause::getColumn, Collectors.toList()))
-                );
+//        Map<Table<?,?>,List<Column>> columnsWhereClauseGroupedByTable =
+//                queryTree
+//                .whereClauses.stream()
+//                .collect(
+//                        Collectors.groupingBy( WhereClause::getTable,
+//                        Collectors.mapping( WhereClause::getColumn, Collectors.toList()))
+//                );
 
-        Map<Table<?,?>,List<WhereClause>> whereClauseGroupedByTable =
+        Map<Table<?,?>,List<WherePredicate>> whereClauseGroupedByTable =
                 queryTree
-                        .whereClauses.stream()
+                        .wherePredicates.stream()
                         .collect(
-                                Collectors.groupingBy( WhereClause::getTable,
+                                Collectors.groupingBy( WherePredicate::getTable,
                                          Collectors.toList())
                         );
 
@@ -90,18 +89,14 @@ public class Planner {
         // TODO are we automatically creating indexes for foreign key? probably not
 
 
-        for( Map.Entry<Table<?,?>, List<WhereClause>> entry : whereClauseGroupedByTable.entrySet() ){
+        for( Map.Entry<Table<?,?>, List<WherePredicate>> entry : whereClauseGroupedByTable.entrySet() ){
 
             Table<?,?> currTable = entry.getKey();
             List<IFilter<?>> filterList = new ArrayList<>();
 
-            for(WhereClause whereClause : entry.getValue() ){
-
-                IFilter<?> filter =
-                        FilterBuilder.build( whereClause );
-
-                 filterList.add(filter);
-
+            for(WherePredicate whereClause : entry.getValue()){
+                IFilter<?> filter = FilterBuilder.build( whereClause );
+                filterList.add(filter);
             }
 
             // a sequential scan for each table
@@ -111,7 +106,12 @@ public class Planner {
 
         }
 
+        // TODO can we merge the filters with the join?
+        for(JoinOperation joinClause : queryTree.joinOperations){
 
+            // joinClause.
+
+        }
 
 
         return null;

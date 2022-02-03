@@ -15,12 +15,12 @@ public final class RepositoryFacade implements InvocationHandler {
 
     private static Logger LOGGER = LoggerFactory.getLogger(DynamicInvocationHandler.class);
 
-    final private Class<? extends IRepository> repositoryClazz;
+    private final Class<? extends IRepository<?,?>> repositoryClazz;
 
     final private Class<?> idClazz;
-    final private Class<? extends AbstractEntity> entityClazz;
+    final private Class<? extends AbstractEntity<?>> entityClazz;
 
-    public RepositoryFacade(final Class<? extends IRepository> repositoryClazz){
+    public RepositoryFacade(final Class<? extends IRepository<?,?>> repositoryClazz){
         this.repositoryClazz = repositoryClazz;
 
         ParameterizedTypeImpl typeImpl = ((ParameterizedTypeImpl) repositoryClazz.
@@ -28,7 +28,7 @@ public final class RepositoryFacade implements InvocationHandler {
 
         Type[] types = typeImpl.getActualTypeArguments();
 
-        this.entityClazz = (Class<? extends AbstractEntity>) types[1];
+        this.entityClazz = (Class<? extends AbstractEntity<?>>) types[1];
         this.idClazz = (Class<?>) types[0];
     }
 

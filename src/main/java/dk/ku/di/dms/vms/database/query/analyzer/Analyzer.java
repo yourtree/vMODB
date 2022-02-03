@@ -1,9 +1,8 @@
 package dk.ku.di.dms.vms.database.query.analyzer;
 
 import dk.ku.di.dms.vms.database.catalog.Catalog;
-import dk.ku.di.dms.vms.database.query.analyzer.clause.JoinClause;
-import dk.ku.di.dms.vms.database.query.analyzer.clause.WhereClause;
-import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
+import dk.ku.di.dms.vms.database.query.analyzer.clause.JoinOperation;
+import dk.ku.di.dms.vms.database.query.analyzer.clause.WherePredicate;
 import dk.ku.di.dms.vms.database.query.parser.enums.JoinEnum;
 import dk.ku.di.dms.vms.database.query.parser.stmt.*;
 import dk.ku.di.dms.vms.database.store.Column;
@@ -73,9 +72,9 @@ public final class Analyzer {
                 ColumnReference columnRightReference = findColumnReference(join.columnRight, tableRight);
 
                 // build typed join clause
-                JoinClause joinClause = new JoinClause(columnLeftReference, columnRightReference, join.expression, join.joinType);
+                JoinOperation joinClause = new JoinOperation(columnLeftReference, columnRightReference, join.expression, join.joinType);
 
-                queryTree.joinClauses.add(joinClause);
+                queryTree.joinOperations.add(joinClause);
 
             }
 
@@ -88,7 +87,7 @@ public final class Analyzer {
                 //  that would make find the column reference faster
                 ColumnReference columnReference = findColumnReference(columnStr, queryTree.tables);
                 if(columnReference != null){
-                    queryTree.columns.add(columnReference);
+                    queryTree.projections.add(columnReference);
                 }
             }
 
@@ -133,6 +132,7 @@ public final class Analyzer {
                     String value = (String) currWhere.value;
 
                     if( value.contains(".") ){
+                        // <table>.<column>
                         String[] split = value.split(".");
                         tableName = split[0];
                         columnName = split[1];
@@ -151,14 +151,14 @@ public final class Analyzer {
                     }
 
                     // build typed join clause
-                    JoinClause joinClause = new JoinClause(columnReference, columnReference1, currWhere.expression, JoinEnum.INNER_JOIN);
+                    JoinOperation joinClause = new JoinOperation(columnReference, columnReference1, currWhere.expression, JoinEnum.INNER_JOIN);
 
-                    queryTree.joinClauses.add(joinClause);
+                    queryTree.joinOperations.add(joinClause);
 
                 } else {
                     // simple where
-                    WhereClause whereClause = new WhereClause(columnReference, currWhere.expression, currWhere.value);
-                    queryTree.whereClauses.add(whereClause);
+                    WherePredicate whereClause = new WherePredicate(columnReference, currWhere.expression, currWhere.value);
+                    queryTree.wherePredicates.add(whereClause);
                 }
 
             }
