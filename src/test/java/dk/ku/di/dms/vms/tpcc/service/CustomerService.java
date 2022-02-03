@@ -37,7 +37,7 @@ public class CustomerService {
         // CustomerInfoDTO customerInfoDTO = new CustomerInfoDTO();
 
         IQueryBuilder builder = QueryBuilderFactory.init();
-        IStatement sql = builder.select("c_discount, c_last, c_credit").into(CustomerInfoDTO.class)
+        IStatement sql = builder.select("c_discount, c_last, c_credit")//.into(CustomerInfoDTO.class)
                             .from("customer")
                             .where("c_w_id", EQUALS, in.c_w_id)
                             .and("c_d_id", EQUALS, in.c_d_id)
@@ -51,7 +51,7 @@ public class CustomerService {
                 .build();
 
         // TODO make query builder part of the repository
-        List<CustomerInfoDTO> customerInfoDTO =
+        // List<CustomerInfoDTO> customerInfoDTO =
         Triplet<Float,String,String> customerData =
                 (Triplet<Float, String, String>) customerRepository.fetch(sql);
 

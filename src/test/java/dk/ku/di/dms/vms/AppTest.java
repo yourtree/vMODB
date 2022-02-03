@@ -1,19 +1,24 @@
 package dk.ku.di.dms.vms;
 
+import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum.EQUALS;
 import static org.junit.Assert.assertTrue;
 
 import dk.ku.di.dms.vms.database.api.modb.RepositoryFacade;
+import dk.ku.di.dms.vms.database.query.planner.node.filter.Filter;
+import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
 import dk.ku.di.dms.vms.operational.DataOperationExecutor;
 import dk.ku.di.dms.vms.event.EventRepository;
 import dk.ku.di.dms.vms.eShopOnContainers.events.AddProductRequest;
 import dk.ku.di.dms.vms.eShopOnContainers.logic.LogicDummyTest;
 import dk.ku.di.dms.vms.eShopOnContainers.repository.IProductRepository;
+import dk.ku.di.dms.vms.tpcc.entity.Item;
 import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderIn;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 
 public class AppTest 
@@ -34,6 +39,17 @@ public class AppTest
         logic.addProduct(request);
 
         assertTrue(true);
+    }
+
+    @Test
+    public void testCreatingFilter() throws IllegalAccessException, NoSuchFieldException {
+
+        Item item = new Item(); item.i_id = 1;
+        Field field = Item.class.getField("i_id");
+        Filter<Integer> filter = FilterBuilder.getIntegerFilter(EQUALS, field, 1);
+
+        // filter.and
+        assertTrue(filter.test( item ));
     }
 
     @Test

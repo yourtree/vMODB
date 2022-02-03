@@ -1,7 +1,9 @@
 package dk.ku.di.dms.vms.database.query.planner.node.filter;
 
-public interface IFilter<T> {
+import java.util.function.Predicate;
 
-    public boolean apply(T entity) throws IllegalAccessException;
+public interface IFilter<T> extends Predicate<T> {
+
+    // public boolean apply(T entity) throws Throwable;
 
 }

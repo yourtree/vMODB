@@ -20,7 +20,7 @@ public final class Planner {
     // plan tree that can be processed by the executor most effectively."
 
     // plan and optimize in the same step
-    public PlanTree plan(final QueryTree queryTree){
+    public PlanTree plan(final QueryTree queryTree) throws IllegalAccessException {
 
         // https://github.com/hyrise/hyrise/tree/master/src/lib/operators
         // https://github.com/hyrise/hyrise/tree/master/src/lib/optimizer

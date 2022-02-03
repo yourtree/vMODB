@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.infra.IRepository;
 import dk.ku.di.dms.vms.tpcc.entity.Customer;
 
 @Repository
-public interface ICustomerRepository extends IRepository<Integer, Customer> {
+public interface ICustomerRepository extends IRepository<Customer.CustomerId, Customer> {
 
 
 }

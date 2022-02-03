@@ -30,4 +30,13 @@ public class Table<PK extends Serializable,TYPE extends AbstractEntity<PK>> {
         this.generationType = generationType;
     }
 
+    public Table(final String name) {
+        this.name = name;
+        this.columnMap = new HashMap<>();
+        this.rows = new HashMap<>();
+        this.indexes = new HashMap<>();
+
+        this.generationType = GenerationType.IDENTITY;
+    }
+
 }
