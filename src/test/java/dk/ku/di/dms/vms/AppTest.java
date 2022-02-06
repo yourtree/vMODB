@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 import dk.ku.di.dms.vms.database.api.modb.RepositoryFacade;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.Filter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
+import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.operational.DataOperationExecutor;
 import dk.ku.di.dms.vms.event.EventRepository;
 import dk.ku.di.dms.vms.eShopOnContainers.events.AddProductRequest;
@@ -18,6 +19,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 
@@ -42,14 +45,16 @@ public class AppTest
     }
 
     @Test
-    public void testCreatingFilter() throws IllegalAccessException, NoSuchFieldException {
+    public void testCreatingFilter() throws Throwable {
 
         Item item = new Item(); item.i_id = 1;
         Field field = Item.class.getField("i_id");
-        Filter<Integer> filter = FilterBuilder.getIntegerFilter(EQUALS, field, 1);
+        MethodHandle h = MethodHandles.lookup().unreflectGetter(field);
+        Integer value = (Integer) h.invoke( item );
+        IFilter<Integer> filter = FilterBuilder.getFilter(EQUALS, 1);
 
         // filter.and
-        assertTrue(filter.test( item ));
+        assertTrue(filter.test( value ));
     }
 
     @Test

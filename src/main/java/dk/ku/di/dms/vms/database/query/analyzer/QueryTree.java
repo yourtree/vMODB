@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.database.query.analyzer;
 
-import dk.ku.di.dms.vms.database.query.analyzer.clause.JoinOperation;
-import dk.ku.di.dms.vms.database.query.analyzer.clause.WherePredicate;
+import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
+import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.store.ColumnReference;
 import dk.ku.di.dms.vms.database.store.Table;
 
@@ -18,7 +18,7 @@ public class QueryTree {
     public Map<String,Table<?,?>> tables;
 
     // join operations
-    public List<JoinOperation> joinOperations;
+    public List<JoinPredicate> joinOperations;
 
     // predicates
     public List<WherePredicate> wherePredicates;

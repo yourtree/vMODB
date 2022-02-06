@@ -2,6 +2,8 @@ package dk.ku.di.dms.vms.database.query.parser.enums;
 
 public enum ExpressionEnum {
 
+    // value expression
+
     LESS_THAN("<"),
 
     GREATER_THAN(">"),
@@ -14,11 +16,20 @@ public enum ExpressionEnum {
 
     NOT_EQUALS("<>"),
 
+    IS_NULL("IS NULL"),
+
+    IS_NOT_NULL("IS NOT NULL"),
+
+    // only for string or char
     LIKE("LIKE"),
+
+    // boolean expression
 
     OR("OR"),
 
     AND("AND"),
+
+    // set expression
 
     IN("IN"),
 
@@ -26,11 +37,7 @@ public enum ExpressionEnum {
 
     NOT("NOT"),
 
-    EXISTS("EXISTS"),
-
-    IS_NULL("IS NULL"),
-
-    IS_NOT_NULL("IS NOT NULL");
+    EXISTS("EXISTS");
 
     public final String name;
 

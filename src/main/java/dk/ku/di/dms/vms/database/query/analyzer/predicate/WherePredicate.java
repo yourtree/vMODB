@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.query.analyzer.clause;
+package dk.ku.di.dms.vms.database.query.analyzer.predicate;
 
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
 import dk.ku.di.dms.vms.database.store.Column;
@@ -15,6 +15,13 @@ public class WherePredicate {
         this.columnReference = columnReference;
         this.expression = expression;
         this.value = value;
+    }
+
+    public WherePredicate(ColumnReference columnReference, ExpressionEnum expression) {
+        this.columnReference = columnReference;
+        this.expression = expression;
+        // for equals, not equals NULL, value is not necessary
+        this.value = null;
     }
 
     public Table<?,?> getTable() {

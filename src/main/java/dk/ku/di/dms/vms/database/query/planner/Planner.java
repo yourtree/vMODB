@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.database.query.planner;
 
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
-import dk.ku.di.dms.vms.database.query.analyzer.clause.JoinOperation;
-import dk.ku.di.dms.vms.database.query.analyzer.clause.WherePredicate;
+import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
+import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
 import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
@@ -20,7 +20,7 @@ public final class Planner {
     // plan tree that can be processed by the executor most effectively."
 
     // plan and optimize in the same step
-    public PlanTree plan(final QueryTree queryTree) throws IllegalAccessException {
+    public PlanTree plan(final QueryTree queryTree) throws Exception {
 
         // https://github.com/hyrise/hyrise/tree/master/src/lib/operators
         // https://github.com/hyrise/hyrise/tree/master/src/lib/optimizer
@@ -107,7 +107,7 @@ public final class Planner {
         }
 
         // TODO can we merge the filters with the join?
-        for(JoinOperation joinClause : queryTree.joinOperations){
+        for(JoinPredicate joinClause : queryTree.joinOperations){
 
             // joinClause.
 
