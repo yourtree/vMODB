@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.store;
 
-public enum ColumnType {
+public enum DataType {
 
     INT,
 

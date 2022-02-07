@@ -1,11 +1,17 @@
 package dk.ku.di.dms.vms.database.query.planner.node.filter;
 
-import java.io.Serializable;
+import dk.ku.di.dms.vms.database.store.refac.Row;
 
-public class NullFilter<V extends Serializable> implements IFilter<V> {
+public class NullFilter implements IFilter<Row> {
+
+    public final int columnIndex;
+
+    public NullFilter(int columnIndex) {
+        this.columnIndex = columnIndex;
+    }
 
     @Override
-    public boolean test(V v) {
-        return v == null;
+    public boolean test(Row row) {
+        return row.get(columnIndex) == null;
     }
 }

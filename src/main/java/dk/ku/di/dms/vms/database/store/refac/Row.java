@@ -1,28 +1,48 @@
 package dk.ku.di.dms.vms.database.store.refac;
 
-import dk.ku.di.dms.vms.database.store.refac.Table;
+import java.nio.ByteBuffer;
 
-import java.util.List;
-
+/**
+ * Defines a rwo.
+ * <p>For each data type, the value should be stored as:
+ * <ul>
+ *   <li>INT: Integer</li>
+ *   <li>LONG: Long</li>
+ *   <li>CHAR: Character</li>
+ *   <li>DOUBLE: Double</li>
+ *   <li>STRING: String</li>
+ * </ul>
+ */
 public abstract class Row {
 
-    // public Table table;
+    protected final Object[] values;
 
-    // collection of values
-    private int[] data;
-
-    private int primaryKey;
-
-    private int[] intData;
-    private long[] longData;
-    private float[] floatData;
-    private double[] doubleData;
-    private char[] charData;
-    private String[] stringData;
-
-
-    @Override
-    public int hashCode() {
-        return primaryKey;
+    public Row(final Object[] values) {
+        this.values = values;
     }
+
+    public Object get(int id) {
+        return values[id];
+    }
+
+    public int getInt(int id) {
+        return (int) values[id];
+    }
+
+    public double getDouble(int id) {
+        return (Double) values[id];
+    }
+
+    public long getLong(int id) {
+        return (long) values[id];
+    }
+
+    public String getString(int id) {
+        return (String) values[id];
+    }
+
+    public Character getCharacter(int id) {
+        return (Character) values[id];
+    }
+
 }

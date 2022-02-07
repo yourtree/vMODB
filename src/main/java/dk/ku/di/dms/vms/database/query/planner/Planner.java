@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
 import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
 import dk.ku.di.dms.vms.database.store.Table;
+import dk.ku.di.dms.vms.database.store.refac.Row;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -92,17 +93,16 @@ public final class Planner {
         for( Map.Entry<Table<?,?>, List<WherePredicate>> entry : whereClauseGroupedByTable.entrySet() ){
 
             Table<?,?> currTable = entry.getKey();
-            List<IFilter<?>> filterList = new ArrayList<>();
-
+            // the row is true at the start anyway
+            IFilter<Row> baseFilter = ( row -> true );
             for(WherePredicate whereClause : entry.getValue()){
-                IFilter<?> filter = FilterBuilder.build( whereClause );
-                filterList.add(filter);
+                baseFilter.and(FilterBuilder.build( whereClause ));
             }
 
             // a sequential scan for each table
 
             // TODO think about parallel seq scan
-            SequentialScan sequentialScan = new SequentialScan( filterList );
+            // SequentialScan sequentialScan = new SequentialScan( filterList, table);
 
         }
 

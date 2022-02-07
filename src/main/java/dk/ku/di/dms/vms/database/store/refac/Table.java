@@ -1,34 +1,28 @@
 package dk.ku.di.dms.vms.database.store.refac;
 
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 
 public abstract class Table {
 
-    public String name;
+    // basically a map of column name to exact position in values
+    private final Map<String,Integer> columnNameToIndexMap;
 
-    public Map<String, Integer> columnToPointerMap;
+    private final String name;
 
-    public Column[] columns;
-
-    public Map<Integer,Row> rows;
+    private final Schema schema;
 
     public abstract int size();
 
-    // the principle is that I will always have the primary key indexed
+    public abstract boolean upsert(IKey key, Row row);
 
-//    public Row(List<Integer> positions){
-//        StringBuilder sb = new StringBuilder();
-//        positions.stream().forEach( pos -> {
-//            sb.append(data[pos]);
-//        });
-//        this.primaryKey = sb.toString().hashCode();
-//    }
-//
-//    public Row(final int pos){
-//        // assert data != null;
-//        this.primaryKey = data[pos] instanceof Integer ? (int) data[pos] : data[pos].hashCode();
-//    }
+    public abstract boolean delete(IKey key);
 
+    public abstract Iterator<Row> iterator();
 
+    public Table(Map<String, Integer> columnNameToIndexMap, String name, Schema schema) {
+        this.columnNameToIndexMap = columnNameToIndexMap;
+        this.name = name;
+        this.schema = schema;
+    }
 }

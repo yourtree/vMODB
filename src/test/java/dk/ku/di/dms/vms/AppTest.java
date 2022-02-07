@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.database.api.modb.RepositoryFacade;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.Filter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
+import dk.ku.di.dms.vms.database.store.refac.Row;
 import dk.ku.di.dms.vms.operational.DataOperationExecutor;
 import dk.ku.di.dms.vms.event.EventRepository;
 import dk.ku.di.dms.vms.eShopOnContainers.events.AddProductRequest;
@@ -51,10 +52,12 @@ public class AppTest
         Field field = Item.class.getField("i_id");
         MethodHandle h = MethodHandles.lookup().unreflectGetter(field);
         Integer value = (Integer) h.invoke( item );
-        IFilter<Integer> filter = FilterBuilder.getFilter(EQUALS, 1);
+        IFilter<Row> filter = FilterBuilder.getFilter(EQUALS, 0, 1);
 
+        // FIXME
+        Row row = null;
         // filter.and
-        assertTrue(filter.test( value ));
+        assertTrue(filter.test( row ));
     }
 
     @Test
