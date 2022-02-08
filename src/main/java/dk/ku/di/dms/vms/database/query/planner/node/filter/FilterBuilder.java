@@ -8,24 +8,24 @@ import java.io.Serializable;
 
 public class FilterBuilder {
 
-    public static IFilter<Row> build(final WherePredicate whereClause) throws Exception {
+    public static IFilter<?> build(final WherePredicate whereClause) throws Exception {
 
         switch(whereClause.columnReference.column.type){
 
             case INT: {
-                return getFilter( whereClause.expression, 1, (int) whereClause.value );
+                return FilterBuilder.<Integer>getFilter( whereClause.expression, (int) whereClause.value );
             }
             case STRING: {
-                //return getFilter( whereClause.expression, (String) whereClause.value );
+                return getFilter( whereClause.expression, (String) whereClause.value );
             }
             case CHAR: {
-                //return getFilter( whereClause.expression, (Character) whereClause.value );
+                return getFilter( whereClause.expression, (Character) whereClause.value );
             }
             case LONG: {
-                //return getFilter( whereClause.expression, (Long) whereClause.value );
+                return getFilter( whereClause.expression, (Long) whereClause.value );
             }
             case DOUBLE: {
-                //return getFilter( whereClause.expression, (Double) whereClause.value );
+                return getFilter( whereClause.expression, (Double) whereClause.value );
             }
             default:
                 throw new IllegalStateException("Unexpected value: " + whereClause.columnReference.column.type);
@@ -33,80 +33,95 @@ public class FilterBuilder {
 
     }
 
-    interface Returnable<V extends Number> {
-        V get(Row row, int columnIndex);
+    interface Returnable<V extends Serializable> {
+        IFilter<V> get(V value, Comparable<V> comparable);
     }
 
-    public static IFilter<Row> getFilter(
+    private static class EqualsPredicateComparator {
+        public static <V> boolean compare( V x, V y ){
+            return x == y;
+        }
+    }
+
+    interface IComparator<V> {
+        boolean compare(V x, V y);
+        //boolean compare(V v);
+    }
+
+    interface IEqualsComparator<V> extends IComparator<V> {
+        default boolean compare(V x, V y){
+            return x == y;
+        }
+    }
+
+    interface INotEqualsComparator<V> extends IComparator<V> {
+        default boolean compare(V x, V y){
+            return x != y;
+        }
+    }
+
+    public static <V extends Serializable> IFilter<V> getFilter(
             final ExpressionEnum expression,
-            final int columnIndex,
-            final int fixedValue) throws Exception {
+            final V fixedValue) throws Exception {
 
 //        Returnable<Double> s1 = ( row, columnIndex2 ) -> row.getDouble(columnIndex2);
-        Returnable<Double> s1 = Row::getDouble;
+//        Returnable<Double> s1 = Row::getDouble;
+
+        //EqualsPredicateComparator.<Integer> compare()
+
+        //IEqualsPredicateComparator<V>.compare(  )
+        IComparator<V> comp;
+        IFilter<V> f;
 
         switch(expression){
             case EQUALS:
-                return new Filter<Integer>(fixedValue, Integer::compareTo, columnIndex) {
-                    @Override
-                    public boolean test(Row row) {
-                        Integer value = row.getInt(this.columnIndex);
-                        return this.comparator.compare( value, this.fixedValue ) == 0;
-                    }
-                };
+                comp = new IEqualsComparator<V>() {};
+                f = new Filter<V>(fixedValue, 1, comp) {};
             case NOT_EQUALS:
-                return new Filter<Integer>(fixedValue, Integer::compareTo, columnIndex) {
-                    @Override
-                    public boolean test(Row row) {
-                        Integer value = row.getInt(this.columnIndex);
-                        return this.comparator.compare( value, this.fixedValue ) != 0;
-                    }
-                };
+                comp = new INotEqualsComparator<V>() {};
+                //Returnable<V> s1 = ( value, comparable ) -> new Filter<V>(fixedValue, 1, comp) {};
+                f = new Filter<V>(fixedValue, 1, comp) {};
             case LESS_THAN_OR_EQUAL:
-                return new Filter<Integer>(fixedValue, Integer::compareTo, columnIndex) {
-                    @Override
-                    public boolean test(Row row) {
-                        Integer value = row.getInt(this.columnIndex);
-                        return this.comparator.compare( value, this.fixedValue ) <= 0;
-                    }
-                };
+//                return new Filter<Integer>(fixedValue, Integer::compareTo) {
+//                    @Override
+//                    public boolean test(Integer value) {
+//                        return this.comparator.compare( value, this.fixedValue ) <= 0;
+//                    }
+//                };
             case LESS_THAN:
-                return new Filter<Integer>(fixedValue, Integer::compareTo, columnIndex) {
-                    @Override
-                    public boolean test(Row row) {
-                        Integer value = row.getInt(this.columnIndex);
-                        return this.comparator.compare( value, this.fixedValue ) < 0;
-                    }
-                };
+//                return new Filter<Integer>(fixedValue, Integer::compareTo) {
+//                    @Override
+//                    public boolean test(Integer value) {
+//                        return this.comparator.compare( value, this.fixedValue ) < 0;
+//                    }
+//                };
             case GREATER_THAN:
-                return new Filter<Integer>(fixedValue, Integer::compareTo, columnIndex) {
-                    @Override
-                    public boolean test(Row row) {
-                        Integer value = row.getInt(this.columnIndex);
-                        return this.comparator.compare( value, this.fixedValue ) > 0;
-                    }
-                };
+//                return new Filter<Integer>(fixedValue, Integer::compareTo) {
+//                    @Override
+//                    public boolean test(Integer value) {
+//                        return this.comparator.compare( value, this.fixedValue ) > 0;
+//                    }
+//                };
             case GREATER_THAN_OR_EQUAL:
-                return new Filter<Integer>(fixedValue, Integer::compareTo, columnIndex) {
-                    @Override
-                    public boolean test(Row row) {
-                        Integer value = row.getInt(this.columnIndex);
-                        return this.comparator.compare( value, this.fixedValue ) >= 0;
-                    }
-                };
+//                return new Filter<Integer>(fixedValue, Integer::compareTo) {
+//                    @Override
+//                    public boolean test(Integer value) {
+//                        return this.comparator.compare( value, this.fixedValue ) >= 0;
+//                    }
+//                };
             case IS_NULL:
-                return new NullFilter(columnIndex) {};
+//                return new NullFilter<Integer>() {};
             case IS_NOT_NULL:
-                return new NullFilter(columnIndex) {
-                    @Override
-                    public boolean test(Row row) {
-                        return !super.test(row);
-                    }
-                };
+//                return new NullFilter<Integer>() {
+//                    @Override
+//                    public boolean test(Integer value) {
+//                        return !super.test(value);
+//                    }
+//                };
             case LIKE: throw new Exception("Like does not apply to integer value.");
+            default: throw new Exception("Predicate not implemented");
         }
 
-        return null;
     }
 
 }

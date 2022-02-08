@@ -94,7 +94,7 @@ public final class Planner {
 
             Table<?,?> currTable = entry.getKey();
             // the row is true at the start anyway
-            IFilter<Row> baseFilter = ( row -> true );
+            IFilter<?> baseFilter = ( v -> true );
             for(WherePredicate whereClause : entry.getValue()){
                 baseFilter.and(FilterBuilder.build( whereClause ));
             }

@@ -1,17 +1,21 @@
 package dk.ku.di.dms.vms.database.store.refac;
 
-import java.nio.ByteBuffer;
-
 /**
- * Defines a row.
+ * Defines a rwo.
+ * <p>For each data type, the value should be stored as:
+ * <ul>
+ *   <li>INT: Integer</li>
+ *   <li>LONG: Long</li>
+ *   <li>CHAR: Character</li>
+ *   <li>DOUBLE: Double</li>
+ *   <li>STRING: String</li>
+ * </ul>
  */
-public class Row {
-
-
+public class Record {
 
     protected final Object[] values;
 
-    public Row(final Object[] values) {
+    public Record(final Object[] values) {
         this.values = values;
     }
 

@@ -1,22 +1,38 @@
 package dk.ku.di.dms.vms.database.query.planner.node.filter;
 
-import dk.ku.di.dms.vms.database.store.refac.Row;
-
 import java.io.Serializable;
-import java.util.Comparator;
 
-public abstract class Filter<V extends Serializable> implements IFilter<Row> {
+public class Filter<V extends Serializable> implements IFilter<V> {
 
-    public final V fixedValue;
+    public V fixedValue;
 
-    public final Comparator<V> comparator;
+    public int columnIdx;
 
-    public final int columnIndex;
+    // public final Comparator<V> comparator;
 
-    public Filter(final V fixedValue, final Comparator<V> comparator,final int columnIndex) {
+    public final FilterBuilder.IComparator<V> comparator;
+
+    public Filter(final V fixedValue, final int columnIdx,
+                  final FilterBuilder.IComparator<V> comparator) {
         this.fixedValue = fixedValue;
+        this.columnIdx = columnIdx;
         this.comparator = comparator;
-        this.columnIndex = columnIndex;
     }
 
+    public Filter(final FilterBuilder.IComparator<V> comparator) {
+        this.fixedValue = null;
+        //this.columnIdx;
+        this.comparator = comparator;
+    }
+
+    /** to avoid creating again the same filter */
+    public final void redefine(final V fixedValue, final int columnIdx){
+        this.fixedValue = fixedValue;
+        this.columnIdx = columnIdx;
+    }
+
+    @Override
+    public boolean test(V v) {
+        return comparator.compare(fixedValue,v);
+    }
 }

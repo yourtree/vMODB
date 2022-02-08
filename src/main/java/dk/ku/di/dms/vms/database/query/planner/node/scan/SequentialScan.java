@@ -15,11 +15,11 @@ import java.util.concurrent.Callable;
  */
 public final class SequentialScan implements Callable<Collection<Row>> {
 
-    private final IFilter<Row> filter;
+    private final IFilter<?> filter;
 
     private final Table table;
 
-    public SequentialScan(final Table table, final IFilter<Row> filter) {
+    public SequentialScan(final Table table, final IFilter<?> filter) {
         this.table = table;
         this.filter = filter;
     }
@@ -33,7 +33,7 @@ public final class SequentialScan implements Callable<Collection<Row>> {
 
         while( iterator.hasNext() ){
             Row row = iterator.next();
-            if (filter.test(row)) result.add(row);
+            //if (filter.test(row)) result.add(row);
         }
 
         return result;
