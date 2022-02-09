@@ -1,10 +1,12 @@
 package dk.ku.di.dms.vms.database.store.refac;
 
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
 
 /**
  * Map-based Table for primary key index lookup
+ * TODO rethink about this class...
  */
 public class IndexedTable extends Table {
 
@@ -13,7 +15,7 @@ public class IndexedTable extends Table {
     // index of the keys in the column array, in order
     private final int[] posKeyColumns;
 
-    public IndexedTable(String name, Schema schema, Map<IKey, Row> lookupMap, int[] posKeyColumns) {
+    public IndexedTable(Map<String, Integer> columnNameToIndexMap, String name, Schema schema, Map<IKey, Row> lookupMap, int[] posKeyColumns) {
         super(columnNameToIndexMap, name, schema);
         this.lookupMap = lookupMap;
         this.posKeyColumns = posKeyColumns;
@@ -22,6 +24,11 @@ public class IndexedTable extends Table {
     @Override
     public int size() {
         return lookupMap.size();
+    }
+
+    @Override
+    public boolean upsert(Row row) {
+        return false;
     }
 
     @Override
@@ -39,5 +46,10 @@ public class IndexedTable extends Table {
     @Override
     public Iterator<Row> iterator() {
         return lookupMap.values().iterator();
+    }
+
+    @Override
+    public Collection<Row> rows() {
+        return null;
     }
 }

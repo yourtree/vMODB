@@ -97,6 +97,7 @@ public final class Planner {
             // the row is true at the start anyway
             IFilter<?> filter = FilterBuilder.build( entry.getValue() );
 
+            // for(  )
 
             // a sequential scan for each table
 

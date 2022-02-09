@@ -1,13 +1,10 @@
 package dk.ku.di.dms.vms.database.store.refac;
 
-import java.nio.ByteBuffer;
-
 /**
- * Defines a row.
+ * Defines an abstract row.
+ * Later a row will be specialized for each concurrency control protocol.
  */
-public class Row {
-
-
+public abstract class Row {
 
     protected final Object[] values;
 

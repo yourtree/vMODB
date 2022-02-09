@@ -10,7 +10,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// logical query plan tree
+/**
+ *  Logical query plan tree.
+ *  TODO change everything to array
+  */
 public class QueryTree {
 
     // projection

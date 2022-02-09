@@ -13,6 +13,14 @@ import java.util.Objects;
  */
 public class FilterBuilder {
 
+    /**
+     * Only used if the same column is being checked in all where predicates.
+     * For instance, x > 100 AND x < 200
+     * Althoug not supported, range queries ( x BETWEEN y ) would also fit
+     * @param wherePredicates
+     * @return
+     * @throws Exception
+     */
     public static IFilter<?> build(final List<WherePredicate> wherePredicates) throws Exception {
 
         IFilter<?> baseFilter = build( wherePredicates.get(0) );
@@ -64,48 +72,48 @@ public class FilterBuilder {
 
         switch(expression){
             case EQUALS:
-                comp = (Comparator<V>) getComparator( dataType );
-                return new Filter<V>(fixedValue, comp) {
+                comp = getComparator(dataType);
+                return new Filter<V>(dataType, fixedValue, comp) {
                     @Override
                     public boolean test(V value) {
                         return this.comparator.compare( value, this.fixedValue ) == 0;
                     }
                 };
             case NOT_EQUALS:
-                comp = (Comparator<V>) getComparator( dataType );
-                return new Filter<V>(fixedValue, comp) {
+                comp = getComparator(dataType);
+                return new Filter<V>(dataType, fixedValue, comp) {
                     @Override
                     public boolean test(V value) {
                         return this.comparator.compare( value, this.fixedValue ) != 0;
                     }
                 };
             case LESS_THAN_OR_EQUAL:
-                comp = (Comparator<V>) getComparator( dataType );
-                return new Filter<V>(fixedValue, comp) {
+                comp = getComparator(dataType);
+                return new Filter<V>(dataType, fixedValue, comp) {
                     @Override
                     public boolean test(V value) {
                         return this.comparator.compare( value, this.fixedValue ) <= 0;
                     }
                 };
             case LESS_THAN:
-                comp = (Comparator<V>) getComparator( dataType );
-                return new Filter<V>(fixedValue, comp) {
+                comp = getComparator(dataType);
+                return new Filter<V>(dataType, fixedValue, comp) {
                     @Override
                     public boolean test(V value) {
                         return this.comparator.compare( value, this.fixedValue ) < 0;
                     }
                 };
             case GREATER_THAN:
-                comp = (Comparator<V>) getComparator( dataType );
-                return new Filter<V>(fixedValue, comp) {
+                comp = getComparator(dataType);
+                return new Filter<V>(dataType, fixedValue, comp) {
                     @Override
                     public boolean test(V value) {
                         return this.comparator.compare( value, this.fixedValue ) > 0;
                     }
                 };
             case GREATER_THAN_OR_EQUAL:
-                comp = (Comparator<V>) getComparator( dataType );
-                return new Filter<V>(fixedValue, comp) {
+                comp = getComparator(dataType);
+                return new Filter<V>(dataType, fixedValue, comp) {
                     @Override
                     public boolean test(V value) {
                         return this.comparator.compare( value, this.fixedValue ) >= 0;
@@ -130,7 +138,7 @@ public class FilterBuilder {
 
     }
 
-    private static Comparator<?> getComparator(DataType type) {
+    private static Comparator getComparator(DataType type) {
         switch (type) {
             case INT: return (Comparator<Integer>) Integer::compareTo;
             case LONG: return (Comparator<Long>) Long::compareTo;
@@ -141,5 +149,17 @@ public class FilterBuilder {
                 throw new IllegalStateException("Unexpected value: " + type);
         }
     }
+
+//    private static Comparator<?> getComparator(DataType type) {
+//        switch (type) {
+//            case INT: return (Comparator<Integer>) Integer::compareTo;
+//            case LONG: return (Comparator<Long>) Long::compareTo;
+//            case DOUBLE: return (Comparator<Double>) Double::compareTo;
+//            case CHAR: return (Comparator<Character>) Character::compareTo;
+//            case STRING: return (Comparator<String>) String::compareTo;
+//            default:
+//                throw new IllegalStateException("Unexpected value: " + type);
+//        }
+//    }
 
 }
