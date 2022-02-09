@@ -1,12 +1,13 @@
 package dk.ku.di.dms.vms.database.query.analyzer;
 
 import dk.ku.di.dms.vms.database.catalog.Catalog;
+import dk.ku.di.dms.vms.database.query.analyzer.predicate.GroupPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.query.parser.enums.JoinEnum;
 import dk.ku.di.dms.vms.database.query.parser.stmt.*;
-import dk.ku.di.dms.vms.database.store.Column;
 import dk.ku.di.dms.vms.database.store.ColumnReference;
+import dk.ku.di.dms.vms.database.store.Schema;
 import dk.ku.di.dms.vms.database.store.Table;
 
 import java.util.List;
@@ -34,7 +35,7 @@ public final class Analyzer {
             List<String> fromClause = select.fromClause;
 
             for(String tableStr : fromClause){
-                Table<?,?> table = catalog.tableMap.getOrDefault(tableStr,null);
+                Table table = catalog.tableMap.getOrDefault(tableStr,null);
                 if(table != null) queryTree.tables.put(tableStr,table);
             }
 
@@ -43,7 +44,7 @@ public final class Analyzer {
             for(JoinClauseElement join : joinClauseElements){
                 // TODO an optimization is iterating through the foreign keys of the table to find the match faster
 
-                Table<?,?> tableLeft = queryTree.tables.getOrDefault(join.tableLeft,null);
+                Table tableLeft = queryTree.tables.getOrDefault(join.tableLeft,null);
 
                 // find in catalog if not found in query yet
                 if(tableLeft == null){
@@ -58,7 +59,7 @@ public final class Analyzer {
                 // find left column
                 ColumnReference columnLeftReference = findColumnReference(join.columnLeft, tableLeft);
 
-                Table<?,?> tableRight = queryTree.tables.getOrDefault(join.tableRight,null);
+                Table tableRight = queryTree.tables.getOrDefault(join.tableRight,null);
                 if(tableRight == null){
                     tableRight = catalog.tableMap.getOrDefault(join.tableRight,null);
                     if(tableRight != null) {
@@ -74,7 +75,7 @@ public final class Analyzer {
                 // build typed join clause
                 JoinPredicate joinClause = new JoinPredicate(columnLeftReference, columnRightReference, join.expression, join.joinType);
 
-                queryTree.joinOperations.add(joinClause);
+                queryTree.joinPredicates.add(joinClause);
 
             }
 
@@ -108,7 +109,7 @@ public final class Analyzer {
                     String[] split = currWhere.column.split(".");
                     tableName = split[0];
                     columnName = split[1];
-                    Table<?,?> table = queryTree.tables.getOrDefault(tableName,null);
+                    Table table = queryTree.tables.getOrDefault(tableName,null);
                     if(table != null) {
                         columnReference = findColumnReference(columnName, table);
                     } else {
@@ -136,7 +137,7 @@ public final class Analyzer {
                         String[] split = value.split(".");
                         tableName = split[0];
                         columnName = split[1];
-                        Table<?,?> table = queryTree.tables.getOrDefault(tableName,null);
+                        Table table = queryTree.tables.getOrDefault(tableName,null);
                         if(table != null) {
                             columnReference1 = findColumnReference(columnName, table);
                         } else {
@@ -153,7 +154,7 @@ public final class Analyzer {
                     // build typed join clause
                     JoinPredicate joinClause = new JoinPredicate(columnReference, columnReference1, currWhere.expression, JoinEnum.INNER_JOIN);
 
-                    queryTree.joinOperations.add(joinClause);
+                    queryTree.joinPredicates.add(joinClause);
 
                 } else {
                     // simple where
@@ -179,22 +180,34 @@ public final class Analyzer {
 
     }
 
-    private ColumnReference findColumnReference(String columnStr, Map<String,? extends Table<?,?>> tables) {
-        for(Table<?,?> tbl : tables.values()){
-            Column column = tbl.columnMap.get(columnStr);
-            if(column != null){
-                return new ColumnReference(column, tbl);
+    private ColumnReference findColumnReference(String columnStr, Map<String,Table> tables) throws Exception {
+
+        ColumnReference columnReferenceToResult = null;
+
+        for(Table table : tables.values()){
+            final Schema schema = table.getSchema();
+            Integer columnIndex = schema.getColumnIndex(columnStr);
+            if(columnIndex != null) {
+                if(columnReferenceToResult == null) {
+                    columnReferenceToResult = new ColumnReference(columnIndex, table);
+                } else {
+                    throw new Exception("Cannot refer to a column name that appear in more than a table without proper reference in the query");
+                }
             }
         }
-        return null;
+        if(columnReferenceToResult != null) {
+            return columnReferenceToResult;
+        }
+        throw new Exception("Column does not exist in the catalog of tables");
     }
 
-    private ColumnReference findColumnReference(String columnStr, Table<?,?> table) {
-        Column column = table.columnMap.get(columnStr);
-        if(column != null){
-            return new ColumnReference(column, table);
+    private ColumnReference findColumnReference(String columnStr, Table table) throws Exception {
+        final Schema schema = table.getSchema();
+        Integer columnIndex = schema.getColumnIndex(columnStr);
+        if(columnIndex == null){
+            throw new Exception("Column does not exist in the table");
         }
-        return null;
+        return new ColumnReference(columnIndex, table);
     }
 
 }

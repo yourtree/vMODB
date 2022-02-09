@@ -3,14 +3,10 @@ package dk.ku.di.dms.vms.database.query.planner;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.database.query.planner.node.filter.Filter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
-import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
 import dk.ku.di.dms.vms.database.store.Table;
-import dk.ku.di.dms.vms.database.store.refac.Row;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -65,7 +61,7 @@ public final class Planner {
 //                        Collectors.mapping( WhereClause::getColumn, Collectors.toList()))
 //                );
 
-        Map<Table<?,?>,List<WherePredicate>> whereClauseGroupedByTable =
+        Map<Table,List<WherePredicate>> whereClauseGroupedByTable =
                 queryTree
                         .wherePredicates.stream()
                         .collect(
@@ -91,9 +87,9 @@ public final class Planner {
         // TODO are we automatically creating indexes for foreign key? probably not
 
 
-        for( Map.Entry<Table<?,?>, List<WherePredicate>> entry : whereClauseGroupedByTable.entrySet() ){
+        for( Map.Entry<Table, List<WherePredicate>> entry : whereClauseGroupedByTable.entrySet() ){
 
-            Table<?,?> currTable = entry.getKey();
+            Table currTable = entry.getKey();
             // the row is true at the start anyway
             IFilter<?> filter = FilterBuilder.build( entry.getValue() );
 
@@ -107,7 +103,7 @@ public final class Planner {
         }
 
         // TODO can we merge the filters with the join?
-        for(JoinPredicate joinClause : queryTree.joinOperations){
+        for(JoinPredicate joinClause : queryTree.joinPredicates){
 
             // joinClause.
 

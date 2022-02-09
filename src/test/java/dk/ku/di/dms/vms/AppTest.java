@@ -1,13 +1,13 @@
 package dk.ku.di.dms.vms;
 
 import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum.EQUALS;
+import static dk.ku.di.dms.vms.database.store.DataType.INT;
 import static org.junit.Assert.assertTrue;
 
 import dk.ku.di.dms.vms.database.api.modb.RepositoryFacade;
-import dk.ku.di.dms.vms.database.query.planner.node.filter.Filter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
-import dk.ku.di.dms.vms.database.store.refac.Row;
+import dk.ku.di.dms.vms.database.store.Row;
 import dk.ku.di.dms.vms.operational.DataOperationExecutor;
 import dk.ku.di.dms.vms.event.EventRepository;
 import dk.ku.di.dms.vms.eShopOnContainers.events.AddProductRequest;
@@ -19,7 +19,6 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
@@ -45,20 +44,28 @@ public class AppTest
         assertTrue(true);
     }
 
+
     @Test
-    public void testCreatingFilter() throws Throwable {
+    public void testMethodHandles() throws Throwable {
 
         Item item = new Item(); item.i_id = 1;
         Field field = Item.class.getField("i_id");
         MethodHandle h = MethodHandles.lookup().unreflectGetter(field);
         Integer value = (Integer) h.invoke( item );
-        // IFilter<?> filter = FilterBuilder.getFilter(EQUALS, 1);
+        IFilter filter = FilterBuilder.getFilter(EQUALS, INT,1);
 
-        // FIXME
-        Row row = null;
+        assertTrue(filter.test( value ));
+    }
+
+    @Test
+    public void testCreatingFilter() throws Throwable {
+
+        IFilter filter = FilterBuilder.getFilter(EQUALS, INT,1);
+
+        Row row = new Row( 1, 2, 3, 10L );
         // filter.and
-        // assertTrue(filter.test( row ));
-        assert true;
+         assertTrue(filter.test( row.getInt(0) ));
+
     }
 
     @Test

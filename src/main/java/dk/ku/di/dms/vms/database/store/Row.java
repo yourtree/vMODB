@@ -1,14 +1,18 @@
-package dk.ku.di.dms.vms.database.store.refac;
+package dk.ku.di.dms.vms.database.store;
 
 /**
  * Defines an abstract row.
  * Later a row will be specialized for each concurrency control protocol.
  */
-public abstract class Row {
+public class Row {
 
     protected final Object[] values;
 
-    public Row(final Object[] values) {
+    /**
+     * Constructor to facilitate row creation. numParams should be ignored
+     * @param values
+     */
+    public Row(final Object... values) {
         this.values = values;
     }
 

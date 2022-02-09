@@ -7,7 +7,7 @@ import java.util.Map;
 
 public class Catalog {
 
-    public Map<String, Table<?,?>> tableMap;
+    public Map<String, Table> tableMap;
 
     public Catalog() {
         this.tableMap = new HashMap<>();

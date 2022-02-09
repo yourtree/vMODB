@@ -1,42 +1,42 @@
 package dk.ku.di.dms.vms.database.store;
 
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
-import dk.ku.di.dms.vms.infra.AbstractEntity;
 
-import javax.persistence.GenerationType;
-import java.io.Serializable;
-import java.util.HashMap;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
-public class Table<PK extends Serializable,TYPE extends AbstractEntity<PK>> {
+public abstract class Table {
 
-    public final String name;
+    protected final String name;
 
-    public final Map<String,Column> columnMap;
+    protected final Schema schema;
 
-    public final Map<PK,TYPE> rows;
+    protected AbstractIndex primaryIndex;
 
-    public final Map<? extends AbstractIndex, AbstractIndex> indexes;
+    protected List<AbstractIndex> secondaryIndexes;
 
-    public final GenerationType generationType;
+    public abstract int size();
 
-    public Table(final String name, final GenerationType generationType) {
+    /** no primary index */
+    public abstract boolean upsert(Row row);
+
+    public abstract boolean upsert(IKey key, Row row);
+
+    public abstract boolean delete(IKey key);
+
+    public abstract Iterator<Row> iterator();
+
+    public abstract Collection<Row> rows();
+
+    public Table(String name, Schema schema) {
         this.name = name;
-        this.columnMap = new HashMap<>();
-        this.rows = new HashMap<>();
-        this.indexes = new HashMap<>();
-
-        // the entity provides this info. should read from the annotation
-        this.generationType = generationType;
+        this.schema = schema;
     }
 
-    public Table(final String name) {
-        this.name = name;
-        this.columnMap = new HashMap<>();
-        this.rows = new HashMap<>();
-        this.indexes = new HashMap<>();
-
-        this.generationType = GenerationType.IDENTITY;
+    public Schema getSchema(){
+        return schema;
     }
 
 }

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.store.refac;
+package dk.ku.di.dms.vms.database.store;
 
 import java.util.Collection;
 import java.util.Iterator;
