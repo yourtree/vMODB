@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.database.query.planner;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
+import dk.ku.di.dms.vms.database.query.planner.node.filter.Filter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
 import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
@@ -94,10 +95,8 @@ public final class Planner {
 
             Table<?,?> currTable = entry.getKey();
             // the row is true at the start anyway
-            IFilter<?> baseFilter = ( v -> true );
-            for(WherePredicate whereClause : entry.getValue()){
-                baseFilter.and(FilterBuilder.build( whereClause ));
-            }
+            IFilter<?> filter = FilterBuilder.build( entry.getValue() );
+
 
             // a sequential scan for each table
 

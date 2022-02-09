@@ -52,7 +52,7 @@ public class AppTest
         Field field = Item.class.getField("i_id");
         MethodHandle h = MethodHandles.lookup().unreflectGetter(field);
         Integer value = (Integer) h.invoke( item );
-        IFilter<?> filter = FilterBuilder.getFilter(EQUALS, 1);
+        // IFilter<?> filter = FilterBuilder.getFilter(EQUALS, 1);
 
         // FIXME
         Row row = null;
