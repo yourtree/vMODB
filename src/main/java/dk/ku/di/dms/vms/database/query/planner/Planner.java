@@ -7,8 +7,10 @@ import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
 import dk.ku.di.dms.vms.database.store.table.Table;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public final class Planner {
@@ -29,22 +31,10 @@ public final class Planner {
 
         // join rule always prune the shortest relation...
         // always apply the filter first
-
-
-
         // do I have any matching index?
-
-
-
-
         // do we have join? what is the outer table?
-
-
         // what should come first, the join or the filter. should I apply the
         // filter together with the join or before? cost optimization
-
-
-
         // native main memory DBMS for data-intensive applications
         // many layers orm introduces, codification and de-codification
         // of application-defined objects into the underlying store. pays a performance price
@@ -61,12 +51,41 @@ public final class Planner {
 //                        Collectors.mapping( WhereClause::getColumn, Collectors.toList()))
 //                );
 
+        Map<String,Table> tablesInvolvedInJoin = new HashMap<>();
+        queryTree
+                .joinPredicates
+                .stream()
+                .map(j-> j.columnLeftReference.table)
+                .forEach( tb ->
+                        tablesInvolvedInJoin.put(
+                                tb.getName(),tb
+                        ) );
+
+        queryTree.joinPredicates.stream()
+                .map(j-> j.columnRightReference.table)
+                .forEach( tb -> tablesInvolvedInJoin.put(
+                        tb.getName(),tb
+                ));
+
+
         Map<Table,List<WherePredicate>> whereClauseGroupedByTable =
                 queryTree
                         .wherePredicates.stream()
+                        .filter( clause -> !tablesInvolvedInJoin
+                                .containsKey(clause.getTable().getName()) )
                         .collect(
                                 Collectors.groupingBy( WherePredicate::getTable,
                                          Collectors.toList())
+                        );
+
+        Map<Table,List<WherePredicate>> filtersForJoinGroupedByTable =
+                queryTree
+                        .wherePredicates.stream()
+                        .filter( clause -> tablesInvolvedInJoin
+                                .containsKey(clause.getTable().getName()) )
+                        .collect(
+                                Collectors.groupingBy( WherePredicate::getTable,
+                                        Collectors.toList())
                         );
 
         // right, what indexes can I use?
@@ -84,7 +103,18 @@ public final class Planner {
 
         // TODO FINISH
 
-        // TODO are we automatically creating indexes for foreign key? probably not
+        // TODO can we merge the filters with the join? i think so
+        for(JoinPredicate joinClause : queryTree.joinPredicates){
+
+            // joinClause.
+            // get filters for this join
+
+            // first the left table
+            // List<IFilter<?>>
+
+        }
+
+        // the scan strategy only applies for those tables not involved in any join
 
         // TODO all predicates with the same column should be a single filter
         for( Map.Entry<Table, List<WherePredicate>> entry : whereClauseGroupedByTable.entrySet() ){
@@ -93,7 +123,7 @@ public final class Planner {
             // the row is true at the start anyway
             IFilter<?> filter = FilterBuilder.build( entry.getValue() );
 
-            // for(  )
+            // TODO is there any index that can help?
 
             // a sequential scan for each table
 
@@ -102,12 +132,7 @@ public final class Planner {
 
         }
 
-        // TODO can we merge the filters with the join?
-        for(JoinPredicate joinClause : queryTree.joinPredicates){
 
-            // joinClause.
-
-        }
 
 
         return null;

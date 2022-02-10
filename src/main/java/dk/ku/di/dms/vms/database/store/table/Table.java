@@ -90,5 +90,7 @@ public abstract class Table {
 //        return lookupMap.values();
 //    }
 
-
+        public String getName(){
+            return this.name;
+        }
 }

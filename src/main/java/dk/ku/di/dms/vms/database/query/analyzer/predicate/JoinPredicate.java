@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.database.query.analyzer.predicate;
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
 import dk.ku.di.dms.vms.database.query.parser.enums.JoinEnum;
 import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
+import dk.ku.di.dms.vms.database.store.table.Table;
 
 public class JoinPredicate {
 
@@ -19,5 +20,9 @@ public class JoinPredicate {
         this.columnRightReference = columnRightReference;
         this.expression = expression;
         this.type = type;
+    }
+
+    public Table getLeftTable() {
+        return columnLeftReference.table;
     }
 }

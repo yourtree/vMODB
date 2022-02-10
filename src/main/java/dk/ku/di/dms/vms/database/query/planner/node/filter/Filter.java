@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.database.store.meta.DataType;
 
 import java.util.Comparator;
 
-public abstract class Filter<V> implements IDynamicFilter<V> {
+abstract class Filter<V> implements IDynamicFilter<V> {
 
     /**
      * To be used by the scan operator
