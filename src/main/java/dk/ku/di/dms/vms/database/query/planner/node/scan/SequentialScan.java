@@ -22,7 +22,7 @@ public final class SequentialScan implements Callable<Collection<Row>> {
     private final Table table;
 
     /**
-     * Filters are agnostic to the columns they are accessing
+     * Filters are agnostic to the columns they are accessing,
      * so they can be reused more easily
      */
     private final IFilter[] filters;
@@ -59,6 +59,7 @@ public final class SequentialScan implements Callable<Collection<Row>> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public Collection<Row> call() {
 
         final boolean noFilter = filters == null;
@@ -74,16 +75,14 @@ public final class SequentialScan implements Callable<Collection<Row>> {
 
             boolean conditionHolds = true;
             int filterIdx = 0;
+
             IFilter currFilter;
+
             while( conditionHolds && filterIdx < filters.length ){
                 currFilter = filters[filterIdx];
-                switch (filterDataTypes[filterIdx]){
-                    case INT: conditionHolds = currFilter.test( row.getInt( filterColumns[filterIdx] ) ); break;
-                    case STRING: conditionHolds = currFilter.test( row.getString( filterColumns[filterIdx] ) ); break;
-                    case DOUBLE: conditionHolds = currFilter.test( row.getDouble( filterColumns[filterIdx] ) ); break;
-                    case LONG: conditionHolds = currFilter.test( row.getLong( filterColumns[filterIdx] ) ); break;
-                    case CHAR: conditionHolds = currFilter.test( row.getCharacter( filterColumns[filterIdx] ) ); break;
-                }
+
+                // unchecked cast, but we know it is safe since the analyzer makes sure that
+                conditionHolds = currFilter.test( row.get( filterColumns[filterIdx] ) );
 
                 // no need to continue anymore
                 if(!conditionHolds) break;

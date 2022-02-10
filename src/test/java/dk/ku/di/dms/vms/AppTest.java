@@ -52,7 +52,7 @@ public class AppTest
         Field field = Item.class.getField("i_id");
         MethodHandle h = MethodHandles.lookup().unreflectGetter(field);
         Integer value = (Integer) h.invoke( item );
-        IFilter filter = FilterBuilder.getFilter(EQUALS, INT,1);
+        IFilter filter = FilterBuilder.getFilter(EQUALS, INT,1, Integer::compareTo);
 
         assertTrue(filter.test( value ));
     }
@@ -60,7 +60,7 @@ public class AppTest
     @Test
     public void testCreatingFilter() throws Throwable {
 
-        IFilter filter = FilterBuilder.getFilter(EQUALS, INT,1);
+        IFilter filter = FilterBuilder.getFilter(EQUALS, INT,1, Integer::compareTo);
 
         Row row = new Row( 1, 2, 3, 10L );
         // filter.and
@@ -70,8 +70,6 @@ public class AppTest
 
     @Test
     public void testDataOperationExecution() throws Exception {
-
-
 
         // 3. create an input event and dispatch for execution
         EventRepository eventRepository = EventRepository.get();

@@ -38,19 +38,19 @@ public class FilterBuilder {
         switch(dataType){
 
             case INT: {
-                return getFilter( wherePredicate.expression, dataType, (int) wherePredicate.value );
+                return getFilter( wherePredicate.expression, dataType, (int) wherePredicate.value, Integer::compareTo );
             }
             case STRING: {
-                return getFilter( wherePredicate.expression, dataType, (String) wherePredicate.value );
+                return getFilter( wherePredicate.expression, dataType, (String) wherePredicate.value, String::compareTo );
             }
             case CHAR: {
-                return getFilter( wherePredicate.expression, dataType, (Character) wherePredicate.value );
+                return getFilter( wherePredicate.expression, dataType, (Character) wherePredicate.value, Character::compareTo );
             }
             case LONG: {
-                return getFilter( wherePredicate.expression, dataType, (Long) wherePredicate.value );
+                return getFilter( wherePredicate.expression, dataType, (Long) wherePredicate.value, Long::compareTo );
             }
             case DOUBLE: {
-                return getFilter( wherePredicate.expression, dataType, (Double) wherePredicate.value );
+                return getFilter( wherePredicate.expression, dataType, (Double) wherePredicate.value, Double::compareTo );
             }
             default:
                 throw new IllegalStateException("Unexpected value: " + dataType);
@@ -61,58 +61,47 @@ public class FilterBuilder {
     public static <V> IFilter<V> getFilter(
             final ExpressionEnum expression,
             final DataType dataType,
-            final V fixedValue) throws Exception {
-
-        /**
-         * Only cast necessary. The ideal solution is to cache the reusable
-         * filters created, so we avoid the overhead of filter creation for every query
-         */
-        Comparator<V> comp;
+            final V fixedValue,
+            final Comparator<V> comparator) throws Exception {
 
         switch(expression){
             case EQUALS:
-                comp = getComparator(dataType);
-                return new Filter<V>(dataType, fixedValue, comp) {
+                return new Filter<V>(dataType, fixedValue, comparator) {
                     @Override
                     public boolean test(V value) {
                         return this.comparator.compare( value, this.fixedValue ) == 0;
                     }
                 };
             case NOT_EQUALS:
-                comp = getComparator(dataType);
-                return new Filter<V>(dataType, fixedValue, comp) {
+                return new Filter<V>(dataType, fixedValue, comparator) {
                     @Override
                     public boolean test(V value) {
                         return this.comparator.compare( value, this.fixedValue ) != 0;
                     }
                 };
             case LESS_THAN_OR_EQUAL:
-                comp = getComparator(dataType);
-                return new Filter<V>(dataType, fixedValue, comp) {
+                return new Filter<V>(dataType, fixedValue, comparator) {
                     @Override
                     public boolean test(V value) {
                         return this.comparator.compare( value, this.fixedValue ) <= 0;
                     }
                 };
             case LESS_THAN:
-                comp = getComparator(dataType);
-                return new Filter<V>(dataType, fixedValue, comp) {
+                return new Filter<V>(dataType, fixedValue, comparator) {
                     @Override
                     public boolean test(V value) {
                         return this.comparator.compare( value, this.fixedValue ) < 0;
                     }
                 };
             case GREATER_THAN:
-                comp = getComparator(dataType);
-                return new Filter<V>(dataType, fixedValue, comp) {
+                return new Filter<V>(dataType, fixedValue, comparator) {
                     @Override
                     public boolean test(V value) {
                         return this.comparator.compare( value, this.fixedValue ) > 0;
                     }
                 };
             case GREATER_THAN_OR_EQUAL:
-                comp = getComparator(dataType);
-                return new Filter<V>(dataType, fixedValue, comp) {
+                return new Filter<V>(dataType, fixedValue, comparator) {
                     @Override
                     public boolean test(V value) {
                         return this.comparator.compare( value, this.fixedValue ) >= 0;
@@ -135,28 +124,6 @@ public class FilterBuilder {
             default: throw new Exception("Predicate not implemented");
         }
 
-    }
-
-    // TODO test this comparator later
-    private static <V> Comparator<V> getComp(){
-        return (Comparator<V>) new Comparator<Integer>() {
-            @Override
-            public int compare(Integer x, Integer y) {
-                return (x < y) ? -1 : ((x == y) ? 0 : 1);
-            }
-        };
-    }
-
-    private static Comparator getComparator(DataType type) {
-        switch (type) {
-            case INT: return (Comparator<Integer>) Integer::compareTo;
-            case LONG: return (Comparator<Long>) Long::compareTo;
-            case DOUBLE: return (Comparator<Double>) Double::compareTo;
-            case CHAR: return (Comparator<Character>) Character::compareTo;
-            case STRING: return (Comparator<String>) String::compareTo;
-            default:
-                throw new IllegalStateException("Unexpected value: " + type);
-        }
     }
 
 }
