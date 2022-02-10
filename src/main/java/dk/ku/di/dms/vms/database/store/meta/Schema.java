@@ -1,4 +1,6 @@
-package dk.ku.di.dms.vms.database.store;
+package dk.ku.di.dms.vms.database.store.meta;
+
+import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.Hashtable;
 import java.util.Map;
@@ -18,6 +20,10 @@ public class Schema {
         return columnIndexMap.get(columnName);
     }
 
+    public DataType getColumnDataType(int columnIndex){
+        return columnDataTypes[columnIndex];
+    }
+
     public Schema(String[] columnNames, DataType[] columnDataTypes) {
         this.columnNames = columnNames;
         this.columnDataTypes = columnDataTypes;
@@ -27,7 +33,8 @@ public class Schema {
         for(int i = 0; i < size; i++){
             columnIndexMap.put(columnNames[i],i);
         }
-
     }
+
+
 
 }

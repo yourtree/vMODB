@@ -29,7 +29,7 @@ public final class QueryBuilder implements IQueryBuilder {
         this.statement = this.selectStatement;
 
         String[] projection = param.split(",");
-        this.selectStatement.columns = new ArrayList<>(Arrays.asList(projection));
+        this.selectStatement.selectClause = new ArrayList<>(Arrays.asList(projection));
 
         return this;
     }

@@ -11,7 +11,9 @@ public abstract class AbstractEntity<PK extends Serializable> {
     // default
     protected AbstractEntity(){}
 
-//    public AbstractPersistentEntity(PK primaryKey){
+//    public abstract int hashCode();
+
+    //    public AbstractPersistentEntity(PK primaryKey){
 //        this.primaryKey = primaryKey;
 //    }
 

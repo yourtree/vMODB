@@ -1,9 +1,8 @@
 package dk.ku.di.dms.vms.database.query.analyzer.predicate;
 
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
-import dk.ku.di.dms.vms.database.store.Column;
-import dk.ku.di.dms.vms.database.store.ColumnReference;
-import dk.ku.di.dms.vms.database.store.Table;
+import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
+import dk.ku.di.dms.vms.database.store.table.Table;
 
 public class WherePredicate {
 
@@ -24,12 +23,8 @@ public class WherePredicate {
         this.value = null;
     }
 
-    public Table<?,?> getTable() {
+    public Table getTable() {
         return columnReference.table;
-    }
-
-    public Column getColumn(){
-        return this.columnReference.column;
     }
 
 }

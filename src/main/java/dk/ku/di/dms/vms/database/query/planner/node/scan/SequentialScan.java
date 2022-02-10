@@ -1,9 +1,9 @@
 package dk.ku.di.dms.vms.database.query.planner.node.scan;
 
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
-import dk.ku.di.dms.vms.database.store.DataType;
-import dk.ku.di.dms.vms.database.store.Row;
-import dk.ku.di.dms.vms.database.store.Table;
+import dk.ku.di.dms.vms.database.store.meta.DataType;
+import dk.ku.di.dms.vms.database.store.row.Row;
+import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.ArrayList;
 import java.util.Collection;

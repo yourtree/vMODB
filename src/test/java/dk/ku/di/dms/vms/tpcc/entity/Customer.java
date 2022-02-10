@@ -4,6 +4,8 @@ import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.Objects;
 
 @Entity
 @Table(name="customer")
@@ -52,5 +54,10 @@ public class Customer extends AbstractEntity<Customer.CustomerId> {
 
     @Column
     public Float c_ytd_payment;
+
+//    @Override
+//    public int hashCode() {
+//        return Objects.hash( this.c_id,  this.c_d_id, this.c_w_id);
+//    }
 
 }

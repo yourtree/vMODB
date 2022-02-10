@@ -1,10 +1,10 @@
-package dk.ku.di.dms.vms.database.store;
+package dk.ku.di.dms.vms.database.store.row;
 
 import java.util.Arrays;
 
 public class CompositeKey extends Row implements IKey {
 
-    public CompositeKey(Object[] values) {
+    public CompositeKey(Object... values) {
         super(values);
     }
 

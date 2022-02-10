@@ -1,14 +1,13 @@
 package dk.ku.di.dms.vms.database.query.analyzer;
 
 import dk.ku.di.dms.vms.database.catalog.Catalog;
-import dk.ku.di.dms.vms.database.query.analyzer.predicate.GroupPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.query.parser.enums.JoinEnum;
 import dk.ku.di.dms.vms.database.query.parser.stmt.*;
-import dk.ku.di.dms.vms.database.store.ColumnReference;
-import dk.ku.di.dms.vms.database.store.Schema;
-import dk.ku.di.dms.vms.database.store.Table;
+import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
+import dk.ku.di.dms.vms.database.store.meta.Schema;
+import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.List;
 import java.util.Map;
@@ -26,6 +25,9 @@ public final class Analyzer {
 
         final QueryTree queryTree = new QueryTree();
 
+        /**
+         * https://docs.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql?view=sql-server-ver15#logical-processing-order-of-the-select-statement
+         */
         if(statement instanceof SelectStatement){
 
             final SelectStatement select = (SelectStatement) statement;
@@ -35,7 +37,7 @@ public final class Analyzer {
             List<String> fromClause = select.fromClause;
 
             for(String tableStr : fromClause){
-                Table table = catalog.tableMap.getOrDefault(tableStr,null);
+                Table table = catalog.getTable(tableStr);
                 if(table != null) queryTree.tables.put(tableStr,table);
             }
 
@@ -48,7 +50,7 @@ public final class Analyzer {
 
                 // find in catalog if not found in query yet
                 if(tableLeft == null){
-                    tableLeft = catalog.tableMap.getOrDefault(join.tableLeft,null);
+                    tableLeft = catalog.getTable(join.tableLeft);
                     if(tableLeft != null) {
                         queryTree.tables.put(join.tableLeft, tableLeft);
                     } else {
@@ -61,7 +63,7 @@ public final class Analyzer {
 
                 Table tableRight = queryTree.tables.getOrDefault(join.tableRight,null);
                 if(tableRight == null){
-                    tableRight = catalog.tableMap.getOrDefault(join.tableRight,null);
+                    tableRight = catalog.getTable(join.tableRight);
                     if(tableRight != null) {
                         queryTree.tables.put(join.tableRight,tableRight);
                     } else {
@@ -81,15 +83,13 @@ public final class Analyzer {
 
             // projection
             // columns in projection may come from join
-            List<String> columns = select.columns;
+            List<String> columns = select.selectClause;
             // cannot allow same column name without AS from multiple tables
             for(String columnStr : columns){
                 // TODO check if table name is included in string,
                 //  that would make find the column reference faster
                 ColumnReference columnReference = findColumnReference(columnStr, queryTree.tables);
-                if(columnReference != null){
-                    queryTree.projections.add(columnReference);
-                }
+                queryTree.projections.add(columnReference);
             }
 
             // where
@@ -106,7 +106,7 @@ public final class Analyzer {
                 String columnName;
 
                 if( currWhere.column.contains(".") ){
-                    String[] split = currWhere.column.split(".");
+                    String[] split = currWhere.column.split("\\.");
                     tableName = split[0];
                     columnName = split[1];
                     Table table = queryTree.tables.getOrDefault(tableName,null);
@@ -117,10 +117,6 @@ public final class Analyzer {
                     }
                 } else {
                     columnReference = findColumnReference(currWhere.column, queryTree.tables);
-                }
-
-                if(columnReference == null) {
-                    throw new Exception("Unknown column: "+currWhere.column);
                 }
 
                 // is it a reference to a table or a char? e.g., "'something'"
@@ -134,7 +130,7 @@ public final class Analyzer {
 
                     if( value.contains(".") ){
                         // <table>.<column>
-                        String[] split = value.split(".");
+                        String[] split = value.split("\\.");
                         tableName = split[0];
                         columnName = split[1];
                         Table table = queryTree.tables.getOrDefault(tableName,null);
@@ -145,10 +141,6 @@ public final class Analyzer {
                         }
                     } else {
                         columnReference1 = findColumnReference(currWhere.column, queryTree.tables);
-                    }
-
-                    if(columnReference1 == null) {
-                        throw new Exception("Unknown column: "+value);
                     }
 
                     // build typed join clause
@@ -164,7 +156,7 @@ public final class Analyzer {
 
             }
 
-            // TODO FINISH sort, group by
+            // TODO FINISH sort and group by
 
         } else if(statement instanceof UpdateStatement){
 
@@ -189,7 +181,8 @@ public final class Analyzer {
             Integer columnIndex = schema.getColumnIndex(columnStr);
             if(columnIndex != null) {
                 if(columnReferenceToResult == null) {
-                    columnReferenceToResult = new ColumnReference(columnIndex, table);
+                    columnReferenceToResult = new ColumnReference(columnIndex,
+                            schema.getColumnDataType(columnIndex), table);
                 } else {
                     throw new Exception("Cannot refer to a column name that appear in more than a table without proper reference in the query");
                 }
@@ -207,7 +200,7 @@ public final class Analyzer {
         if(columnIndex == null){
             throw new Exception("Column does not exist in the table");
         }
-        return new ColumnReference(columnIndex, table);
+        return new ColumnReference(columnIndex, schema.getColumnDataType(columnIndex), table);
     }
 
 }

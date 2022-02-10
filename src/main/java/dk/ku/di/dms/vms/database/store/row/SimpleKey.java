@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.store;
+package dk.ku.di.dms.vms.database.store.row;
 
 public class SimpleKey implements IKey {
 

@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
-import dk.ku.di.dms.vms.database.store.Table;
+import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.List;
 import java.util.Map;
@@ -86,7 +86,7 @@ public final class Planner {
 
         // TODO are we automatically creating indexes for foreign key? probably not
 
-
+        // TODO all predicates with the same column should be a single filter
         for( Map.Entry<Table, List<WherePredicate>> entry : whereClauseGroupedByTable.entrySet() ){
 
             Table currTable = entry.getKey();

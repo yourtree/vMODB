@@ -1,17 +1,18 @@
 package dk.ku.di.dms.vms.database.query.parser.enums;
 
-public enum GroupEnum {
+public enum GroupByAggregateFunctionEnum {
 
     AVG("AVG"),
+    SUM("SUM"),
     COUNT("COUNT"),
     MIN("MIN"),
     MAX("MAX");
 
     public final String name;
 
-    GroupEnum(){ this.name = name(); }
+    GroupByAggregateFunctionEnum(){ this.name = name(); }
 
-    GroupEnum(String name) {
+    GroupByAggregateFunctionEnum(String name) {
         this.name = name;
     }
 

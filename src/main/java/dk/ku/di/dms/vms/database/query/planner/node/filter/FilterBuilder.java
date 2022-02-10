@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.database.query.planner.node.filter;
 
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
-import dk.ku.di.dms.vms.database.store.DataType;
+import dk.ku.di.dms.vms.database.store.meta.DataType;
 
 import java.util.Comparator;
 import java.util.List;
@@ -16,9 +16,9 @@ public class FilterBuilder {
     /**
      * Only used if the same column is being checked in all where predicates.
      * For instance, x > 100 AND x < 200
-     * Althoug not supported, range queries ( x BETWEEN y ) would also fit
+     * Although not supported, range queries ( x BETWEEN y ) would also fit
      * @param wherePredicates
-     * @return
+     * @return A composite filter, i.e., a set of filters applying to the same column
      * @throws Exception
      */
     public static IFilter<?> build(final List<WherePredicate> wherePredicates) throws Exception {
@@ -33,7 +33,7 @@ public class FilterBuilder {
 
     public static IFilter<?> build(final WherePredicate wherePredicate) throws Exception {
 
-        DataType dataType = wherePredicate.columnReference.column.type;
+        DataType dataType = wherePredicate.columnReference.dataType;
 
         switch(dataType){
 
@@ -53,7 +53,7 @@ public class FilterBuilder {
                 return getFilter( wherePredicate.expression, dataType, (Double) wherePredicate.value );
             }
             default:
-                throw new IllegalStateException("Unexpected value: " + wherePredicate.columnReference.column.type);
+                throw new IllegalStateException("Unexpected value: " + dataType);
         }
 
     }
@@ -68,7 +68,6 @@ public class FilterBuilder {
          * filters created, so we avoid the overhead of filter creation for every query
          */
         Comparator<V> comp;
-        IFilter<V> f;
 
         switch(expression){
             case EQUALS:
@@ -138,6 +137,16 @@ public class FilterBuilder {
 
     }
 
+    // TODO test this comparator later
+    private static <V> Comparator<V> getComp(){
+        return (Comparator<V>) new Comparator<Integer>() {
+            @Override
+            public int compare(Integer x, Integer y) {
+                return (x < y) ? -1 : ((x == y) ? 0 : 1);
+            }
+        };
+    }
+
     private static Comparator getComparator(DataType type) {
         switch (type) {
             case INT: return (Comparator<Integer>) Integer::compareTo;
@@ -149,17 +158,5 @@ public class FilterBuilder {
                 throw new IllegalStateException("Unexpected value: " + type);
         }
     }
-
-//    private static Comparator<?> getComparator(DataType type) {
-//        switch (type) {
-//            case INT: return (Comparator<Integer>) Integer::compareTo;
-//            case LONG: return (Comparator<Long>) Long::compareTo;
-//            case DOUBLE: return (Comparator<Double>) Double::compareTo;
-//            case CHAR: return (Comparator<Character>) Character::compareTo;
-//            case STRING: return (Comparator<String>) String::compareTo;
-//            default:
-//                throw new IllegalStateException("Unexpected value: " + type);
-//        }
-//    }
 
 }

@@ -1,10 +1,10 @@
 package dk.ku.di.dms.vms.database.query.analyzer;
 
-import dk.ku.di.dms.vms.database.query.analyzer.predicate.GroupPredicate;
+import dk.ku.di.dms.vms.database.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.database.store.ColumnReference;
-import dk.ku.di.dms.vms.database.store.Table;
+import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
+import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.*;
 
@@ -24,7 +24,7 @@ public class QueryTree {
     // predicates
     public List<WherePredicate> wherePredicates;
 
-    public List<GroupPredicate> groupPredicates;
+    public List<GroupByPredicate> groupPredicates;
 
     // TODO sort predicate
 

@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.modb;
 
 import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
-import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
@@ -9,35 +8,49 @@ import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.database.query.planner.PlanTree;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
-import dk.ku.di.dms.vms.database.store.Table;
-import dk.ku.di.dms.vms.tpcc.entity.District;
+import dk.ku.di.dms.vms.database.store.meta.DataType;
+import dk.ku.di.dms.vms.database.store.meta.Schema;
+import dk.ku.di.dms.vms.database.store.row.CompositeKey;
+import dk.ku.di.dms.vms.database.store.row.Row;
+import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;
+import dk.ku.di.dms.vms.database.store.table.Table;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum.EQUALS;
 
 public class QueryTest {
 
-    private Catalog catalog;
+    private static Catalog catalog;
 
-    private void buildCatalog(){
-        Table<District.DistrictId, District> tbl = new Table<>("district");
+    @BeforeClass
+    public static void buildCatalog(){
 
-        this.catalog = new Catalog();
-        catalog.tableMap.put(tbl.name,tbl);
+        CompositeKey key = new CompositeKey(3,2L);
 
-        District district = new District();
-        district.d_id = 3;
-        district.d_w_id = 2;
+        String[] itemColumns = { "i_id", "i_price", "i_name", "i_data" };
+        DataType[] dataTypes = { DataType.INT, DataType.FLOAT, DataType.STRING, DataType.STRING  };
 
-        District.DistrictId id = new District.DistrictId(3,2);
+        Schema schema = new Schema(itemColumns, dataTypes);
 
-        tbl.rows.put(id,district);
+        Table table = new HashIndexedTable("item", schema);
+
+        catalog = new Catalog();
+        catalog.insertTable("item",table);
+
+        Row row = new Row(3,2L,"HAHA","HEHE");
+
+        table.upsert( key, row);
+
+    }
+
+    @Test
+    public void isCatalogNotEmpty() throws Exception {
+        assert catalog.getTable("item") != null;
     }
 
     @Test
     public void testQueryParsing() throws Exception {
-
-        buildCatalog();
 
         IQueryBuilder builder = QueryBuilderFactory.init();
         IStatement sql = builder.update("district")

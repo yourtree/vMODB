@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.store;
+package dk.ku.di.dms.vms.database.store.row;
 
 /**
  * Defines an abstract row.

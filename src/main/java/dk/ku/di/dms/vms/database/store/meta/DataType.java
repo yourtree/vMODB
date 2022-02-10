@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.store;
+package dk.ku.di.dms.vms.database.store.meta;
 
 public enum DataType {
 
@@ -9,6 +9,8 @@ public enum DataType {
     CHAR,
 
     LONG,
+
+    FLOAT,
 
     DOUBLE;
 

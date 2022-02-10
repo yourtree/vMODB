@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.database.query.analyzer.predicate;
 
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
 import dk.ku.di.dms.vms.database.query.parser.enums.JoinEnum;
-import dk.ku.di.dms.vms.database.store.ColumnReference;
+import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
 
 public class JoinPredicate {
 

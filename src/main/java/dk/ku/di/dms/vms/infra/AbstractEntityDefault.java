@@ -20,4 +20,9 @@ public abstract class AbstractEntityDefault extends AbstractEntity<Long> {
         this.id = id;
     }
 
+    // TODO Find a way to set hash code on object construction
+    @Override
+    public int hashCode() {
+        return Long.hashCode(id);
+    }
 }

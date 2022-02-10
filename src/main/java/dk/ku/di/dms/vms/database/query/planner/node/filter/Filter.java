@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.planner.node.filter;
 
-import dk.ku.di.dms.vms.database.store.DataType;
+import dk.ku.di.dms.vms.database.store.meta.DataType;
 
 import java.util.Comparator;
 
