@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.parser.enums;
 
-public enum GroupByAggregateFunctionEnum {
+public enum GroupByEnum {
 
     AVG("AVG"),
     SUM("SUM"),
@@ -10,9 +10,9 @@ public enum GroupByAggregateFunctionEnum {
 
     public final String name;
 
-    GroupByAggregateFunctionEnum(){ this.name = name(); }
+    GroupByEnum(){ this.name = name(); }
 
-    GroupByAggregateFunctionEnum(String name) {
+    GroupByEnum(String name) {
         this.name = name;
     }
 

@@ -1,29 +1,13 @@
 package dk.ku.di.dms.vms.database.query.planner.node.filter;
 
-import dk.ku.di.dms.vms.database.store.meta.DataType;
-
 import java.util.Comparator;
 
-abstract class Filter<V> implements IDynamicFilter<V> {
-
-    /**
-     * To be used by the scan operator
-     */
-    public final DataType dataType;
-
-    public V fixedValue;
+abstract class Filter<V> implements IFilter<V> {
 
     public final Comparator<V> comparator;
 
-    public Filter(final DataType dataType, final V fixedValue, final Comparator<V> comparator) {
-        this.dataType = dataType;
-        this.fixedValue = fixedValue;
+    public Filter(final Comparator<V> comparator) {
         this.comparator = comparator;
-    }
-
-    @Override
-    public void redefine(V newFixedValue) {
-        this.fixedValue = newFixedValue;
     }
 
 }

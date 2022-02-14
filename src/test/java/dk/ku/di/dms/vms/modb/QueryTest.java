@@ -6,7 +6,7 @@ import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
-import dk.ku.di.dms.vms.database.query.planner.PlanTree;
+import dk.ku.di.dms.vms.database.query.planner.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
@@ -68,7 +68,7 @@ public class QueryTest {
         QueryTree queryTree = analyzer.analyze(sql);
 
         Planner planner = new Planner();
-        PlanTree planTree = planner.plan(queryTree);
+        PlanNode planTree = planner.plan(queryTree);
 
         assert(true);
 

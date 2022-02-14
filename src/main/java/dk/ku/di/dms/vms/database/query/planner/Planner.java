@@ -3,14 +3,19 @@ package dk.ku.di.dms.vms.database.query.planner;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
+import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
+import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
+import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.database.store.table.Table;
+import jdk.nashorn.internal.objects.annotations.Where;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public final class Planner {
@@ -20,7 +25,7 @@ public final class Planner {
     // plan tree that can be processed by the executor most effectively."
 
     // plan and optimize in the same step
-    public PlanTree plan(final QueryTree queryTree) throws Exception {
+    public PlanNode plan(final QueryTree queryTree) throws Exception {
 
         // https://github.com/hyrise/hyrise/tree/master/src/lib/operators
         // https://github.com/hyrise/hyrise/tree/master/src/lib/optimizer
@@ -51,24 +56,24 @@ public final class Planner {
 //                        Collectors.mapping( WhereClause::getColumn, Collectors.toList()))
 //                );
 
-        Map<String,Table> tablesInvolvedInJoin = new HashMap<>();
+        final Map<String,Integer> tablesInvolvedInJoin = new Hashtable<>();
         queryTree
                 .joinPredicates
                 .stream()
                 .map(j-> j.columnLeftReference.table)
                 .forEach( tb ->
                         tablesInvolvedInJoin.put(
-                                tb.getName(),tb
+                                tb.getName(),1
                         ) );
 
         queryTree.joinPredicates.stream()
                 .map(j-> j.columnRightReference.table)
                 .forEach( tb -> tablesInvolvedInJoin.put(
-                        tb.getName(),tb
+                        tb.getName(),1
                 ));
 
 
-        Map<Table,List<WherePredicate>> whereClauseGroupedByTable =
+        final Map<Table,List<WherePredicate>> whereClauseGroupedByTable =
                 queryTree
                         .wherePredicates.stream()
                         .filter( clause -> !tablesInvolvedInJoin
@@ -101,39 +106,84 @@ public final class Planner {
         // naive, check joins, do I have an index? if so, use it, otherwise embrace the where clause during the join
 
 
-        // TODO FINISH
+        // TODO FINISH usually the projection is pushed down in disk-based DBMS,
+        //  but here I will just create the final projection when I need to
+        //  deliver the result back to the application
 
-        // TODO can we merge the filters with the join? i think so
-        for(JoinPredicate joinClause : queryTree.joinPredicates){
 
-            // joinClause.
+        for(final JoinPredicate joinPredicate : queryTree.joinPredicates){
+
             // get filters for this join
+
+            Table tableLeft = joinPredicate.getLeftTable();
 
             // first the left table
             // List<IFilter<?>>
+
+            // TODO can we merge the filters with the join? i think so
+            // remove from map after applying the additional filters
+//            filtersForJoinGroupedByTable
+
+            // TODO the shortest the table, lower the degree of the join operation in the query tree
 
         }
 
         // the scan strategy only applies for those tables not involved in any join
 
+        // a sequential scan for each table
         // TODO all predicates with the same column should be a single filter
-        for( Map.Entry<Table, List<WherePredicate>> entry : whereClauseGroupedByTable.entrySet() ){
+        for( final Map.Entry<Table, List<WherePredicate>> entry : whereClauseGroupedByTable.entrySet() ){
+
+            final List<WherePredicate> wherePredicates = entry.getValue();
+            final int size = wherePredicates.size();
+            IFilter<?>[] filters = new IFilter<?>[size];
+            int[] filterColumns = new int[size];
+            Collection<IdentifiableNode<Object>> filterParams = new LinkedList<>();
 
             Table currTable = entry.getKey();
-            // the row is true at the start anyway
-            IFilter<?> filter = FilterBuilder.build( entry.getValue() );
 
-            // TODO is there any index that can help?
+            int index = 0;
+            for(final WherePredicate w : wherePredicates){
 
-            // a sequential scan for each table
+                boolean nullable = w.expression == ExpressionEnum.IS_NOT_NULL || w.expression == ExpressionEnum.IS_NULL;
 
-            // TODO think about parallel seq scan
-            // SequentialScan sequentialScan = new SequentialScan( filterList, table);
+                filters[ index ] = FilterBuilder.build( w );
+                filterColumns[ index ] = w.columnReference.columnIndex;
+                if( !nullable ){
+                    filterParams.add( new IdentifiableNode<>( index, w.value ) );
+                }
+
+                index++;
+            }
+
+            // TODO is there any index that can help? from all the indexes, which one gives the best selectivity?
+
+            final SequentialScan seqScan = new SequentialScan( currTable, filters, filterColumns, filterParams );
+
+
+            // Executor exec = Executors.newScheduledThreadPool()
+
+            Supplier<OperatorResult> sup = new Supplier<OperatorResult>() {
+
+                @Override
+                public OperatorResult get() {
+                    return null;
+                }
+            };
+
+            Consumer<OperatorResult> con = new Consumer<OperatorResult>() {
+                @Override
+                public void accept(OperatorResult operatorResult) {
+
+                }
+            };
+
 
         }
 
 
-
+        // TODO think about parallel seq scan
+        // SequentialScan sequentialScan = new SequentialScan( filterList, table);
 
         return null;
     }
