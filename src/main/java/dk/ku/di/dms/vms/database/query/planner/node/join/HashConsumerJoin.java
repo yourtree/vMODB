@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.database.query.planner.node.join;
 
 import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.store.index.IIndex;
-import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -13,7 +12,7 @@ import java.util.function.Supplier;
  * A hash join where its dependencies are not fulfilled from the start
  * For example, when it is necessary to perform a sequential scan
  * before fulfilling the join
- * TODO generalize for left, irght, outer join
+ * TODO generalize for left, right, outer join
  */
 
 public class HashConsumerJoin implements
@@ -46,7 +45,7 @@ public class HashConsumerJoin implements
             OperatorResult left = operatorResultFutureLeft.get();
             OperatorResult right = operatorResultFutureRight.get();
 
-
+            // TODO continue
 
         } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();

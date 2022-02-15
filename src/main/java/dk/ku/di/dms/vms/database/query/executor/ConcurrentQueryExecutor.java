@@ -10,7 +10,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class QueryExecutor implements Supplier<CompletableFuture<OperatorResult>> {
+public class ConcurrentQueryExecutor implements Supplier<CompletableFuture<OperatorResult>> {
 
     private final Executor executor;
 
@@ -18,9 +18,9 @@ public class QueryExecutor implements Supplier<CompletableFuture<OperatorResult>
 
     private final Map<PlanNode, PlanNode[]> predecessorLeafNodes;
 
-    public QueryExecutor(final Executor executor,
-                         final PlanNode head,
-                         final Map<PlanNode, PlanNode[]> predecessorLeafNodes) {
+    public ConcurrentQueryExecutor(final Executor executor,
+                                   final PlanNode head,
+                                   final Map<PlanNode, PlanNode[]> predecessorLeafNodes) {
         this.executor = executor;
         this.head = head;
         this.predecessorLeafNodes = predecessorLeafNodes;
@@ -47,13 +47,17 @@ public class QueryExecutor implements Supplier<CompletableFuture<OperatorResult>
                 if (childrenList.length == 2) {
                     // two children always lead to a biconsumer
 
-                    BiConsumer<CompletableFuture<OperatorResult>, CompletableFuture<OperatorResult>> node = iNode.biConsumer;
+                    BiConsumer<CompletableFuture<OperatorResult>, CompletableFuture<OperatorResult>> node =
+                            iNode.biConsumer;
                     PlanNode left = childrenList[0];
                     PlanNode right = childrenList[1];
+
+                    // TODO make sure the push order is guaranteed by the executor
+                    // concurrent queue should guarantee the order of queuing
                     CompletableFuture<OperatorResult> op1 =
-                            CompletableFuture.supplyAsync(left.supplier);
+                            CompletableFuture.supplyAsync(left.supplier,executor);
                     CompletableFuture<OperatorResult> op2 =
-                            CompletableFuture.supplyAsync(right.supplier);
+                            CompletableFuture.supplyAsync(right.supplier,executor);
 
                     // avoid blocking now, so we can continue building the execution tree
                     node.accept(op1, op2);
@@ -74,7 +78,7 @@ public class QueryExecutor implements Supplier<CompletableFuture<OperatorResult>
                     PlanNode children = childrenList[0];
 
                     CompletableFuture<OperatorResult> op =
-                            CompletableFuture.supplyAsync(children.supplier);
+                            CompletableFuture.supplyAsync(children.supplier,executor);
 
                     node.accept(op);
 

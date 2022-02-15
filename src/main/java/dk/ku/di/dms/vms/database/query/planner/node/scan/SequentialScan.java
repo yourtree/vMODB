@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.database.query.planner.node.scan;
 
 import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.database.store.row.Row;
@@ -39,14 +40,11 @@ public final class SequentialScan implements Supplier<OperatorResult> {
     private Collection<IdentifiableNode<Object>> filterParams;
 
     public SequentialScan(final Table table,
-                          final IFilter[] filters,
-                          final int[] filterColumns,
-                          final Collection<IdentifiableNode<Object>> filterParams)
-    {
+                          final FilterInfo filterInfo) {
         this.table = table;
-        this.filters = filters;
-        this.filterColumns = filterColumns;
-        this.filterParams = filterParams;
+        this.filters = filterInfo.filters;
+        this.filterColumns = filterInfo.filterColumns;
+        this.filterParams = filterInfo.filterParams;
     }
 
     /**
@@ -74,51 +72,55 @@ public final class SequentialScan implements Supplier<OperatorResult> {
 
         Collection<Row> result = new ArrayList<>();
 
-        Iterator<Row> iterator = table.iterator();
+        Collection<Row> rows = table.rows();
 
-        while( iterator.hasNext() ){
-            Row row = iterator.next();
-
-            boolean conditionHolds = true;
-            int filterIdx = 0;
-
-            IFilter currFilter;
-
-            Iterator<IdentifiableNode<Object>> paramsIterator = filterParams.iterator();
-            IdentifiableNode currParam = null;
-            if (paramsIterator.hasNext()){
-                currParam = paramsIterator.next();
-            }
-
-            while( conditionHolds && filterIdx < filters.length ){
-                currFilter = filters[filterIdx];
-
-                // unchecked cast, but we know it is safe since the analyzer makes sure that
-                if(currParam != null && currParam.id == filterIdx) {
-                    conditionHolds = currFilter.eval(row.get(filterColumns[filterIdx]), currParam );
-                    if (paramsIterator.hasNext()){
-                        currParam = paramsIterator.next();
-                    } else {
-                        currParam = null;
-                    }
-                }
-                else {
-                    conditionHolds = currFilter.eval(row.get(filterColumns[filterIdx]));
-                }
-
-                // no need to continue anymore
-                if(!conditionHolds) break;
-
-                filterIdx++;
-
-            }
-
+        for(Row row : rows){
+            boolean conditionHolds = check(row);
             if(conditionHolds) result.add(row);
-
         }
 
         res.rows = result;
         return res;
+    }
+
+    private boolean check(final Row row){
+
+        boolean conditionHolds = true;
+        int filterIdx = 0;
+
+        IFilter currFilter;
+
+        Iterator<IdentifiableNode<Object>> paramsIterator = filterParams.iterator();
+        IdentifiableNode currParam = null;
+        if (paramsIterator.hasNext()){
+            currParam = paramsIterator.next();
+        }
+
+        while( conditionHolds && filterIdx < filters.length ){
+            currFilter = filters[filterIdx];
+
+            // unchecked cast, but we know it is safe since the analyzer makes sure that
+            if(currParam != null && currParam.id == filterIdx) {
+                conditionHolds = currFilter.eval(row.get(filterColumns[filterIdx]), currParam );
+                if (paramsIterator.hasNext()){
+                    currParam = paramsIterator.next();
+                } else {
+                    currParam = null;
+                }
+            }
+            else {
+                conditionHolds = currFilter.eval(row.get(filterColumns[filterIdx]));
+            }
+
+            // no need to continue anymore
+            if(!conditionHolds) break;
+
+            filterIdx++;
+
+        }
+
+        return conditionHolds;
+
     }
 
 }

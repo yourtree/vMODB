@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
+import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
 import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
@@ -72,6 +73,7 @@ public final class Planner {
                         tb.getName(),1
                 ));
 
+        // select tb3.id, tb1.id, tb2.id from tb1, tb2, tb3 where tb1.id = tb2.id and tb1.io = 1
 
         final Map<Table,List<WherePredicate>> whereClauseGroupedByTable =
                 queryTree
@@ -157,32 +159,16 @@ public final class Planner {
             }
 
             // TODO is there any index that can help? from all the indexes, which one gives the best selectivity?
+            final FilterInfo filterInfo = new FilterInfo(filters, filterColumns, filterParams);
+            final SequentialScan seqScan = new SequentialScan(currTable,filterInfo);
 
-            final SequentialScan seqScan = new SequentialScan( currTable, filters, filterColumns, filterParams );
-
-
-            // Executor exec = Executors.newScheduledThreadPool()
-
-            Supplier<OperatorResult> sup = new Supplier<OperatorResult>() {
-
-                @Override
-                public OperatorResult get() {
-                    return null;
-                }
-            };
-
-            Consumer<OperatorResult> con = new Consumer<OperatorResult>() {
-                @Override
-                public void accept(OperatorResult operatorResult) {
-
-                }
-            };
 
 
         }
 
+        // TODO focus on left deep, most cases will fall in this category
 
-        // TODO think about parallel seq scan
+        // TODO think about parallel seq scan,
         // SequentialScan sequentialScan = new SequentialScan( filterList, table);
 
         return null;

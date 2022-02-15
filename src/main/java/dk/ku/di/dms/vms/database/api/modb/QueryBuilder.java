@@ -8,6 +8,8 @@ import java.util.Arrays;
 
 /**
  * Bypassing the parsing from strings
+ * TODO: look at https://github.com/19WAS85/coollection#readme and
+ * https://www.jinq.org/
  */
 
 // TODO make it private and create an interface (IQueryBuilder) with these methods

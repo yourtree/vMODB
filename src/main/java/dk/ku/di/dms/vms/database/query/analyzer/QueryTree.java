@@ -27,7 +27,7 @@ public class QueryTree {
 
     public List<GroupByPredicate> groupByPredicates;
 
-    // TODO sort predicate
+    // TODO order by predicate
     public List<OrderByPredicate> orderByPredicates;
 
     public QueryTree() {

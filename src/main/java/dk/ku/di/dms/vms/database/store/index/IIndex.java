@@ -16,7 +16,7 @@ public interface IIndex {
 
     Row retrieve(IKey key);
 
-    Iterator<Row> iterator();
+    boolean retrieve(IKey key, Row outputRow);
 
     int size();
 
