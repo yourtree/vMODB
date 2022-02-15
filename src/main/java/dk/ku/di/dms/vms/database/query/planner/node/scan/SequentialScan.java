@@ -9,12 +9,13 @@ import dk.ku.di.dms.vms.database.store.table.Table;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.concurrent.Callable;
 import java.util.function.Supplier;
 
 /**
  * aka table scan
  * A thread should run the scan
+ * This is a blocking implementation, i.e.,
+ * the upstream operator must wait for this entire execution to get to work
  */
 public final class SequentialScan implements Supplier<OperatorResult> {
 

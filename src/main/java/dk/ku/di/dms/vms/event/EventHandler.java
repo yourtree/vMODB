@@ -23,7 +23,8 @@ import java.util.concurrent.Executors;
 public abstract class EventHandler<T extends IEvent> {
 
     // TODO can use condition
-    //  https://examples.javacodegeeks.com/core-java/util/concurrent/locks-concurrent/condition/java-util-concurrent-locks-condition-example/
+    // https://baptiste-wicht.com/posts/2010/09/java-concurrency-part-5-monitors-locks-and-conditions.html
+    // https://examples.javacodegeeks.com/core-java/util/concurrent/locks-concurrent/condition/java-util-concurrent-locks-condition-example/
 
     // TODO later on, one for each queue..
     //  then it becomes a map of queues,

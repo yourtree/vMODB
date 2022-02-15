@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.database.query.planner;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -7,8 +8,8 @@ import java.util.function.Supplier;
 public class PlanNode {
 
     public final Supplier<OperatorResult> supplier;
-    public final Consumer<OperatorResult> consumer;
-    public final BiConsumer<OperatorResult,OperatorResult> biConsumer;
+    public final Consumer<CompletableFuture<OperatorResult>> consumer;
+    public final BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>> biConsumer;
 
     public final PlanNode father;
     public final PlanNode left;
@@ -19,8 +20,8 @@ public class PlanNode {
     // https://www.interdb.jp/pg/pgsql03.html
 
     public PlanNode(Supplier<OperatorResult> supplier,
-                    Consumer<OperatorResult> consumer,
-                    BiConsumer<OperatorResult, OperatorResult> biConsumer,
+                    Consumer<CompletableFuture<OperatorResult>> consumer,
+                    BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>> biConsumer,
                     PlanNode father,
                     PlanNode left,
                     PlanNode right,

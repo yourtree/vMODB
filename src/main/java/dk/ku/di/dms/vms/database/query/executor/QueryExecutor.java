@@ -2,69 +2,95 @@ package dk.ku.di.dms.vms.database.query.executor;
 
 import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.PlanNode;
-import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class QueryExecutor implements Supplier<OperatorResult> {
+public class QueryExecutor implements Supplier<CompletableFuture<OperatorResult>> {
 
     private final Executor executor;
 
     private final PlanNode head;
 
-    private final Map<IdentifiableNode<PlanNode>,List<PlanNode>> predecessorLeafNodes;
+    private final Map<PlanNode, PlanNode[]> predecessorLeafNodes;
 
     public QueryExecutor(final Executor executor,
                          final PlanNode head,
-                         final Map<IdentifiableNode<PlanNode>,List<PlanNode>> predecessorLeafNodes) {
+                         final Map<PlanNode, PlanNode[]> predecessorLeafNodes) {
         this.executor = executor;
         this.head = head;
         this.predecessorLeafNodes = predecessorLeafNodes;
     }
 
-    /** while there are remaining tasks, continue in a loop
-        to schedule the tasks when their dependencies have been
-        fulfilled
-    */
+    /**
+     * while there are remaining tasks, continue in a loop
+     * to schedule the tasks when their dependencies have been
+     * fulfilled
+     */
     @Override
-    public OperatorResult get() {
+    public CompletableFuture<OperatorResult> get() {
 
-        // boolean availableTasks = !predecessorLeafNodes.isEmpty();
+        CompletableFuture<OperatorResult> finalTask = null;
 
-        // TODO the leaves of a node always form a pair?
+        // while we still have a predecessor to schedule
+        while (predecessorLeafNodes.size() > 0) {
 
-        for( Map.Entry<IdentifiableNode<PlanNode>,List<PlanNode>> entry : this.predecessorLeafNodes.entrySet() ){
+            for (Map.Entry<PlanNode, PlanNode[]> entry : this.predecessorLeafNodes.entrySet()) {
 
-            IdentifiableNode<PlanNode> iNode = entry.getKey();
-            BiConsumer<OperatorResult,OperatorResult> node = iNode.object.biConsumer;
-            PlanNode left = entry.getValue().get(0);
-            PlanNode right = entry.getValue().get(1);
-            CompletableFuture<OperatorResult> op1 =
-                    CompletableFuture.supplyAsync( left.supplier );
-            CompletableFuture<OperatorResult> op2 =
-                    CompletableFuture.supplyAsync( right.supplier );
+                PlanNode[] childrenList = entry.getValue();
+                PlanNode iNode = entry.getKey();
 
-            node.accept( op1.join(), op2.join() );
+                if (childrenList.length == 2) {
+                    // two children always lead to a biconsumer
 
-//            CompletableFuture<OperatorResult> op3 = future
-//                    .biAccept( op1, op2, iNode.object.biConsumer, null );
+                    BiConsumer<CompletableFuture<OperatorResult>, CompletableFuture<OperatorResult>> node = iNode.biConsumer;
+                    PlanNode left = childrenList[0];
+                    PlanNode right = childrenList[1];
+                    CompletableFuture<OperatorResult> op1 =
+                            CompletableFuture.supplyAsync(left.supplier);
+                    CompletableFuture<OperatorResult> op2 =
+                            CompletableFuture.supplyAsync(right.supplier);
 
-            // CompletableFuture<Void> future = op1.thenCombine( op2,  )
-            //thenAcceptAsync( iNode.object.biConsumer.accept(  ); )
-                            //.thenCombineAsync( right.supplier, ( l,r ) -> iNode.object.biConsumer.accept(l, (OperatorResult) r) );
-//                            .thenCombineAsync(
-//                                    right.supplier, (l,r) -> iNode.object.biConsumer.accept(l,r) );
+                    // avoid blocking now, so we can continue building the execution tree
+                    node.accept(op1, op2);
 
+                    if (predecessorLeafNodes.get(iNode.father) == null) {
+                        PlanNode[] newChildrenList = new PlanNode[2];
+                        newChildrenList[0] = iNode;
+                        predecessorLeafNodes.put(iNode.father, newChildrenList);
+                    } else {
+                        PlanNode[] _children = predecessorLeafNodes.get(iNode.father);
+                        _children[1] = iNode;
+                    }
+
+                } else if (childrenList.length == 1) { // == 1
+
+                    Consumer<CompletableFuture<OperatorResult>> node = iNode.consumer;
+
+                    PlanNode children = childrenList[0];
+
+                    CompletableFuture<OperatorResult> op =
+                            CompletableFuture.supplyAsync(children.supplier);
+
+                    node.accept(op);
+
+                    PlanNode[] newChildrenList = new PlanNode[1];
+                    newChildrenList[0] = iNode;
+                    predecessorLeafNodes.put(iNode.father, newChildrenList);
+                } else {
+                    // TODO or equals to head?
+                    finalTask = CompletableFuture.supplyAsync(iNode.supplier);
+                }
+
+            }
         }
 
-        // CompletableFuture<OperatorResult>
+        return finalTask;
 
-        return null;
     }
+
 }
