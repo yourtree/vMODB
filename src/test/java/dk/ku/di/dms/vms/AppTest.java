@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms;
 
-import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum.EQUALS;
-import static dk.ku.di.dms.vms.database.store.meta.DataType.INT;
+import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
 import static org.junit.Assert.assertTrue;
 
 import dk.ku.di.dms.vms.database.api.modb.RepositoryFacade;

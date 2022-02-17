@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.parser;
 
-import dk.ku.di.dms.vms.database.query.parser.enums.StatementEnum;
+import dk.ku.di.dms.vms.database.query.parser.enums.StatementTypeEnum;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -18,8 +18,8 @@ public class QueryUtil {
     static {
         keywordsMap = new HashSet<>();
 
-        StatementEnum[] statementEnums = StatementEnum.values();
-        StatementEnum[] expressionEnums = StatementEnum.values();
+        StatementTypeEnum[] statementEnums = StatementTypeEnum.values();
+        StatementTypeEnum[] expressionEnums = StatementTypeEnum.values();
 
         for(int i = 0; i < statementEnums.length; i++){
             keywordsMap.add( statementEnums[i].name() );

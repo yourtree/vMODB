@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.api.modb;
 
-import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
+import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.database.query.parser.stmt.*;
 
 import java.util.ArrayList;
@@ -11,9 +11,7 @@ import java.util.Arrays;
  * TODO: look at https://github.com/19WAS85/coollection#readme and
  * https://www.jinq.org/
  */
-
-// TODO make it private and create an interface (IQueryBuilder) with these methods
-public final class QueryBuilder implements IQueryBuilder {
+final class QueryBuilder implements IQueryBuilder {
 
     // a statement for each to avoid casting
     private SelectStatement selectStatement;
@@ -47,7 +45,7 @@ public final class QueryBuilder implements IQueryBuilder {
         return this;
     }
 
-    public QueryBuilder on(String param1, ExpressionEnum expression, String param2) throws BuilderException {
+    public QueryBuilder on(String param1, ExpressionTypeEnum expression, String param2) throws BuilderException {
         String[] param2Array = param2.split(".");
         if(param2Array.length != 2) {
             throw new BuilderException("Should contain a table and a column following the pattern <table>.<column>");
@@ -76,22 +74,22 @@ public final class QueryBuilder implements IQueryBuilder {
 
     // Found in both select and update
 
-    public QueryBuilder where(final String param, final ExpressionEnum expr, final Object value) {
+    public QueryBuilder where(final String param, final ExpressionTypeEnum expr, final Object value) {
         this.statement.where( param, expr, value );
         return this;
     }
 
-    public QueryBuilder where(String param1, ExpressionEnum expr, String param2) {
+    public QueryBuilder where(String param1, ExpressionTypeEnum expr, String param2) {
         this.statement.where( param1, expr, param2 );
         return this;
     }
 
-    public QueryBuilder and(String param, final ExpressionEnum expr, final Object value) {
+    public QueryBuilder and(String param, final ExpressionTypeEnum expr, final Object value) {
         this.statement.and( param, expr, value );
         return this;
     }
 
-    public QueryBuilder or(String param, final ExpressionEnum expr, final Object value) {
+    public QueryBuilder or(String param, final ExpressionTypeEnum expr, final Object value) {
         this.statement.or( param, expr, value );
         return this;
     }

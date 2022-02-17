@@ -17,7 +17,7 @@ import dk.ku.di.dms.vms.database.store.table.Table;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum.EQUALS;
+import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
 
 public class QueryTest {
 

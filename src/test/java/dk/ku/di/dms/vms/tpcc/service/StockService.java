@@ -12,7 +12,7 @@ import dk.ku.di.dms.vms.tpcc.repository.IStockRepository;
 
 import java.util.concurrent.CompletableFuture;
 
-import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum.EQUALS;
+import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
 
 // https://stackoverflow.com/questions/1250643/how-to-wait-for-all-threads-to-finish-using-executorservice
 

@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.parser.enums;
 
-public enum ExpressionEnum {
+public enum ExpressionTypeEnum {
 
     // value expression
 
@@ -41,9 +41,9 @@ public enum ExpressionEnum {
 
     public final String name;
 
-    ExpressionEnum(){ this.name = name(); }
+    ExpressionTypeEnum(){ this.name = name(); }
 
-    ExpressionEnum(String name) {
+    ExpressionTypeEnum(String name) {
         this.name = name;
     }
 

@@ -1,13 +1,11 @@
 package dk.ku.di.dms.vms.database.query.planner.node.filter;
 
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
+import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
 
 import java.util.Comparator;
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -18,14 +16,14 @@ public class FilterBuilder {
     /**
      * The cache is progressively built (during application execution) instead of eagerly at startup
      */
-    public static final Map<DataType, Map<ExpressionEnum,IFilter<?>>> cachedFilters = new ConcurrentHashMap<>();
+    public static final Map<DataType, Map<ExpressionTypeEnum,IFilter<?>>> cachedFilters = new ConcurrentHashMap<>();
 
     public static IFilter<?> build(final WherePredicate wherePredicate) throws Exception {
 
         DataType dataType = wherePredicate.columnReference.dataType;
-        ExpressionEnum expressionEnum = wherePredicate.expression;
+        ExpressionTypeEnum expressionEnum = wherePredicate.expression;
 
-        Map<ExpressionEnum,IFilter<?>> filterDataTypeMap = cachedFilters.getOrDefault(dataType,null);
+        Map<ExpressionTypeEnum,IFilter<?>> filterDataTypeMap = cachedFilters.getOrDefault(dataType,null);
         if(filterDataTypeMap != null){
             if(filterDataTypeMap.get(expressionEnum) != null){
                 return filterDataTypeMap.get(expressionEnum);
@@ -69,7 +67,7 @@ public class FilterBuilder {
     }
 
     public static <V> IFilter<V> getFilter(
-            final ExpressionEnum expression,
+            final ExpressionTypeEnum expression,
             final Comparator<V> comparator) throws Exception {
 
         switch(expression){

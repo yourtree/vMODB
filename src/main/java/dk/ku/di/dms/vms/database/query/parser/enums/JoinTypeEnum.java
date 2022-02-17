@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.parser.enums;
 
-public enum JoinEnum {
+public enum JoinTypeEnum {
 
     JOIN("JOIN"),
 
@@ -14,9 +14,9 @@ public enum JoinEnum {
 
     public final String name;
 
-    JoinEnum(){ this.name = name(); }
+    JoinTypeEnum(){ this.name = name(); }
 
-    JoinEnum(String name) {
+    JoinTypeEnum(String name) {
         this.name = name;
     }
 

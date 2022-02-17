@@ -6,18 +6,14 @@ import dk.ku.di.dms.vms.annotations.Outbound;
 import dk.ku.di.dms.vms.annotations.Transactional;
 import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
 import dk.ku.di.dms.vms.database.api.modb.BuilderException;
-import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderOut;
 import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderIn;
 import dk.ku.di.dms.vms.tpcc.repository.ICustomerRepository;
-import dk.ku.di.dms.vms.utils.CustomerInfoDTO;
 import dk.ku.di.dms.vms.utils.Triplet;
 
-import java.util.List;
-
-import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum.EQUALS;
+import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
 
 @Microservice("customer")
 public class CustomerService {

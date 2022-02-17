@@ -16,7 +16,7 @@ import dk.ku.di.dms.vms.utils.Pair;
 
 import java.util.concurrent.*;
 
-import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum.EQUALS;
+import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
 
 @Microservice("warehouse")
 public class WareDistService {

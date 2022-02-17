@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.parser.enums;
 
-public enum GroupByEnum {
+public enum GroupByOperationEnum {
 
     AVG("AVG"),
     SUM("SUM"),
@@ -10,9 +10,9 @@ public enum GroupByEnum {
 
     public final String name;
 
-    GroupByEnum(){ this.name = name(); }
+    GroupByOperationEnum(){ this.name = name(); }
 
-    GroupByEnum(String name) {
+    GroupByOperationEnum(String name) {
         this.name = name;
     }
 

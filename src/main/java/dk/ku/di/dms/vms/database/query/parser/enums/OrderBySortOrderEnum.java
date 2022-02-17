@@ -1,15 +1,15 @@
 package dk.ku.di.dms.vms.database.query.parser.enums;
 
-public enum OrderBySortEnum {
+public enum OrderBySortOrderEnum {
 
     MIN("ASC"),
     MAX("DESC");
 
     public final String name;
 
-    OrderBySortEnum(){ this.name = name(); }
+    OrderBySortOrderEnum(){ this.name = name(); }
 
-    OrderBySortEnum(String name) {
+    OrderBySortOrderEnum(String name) {
         this.name = name;
     }
 

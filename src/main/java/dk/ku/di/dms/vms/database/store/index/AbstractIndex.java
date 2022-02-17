@@ -10,14 +10,17 @@ public abstract class AbstractIndex<K> {
     // I need this to figure out whether this index is applied to a set of columns
     private final int[] columnsIndex;
 
+    private final int hashCode;
+
     public AbstractIndex(final int... columnsIndex) {
         this.columnsIndex = columnsIndex;
+        this.hashCode = Arrays.hashCode(columnsIndex);
     }
 
     // use bitwise comparison to find whether a given index exists for such columns
     // https://stackoverflow.com/questions/8504288/java-bitwise-comparison-of-a-byte/8504393
     public int hashCode(){
-        return Arrays.hashCode(columnsIndex);
+        return this.hashCode;
     }
 
     public abstract boolean upsert(K key, Row row);

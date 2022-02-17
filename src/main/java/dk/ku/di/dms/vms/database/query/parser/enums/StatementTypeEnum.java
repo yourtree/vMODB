@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.parser.enums;
 
-public enum StatementEnum {
+public enum StatementTypeEnum {
 
     SELECT("SELECT"),
 
@@ -20,15 +20,17 @@ public enum StatementEnum {
 
     AS("AS"),
 
+    ON("ON"),
+
     WHERE("WHERE"),
 
     FROM("FROM");
 
     public final String name;
 
-    StatementEnum(){ this.name = name(); }
+    StatementTypeEnum(){ this.name = name(); }
 
-    StatementEnum(String name) {
+    StatementTypeEnum(String name) {
         this.name = name;
     }
 

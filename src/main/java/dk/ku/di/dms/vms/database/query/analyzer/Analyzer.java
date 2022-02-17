@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.database.query.analyzer;
 import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.database.query.parser.enums.JoinEnum;
+import dk.ku.di.dms.vms.database.query.parser.enums.JoinTypeEnum;
 import dk.ku.di.dms.vms.database.query.parser.stmt.*;
 import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
@@ -144,7 +144,7 @@ public final class Analyzer {
                     }
 
                     // build typed join clause
-                    JoinPredicate joinClause = new JoinPredicate(columnReference, columnReference1, currWhere.expression, JoinEnum.INNER_JOIN);
+                    JoinPredicate joinClause = new JoinPredicate(columnReference, columnReference1, currWhere.expression, JoinTypeEnum.INNER_JOIN);
 
                     queryTree.joinPredicates.add(joinClause);
 

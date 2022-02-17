@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.database.query.planner;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionEnum;
+import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
@@ -113,34 +113,61 @@ public final class Planner {
 
         // TODO optimization. the same table can appear in several joins.
         //  in this sense, which join + filter should be executed first to give the best prune of records?
+
+        // TODO I am not considering a JOIN predicate may contain more than a column....
         for(final JoinPredicate joinPredicate : queryTree.joinPredicates){
 
-            // get filters for this join
+            boolean leftTableIsIndexed = false;
 
             Table tableLeft = joinPredicate.getLeftTable();
 
-            // first the left table
-            // List<IFilter<?>>
+            // is join condition on primary key? then I can bypass the index selection step
+            if(tableLeft.hasPrimaryKey()){
+                int pIndexHash = tableLeft.getPrimaryIndex().hashCode();
+                int[] idxArr = { joinPredicate.columnLeftReference.columnIndex };
+                int colHash = Arrays.hashCode(idxArr);
+                if (pIndexHash == colHash){
+                    leftTableIsIndexed = true;
+                }
+            } else {
+                // then only consider the filters for this table
+                // maybe I should add the filters after I build all the join operators...
+                // exactly... the filters may even change the operator??? because the filter may have a better index...
+                // the question is: do I have an index to apply on a filter that is even better than the one chosen?
+            }
 
+            boolean rightTableIsIndexed = false;
             Table tableRight = joinPredicate.getRightTable();
 
+            if(leftTableIsIndexed && rightTableIsIndexed){
+                // does this case necessarily lead to symmetric HashJoin?
+
+            } // asymmetric hash join
+            else if( leftTableIsIndexed ){
+
+            } else if ( rightTableIsIndexed ) {
+
+            } // nested loop join
+            else {
+
+            }
 
 
             // TODO the shortest the table, lower the degree of the join operation in the query tree
-
+            // thus, store a map of plan nodes keyed by table
+            // the plan node with the largest probability of pruning (considering index type + filters + size of table)
+            // more records earlier in the query are pushed downstream in the physical query plan
         }
 
         // ordered list. better selectivity rate leads to a deeper node
 
         // TODO can we merge the filters with the join? i think so. after building the join operators, we can do it
         // remove from map after applying the additional filters
-//            filtersForJoinGroupedByTable
+        // filtersForJoinGroupedByTable
 
-        // Map<Table,List<IJoin>>
 
+        // a scan for each table
         // the scan strategy only applies for those tables not involved in any join
-
-        // a sequential scan for each table
         // TODO all predicates with the same column should be a single filter
         for( final Map.Entry<Table, List<WherePredicate>> entry : whereClauseGroupedByTable.entrySet() ){
 
@@ -155,7 +182,7 @@ public final class Planner {
             int i = 0;
             for(final WherePredicate w : wherePredicates){
 
-                boolean nullable = w.expression == ExpressionEnum.IS_NOT_NULL || w.expression == ExpressionEnum.IS_NULL;
+                boolean nullable = w.expression == ExpressionTypeEnum.IS_NOT_NULL || w.expression == ExpressionTypeEnum.IS_NULL;
 
                 filters[ i ] = FilterBuilder.build( w );
                 filterColumns[ i ] = w.columnReference.columnIndex;
@@ -166,16 +193,14 @@ public final class Planner {
                 i++;
             }
 
-            // TODO is there any index that can help? from all the indexes, which one gives the best selectivity?
-            // actually I need the index information to decide which operator, e.g., index scan
-
-
-            // Here we are relying on the fact that every index created are stored in order of the table column
-
             final FilterInfo filterInfo = new FilterInfo(filters, filterColumns, filterParams);
+            // I need the index information to decide which operator, e.g., index scan
             final AbstractIndex optimalIndex = findOptimalIndex( currTable, filterInfo);
-            final SequentialScan seqScan = new SequentialScan(optimalIndex,filterInfo);
-
+            if(optimalIndex.getType() == IndexTypeEnum.HASH){
+                // TODO finish new IndexScan()
+            } else {
+                final SequentialScan seqScan = new SequentialScan(optimalIndex, filterInfo);
+            }
 
 
         }
@@ -188,6 +213,9 @@ public final class Planner {
         return null;
     }
 
+    /*
+     *  Here we are relying on the fact that every index created are stored in order of the table column
+     */
     private AbstractIndex findOptimalIndex(final Table table, final FilterInfo filterInfo){
 
         // all combinations... TODO this can be built in the previous step...
@@ -270,7 +298,7 @@ public final class Planner {
         } else {
             // bestSelectivity = table.size();
             if(!table.hasPrimaryKey()){
-                // we still need to return a list...
+                // we still need to return a reference to the table rows...
                 return table.getInternalIndex();
             } else {
                 return table.getPrimaryIndex();
