@@ -25,4 +25,9 @@ public class JoinPredicate {
     public Table getLeftTable() {
         return columnLeftReference.table;
     }
+
+    public Table getRightTable() {
+        return columnRightReference.table;
+    }
+
 }

@@ -5,9 +5,6 @@ import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
 import dk.ku.di.dms.vms.database.store.index.HashIndex;
 
-import java.util.Collection;
-import java.util.Iterator;
-
 /**
  * Map-based Table for primary key index lookup
  *
@@ -49,16 +46,6 @@ public final class HashIndexedTable extends Table {
     @Override
     public Row retrieve(IKey key) {
         return primaryIndex.retrieve(key);
-    }
-
-    @Override
-    public Iterator<Row> iterator() {
-        return primaryIndex.iterator();
-    }
-
-    @Override
-    public Collection<Row> rows() {
-        return primaryIndex.rows();
     }
 
 }

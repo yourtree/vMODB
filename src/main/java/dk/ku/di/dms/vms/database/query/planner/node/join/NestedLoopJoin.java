@@ -2,9 +2,9 @@ package dk.ku.di.dms.vms.database.query.planner.node.join;
 
 public class NestedLoopJoin {
 
-    final FilterJoinInfo filterJoin;
+    final JoinCondition filterJoin;
 
-    public NestedLoopJoin(FilterJoinInfo filterJoin) {
+    public NestedLoopJoin(JoinCondition filterJoin) {
         this.filterJoin = filterJoin;
     }
 }

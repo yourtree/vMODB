@@ -18,7 +18,7 @@ import java.util.function.Supplier;
  * In other words, previous scanning and transformation steps are not necessary
  */
 
-public class HashJoin implements Supplier<OperatorResult>
+public class HashJoin implements Supplier<OperatorResult>, IJoin
 {
 
     private final HashIndex innerIndex;

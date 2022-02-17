@@ -52,19 +52,19 @@ public class AppTest
         Field field = Item.class.getField("i_id");
         MethodHandle h = MethodHandles.lookup().unreflectGetter(field);
         Integer value = (Integer) h.invoke( item );
-        IFilter filter = FilterBuilder.getFilter(EQUALS, INT,1, Integer::compareTo);
+        IFilter filter = FilterBuilder.getFilter(EQUALS, Integer::compareTo);
 
-        assertTrue(filter.test( value ));
+        assertTrue(filter.eval( value ));
     }
 
     @Test
     public void testCreatingFilter() throws Throwable {
 
-        IFilter filter = FilterBuilder.getFilter(EQUALS, INT,1, Integer::compareTo);
+        IFilter filter = FilterBuilder.getFilter(EQUALS, Integer::compareTo);
 
         Row row = new Row( 1, 2, 3, 10L );
         // filter.and
-         assertTrue(filter.test( row.getInt(0) ));
+         assertTrue(filter.eval( row.getInt(0) ));
 
     }
 

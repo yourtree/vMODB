@@ -5,28 +5,18 @@ import dk.ku.di.dms.vms.database.store.row.Row;
 
 import java.util.*;
 
-public class HashIndex implements IIndex {
+public class HashIndex extends AbstractIndex<IKey> {
 
     protected final Map<IKey, Row> lookupMap;
 
-    // I need this to figure out whether this index
-    private final int[] columnsIndex;
-
-    public HashIndex(int... columnsIndex) {
+    public HashIndex(int... columnsIndex){
+        super(columnsIndex);
         this.lookupMap = new HashMap<>();
-        this.columnsIndex = columnsIndex;
     }
 
     public HashIndex(final int initialSize, int... columnsIndex){
+        super(columnsIndex);
         this.lookupMap = new HashMap<>(initialSize);
-        this.columnsIndex = columnsIndex;
-    }
-
-    // use bitwise comparison to find whether a given index exists for such columns
-    // https://stackoverflow.com/questions/8504288/java-bitwise-comparison-of-a-byte/8504393
-    public int hashCode(){
-        if (columnsIndex.length == 1) return columnsIndex[0];
-        return Arrays.hashCode(columnsIndex);
     }
 
     @Override
@@ -51,11 +41,6 @@ public class HashIndex implements IIndex {
         return outputRow == null;
     }
 
-    // clustered index does not make sense in mmdbs?
-
-    // default is hash
-    // public IndexEnum indexType;
-
     @Override
     public int size() {
         return lookupMap.size();
@@ -63,6 +48,11 @@ public class HashIndex implements IIndex {
 
     public Collection<Row> rows(){
         return lookupMap.values();
+    }
+
+    @Override
+    public IndexTypeEnum getType() {
+        return IndexTypeEnum.HASH;
     }
 
     public Set<Map.Entry<IKey,Row>> entrySet(){

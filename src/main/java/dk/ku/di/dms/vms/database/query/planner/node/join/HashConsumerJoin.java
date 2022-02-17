@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.database.query.planner.node.join;
 
 import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
-import dk.ku.di.dms.vms.database.store.index.IIndex;
+import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -17,16 +17,17 @@ import java.util.function.Supplier;
 
 public class HashConsumerJoin implements
         BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>>,
-        Supplier<OperatorResult>
+        Supplier<OperatorResult>,
+        IJoin
 {
 
-    private final IIndex innerTableIndex;
-    private final IIndex outerTableIndex;
+    private final AbstractIndex innerTableIndex;
+    private final AbstractIndex outerTableIndex;
 
     private CompletableFuture<OperatorResult> operatorResultFutureLeft;
     private CompletableFuture<OperatorResult> operatorResultFutureRight;
 
-    public HashConsumerJoin(IIndex innerTableIndex, IIndex outerTableIndex) {
+    public HashConsumerJoin(AbstractIndex innerTableIndex, AbstractIndex outerTableIndex) {
         this.innerTableIndex = innerTableIndex;
         this.outerTableIndex = outerTableIndex;
     }

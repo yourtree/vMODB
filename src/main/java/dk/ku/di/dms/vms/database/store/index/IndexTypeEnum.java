@@ -1,15 +1,15 @@
 package dk.ku.di.dms.vms.database.store.index;
 
-public enum IndexEnum {
+public enum IndexTypeEnum {
 
-    BTREE("BTREE"),
+    TREE("TREE"),
     HASH("HASH");
 
     public final String name;
 
-    IndexEnum(){ this.name = name(); }
+    IndexTypeEnum(){ this.name = name(); }
 
-    IndexEnum(String name) {
+    IndexTypeEnum(String name) {
         this.name = name;
     }
 

@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
+import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.table.Table;
 
@@ -21,9 +22,9 @@ import java.util.function.Supplier;
 public final class SequentialScan implements Supplier<OperatorResult> {
 
     /**
-     * The table to iterate with
+     * The index to iterate with
      */
-    private final Table table;
+    private final AbstractIndex index;
 
     /**
      * Filters are agnostic to the columns they are accessing,
@@ -39,9 +40,9 @@ public final class SequentialScan implements Supplier<OperatorResult> {
     /** The parameters of the filters */
     private Collection<IdentifiableNode<Object>> filterParams;
 
-    public SequentialScan(final Table table,
+    public SequentialScan(final AbstractIndex index,
                           final FilterInfo filterInfo) {
-        this.table = table;
+        this.index = index;
         this.filters = filterInfo.filters;
         this.filterColumns = filterInfo.filterColumns;
         this.filterParams = filterInfo.filterParams;
@@ -49,10 +50,10 @@ public final class SequentialScan implements Supplier<OperatorResult> {
 
     /**
      * No filter scan. For instance, SELECT * FROM table
-     * @param table
+     * @param index
      */
-    public SequentialScan(final Table table) {
-        this.table = table;
+    public SequentialScan(final AbstractIndex index) {
+        this.index = index;
         this.filters = null;
         this.filterColumns = null;
         this.filterParams = null;
@@ -66,13 +67,13 @@ public final class SequentialScan implements Supplier<OperatorResult> {
         OperatorResult res = new OperatorResult();
 
         if (noFilter) {
-            res.rows = table.rows();
+            res.rows = index.rows();
             return res;
         }
 
         Collection<Row> result = new ArrayList<>();
 
-        Collection<Row> rows = table.rows();
+        Collection<Row> rows = index.rows();
 
         for(Row row : rows){
             boolean conditionHolds = check(row);
