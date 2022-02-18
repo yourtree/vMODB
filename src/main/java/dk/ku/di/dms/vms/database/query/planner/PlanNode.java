@@ -7,17 +7,21 @@ import java.util.function.Supplier;
 
 public class PlanNode {
 
-    public final Supplier<OperatorResult> supplier;
-    public final Consumer<CompletableFuture<OperatorResult>> consumer;
-    public final BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>> biConsumer;
+    public Supplier<OperatorResult> supplier;
+    public Consumer<CompletableFuture<OperatorResult>> consumer;
+    public BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>> biConsumer;
 
-    public final PlanNode father;
-    public final PlanNode left;
-    public final PlanNode right;
+    public PlanNode father;
+    public PlanNode left;
+    public PlanNode right;
 
-    public final boolean isLeaf;
+    public boolean isLeaf;
 
     // https://www.interdb.jp/pg/pgsql03.html
+
+    public PlanNode(Supplier<OperatorResult> supplier){
+        this.supplier = supplier;
+    }
 
     public PlanNode(Supplier<OperatorResult> supplier,
                     Consumer<CompletableFuture<OperatorResult>> consumer,

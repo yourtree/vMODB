@@ -19,15 +19,16 @@ public abstract class Table {
 
     protected final Schema schema;
 
-    protected AbstractIndex primaryIndex;
+    protected AbstractIndex<IKey> primaryIndex;
 
-    protected Map<IKey, AbstractIndex> secondaryIndexes;
+    // Hashed by the column set
+    protected Map<IKey, AbstractIndex<IKey>> secondaryIndexes;
 
     /** System-defined index to iterate over the rows.
      *  ATTENTION! Only used in case no primary index has been defined
      *   and no secondary index can be used in the query
      */
-    protected AbstractIndex internalIndex;
+    protected AbstractIndex<IKey> internalIndex;
 
     public abstract int size();
 
@@ -49,24 +50,27 @@ public abstract class Table {
         return schema;
     }
 
-    public boolean hasPrimaryKey(){
-        return primaryIndex != null;
-    }
-
-    public AbstractIndex getPrimaryIndex(){
-        return primaryIndex;
-    }
-
     public String getName(){
         return this.name;
     }
 
-    public Collection<AbstractIndex> getSecondaryIndexes(){
-        return secondaryIndexes.values();
+    public boolean hasPrimaryKey(){
+        return primaryIndex != null;
     }
 
-    public AbstractIndex getInternalIndex(){
+    public AbstractIndex<IKey> getPrimaryIndex(){
+        return primaryIndex;
+    }
+
+    public AbstractIndex<IKey> getSecondaryIndexForColumnSetHash( final IKey key ){
+        return secondaryIndexes.getOrDefault( key, null );
+    }
+
+    public AbstractIndex<IKey> getInternalIndex(){
         return internalIndex;
     }
 
+    public Collection<AbstractIndex<IKey>> getSecondaryIndexes() {
+        return secondaryIndexes.values();
+    }
 }

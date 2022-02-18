@@ -2,8 +2,8 @@ package dk.ku.di.dms.vms.database.store.index;
 
 public enum IndexTypeEnum {
 
-    TREE("TREE"),
-    HASH("HASH");
+    SIMPLE("SIMPLE"),
+    COMPOSITE("COMPOSITE");
 
     public final String name;
 

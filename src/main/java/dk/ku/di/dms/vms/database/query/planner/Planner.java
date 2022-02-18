@@ -7,11 +7,16 @@ import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
+import dk.ku.di.dms.vms.database.query.planner.node.join.HashJoin;
+import dk.ku.di.dms.vms.database.query.planner.node.join.IndexedNestedLoopJoin;
+import dk.ku.di.dms.vms.database.query.planner.node.join.NestedLoopJoin;
 import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
-import dk.ku.di.dms.vms.database.store.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.database.store.meta.Schema;
+import dk.ku.di.dms.vms.database.store.index.HashIndex;
+import dk.ku.di.dms.vms.database.store.index.IndexDataStructureEnum;
+import dk.ku.di.dms.vms.database.store.row.IKey;
+import dk.ku.di.dms.vms.database.store.row.SimpleKey;
 import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.*;
@@ -111,45 +116,89 @@ public final class Planner {
         //  but here I will just create the final projection when I need to
         //  deliver the result back to the application
 
-        // TODO optimization. the same table can appear in several joins.
-        //  in this sense, which join + filter should be executed first to give the best prune of records?
+
 
         // TODO I am not considering a JOIN predicate may contain more than a column....
+        // if the pk or secIndex only applies to one of the columns, then others become filters
         for(final JoinPredicate joinPredicate : queryTree.joinPredicates){
 
             boolean leftTableIsIndexed = false;
+            AbstractIndex<IKey> leftTableIndex = null;
 
             Table tableLeft = joinPredicate.getLeftTable();
 
-            // is join condition on primary key? then I can bypass the index selection step
+            // this approach used for composite key
+            //int[] colIdxArr = { joinPredicate.columnLeftReference.columnIndex };
+            //int colHash = Arrays.hashCode(colIdxArr);
+
+            // approach used for simple key
+            SimpleKey keyLeft = new SimpleKey( joinPredicate.columnLeftReference.columnIndex );
+
+            // if there is a join condition based on primary key then I can bypass the index selection step
+            // of course there may the case where the developer can define a tree-base pk and hash-based index
+            // but in our case we can constrain that through our annotation-based semantics...
             if(tableLeft.hasPrimaryKey()){
                 int pIndexHash = tableLeft.getPrimaryIndex().hashCode();
-                int[] idxArr = { joinPredicate.columnLeftReference.columnIndex };
-                int colHash = Arrays.hashCode(idxArr);
-                if (pIndexHash == colHash){
+                if (pIndexHash == keyLeft.hashCode()){
+                    leftTableIndex = tableLeft.getPrimaryIndex();
                     leftTableIsIndexed = true;
                 }
-            } else {
+            }
+
+            if( !leftTableIsIndexed && tableLeft.getSecondaryIndexForColumnSetHash(keyLeft) != null ){
+                leftTableIndex = tableLeft.getSecondaryIndexForColumnSetHash(keyLeft);
+                leftTableIsIndexed = true;
+
+            //else if(tableLeft.getSecondaryIndexes().size() > 0){
                 // then only consider the filters for this table
                 // maybe I should add the filters after I build all the join operators...
                 // exactly... the filters may even change the operator??? because the filter may have a better index...
                 // the question is: do I have an index to apply on a filter that is even better than the one chosen?
-            }
+
+            } //else {
+                // in this case the hope is finding an index for a filter...
+            //}
 
             boolean rightTableIsIndexed = false;
+            AbstractIndex<IKey> rightTableIndex = null;
+
             Table tableRight = joinPredicate.getRightTable();
 
+            SimpleKey keyRight = new SimpleKey( joinPredicate.columnRightReference.columnIndex );
+
+            if(tableRight.hasPrimaryKey()){
+                int pIndexHash = tableRight.getPrimaryIndex().hashCode();
+                if (pIndexHash == keyRight.hashCode()){
+                    rightTableIndex = tableRight.getPrimaryIndex();
+                    rightTableIsIndexed = true;
+                }
+            }
+
+            if( !rightTableIsIndexed && tableRight.getSecondaryIndexForColumnSetHash(keyLeft) != null ) {
+                rightTableIndex = tableRight.getSecondaryIndexForColumnSetHash(keyLeft);
+                rightTableIsIndexed = true;
+            }
+
+            // now we have to decide the operators
             if(leftTableIsIndexed && rightTableIsIndexed){
                 // does this case necessarily lead to symmetric HashJoin?
+                HashJoin hashJoin;
+                if(leftTableIndex.size() > rightTableIndex.size()){
+                    hashJoin = new HashJoin( rightTableIndex, leftTableIndex );
+                } else {
+                    hashJoin = new HashJoin( leftTableIndex, rightTableIndex );
+                }
+                PlanNode planNode = new PlanNode(hashJoin);
+            } else if( leftTableIsIndexed ){ // indexed nested loop join on inner table. the outer probes it
 
-            } // asymmetric hash join
-            else if( leftTableIsIndexed ){
-
-            } else if ( rightTableIsIndexed ) {
-
-            } // nested loop join
-            else {
-
+                IndexedNestedLoopJoin indexedNestedLoopJoin =
+                        new IndexedNestedLoopJoin( tableRight.getInternalIndex(), leftTableIndex );
+            } else if( rightTableIsIndexed ) {
+                IndexedNestedLoopJoin indexedNestedLoopJoin =
+                        new IndexedNestedLoopJoin( tableLeft.getInternalIndex(), rightTableIndex );
+            } else { // nested loop join
+                // ideally this is pushed upstream to benefit from pruning performed by downstream nodes
+                NestedLoopJoin nestedLoopJoin = new NestedLoopJoin();
             }
 
 
@@ -161,10 +210,13 @@ public final class Planner {
 
         // ordered list. better selectivity rate leads to a deeper node
 
+        // TODO optimization. the same table can appear in several joins.
+        //  in this sense, which join + filter should be executed first to give the best prune of records?
         // TODO can we merge the filters with the join? i think so. after building the join operators, we can do it
         // remove from map after applying the additional filters
         // filtersForJoinGroupedByTable
 
+        // here I need to iterate over the plan nodes defined earlier
 
         // a scan for each table
         // the scan strategy only applies for those tables not involved in any join
@@ -182,11 +234,12 @@ public final class Planner {
             int i = 0;
             for(final WherePredicate w : wherePredicates){
 
-                boolean nullable = w.expression == ExpressionTypeEnum.IS_NOT_NULL || w.expression == ExpressionTypeEnum.IS_NULL;
+                boolean nullableExpression = w.expression == ExpressionTypeEnum.IS_NOT_NULL
+                        || w.expression == ExpressionTypeEnum.IS_NULL;
 
                 filters[ i ] = FilterBuilder.build( w );
                 filterColumns[ i ] = w.columnReference.columnIndex;
-                if( !nullable ){
+                if( !nullableExpression ){
                     filterParams.add( new IdentifiableNode<>( i, w.value ) );
                 }
 
@@ -195,8 +248,8 @@ public final class Planner {
 
             final FilterInfo filterInfo = new FilterInfo(filters, filterColumns, filterParams);
             // I need the index information to decide which operator, e.g., index scan
-            final AbstractIndex optimalIndex = findOptimalIndex( currTable, filterInfo);
-            if(optimalIndex.getType() == IndexTypeEnum.HASH){
+            final AbstractIndex optimalIndex = findOptimalIndex( currTable, filterInfo.filterColumns, false );
+            if(optimalIndex.getType() == IndexDataStructureEnum.HASH){
                 // TODO finish new IndexScan()
             } else {
                 final SequentialScan seqScan = new SequentialScan(optimalIndex, filterInfo);
@@ -216,10 +269,10 @@ public final class Planner {
     /*
      *  Here we are relying on the fact that every index created are stored in order of the table column
      */
-    private AbstractIndex findOptimalIndex(final Table table, final FilterInfo filterInfo){
+    private AbstractIndex findOptimalIndex(final Table table, final int[] filterColumns, final boolean skipPrimaryKey){
 
         // all combinations... TODO this can be built in the previous step...
-        final List<int[]> combinations = getAllPossibleColumnCombinations(filterInfo.filterColumns);
+        final List<int[]> combinations = getAllPossibleColumnCombinations(filterColumns);
 
         // TODO this can be done inside getAllPossibleColumnCombinations
         // build map of hash code
@@ -234,8 +287,7 @@ public final class Planner {
         AbstractIndex optimalIndex = null;
 
         // first try the primary index
-
-        if(table.hasPrimaryKey()){
+        if(!skipPrimaryKey && table.hasPrimaryKey()){
             final AbstractIndex pIndex = table.getPrimaryIndex();
             if( hashCodeMap.get( pIndex.hashCode() ) != null ){
                 // bestSelectivity = 1D / table.size();
@@ -243,7 +295,9 @@ public final class Planner {
             }
         }
 
-        // the selectivity may be unknown, we should use heuristic here to decide what is the best index
+        // the selectivity may be unknown, we should use simple heuristic here to decide what is the best index
+        // the heuristic is simply the number of columns an index covers
+        // of course this can be misleading, since the selectivity can be poor, leading to scan the entire table anyway...
         // TODO we could insert a selectivity collector in the sequential scan so later this data can be used here
         for( final AbstractIndex secIndex : table.getSecondaryIndexes() ){
 
@@ -256,37 +310,25 @@ public final class Planner {
             int[] columns = hashCodeMap.getOrDefault( secIndex.hashCode(), null );
             if( columns != null ){
 
-                float totalSize = 0;
-                final Schema schema = table.getSchema();
-                for(int iCol = 0; iCol < columns.length; iCol++){
-                    switch ( schema.getColumnDataType( iCol ) ){
-                        case INT:
-                        case FLOAT:
-                            totalSize += 32; break;
-                        case STRING: totalSize += 16 * 8; break;
-                        // 16-bit * average number of chars in a string. average size of value in a given column would be the ideal
-                        case LONG:
-                        case DOUBLE:
-                            totalSize += 64; break;
-                        case CHAR: totalSize += 16; break;
-                    }
-
-                }
+                // optimistic belief that the number of columns would lead to a significant pruning of records
+                float heuristicSelectivity = (float) columns.length / table.size();
 
                 // try next index then
-                if(totalSize > bestSelectivity) continue;
+                if(heuristicSelectivity > bestSelectivity) continue;
 
                 // if tiebreak, hash index type is chosen as the tiebreaker criterion
-
-                if(totalSize == bestSelectivity){
+                if(heuristicSelectivity == bestSelectivity
+                        && optimalIndex.getType() == IndexDataStructureEnum.TREE
+                        && secIndex.getType() == IndexDataStructureEnum.HASH){
                     // do not need to check whether optimalIndex != null since totalSize
                     // can never be equals to FLOAT.MAX_VALUE
-                    optimalIndex = optimalIndex.getType() == IndexTypeEnum.TREE ? secIndex : optimalIndex;
+                    optimalIndex = secIndex;
                     continue;
                 }
 
+                // heuristicSelectivity < bestSelectivity
                 optimalIndex = secIndex;
-                bestSelectivity = totalSize;
+                bestSelectivity = heuristicSelectivity;
 
             }
 
@@ -314,19 +356,30 @@ public final class Planner {
         int[] arr0 = { filterColumns[0] };
         int[] arr1 = { filterColumns[1] };
         int[] arr2 = { filterColumns[0], filterColumns[1] };
-        List<int[]> res = new ArrayList<>();
-        res.add(arr0);
-        res.add(arr1);
-        res.add(arr2);
-        return res;
+        return Arrays.asList( arr0, arr1, arr2 );
+    }
+
+    private List<int[]> getCombinationsFor3SizeColumnList( final int[] filterColumns ){
+        int[] arr0 = { filterColumns[0] };
+        int[] arr1 = { filterColumns[1] };
+        int[] arr2 = { filterColumns[2] };
+        int[] arr3 = { filterColumns[0], filterColumns[1], filterColumns[2] };
+        int[] arr4 = { filterColumns[0], filterColumns[1] };
+        int[] arr5 = { filterColumns[0], filterColumns[2] };
+        int[] arr6 = { filterColumns[1], filterColumns[2] };
+        return Arrays.asList( arr0, arr1, arr2, arr3, arr4, arr5, arr6 );
     }
 
     // TODO later get metadata to know whether such a column has an index
     // TODO a column can appear more than once. make it sure it appears only once
     public List<int[]> getAllPossibleColumnCombinations( final int[] filterColumns ){
 
-        // TODO for one and three values I can do it directly without using an n^2 algorithm
+        // in case only one condition for join and single filter
+        if(filterColumns.length == 1) return Arrays.asList(filterColumns);
+
         if(filterColumns.length == 2) return getCombinationsFor2SizeColumnList(filterColumns);
+
+        if(filterColumns.length == 3) return getCombinationsFor3SizeColumnList(filterColumns);
 
         final int length = filterColumns.length;
 

@@ -4,13 +4,14 @@ import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
-import dk.ku.di.dms.vms.database.store.index.HashIndex;
+import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 import dk.ku.di.dms.vms.database.store.row.IKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
 
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -21,26 +22,31 @@ import java.util.function.Supplier;
 public class HashJoin implements Supplier<OperatorResult>, IJoin
 {
 
-    private final HashIndex innerIndex;
-    private final HashIndex outerIndex;
+    private final AbstractIndex<IKey> innerIndex;
+    private final AbstractIndex<IKey> outerIndex;
 
-    private final FilterInfo filterInner;
-    private final FilterInfo filterOuter;
+    private FilterInfo filterInner;
+    private FilterInfo filterOuter;
 
-    public HashJoin(final HashIndex innerIndex,
-                    final HashIndex outerIndex,
-                    final FilterInfo filterInner,
-                    final FilterInfo filterOuter) {
+    public HashJoin(final AbstractIndex<IKey> innerIndex,
+                    final AbstractIndex<IKey> outerIndex) {
         this.innerIndex = innerIndex;
         this.outerIndex = outerIndex;
+    }
+
+    public void setFilterInner(final FilterInfo filterInner) {
         this.filterInner = filterInner;
+    }
+
+    public void setFilterOuter(final FilterInfo filterOuter) {
         this.filterOuter = filterOuter;
     }
 
     @Override
     public OperatorResult get() {
 
-        for(final Map.Entry<IKey,Row> rowEntry : innerIndex.entrySet()){
+        Set<Map.Entry<IKey,Row>> entries = innerIndex.entrySet();
+        for(final Map.Entry<IKey,Row> rowEntry : entries){
 
             IKey currRowKey = rowEntry.getKey();
             Row currRowVal = rowEntry.getValue();
@@ -83,8 +89,9 @@ public class HashJoin implements Supplier<OperatorResult>, IJoin
 
     }
 
+    @SuppressWarnings("unchecked")
     private boolean check(final Row row,
-                          final IFilter[] filters,
+                          final IFilter<?>[] filters,
                           final int[] filterColumns,
                           final Collection<IdentifiableNode<Object>> filterParams){
 
@@ -94,7 +101,7 @@ public class HashJoin implements Supplier<OperatorResult>, IJoin
         IFilter currFilter;
 
         Iterator<IdentifiableNode<Object>> paramsIterator = filterParams.iterator();
-        IdentifiableNode currParam = null;
+        IdentifiableNode<Object> currParam = null;
         if (paramsIterator.hasNext()){
             currParam = paramsIterator.next();
         }
@@ -104,7 +111,7 @@ public class HashJoin implements Supplier<OperatorResult>, IJoin
 
             // unchecked cast, but we know it is safe since the analyzer makes sure that
             if(currParam != null && currParam.id == filterIdx) {
-                conditionHolds = currFilter.eval(row.get(filterColumns[filterIdx]), currParam );
+                conditionHolds = currFilter.eval(row.get(filterColumns[filterIdx]), currParam.object );
                 if (paramsIterator.hasNext()){
                     currParam = paramsIterator.next();
                 } else {

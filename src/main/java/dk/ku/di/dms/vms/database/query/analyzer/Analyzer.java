@@ -151,7 +151,7 @@ public final class Analyzer {
                 } else {
                     // simple where
                     WherePredicate whereClause = new WherePredicate(columnReference, currWhere.expression, currWhere.value);
-                    queryTree.wherePredicates.add(whereClause);
+                    queryTree.addWhereClauseSortedByColumnIndex(whereClause);
                 }
 
             }

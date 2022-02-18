@@ -1,20 +1,26 @@
 package dk.ku.di.dms.vms.database.store.index;
 
+import dk.ku.di.dms.vms.database.store.row.IKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Map;
+import java.util.Set;
 
 public abstract class AbstractIndex<K> {
 
-    // I need this to figure out whether this index is applied to a set of columns
-    private final int[] columnsIndex;
-
+    private final IndexTypeEnum type;
     private final int hashCode;
 
     public AbstractIndex(final int... columnsIndex) {
-        this.columnsIndex = columnsIndex;
-        this.hashCode = Arrays.hashCode(columnsIndex);
+        if(columnsIndex.length == 1) {
+            this.hashCode = columnsIndex[0];
+            this.type = IndexTypeEnum.SIMPLE;
+        } else {
+            this.hashCode = Arrays.hashCode(columnsIndex);
+            this.type = IndexTypeEnum.COMPOSITE;
+        }
     }
 
     // use bitwise comparison to find whether a given index exists for such columns
@@ -36,6 +42,8 @@ public abstract class AbstractIndex<K> {
     public abstract Collection<Row> rows();
 
     /** information used by the planner to decide for the appropriate operator */
-    public abstract IndexTypeEnum getType();
+    public abstract IndexDataStructureEnum getType();
+
+    public abstract Set<Map.Entry<K,Row>> entrySet();
 
 }

@@ -51,8 +51,8 @@ public class HashIndex extends AbstractIndex<IKey> {
     }
 
     @Override
-    public IndexTypeEnum getType() {
-        return IndexTypeEnum.HASH;
+    public IndexDataStructureEnum getType() {
+        return IndexDataStructureEnum.HASH;
     }
 
     public Set<Map.Entry<IKey,Row>> entrySet(){

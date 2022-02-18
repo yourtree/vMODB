@@ -3,9 +3,7 @@ package dk.ku.di.dms.vms.database.store.index;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
 import dk.ku.di.dms.vms.database.store.row.Row;
 
-import java.util.Collection;
-import java.util.SortedMap;
-import java.util.TreeMap;
+import java.util.*;
 
 /**
  * Basic implementation of a range index
@@ -82,8 +80,14 @@ public class RangeIndex<T> extends AbstractIndex<T> {
     }
 
     @Override
-    public IndexTypeEnum getType() {
-        return IndexTypeEnum.TREE;
+    public IndexDataStructureEnum getType() {
+        return IndexDataStructureEnum.TREE;
     }
+
+    @Override
+    public Set<Map.Entry<T, Row>> entrySet() {
+        return null;
+    }
+
 
 }
