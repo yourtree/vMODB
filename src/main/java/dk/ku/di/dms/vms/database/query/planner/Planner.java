@@ -79,7 +79,7 @@ public final class Planner {
         // cartesian product
         // select tb3.id, tb1.id, tb2.id from tb1, tb2, tb3 where tb1.id = tb2.id and tb1.io = 1
 
-        final Map<Table,List<WherePredicate>> whereClauseGroupedByTable =
+        final Map<Table,List<WherePredicate>> whereClauseGroupedByTableNotInAnyJoin =
                 queryTree
                         .wherePredicates.stream()
                         .filter( clause -> !tablesInvolvedInJoin
@@ -117,6 +117,7 @@ public final class Planner {
         //  deliver the result back to the application
 
         Map<Table,List<AbstractJoin>> joinsPerTable = new HashMap<>();
+        Map<Table,List<AbstractJoin>> auxJoinsPerTable = new HashMap<>();
 
         // TODO I am not considering a JOIN predicate may contain more than a column....
         // if the pk or secIndex only applies to one of the columns, then others become filters
@@ -181,6 +182,7 @@ public final class Planner {
 
             final AbstractJoin join;
             final Table tableRef;
+            final Table tableRefAux;
 
             // now we have to decide the operators
             if(leftTableIsIndexed && rightTableIsIndexed){
@@ -189,31 +191,37 @@ public final class Planner {
                 if(leftTableIndex.size() > rightTableIndex.size()){
                     join = new HashJoin( rightTableIndex, leftTableIndex );
                     tableRef = tableRight;
+                    tableRefAux = tableLeft;
                 } else {
                     join = new HashJoin( leftTableIndex, rightTableIndex );
                     tableRef = tableLeft;
+                    tableRefAux = tableRight;
                 }
 
             } else if( leftTableIsIndexed ){ // indexed nested loop join on inner table. the outer probes its rows
                 tableRef = tableRight;
+                tableRefAux = tableLeft;
                 join = new IndexedNestedLoopJoin( tableRight.getInternalIndex(), leftTableIndex );
             } else if( rightTableIsIndexed ) {
                 tableRef = tableLeft;
+                tableRefAux = tableRight;
                 join = new IndexedNestedLoopJoin( tableLeft.getInternalIndex(), rightTableIndex );
             } else { // nested loop join
                 // ideally this is pushed upstream to benefit from pruning performed by downstream nodes
                 if(tableLeft.getInternalIndex().size() > tableRight.getInternalIndex().size()){
                     tableRef = tableRight;
+                    tableRefAux = tableLeft;
                     join = new NestedLoopJoin(tableRight.getInternalIndex(), tableLeft.getInternalIndex());
                 } else {
                     tableRef = tableLeft;
+                    tableRefAux = tableRight;
                     join = new NestedLoopJoin(tableLeft.getInternalIndex(), tableRight.getInternalIndex());
                 }
 
             }
 
-            List<AbstractJoin> planNodes = joinsPerTable.getOrDefault(tableRef,new ArrayList<>());
-            this.addJoinToRespectiveTableInOrder(join, planNodes);
+            this.addJoinToRespectiveTableInOrder(tableRef, join, joinsPerTable);
+            this.addToAuxJoinsPerTable( tableRefAux, join, auxJoinsPerTable );
 
         }
 
@@ -222,11 +230,26 @@ public final class Planner {
         //      yes, but without the selectivity info there is nothing we can do. I can store the selectivity info
         //      on index creation, but for that I need to have tuples already stored...
 
+
+
+        Table tableRef;
         // Merging the filters with the join
         // The heuristic now is just to apply the filter as early as possible. later we can revisit
         // remove from map after applying the additional filters
         for( Map.Entry<Table,List<WherePredicate>> tableFilter : filtersForJoinGroupedByTable.entrySet() ){
-            // joinsPerTable TODO finish it
+
+            // if find in joins per table, add filter to the first join and remove the table from the aux
+            tableRef = tableFilter.getKey();
+
+            List<AbstractJoin> joins = joinsPerTable.getOrDefault( tableRef, null );
+            if(joins != null) {
+                joins.get(0).setFilterInner( buildFilterInfo( tableFilter.getValue() ) );
+            }
+
+            // if the outer table is in aux, then apply so it guarantees optimality
+            // TODO finish
+
+            // otherwise find in the aux, add to the first join (suboptimal) and remove the table from aux
         }
 
 
@@ -238,34 +261,14 @@ public final class Planner {
         // TODO build filter checks where the number of parameters are known a priori and can
         //      take better advantage of the runtime, i.e., avoid loops over the filters
         //      E.g., eval2(predicate1, values2, predicate2, values2) ...
-        //      each one of the tables here lead to a cartesian product operation...
-        //      so it should be pushed upstream
-        for( final Map.Entry<Table, List<WherePredicate>> entry : whereClauseGroupedByTable.entrySet() ){
+        //      each one of the tables here lead to a cartesian product operation
+        //      if there are any join, so it should be pushed upstream to avoid high cost
+        for( final Map.Entry<Table, List<WherePredicate>> entry : whereClauseGroupedByTableNotInAnyJoin.entrySet() ){
 
             final List<WherePredicate> wherePredicates = entry.getValue();
-            final int size = wherePredicates.size();
-            IFilter<?>[] filters = new IFilter<?>[size];
-            int[] filterColumns = new int[size];
-            Collection<IdentifiableNode<Object>> filterParams = new LinkedList<>();
+            final Table currTable = entry.getKey();
+            final FilterInfo filterInfo = buildFilterInfo( wherePredicates );
 
-            Table currTable = entry.getKey();
-
-            int i = 0;
-            for(final WherePredicate w : wherePredicates){
-
-                boolean nullableExpression = w.expression == ExpressionTypeEnum.IS_NOT_NULL
-                        || w.expression == ExpressionTypeEnum.IS_NULL;
-
-                filters[ i ] = FilterBuilder.build( w );
-                filterColumns[ i ] = w.columnReference.columnIndex;
-                if( !nullableExpression ){
-                    filterParams.add( new IdentifiableNode<>( i, w.value ) );
-                }
-
-                i++;
-            }
-
-            final FilterInfo filterInfo = new FilterInfo(filters, filterColumns, filterParams);
             // I need the index information to decide which operator, e.g., index scan
             final AbstractIndex optimalIndex = findOptimalIndex( currTable, filterInfo.filterColumns, false );
             if(optimalIndex.getType() == IndexDataStructureEnum.HASH){
@@ -273,7 +276,6 @@ public final class Planner {
             } else {
                 final SequentialScan seqScan = new SequentialScan(optimalIndex, filterInfo);
             }
-
 
         }
 
@@ -283,6 +285,47 @@ public final class Planner {
         // SequentialScan sequentialScan = new SequentialScan( filterList, table);
 
         return null;
+    }
+
+    private FilterInfo buildFilterInfo( final List<WherePredicate> wherePredicates ) throws Exception {
+
+        final int size = wherePredicates.size();
+        IFilter<?>[] filters = new IFilter<?>[size];
+        int[] filterColumns = new int[size];
+        Collection<IdentifiableNode<Object>> filterParams = new LinkedList<>();
+
+        int i = 0;
+        for(final WherePredicate w : wherePredicates){
+
+            boolean nullableExpression = w.expression == ExpressionTypeEnum.IS_NOT_NULL
+                    || w.expression == ExpressionTypeEnum.IS_NULL;
+
+            filters[ i ] = FilterBuilder.build( w );
+            filterColumns[ i ] = w.columnReference.columnIndex;
+            if( !nullableExpression ){
+                filterParams.add( new IdentifiableNode<>( i, w.value ) );
+            }
+
+            i++;
+        }
+
+        return new FilterInfo(filters, filterColumns, filterParams);
+
+    }
+
+    /**
+     * some tables might not be the "left" table in the join operation, thus filter loop
+     * would miss these table filters. we need to maintain a separate map (auxJoinsPerTable)
+     * with the "right" tables
+     * when they appear as "left" (joinsPerTable) they are removed from the auxJoinsPerTable
+     * FIXME right now I am not sorting the list as in addJoinToRespectiveTableInOrder (M)
+     *       to reuse M, I would need to modularize the condition of the inner/outer table
+     *       to a separate method, which could be defined by a boolean parameter (e.g., inner == false)
+     * @param tableRef
+     */
+    private void addToAuxJoinsPerTable(final Table tableRef, final AbstractJoin join, final Map<Table,List<AbstractJoin>> auxJoinsPerTable){
+        List<AbstractJoin> auxJoins = auxJoinsPerTable.getOrDefault(tableRef,new ArrayList<>());
+        auxJoins.add( join );
     }
 
     /** the shortest the table, lower the degree of the join operation in the query tree
@@ -295,10 +338,14 @@ public final class Planner {
      * So I just need to check to order the plan nodes according to the size of the right table
      * TODO binary search
      * Priority order of sorting conditions: type of join, selectivity (we are lacking this right now), size of (right) table
-     * @param joins
-     * @param joins
+     * @param tableRef
+     * @param join
+     * @param joinsPerTable
      */
-    private void addJoinToRespectiveTableInOrder( final AbstractJoin join, final List<AbstractJoin> joins){
+    private void addJoinToRespectiveTableInOrder( final Table tableRef, final AbstractJoin join, Map<Table,List<AbstractJoin>> joinsPerTable ){
+
+        List<AbstractJoin> joins = joinsPerTable.getOrDefault(tableRef,new ArrayList<>());
+
         if(joins.size() == 0){
             joins.add(join);
             return;
