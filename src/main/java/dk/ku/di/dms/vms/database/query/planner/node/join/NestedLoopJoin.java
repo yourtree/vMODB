@@ -1,12 +1,18 @@
 package dk.ku.di.dms.vms.database.query.planner.node.join;
 
-public class NestedLoopJoin {
+import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
+import dk.ku.di.dms.vms.database.store.row.IKey;
 
-    private JoinCondition filterJoin;
+public class NestedLoopJoin extends AbstractJoin {
 
-    public NestedLoopJoin(){}
+    // private JoinCondition filterJoin;
 
-    public NestedLoopJoin(JoinCondition filterJoin) {
-        this.filterJoin = filterJoin;
+    public NestedLoopJoin(AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
+        super(innerIndex, outerIndex);
+    }
+
+    @Override
+    public JoinTypeEnum getType() {
+        return JoinTypeEnum.NESTED_LOOP;
     }
 }

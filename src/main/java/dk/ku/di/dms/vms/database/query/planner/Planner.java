@@ -7,9 +7,7 @@ import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
-import dk.ku.di.dms.vms.database.query.planner.node.join.HashJoin;
-import dk.ku.di.dms.vms.database.query.planner.node.join.IndexedNestedLoopJoin;
-import dk.ku.di.dms.vms.database.query.planner.node.join.NestedLoopJoin;
+import dk.ku.di.dms.vms.database.query.planner.node.join.*;
 import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
@@ -21,6 +19,8 @@ import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static dk.ku.di.dms.vms.database.query.planner.node.join.JoinTypeEnum.*;
 
 public final class Planner {
 
@@ -116,7 +116,7 @@ public final class Planner {
         //  but here I will just create the final projection when I need to
         //  deliver the result back to the application
 
-
+        Map<Table,List<AbstractJoin>> joinsPerTable = new HashMap<>();
 
         // TODO I am not considering a JOIN predicate may contain more than a column....
         // if the pk or secIndex only applies to one of the columns, then others become filters
@@ -179,48 +179,67 @@ public final class Planner {
                 rightTableIsIndexed = true;
             }
 
+            final AbstractJoin join;
+            final Table tableRef;
+
             // now we have to decide the operators
             if(leftTableIsIndexed && rightTableIsIndexed){
-                // does this case necessarily lead to symmetric HashJoin?
-                HashJoin hashJoin;
-                if(leftTableIndex.size() > rightTableIndex.size()){
-                    hashJoin = new HashJoin( rightTableIndex, leftTableIndex );
-                } else {
-                    hashJoin = new HashJoin( leftTableIndex, rightTableIndex );
-                }
-                PlanNode planNode = new PlanNode(hashJoin);
-            } else if( leftTableIsIndexed ){ // indexed nested loop join on inner table. the outer probes it
+                // does this case necessarily lead to symmetric HashJoin? https://cs.uwaterloo.ca/~david/cs448/
 
-                IndexedNestedLoopJoin indexedNestedLoopJoin =
-                        new IndexedNestedLoopJoin( tableRight.getInternalIndex(), leftTableIndex );
+                if(leftTableIndex.size() > rightTableIndex.size()){
+                    join = new HashJoin( rightTableIndex, leftTableIndex );
+                    tableRef = tableRight;
+                } else {
+                    join = new HashJoin( leftTableIndex, rightTableIndex );
+                    tableRef = tableLeft;
+                }
+
+            } else if( leftTableIsIndexed ){ // indexed nested loop join on inner table. the outer probes its rows
+                tableRef = tableRight;
+                join = new IndexedNestedLoopJoin( tableRight.getInternalIndex(), leftTableIndex );
             } else if( rightTableIsIndexed ) {
-                IndexedNestedLoopJoin indexedNestedLoopJoin =
-                        new IndexedNestedLoopJoin( tableLeft.getInternalIndex(), rightTableIndex );
+                tableRef = tableLeft;
+                join = new IndexedNestedLoopJoin( tableLeft.getInternalIndex(), rightTableIndex );
             } else { // nested loop join
                 // ideally this is pushed upstream to benefit from pruning performed by downstream nodes
-                NestedLoopJoin nestedLoopJoin = new NestedLoopJoin();
+                if(tableLeft.getInternalIndex().size() > tableRight.getInternalIndex().size()){
+                    tableRef = tableRight;
+                    join = new NestedLoopJoin(tableRight.getInternalIndex(), tableLeft.getInternalIndex());
+                } else {
+                    tableRef = tableLeft;
+                    join = new NestedLoopJoin(tableLeft.getInternalIndex(), tableRight.getInternalIndex());
+                }
+
             }
 
+            List<AbstractJoin> planNodes = joinsPerTable.getOrDefault(tableRef,new ArrayList<>());
+            this.addJoinToRespectiveTableInOrder(join, planNodes);
 
-            // TODO the shortest the table, lower the degree of the join operation in the query tree
-            // thus, store a map of plan nodes keyed by table
-            // the plan node with the largest probability of pruning (considering index type + filters + size of table)
-            // more records earlier in the query are pushed downstream in the physical query plan
         }
 
-        // ordered list. better selectivity rate leads to a deeper node
-
         // TODO optimization. the same table can appear in several joins.
-        //  in this sense, which join + filter should be executed first to give the best prune of records?
-        // TODO can we merge the filters with the join? i think so. after building the join operators, we can do it
+        //      in this sense, which join + filter should be executed first to give the best prune of records?
+        //      yes, but without the selectivity info there is nothing we can do. I can store the selectivity info
+        //      on index creation, but for that I need to have tuples already stored...
+
+        // Merging the filters with the join
+        // The heuristic now is just to apply the filter as early as possible. later we can revisit
         // remove from map after applying the additional filters
-        // filtersForJoinGroupedByTable
+        for( Map.Entry<Table,List<WherePredicate>> tableFilter : filtersForJoinGroupedByTable.entrySet() ){
+            // joinsPerTable TODO finish it
+        }
+
 
         // here I need to iterate over the plan nodes defined earlier
 
         // a scan for each table
         // the scan strategy only applies for those tables not involved in any join
         // TODO all predicates with the same column should be a single filter
+        // TODO build filter checks where the number of parameters are known a priori and can
+        //      take better advantage of the runtime, i.e., avoid loops over the filters
+        //      E.g., eval2(predicate1, values2, predicate2, values2) ...
+        //      each one of the tables here lead to a cartesian product operation...
+        //      so it should be pushed upstream
         for( final Map.Entry<Table, List<WherePredicate>> entry : whereClauseGroupedByTable.entrySet() ){
 
             final List<WherePredicate> wherePredicates = entry.getValue();
@@ -266,8 +285,54 @@ public final class Planner {
         return null;
     }
 
-    /*
-     *  Here we are relying on the fact that every index created are stored in order of the table column
+    /** the shortest the table, lower the degree of the join operation in the query tree
+     * thus, store a map of plan nodes keyed by table
+     * the plan node with the largest probability of pruning (considering index type + filters + size of table)
+     * more records earlier in the query are pushed downstream in the physical query plan
+     * ordered list of participating tables. the first one is the smallest table and so on.
+     * better selectivity rate leads to a deeper node
+     * Consider that the base table is always the left one in the join
+     * So I just need to check to order the plan nodes according to the size of the right table
+     * TODO binary search
+     * Priority order of sorting conditions: type of join, selectivity (we are lacking this right now), size of (right) table
+     * @param joins
+     * @param joins
+     */
+    private void addJoinToRespectiveTableInOrder( final AbstractJoin join, final List<AbstractJoin> joins){
+        if(joins.size() == 0){
+            joins.add(join);
+            return;
+        }
+        Iterator<AbstractJoin> it = joins.iterator();
+        int posToInsert = 0;
+        AbstractJoin next = it.next();
+        boolean hasNext = true;
+        while (hasNext &&
+                (
+                  (
+                    ( next.getType() == HASH && (join.getType() == INDEX_NESTED_LOOP || join.getType() == NESTED_LOOP ) )
+                    || // TODO this may not be true for all joins. e.g., some index nested loop might take longer than a nested loop join
+                    ( next.getType() == INDEX_NESTED_LOOP && (join.getType() == NESTED_LOOP ) )
+                  )
+                  ||
+                  ( join.getOuterIndex().size() > next.getOuterIndex().size() )
+                )
+            )
+        {
+            if(it.hasNext()){
+                next = it.next();
+                posToInsert++;
+            } else {
+                hasNext = false;
+            }
+
+        }
+        joins.add(posToInsert, join);
+    }
+
+    /**
+     *  Here we are relying on the fact that the developer has declared the columns
+     *  in the where clause matching the actual index column order definition
      */
     private AbstractIndex findOptimalIndex(final Table table, final int[] filterColumns, final boolean skipPrimaryKey){
 
@@ -370,7 +435,7 @@ public final class Planner {
         return Arrays.asList( arr0, arr1, arr2, arr3, arr4, arr5, arr6 );
     }
 
-    // TODO later get metadata to know whether such a column has an index
+    // TODO later get metadata to know whether such a column has an index, so it can be pruned from this search
     // TODO a column can appear more than once. make it sure it appears only once
     public List<int[]> getAllPossibleColumnCombinations( final int[] filterColumns ){
 

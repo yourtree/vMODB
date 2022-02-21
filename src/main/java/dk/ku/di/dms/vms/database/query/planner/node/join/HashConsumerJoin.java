@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.database.query.planner.node.join;
 
 import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
+import dk.ku.di.dms.vms.database.store.row.IKey;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -15,21 +16,22 @@ import java.util.function.Supplier;
  * TODO generalize for left, right, outer join
  */
 
-public class HashConsumerJoin implements
+public class HashConsumerJoin extends AbstractJoin
+        implements
         BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>>,
-        Supplier<OperatorResult>,
-        IJoin
+        Supplier<OperatorResult>
 {
-
-    private final AbstractIndex innerTableIndex;
-    private final AbstractIndex outerTableIndex;
 
     private CompletableFuture<OperatorResult> operatorResultFutureLeft;
     private CompletableFuture<OperatorResult> operatorResultFutureRight;
 
-    public HashConsumerJoin(AbstractIndex innerTableIndex, AbstractIndex outerTableIndex) {
-        this.innerTableIndex = innerTableIndex;
-        this.outerTableIndex = outerTableIndex;
+    public HashConsumerJoin(AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
+        super(innerIndex, outerIndex);
+    }
+
+    @Override
+    public JoinTypeEnum getType() {
+        return JoinTypeEnum.HASH;
     }
 
     @Override

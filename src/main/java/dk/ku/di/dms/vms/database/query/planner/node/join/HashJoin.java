@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.database.query.planner.node.join;
 
 import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
-import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
@@ -19,27 +18,16 @@ import java.util.function.Supplier;
  * In other words, previous scanning and transformation steps are not necessary
  */
 
-public class HashJoin implements Supplier<OperatorResult>, IJoin
+public class HashJoin extends AbstractJoin implements Supplier<OperatorResult>
 {
 
-    private final AbstractIndex<IKey> innerIndex;
-    private final AbstractIndex<IKey> outerIndex;
-
-    private FilterInfo filterInner;
-    private FilterInfo filterOuter;
-
-    public HashJoin(final AbstractIndex<IKey> innerIndex,
-                    final AbstractIndex<IKey> outerIndex) {
-        this.innerIndex = innerIndex;
-        this.outerIndex = outerIndex;
+    public HashJoin(AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
+        super(innerIndex, outerIndex);
     }
 
-    public void setFilterInner(final FilterInfo filterInner) {
-        this.filterInner = filterInner;
-    }
-
-    public void setFilterOuter(final FilterInfo filterOuter) {
-        this.filterOuter = filterOuter;
+    @Override
+    public JoinTypeEnum getType() {
+        return JoinTypeEnum.HASH;
     }
 
     @Override

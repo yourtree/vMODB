@@ -15,6 +15,9 @@ import java.util.Map;
  */
 public abstract class Table {
 
+    // at first, I am considering the table name is immutable. the hash code is cached to uniquely identify the table in java maps
+    private final int hashCode;
+
     protected final String name;
 
     protected final Schema schema;
@@ -41,9 +44,15 @@ public abstract class Table {
 
     public abstract Row retrieve(IKey key);
 
-    public Table(String name, Schema schema) {
+    public Table(final String name, final Schema schema) {
         this.name = name;
         this.schema = schema;
+        this.hashCode = name.hashCode();
+    }
+
+    @Override
+    public int hashCode(){
+        return this.hashCode;
     }
 
     public Schema getSchema(){
