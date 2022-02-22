@@ -11,14 +11,13 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
 
 /**
  * A hash join where its dependencies are fulfilled from the start
  * In other words, previous scanning and transformation steps are not necessary
  */
 
-public class HashJoin extends AbstractJoin implements Supplier<OperatorResult>
+public class HashJoin extends AbstractJoin
 {
 
     public HashJoin(AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {

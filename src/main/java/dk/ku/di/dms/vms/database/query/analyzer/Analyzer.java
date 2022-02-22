@@ -88,11 +88,16 @@ public final class Analyzer {
             // columns in projection may come from join
             List<String> columns = select.selectClause;
             // cannot allow same column name without AS from multiple tables
-            for(String columnStr : columns){
-                // TODO check if table name is included in string,
-                //  that would make find the column reference faster
-                ColumnReference columnReference = findColumnReference(columnStr, queryTree.tables);
-                queryTree.projections.add(columnReference);
+            for(String columnRefStr : columns){
+                if( columnRefStr.contains(".") ){
+                    String[] splitted = columnRefStr.split("\\."); // FIXME check if there are 2 indexes in array
+                    ColumnReference columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
+                    queryTree.projections.add(columnReference);
+                } else {
+                    ColumnReference columnReference = findColumnReference(columnRefStr, queryTree.tables);
+                    queryTree.projections.add(columnReference);
+                }
+
             }
 
             // where
@@ -209,6 +214,21 @@ public final class Analyzer {
         if(columnIndex == null){
             throw new AnalyzerException("Column does not exist in the table");
         }
+        return new ColumnReference(columnIndex, schema.getColumnDataType(columnIndex), table);
+    }
+
+    private ColumnReference findColumnReference(String columnStr, String tableStr, Map<String,Table> tables) throws AnalyzerException {
+
+        if(tables.get(tableStr) == null ){
+            throw new AnalyzerException("Table "+ tableStr + " does not exist in the catalog.");
+        }
+        final Table table = tables.get(tableStr);
+        final Schema schema = table.getSchema();
+        Integer columnIndex = schema.getColumnIndex(columnStr);
+        if(columnIndex == null){
+            throw new AnalyzerException("Column does not exist in the table "+ tableStr);
+        }
+
         return new ColumnReference(columnIndex, schema.getColumnDataType(columnIndex), table);
     }
 

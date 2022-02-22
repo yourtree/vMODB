@@ -18,7 +18,7 @@ public class FilterBuilder {
      */
     public static final Map<DataType, Map<ExpressionTypeEnum,IFilter<?>>> cachedFilters = new ConcurrentHashMap<>();
 
-    public static IFilter<?> build(final WherePredicate wherePredicate) throws Exception {
+    public static IFilter<?> build(final WherePredicate wherePredicate) throws FilterBuilderException {
 
         DataType dataType = wherePredicate.columnReference.dataType;
         ExpressionTypeEnum expressionEnum = wherePredicate.expression;
@@ -68,7 +68,7 @@ public class FilterBuilder {
 
     public static <V> IFilter<V> getFilter(
             final ExpressionTypeEnum expression,
-            final Comparator<V> comparator) throws Exception {
+            final Comparator<V> comparator) throws FilterBuilderException {
 
         switch(expression){
             case EQUALS:
@@ -131,8 +131,9 @@ public class FilterBuilder {
                         return v != null;
                     }
                 };
-            case LIKE: throw new Exception("Like does not apply to integer value.");
-            default: throw new Exception("Predicate not implemented");
+            // FIXME can we make sure these exceptions are thrown in the analyzer?
+            case LIKE: throw new FilterBuilderException("Like does not apply to integer value.");
+            default: throw new FilterBuilderException("Predicate not implemented");
         }
 
     }

@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum;
+import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilderException;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
@@ -27,8 +28,12 @@ public final class Planner {
     // "The planner receives a query tree from the rewriter and generates a (query)
     // plan tree that can be processed by the executor most effectively."
 
+    public PlanNode plan(final QueryTree queryTree) throws FilterBuilderException {
+        return this.plan( queryTree, QueryTreeTypeEnum.LEFT_DEEP );
+    }
+
     // plan and optimize in the same step
-    public PlanNode plan(final QueryTree queryTree) throws Exception {
+    public PlanNode plan(final QueryTree queryTree, final QueryTreeTypeEnum treeType) throws FilterBuilderException {
 
         // https://github.com/hyrise/hyrise/tree/master/src/lib/operators
         // https://github.com/hyrise/hyrise/tree/master/src/lib/optimizer
@@ -59,24 +64,17 @@ public final class Planner {
 //                        Collectors.mapping( WhereClause::getColumn, Collectors.toList()))
 //                );
 
-        final Map<String,Integer> tablesInvolvedInJoin = new Hashtable<>();
-        queryTree
-                .joinPredicates
-                .stream()
-                .map(j-> j.columnLeftReference.table)
-                .forEach( tb ->
-                        tablesInvolvedInJoin.put(
-                                tb.getName(),1
-                        ) );
+        final Map<String,Integer> tablesInvolvedInJoin = new HashMap<>();
 
-        queryTree.joinPredicates.stream()
-                .map(j-> j.columnRightReference.table)
-                .forEach( tb -> tablesInvolvedInJoin.put(
-                        tb.getName(),1
-                ));
+        for(JoinPredicate join : queryTree.joinPredicates){
+            tablesInvolvedInJoin.put(join.getLeftTable().getName(), 1);
+            tablesInvolvedInJoin.put(join.getRightTable().getName(), 1);
+        }
 
         // cartesian product
         // select tb3.id, tb1.id, tb2.id from tb1, tb2, tb3 where tb1.id = tb2.id and tb1.io = 1
+
+        // TODO optimization. avoid stream by reusing the table list in query tree. simply maintain a bool (in_join?)
 
         final Map<Table,List<WherePredicate>> whereClauseGroupedByTableNotInAnyJoin =
                 queryTree
@@ -88,13 +86,13 @@ public final class Planner {
                                          Collectors.toList())
                         );
 
-        Map<Table,List<WherePredicate>> filtersForJoinGroupedByTable =
+            Map<Table,List<WherePredicate>> filtersForJoinGroupedByTable =
                 queryTree
                         .wherePredicates.stream()
                         .filter( clause -> tablesInvolvedInJoin
                                 .containsKey(clause.getTable().getName()) )
                         .collect(
-                                Collectors.groupingBy( WherePredicate::getTable,
+                                Collectors.groupingByConcurrent( WherePredicate::getTable,
                                         Collectors.toList())
                         );
 
@@ -187,7 +185,7 @@ public final class Planner {
             if(leftTableIsIndexed && rightTableIsIndexed){
                 // does this case necessarily lead to symmetric HashJoin? https://cs.uwaterloo.ca/~david/cs448/
 
-                if(leftTableIndex.size() > rightTableIndex.size()){
+                if(leftTableIndex.size() >= rightTableIndex.size()){
                     join = new HashJoin( rightTableIndex, leftTableIndex );
                     tableRef = tableRight;
                     tableRefAux = tableLeft;
@@ -207,7 +205,7 @@ public final class Planner {
                 join = new IndexedNestedLoopJoin( tableLeft.getInternalIndex(), rightTableIndex );
             } else { // nested loop join
                 // ideally this is pushed upstream to benefit from pruning performed by downstream nodes
-                if(tableLeft.getInternalIndex().size() > tableRight.getInternalIndex().size()){
+                if(tableLeft.getInternalIndex().size() >= tableRight.getInternalIndex().size()){
                     tableRef = tableRight;
                     tableRefAux = tableLeft;
                     join = new NestedLoopJoin(tableRight.getInternalIndex(), tableLeft.getInternalIndex());
@@ -233,8 +231,11 @@ public final class Planner {
         // Merging the filters with the join
         // The heuristic now is just to apply the filter as early as possible. later we can revisit
         // remove from map after applying the additional filters
-        for( Map.Entry<Table,List<WherePredicate>> tableFilter : filtersForJoinGroupedByTable.entrySet() ){
 
+        //Iterator<Map.Entry<Table,List<WherePredicate>>> iterator = filtersForJoinGroupedByTable.entrySet().iterator();
+        //while(iterator.hasNext()){
+        for( Map.Entry<Table,List<WherePredicate>> tableFilter : filtersForJoinGroupedByTable.entrySet() ){
+            //Map.Entry<Table,List<WherePredicate>> tableFilter = iterator.next();
             // if find in joins per table, add filter to the first join and remove the table from the aux
             tableRef = tableFilter.getKey();
 
@@ -242,10 +243,12 @@ public final class Planner {
             if(joins != null) {
                 // we always have at least one
                 joins.get(0).setFilterInner( buildFilterInfo( tableFilter.getValue() ) );
-                // should remove it from the aux too in case there is some entry there
-                // auxJoinsPerTable.replace( joins.get(0).getInnerIndex().getTable(), null );
+                // should remove it from the aux too in case there is some entry there, e.g., is the outer
+                // although the method addAux safeguards that, there may be an interleaving with addJoinTo...
+                auxJoinsPerTable.remove( tableRef );
                 // remove it from here in case this table is outer in other join
-                filtersForJoinGroupedByTable.replace( joins.get(0).getInnerIndex().getTable(), null );
+                filtersForJoinGroupedByTable.remove( tableRef );
+                // iterator.remove();
 
                 // if the outer table is in aux, then apply the filter, so it guarantees "optimality" (not guaranteed)
                 // the joins are in order here. take advantage to iterate over the outer indexes
@@ -253,24 +256,39 @@ public final class Planner {
                     List<WherePredicate> list = filtersForJoinGroupedByTable.get( join.getOuterIndex().getTable() );
                     if( list != null ){
                         join.setFilterOuter( buildFilterInfo( list ) );
-                        filtersForJoinGroupedByTable.replace( join.getOuterIndex().getTable(), null );
+                        filtersForJoinGroupedByTable.remove( join.getOuterIndex().getTable() );
                     }
                 }
 
             } else {
                 // otherwise, find in the aux, add to the first join (suboptimal) and remove the table from aux
-
                 joins = auxJoinsPerTable.getOrDefault( tableRef, null );
-                joins.get(0).setFilterInner( buildFilterInfo( tableFilter.getValue() ) );
-                auxJoinsPerTable.replace( joins.get(0).getInnerIndex().getTable(), null );
-                filtersForJoinGroupedByTable.replace( joins.get(0).getInnerIndex().getTable(), null );
-
+                joins.get(0).setFilterOuter( buildFilterInfo( tableFilter.getValue() ) );
+                auxJoinsPerTable.remove( tableRef );
+                filtersForJoinGroupedByTable.remove( tableRef );
+                //iterator.remove();
             }
 
         }
 
-        // here I need to iterate over the joins defined earlier to build the plan tree for the joins
-        // joinsPerTable
+        // left deep, most cases will fall in this category
+        if(treeType == QueryTreeTypeEnum.LEFT_DEEP){
+            // here I need to iterate over the joins defined earlier to build the plan tree for the joins
+            PlanNode previous = null;
+
+            // possible optimization
+            // if(joinsPerTable.size() == 1){}
+
+            for(final Map.Entry<Table,List<AbstractJoin>> joinEntry : joinsPerTable.entrySet()){
+                List<AbstractJoin> joins = joinEntry.getValue();
+                // TODO finish
+//                for( final AbstractJoin join :  )
+//                PlanNode node = new PlanNode( join );
+            }
+        } else{
+            // TODO finish later
+        }
+
 
         // a scan for each table
         // the scan strategy only applies for those tables not involved in any join
@@ -296,15 +314,13 @@ public final class Planner {
 
         }
 
-        // TODO focus on left deep, most cases will fall in this category
-
         // TODO think about parallel seq scan,
         // SequentialScan sequentialScan = new SequentialScan( filterList, table);
 
         return null;
     }
 
-    private FilterInfo buildFilterInfo( final List<WherePredicate> wherePredicates ) throws Exception {
+    private FilterInfo buildFilterInfo( final List<WherePredicate> wherePredicates ) throws FilterBuilderException {
 
         final int size = wherePredicates.size();
         IFilter<?>[] filters = new IFilter<?>[size];
@@ -340,7 +356,8 @@ public final class Planner {
      *       to a separate method, which could be defined by a boolean parameter (e.g., inner == false)
      * @param tableRef
      */
-    private void addToAuxJoinsPerTable(final Table tableRef, final AbstractJoin join,
+    private void addToAuxJoinsPerTable(final Table tableRef,
+                                       final AbstractJoin join,
                                        final Map<Table,List<AbstractJoin>> joinsPerTable,
                                        final Map<Table,List<AbstractJoin>> auxJoinsPerTable){
         if(joinsPerTable.get( tableRef ) != null) {
@@ -348,6 +365,7 @@ public final class Planner {
         }
         List<AbstractJoin> auxJoins = auxJoinsPerTable.getOrDefault(tableRef,new ArrayList<>());
         auxJoins.add( join );
+        auxJoinsPerTable.put( tableRef, auxJoins );
     }
 
     /** the shortest the table, lower the degree of the join operation in the query tree
@@ -370,6 +388,7 @@ public final class Planner {
 
         if(joins.size() == 0){
             joins.add(join);
+            joinsPerTable.put( tableRef, joins );
             return;
         }
         Iterator<AbstractJoin> it = joins.iterator();

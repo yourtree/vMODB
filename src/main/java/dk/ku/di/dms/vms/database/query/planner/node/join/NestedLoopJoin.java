@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.database.query.planner.node.join;
 
+import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 import dk.ku.di.dms.vms.database.store.row.IKey;
 
@@ -14,5 +15,11 @@ public class NestedLoopJoin extends AbstractJoin {
     @Override
     public JoinTypeEnum getType() {
         return JoinTypeEnum.NESTED_LOOP;
+    }
+
+    @Override
+    public OperatorResult get() {
+        // TODO finish
+        return null;
     }
 }

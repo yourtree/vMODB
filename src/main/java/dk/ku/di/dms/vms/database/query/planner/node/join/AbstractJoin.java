@@ -1,14 +1,18 @@
 package dk.ku.di.dms.vms.database.query.planner.node.join;
 
+import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 import dk.ku.di.dms.vms.database.store.row.IKey;
 
+import java.util.function.Supplier;
+
 /**
  * Interface to simplify the grouping of join operators in the planner
- * A class implementing IJoin simply means a type of JOIN operator
+ * A class implementing IJoin simply means a type of JOIN operator.
+ * All types of join operators supply a result.
  */
-public abstract class AbstractJoin {
+public abstract class AbstractJoin implements Supplier<OperatorResult> {
 
     protected final AbstractIndex<IKey> innerIndex;
     protected final AbstractIndex<IKey> outerIndex;

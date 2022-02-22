@@ -6,7 +6,7 @@ import dk.ku.di.dms.vms.database.store.row.IKey;
 
 import java.util.function.Supplier;
 
-public class IndexedNestedLoopJoin extends AbstractJoin implements Supplier<OperatorResult> {
+public class IndexedNestedLoopJoin extends AbstractJoin {
 
     public IndexedNestedLoopJoin(AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
         super(innerIndex, outerIndex);

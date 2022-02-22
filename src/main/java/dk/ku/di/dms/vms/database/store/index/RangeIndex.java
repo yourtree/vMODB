@@ -51,7 +51,7 @@ public class RangeIndex<T> extends AbstractIndex<T> {
 
     @Override
     public boolean delete(T key) {
-        map.replace(key,null);
+        map.remove(key);
         return true;
     }
 

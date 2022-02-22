@@ -1,10 +1,12 @@
 package dk.ku.di.dms.vms.modb;
 
+import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
+import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.database.query.planner.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
@@ -47,6 +49,35 @@ public class QueryTest {
     @Test
     public void isCatalogNotEmpty() throws Exception {
         assert catalog.getTable("item") != null;
+    }
+
+    @Test
+    public void testQueryParse(){
+
+        final Catalog catalog = new Catalog();
+        String[] columnNames = { "col1", "col2" };
+        DataType[] columnDataTypes = { DataType.INT, DataType.INT };
+        final Schema schema = new Schema( columnNames, columnDataTypes );
+        catalog.insertTable( new HashIndexedTable( "tb1", schema, new int[]{0} ));
+        catalog.insertTable( new HashIndexedTable( "tb2", schema, new int[]{0} ));
+
+        try {
+            // TODO move this test to query test
+            IQueryBuilder builder = QueryBuilderFactory.init();
+            IStatement sql = builder.select("col1, col2") // this should raise an error
+                    .from("tb1")
+                    .join("tb2","col1").on(EQUALS, "tb2.col1")
+                    .where("col2", EQUALS, 2) // this should raise an error
+                    .build();
+
+            Analyzer analyzer = new Analyzer(catalog);
+            QueryTree queryTree = analyzer.analyze( sql );
+
+        } catch(AnalyzerException | BuilderException e){
+            System.out.println(e.getMessage());
+            assert true;
+        }
+
     }
 
     @Test

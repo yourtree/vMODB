@@ -28,7 +28,7 @@ public class HashIndex extends AbstractIndex<IKey> {
 
     @Override
     public boolean delete(IKey key) {
-        lookupMap.replace(key,null);
+        lookupMap.remove(key);
         return true;
     }
 

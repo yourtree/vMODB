@@ -17,10 +17,7 @@ import java.util.function.Supplier;
  */
 
 public class HashConsumerJoin extends AbstractJoin
-        implements
-        BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>>,
-        Supplier<OperatorResult>
-{
+        implements BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>> {
 
     private CompletableFuture<OperatorResult> operatorResultFutureLeft;
     private CompletableFuture<OperatorResult> operatorResultFutureRight;

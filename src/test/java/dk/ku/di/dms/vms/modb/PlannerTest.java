@@ -9,6 +9,7 @@ import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
+import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilderException;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
 import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;
@@ -28,48 +29,21 @@ public class PlannerTest {
         final Schema schema = new Schema( columnNames, columnDataTypes );
         catalog.insertTable( new HashIndexedTable( "tb1", schema, new int[]{0} ));
         catalog.insertTable( new HashIndexedTable( "tb2", schema, new int[]{0} ));
+        catalog.insertTable( new HashIndexedTable( "tb3", schema, new int[]{0} ));
 
         IQueryBuilder builder = QueryBuilderFactory.init();
-        IStatement sql = builder.select("tb1.col1, tb2.col2") // this should not raise an error
+        IStatement sql = builder.select("tb1.col1, tb2.col2")
                 .from("tb1")
-                .join("tb2","col1").on(EQUALS, "tb1.col1") // this may be ok but I am being strict here
-                .where("tb1.col2", EQUALS, 2) // this should not raise an error
+                .join("tb2","col1").on(EQUALS, "tb1.col1")
+                .join("tb3","col1").on(EQUALS, "tb1.col1")
+                .where("tb1.col2", EQUALS, 2)
+                .and("tb2.col2",EQUALS,1)
                 .build();
 
         Analyzer analyzer = new Analyzer(catalog);
         QueryTree queryTree = analyzer.analyze( sql );
 
-
         return queryTree;
-    }
-
-    @Test
-    public void testQueryParse(){
-
-        final Catalog catalog = new Catalog();
-        String[] columnNames = { "col1", "col2" };
-        DataType[] columnDataTypes = { DataType.INT, DataType.INT };
-        final Schema schema = new Schema( columnNames, columnDataTypes );
-        catalog.insertTable( new HashIndexedTable( "tb1", schema, new int[]{0} ));
-        catalog.insertTable( new HashIndexedTable( "tb2", schema, new int[]{0} ));
-
-        try {
-            // TODO move this test to query test
-            IQueryBuilder builder = QueryBuilderFactory.init();
-            IStatement sql = builder.select("col1, col2") // this should raise an error
-                    .from("tb1")
-                    .join("tb2","col1").on(EQUALS, "tb2.col1")
-                    .where("col2", EQUALS, 2) // this should raise an error
-                    .build();
-
-            Analyzer analyzer = new Analyzer(catalog);
-            QueryTree queryTree = analyzer.analyze( sql );
-
-        } catch(AnalyzerException | BuilderException e){
-            System.out.println(e.getMessage());
-            assert true;
-        }
-
     }
 
     private QueryTree getSimpleQueryTree() throws BuilderException, AnalyzerException {
@@ -94,13 +68,13 @@ public class PlannerTest {
     }
 
     @Test
-    public void testJoinPlan() throws BuilderException, AnalyzerException {
+    public void testJoinPlan() throws BuilderException, AnalyzerException, FilterBuilderException {
 
         final QueryTree queryTree = getJoinQueryTree();
 
         final Planner planner = new Planner();
 
-        // planner.plan()
+        planner.plan( queryTree );
 
         assert true;
     }
