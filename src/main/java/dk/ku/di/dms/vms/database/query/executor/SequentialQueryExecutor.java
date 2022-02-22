@@ -3,20 +3,18 @@ package dk.ku.di.dms.vms.database.query.executor;
 import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.PlanNode;
 
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
 public class SequentialQueryExecutor implements Supplier<OperatorResult> {
 
-    private final PlanNode head;
+    private final Executor executor;
+    private final PlanNode tail;
 
-    private final Map<PlanNode, PlanNode[]> predecessorLeafNodes;
-
-    public SequentialQueryExecutor(final PlanNode head,
-                                   final Map<PlanNode, PlanNode[]> predecessorLeafNodes) {
-        this.head = head;
-        this.predecessorLeafNodes = predecessorLeafNodes;
+    public SequentialQueryExecutor(final Executor executor, final PlanNode tail) {
+        this.executor = executor;
+        this.tail = tail;
     }
 
     /**
@@ -38,14 +36,6 @@ public class SequentialQueryExecutor implements Supplier<OperatorResult> {
         // parallel strategy
 
         // while we still have a predecessor to schedule
-        while (predecessorLeafNodes.size() > 0) {
-
-            for (Map.Entry<PlanNode, PlanNode[]> entry : this.predecessorLeafNodes.entrySet()) {
-
-
-
-            }
-        }
 
         return null;
 

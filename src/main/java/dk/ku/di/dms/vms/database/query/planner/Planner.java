@@ -271,6 +271,8 @@ public final class Planner {
 
         }
 
+        PlanNode planNodeToReturn = null;
+
         // left deep, most cases will fall in this category
         if(treeType == QueryTreeTypeEnum.LEFT_DEEP){
             // here I need to iterate over the joins defined earlier to build the plan tree for the joins
@@ -279,14 +281,32 @@ public final class Planner {
             // possible optimization
             // if(joinsPerTable.size() == 1){}
 
+            List<PlanNode> headers = new ArrayList<>(joinsPerTable.size());
+
             for(final Map.Entry<Table,List<AbstractJoin>> joinEntry : joinsPerTable.entrySet()){
                 List<AbstractJoin> joins = joinEntry.getValue();
                 // TODO finish
-//                for( final AbstractJoin join :  )
-//                PlanNode node = new PlanNode( join );
+                for( final AbstractJoin join : joins ) {
+                    final PlanNode node = new PlanNode(join);
+                    node.left = previous;
+                    previous.father = node; // why do I need a father?
+                    previous = node;
+                }
+
+                headers.add( previous );
+                previous = null;
+
             }
+
+            // == 1 means no cartesian product
+            if(headers.size() == 1){
+                planNodeToReturn = headers.get(0);
+            } else {
+                // cartesian product
+            }
+
         } else{
-            // TODO finish later
+            // TODO finish BUSHY TREE later
         }
 
 
@@ -317,7 +337,7 @@ public final class Planner {
         // TODO think about parallel seq scan,
         // SequentialScan sequentialScan = new SequentialScan( filterList, table);
 
-        return null;
+        return planNodeToReturn;
     }
 
     private FilterInfo buildFilterInfo( final List<WherePredicate> wherePredicates ) throws FilterBuilderException {

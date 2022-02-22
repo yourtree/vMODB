@@ -8,6 +8,7 @@ import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
+import dk.ku.di.dms.vms.database.query.planner.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilderException;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
@@ -74,9 +75,9 @@ public class PlannerTest {
 
         final Planner planner = new Planner();
 
-        planner.plan( queryTree );
+        PlanNode node = planner.plan( queryTree );
 
-        assert true;
+        assert node != null;
     }
 
     @Test
