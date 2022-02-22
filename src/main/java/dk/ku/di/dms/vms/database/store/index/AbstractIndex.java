@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.database.store.index;
 
-import dk.ku.di.dms.vms.database.store.row.IKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
+import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -13,10 +13,14 @@ public abstract class AbstractIndex<K> {
     private final IndexTypeEnum type;
     private final int hashCode;
 
-    public AbstractIndex(final int... columnsIndex) {
+    // respective table of this index
+    private final Table table;
+
+    public AbstractIndex(final Table table, final int... columnsIndex) {
+        this.table = table;
         if(columnsIndex.length == 1) {
             this.hashCode = columnsIndex[0];
-            this.type = IndexTypeEnum.SIMPLE;
+            this.type = IndexTypeEnum.SINGLE;
         } else {
             this.hashCode = Arrays.hashCode(columnsIndex);
             this.type = IndexTypeEnum.COMPOSITE;
@@ -43,6 +47,10 @@ public abstract class AbstractIndex<K> {
 
     /** information used by the planner to decide for the appropriate operator */
     public abstract IndexDataStructureEnum getType();
+
+    public Table getTable(){
+        return this.table;
+    }
 
     public abstract Set<Map.Entry<K,Row>> entrySet();
 

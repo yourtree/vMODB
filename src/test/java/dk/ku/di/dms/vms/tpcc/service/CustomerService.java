@@ -42,8 +42,8 @@ public class CustomerService {
 
         builder.select("o_id, c_id, c_last, c_discount")
                 .from("customer")
-                .join("order").on( "o_c_id", EQUALS, "customer.c_id" )
-                .join( "order_line" ).on( "o_l_o_id", EQUALS, "order.o_id" )
+                .join("order","o_c_id").on(EQUALS, "customer.c_id" )
+                .join( "order_line", "o_l_o_id" ).on(EQUALS, "order.o_id" )
                 .build();
 
         // TODO make query builder part of the repository

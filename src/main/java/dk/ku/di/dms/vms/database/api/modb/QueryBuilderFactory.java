@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 
 public final class QueryBuilderFactory {
 
-    final private static Logger logger = LoggerFactory.getLogger(QueryBuilder.class);
+     final private static Logger logger = LoggerFactory.getLogger(QueryBuilder.class);
 
     public static IQueryBuilder init() {
 //        try{

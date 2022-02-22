@@ -9,7 +9,7 @@ import java.util.Arrays;
 /**
  * Bypassing the parsing from strings
  * TODO: look at https://github.com/19WAS85/coollection#readme and
- * https://www.jinq.org/
+ * Interesting to take a look: https://www.jinq.org/
  */
 final class QueryBuilder implements IQueryBuilder {
 
@@ -28,7 +28,7 @@ final class QueryBuilder implements IQueryBuilder {
         this.selectStatement = new SelectStatement();
         this.statement = this.selectStatement;
 
-        String[] projection = param.split(",");
+        String[] projection = param.replace(" ","").split(",");
         this.selectStatement.selectClause = new ArrayList<>(Arrays.asList(projection));
 
         return this;
@@ -40,17 +40,17 @@ final class QueryBuilder implements IQueryBuilder {
         return this;
     }
 
-    public QueryBuilder join(String param){
-        this.statement.join( param );
+    public QueryBuilder join(String table, String column){
+        this.statement.join( table, column );
         return this;
     }
 
-    public QueryBuilder on(String param1, ExpressionTypeEnum expression, String param2) throws BuilderException {
-        String[] param2Array = param2.split(".");
+    public QueryBuilder on(ExpressionTypeEnum expression, String tableColumnParam) throws BuilderException {
+        String[] param2Array = tableColumnParam.split("\\.");
         if(param2Array.length != 2) {
-            throw new BuilderException("Should contain a table and a column following the pattern <table>.<column>");
+            throw new BuilderException("Join clause should contain a table and a column following the pattern <table>.<column>");
         }
-        this.statement.on(param1,expression,param2Array[0],param2Array[1]);
+        this.statement.on(expression,param2Array[0],param2Array[1]);
         return this;
     }
 

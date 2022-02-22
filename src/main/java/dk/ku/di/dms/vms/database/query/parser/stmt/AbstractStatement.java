@@ -13,6 +13,7 @@ public abstract class AbstractStatement implements IStatement {
 
     public List<JoinClauseElement> joinClause;
     private String tempJoinTable;
+    private String tempJoinColumn;
     private JoinTypeEnum tempJoinType;
 
     private StatementTypeEnum lastStatement = null;
@@ -53,14 +54,15 @@ public abstract class AbstractStatement implements IStatement {
 
     // join
 
-    public void join(String param) {
-        this.tempJoinTable = param;
+    public void join(String table, String column) {
+        this.tempJoinTable = table;
+        this.tempJoinColumn = column;
         this.tempJoinType = JoinTypeEnum.JOIN;
     }
 
-    public void on(String param1, ExpressionTypeEnum expression, String table2, String param2) {
+    public void on(ExpressionTypeEnum expression, String table, String param) {
         JoinClauseElement joinClauseElement =
-                new JoinClauseElement(tempJoinTable,param1,tempJoinType, expression, table2, param2);
+                new JoinClauseElement(tempJoinTable,tempJoinColumn,tempJoinType, expression, table, param);
         if (this.joinClause == null) {
             this.joinClause = new ArrayList<>();
         }

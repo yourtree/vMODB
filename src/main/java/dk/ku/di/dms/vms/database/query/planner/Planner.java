@@ -11,7 +11,6 @@ import dk.ku.di.dms.vms.database.query.planner.node.join.*;
 import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
-import dk.ku.di.dms.vms.database.store.index.HashIndex;
 import dk.ku.di.dms.vms.database.store.index.IndexDataStructureEnum;
 import dk.ku.di.dms.vms.database.store.row.IKey;
 import dk.ku.di.dms.vms.database.store.row.SimpleKey;
@@ -221,7 +220,7 @@ public final class Planner {
             }
 
             this.addJoinToRespectiveTableInOrder(tableRef, join, joinsPerTable);
-            this.addToAuxJoinsPerTable( tableRefAux, join, auxJoinsPerTable );
+            this.addToAuxJoinsPerTable( tableRefAux, join, joinsPerTable, auxJoinsPerTable );
 
         }
 
@@ -229,8 +228,6 @@ public final class Planner {
         //      in this sense, which join + filter should be executed first to give the best prune of records?
         //      yes, but without the selectivity info there is nothing we can do. I can store the selectivity info
         //      on index creation, but for that I need to have tuples already stored...
-
-
 
         Table tableRef;
         // Merging the filters with the join
@@ -243,17 +240,37 @@ public final class Planner {
 
             List<AbstractJoin> joins = joinsPerTable.getOrDefault( tableRef, null );
             if(joins != null) {
+                // we always have at least one
                 joins.get(0).setFilterInner( buildFilterInfo( tableFilter.getValue() ) );
+                // should remove it from the aux too in case there is some entry there
+                // auxJoinsPerTable.replace( joins.get(0).getInnerIndex().getTable(), null );
+                // remove it from here in case this table is outer in other join
+                filtersForJoinGroupedByTable.replace( joins.get(0).getInnerIndex().getTable(), null );
+
+                // if the outer table is in aux, then apply the filter, so it guarantees "optimality" (not guaranteed)
+                // the joins are in order here. take advantage to iterate over the outer indexes
+                for( AbstractJoin join : joins ){
+                    List<WherePredicate> list = filtersForJoinGroupedByTable.get( join.getOuterIndex().getTable() );
+                    if( list != null ){
+                        join.setFilterOuter( buildFilterInfo( list ) );
+                        filtersForJoinGroupedByTable.replace( join.getOuterIndex().getTable(), null );
+                    }
+                }
+
+            } else {
+                // otherwise, find in the aux, add to the first join (suboptimal) and remove the table from aux
+
+                joins = auxJoinsPerTable.getOrDefault( tableRef, null );
+                joins.get(0).setFilterInner( buildFilterInfo( tableFilter.getValue() ) );
+                auxJoinsPerTable.replace( joins.get(0).getInnerIndex().getTable(), null );
+                filtersForJoinGroupedByTable.replace( joins.get(0).getInnerIndex().getTable(), null );
+
             }
 
-            // if the outer table is in aux, then apply so it guarantees optimality
-            // TODO finish
-
-            // otherwise find in the aux, add to the first join (suboptimal) and remove the table from aux
         }
 
-
-        // here I need to iterate over the plan nodes defined earlier
+        // here I need to iterate over the joins defined earlier to build the plan tree for the joins
+        // joinsPerTable
 
         // a scan for each table
         // the scan strategy only applies for those tables not involved in any join
@@ -323,7 +340,12 @@ public final class Planner {
      *       to a separate method, which could be defined by a boolean parameter (e.g., inner == false)
      * @param tableRef
      */
-    private void addToAuxJoinsPerTable(final Table tableRef, final AbstractJoin join, final Map<Table,List<AbstractJoin>> auxJoinsPerTable){
+    private void addToAuxJoinsPerTable(final Table tableRef, final AbstractJoin join,
+                                       final Map<Table,List<AbstractJoin>> joinsPerTable,
+                                       final Map<Table,List<AbstractJoin>> auxJoinsPerTable){
+        if(joinsPerTable.get( tableRef ) != null) {
+            return;
+        }
         List<AbstractJoin> auxJoins = auxJoinsPerTable.getOrDefault(tableRef,new ArrayList<>());
         auxJoins.add( join );
     }

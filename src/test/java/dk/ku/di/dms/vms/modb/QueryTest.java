@@ -36,7 +36,7 @@ public class QueryTest {
         Table table = new HashIndexedTable("item", schema);
 
         catalog = new Catalog();
-        catalog.insertTable("item",table);
+        catalog.insertTable(table);
 
         Row row = new Row(3,2L,"HAHA","HEHE");
 

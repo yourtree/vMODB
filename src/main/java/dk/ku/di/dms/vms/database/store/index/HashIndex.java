@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.database.store.index;
 
 import dk.ku.di.dms.vms.database.store.row.IKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
+import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.*;
 
@@ -9,13 +10,13 @@ public class HashIndex extends AbstractIndex<IKey> {
 
     protected final Map<IKey, Row> lookupMap;
 
-    public HashIndex(int... columnsIndex){
-        super(columnsIndex);
+    public HashIndex(final Table table, int... columnsIndex){
+        super(table, columnsIndex);
         this.lookupMap = new HashMap<>();
     }
 
-    public HashIndex(final int initialSize, int... columnsIndex){
-        super(columnsIndex);
+    public HashIndex(final Table table, final int initialSize, int... columnsIndex){
+        super(table, columnsIndex);
         this.lookupMap = new HashMap<>(initialSize);
     }
 

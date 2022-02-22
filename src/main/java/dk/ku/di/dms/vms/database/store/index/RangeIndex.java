@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.database.store.index;
 
 import dk.ku.di.dms.vms.database.store.meta.DataType;
 import dk.ku.di.dms.vms.database.store.row.Row;
+import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.*;
 
@@ -17,8 +18,8 @@ public class RangeIndex<T> extends AbstractIndex<T> {
 
     final int columnIndex;
 
-    public RangeIndex(final DataType dataType,final int columnIndex){
-        super(columnIndex);
+    public RangeIndex(final DataType dataType, final Table table, final int columnIndex){
+        super(table, columnIndex);
         this.map = this.getMap(dataType);
         this.columnIndex = columnIndex;
     }

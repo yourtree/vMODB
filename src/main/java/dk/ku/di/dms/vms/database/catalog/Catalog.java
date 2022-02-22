@@ -25,8 +25,8 @@ public class Catalog {
         return tableMap.getOrDefault(tableName,null);
     }
 
-    public boolean insertTable(String tableName, Table table){
-        tableMap.put(tableName,table);
+    public boolean insertTable(Table table){
+        tableMap.put(table.getName(),table);
         return true;
     }
 

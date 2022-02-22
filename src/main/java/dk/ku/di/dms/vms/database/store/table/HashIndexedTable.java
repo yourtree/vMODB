@@ -13,12 +13,12 @@ public final class HashIndexedTable extends Table {
 
     public HashIndexedTable(final String name, final Schema schema, int... columnsIndex) {
         super(name, schema);
-        this.primaryIndex = new HashIndex(columnsIndex);
+        this.primaryIndex = new HashIndex(this, columnsIndex);
     }
 
     public HashIndexedTable(final String name, final Schema schema, final int initialSize, int... columnsIndex) {
         super(name, schema);
-        this.primaryIndex = new HashIndex(initialSize, columnsIndex);
+        this.primaryIndex = new HashIndex(this, initialSize, columnsIndex);
     }
 
     @Override

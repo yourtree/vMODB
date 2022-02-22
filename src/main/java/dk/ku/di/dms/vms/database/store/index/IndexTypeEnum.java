@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.database.store.index;
 
 public enum IndexTypeEnum {
 
-    SIMPLE("SIMPLE"),
+    SINGLE("SINGLE"),
     COMPOSITE("COMPOSITE");
 
     public final String name;
