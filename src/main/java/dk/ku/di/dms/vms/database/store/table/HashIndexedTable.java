@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.store.table;
 
-import dk.ku.di.dms.vms.database.store.row.IKey;
+import dk.ku.di.dms.vms.database.store.common.IKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
 import dk.ku.di.dms.vms.database.store.index.HashIndex;
@@ -13,17 +13,17 @@ public final class HashIndexedTable extends Table {
 
     public HashIndexedTable(final String name, final Schema schema, int... columnsIndex) {
         super(name, schema);
-        this.primaryIndex = new HashIndex(this, columnsIndex);
+        this.primaryKeyIndex = new HashIndex(this, columnsIndex);
     }
 
     public HashIndexedTable(final String name, final Schema schema, final int initialSize, int... columnsIndex) {
         super(name, schema);
-        this.primaryIndex = new HashIndex(this, initialSize, columnsIndex);
+        this.primaryKeyIndex = new HashIndex(this, initialSize, columnsIndex);
     }
 
     @Override
     public int size() {
-        return primaryIndex.size();
+        return primaryKeyIndex.size();
     }
 
     @Override
@@ -33,19 +33,19 @@ public final class HashIndexedTable extends Table {
 
     @Override
     public boolean upsert(IKey key, Row row) {
-        primaryIndex.upsert(key,row);
+        primaryKeyIndex.upsert(key,row);
         return true;
     }
 
     @Override
     public boolean delete(IKey key) {
-        primaryIndex.delete(key);
+        primaryKeyIndex.delete(key);
         return true;
     }
 
     @Override
     public Row retrieve(IKey key) {
-        return primaryIndex.retrieve(key);
+        return primaryKeyIndex.retrieve(key);
     }
 
 }

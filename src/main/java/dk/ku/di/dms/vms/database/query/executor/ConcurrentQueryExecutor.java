@@ -48,7 +48,7 @@ public class ConcurrentQueryExecutor implements Supplier<CompletableFuture<Opera
                     // two children always lead to a biconsumer
 
                     BiConsumer<CompletableFuture<OperatorResult>, CompletableFuture<OperatorResult>> node =
-                            iNode.biConsumer;
+                            iNode.biConsumerFuture;
                     PlanNode left = childrenList[0];
                     PlanNode right = childrenList[1];
 
@@ -73,7 +73,7 @@ public class ConcurrentQueryExecutor implements Supplier<CompletableFuture<Opera
 
                 } else if (childrenList.length == 1) { // == 1
 
-                    Consumer<CompletableFuture<OperatorResult>> node = iNode.consumer;
+                    Consumer<CompletableFuture<OperatorResult>> node = iNode.consumerFuture;
 
                     PlanNode children = childrenList[0];
 

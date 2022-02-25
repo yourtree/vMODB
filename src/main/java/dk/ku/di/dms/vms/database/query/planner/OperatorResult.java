@@ -7,7 +7,8 @@ import java.util.function.Supplier;
 
 public class OperatorResult implements Supplier<Collection<Row>> {
 
-    // TODO think about splitterator to connect with language processing
+    // TODO think about spliterator to connect with language processing
+    //  (https://docs.oracle.com/javase/8/docs/api/java/util/Spliterator.html)
 
     public Collection<Row> rows;
 

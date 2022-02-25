@@ -7,20 +7,27 @@ import java.util.List;
 
 public interface IRepository<PK extends Serializable,T extends AbstractEntity<PK>> {
 
-    public T insert(T object);
-    public T insertAll(List<T> objects);
+    T insert(T object);
+    T insertAll(List<T> objects);
 
-    public T update(T object);
-    public T updateAll(List<T> objects);
+    T update(T object);
+    T updateAll(List<T> objects);
 
-    public T delete(T object);
-    public T deleteAll(List<T> objects);
-    public T deleteByKey(PK key);
-    public T deleteAllByKey(List<PK> keys);
+    T delete(T object);
+    T deleteAll(List<T> objects);
+    T deleteByKey(PK key);
+    T deleteAllByKey(List<PK> keys);
 
-    public List<T> query(Qualification qualification);
-    public T lookupByKey(PK key);
+    List<T> query(Qualification qualification);
+    T lookupByKey(PK key);
 
-    public Object fetch(IStatement sql);
+    /**
+     * Used for issuing update statements and retrieving a single row (object)
+      */
+    <DTO> DTO fetch( //List<DTO> c,
+                      IStatement statement);
+
+    <DTO> List<DTO> fetchList( //List<DTO> c,
+                     IStatement statement);
 
 }

@@ -12,7 +12,7 @@ import dk.ku.di.dms.vms.database.query.planner.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
-import dk.ku.di.dms.vms.database.store.row.CompositeKey;
+import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;
 import dk.ku.di.dms.vms.database.store.table.Table;
@@ -85,10 +85,10 @@ public class QueryTest {
 
         IQueryBuilder builder = QueryBuilderFactory.init();
         IStatement sql = builder.update("district")
-                .set("d_next_o_id",1)
-                .where("d_w_id", EQUALS, 2)
-                .and("d_id", EQUALS, 3)
-                .build();
+                                .set("d_next_o_id",1)
+                                .where("d_w_id", EQUALS, 2)
+                                .and("d_id", EQUALS, 3)
+                                .build();
 
         // TODO assert the set, where, and...
 

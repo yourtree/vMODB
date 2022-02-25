@@ -20,7 +20,7 @@ public abstract class AbstractIndex<K> {
         this.table = table;
         if(columnsIndex.length == 1) {
             this.hashCode = columnsIndex[0];
-            this.type = IndexTypeEnum.SINGLE;
+            this.type = IndexTypeEnum.SIMPLE;
         } else {
             this.hashCode = Arrays.hashCode(columnsIndex);
             this.type = IndexTypeEnum.COMPOSITE;

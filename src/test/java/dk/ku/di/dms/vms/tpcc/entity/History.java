@@ -8,6 +8,10 @@ import javax.persistence.*;
 @Table(name="history")
 public class History extends AbstractEntityDefault {
 
+//    @Id
+//    @GeneratedValue(AUTO)
+//    private Long id;
+
     @Column
     public Integer h_c_id;
 

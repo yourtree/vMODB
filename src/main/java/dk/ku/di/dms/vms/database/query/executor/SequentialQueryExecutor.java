@@ -3,19 +3,16 @@ package dk.ku.di.dms.vms.database.query.executor;
 import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.PlanNode;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
 public class SequentialQueryExecutor implements Supplier<OperatorResult> {
 
-    private final Executor executor;
-    private final PlanNode tail;
+    private PlanNode node;
 
-    public SequentialQueryExecutor(final Executor executor, final PlanNode tail) {
-        this.executor = executor;
-        this.tail = tail;
+    public SequentialQueryExecutor(final PlanNode node) {
+        this.node = node;
     }
+
 
     /**
      * while there are remaining tasks, continue in a loop
@@ -25,19 +22,27 @@ public class SequentialQueryExecutor implements Supplier<OperatorResult> {
     @Override
     public OperatorResult get() {
 
-        CompletableFuture<OperatorResult> finalTask = null;
+        //CompletableFuture<OperatorResult> finalTask = null;
 
-        // TODO define the best strategy
+        OperatorResult result = null;
 
-        // single thread strategy
+        // while we still have a node to schedule
+        while(true){
 
-        // heuristic based
+            // with an executor it would be like that
+            // Future<OperatorResult> futureResult = this.executor.submit( () -> tail.supplier.get() );
 
-        // parallel strategy
+            result = node.supplier.get();
 
-        // while we still have a predecessor to schedule
+            node = node.father;
 
-        return null;
+            if(node == null) break;
+
+            node.consumer.accept( result );
+
+        }
+
+        return result;
 
     }
 

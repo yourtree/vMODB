@@ -1,6 +1,8 @@
-package dk.ku.di.dms.vms.database.store.row;
+package dk.ku.di.dms.vms.database.store.common;
 
-public class SimpleKey implements IKey {
+import dk.ku.di.dms.vms.database.store.index.IIndexKey;
+
+public class SimpleKey implements IKey, IIndexKey {
 
     private final Object value;
 

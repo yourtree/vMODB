@@ -7,9 +7,15 @@ import java.util.function.Supplier;
 
 public class PlanNode {
 
+    // applies to any execution
     public Supplier<OperatorResult> supplier;
-    public Consumer<CompletableFuture<OperatorResult>> consumer;
-    public BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>> biConsumer;
+
+    // single thread execution
+    public Consumer<OperatorResult> consumer;
+
+    // parallel execution
+    public Consumer<CompletableFuture<OperatorResult>> consumerFuture;
+    public BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>> biConsumerFuture;
 
     public PlanNode father;
     public PlanNode left;
@@ -24,15 +30,15 @@ public class PlanNode {
     }
 
     public PlanNode(Supplier<OperatorResult> supplier,
-                    Consumer<CompletableFuture<OperatorResult>> consumer,
-                    BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>> biConsumer,
+                    Consumer<CompletableFuture<OperatorResult>> consumerFuture,
+                    BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>> biConsumerFuture,
                     PlanNode father,
                     PlanNode left,
                     PlanNode right,
                     boolean isLeaf) {
         this.supplier = supplier;
-        this.consumer = consumer;
-        this.biConsumer = biConsumer;
+        this.consumerFuture = consumerFuture;
+        this.biConsumerFuture = biConsumerFuture;
         this.father = father;
         this.left = left;
         this.right = right;

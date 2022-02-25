@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
-import dk.ku.di.dms.vms.database.store.row.IKey;
+import dk.ku.di.dms.vms.database.store.common.IKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
 
 import java.util.Collection;

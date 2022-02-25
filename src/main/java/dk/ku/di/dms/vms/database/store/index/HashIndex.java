@@ -1,11 +1,14 @@
 package dk.ku.di.dms.vms.database.store.index;
 
-import dk.ku.di.dms.vms.database.store.row.IKey;
+import dk.ku.di.dms.vms.database.store.common.IKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.*;
 
+/**
+ * Read @link{https://stackoverflow.com/questions/20824686/what-is-difference-between-primary-index-and-secondary-index-exactly}
+ */
 public class HashIndex extends AbstractIndex<IKey> {
 
     protected final Map<IKey, Row> lookupMap;

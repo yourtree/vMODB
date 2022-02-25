@@ -2,8 +2,8 @@ package dk.ku.di.dms.vms.database.store.meta;
 
 import dk.ku.di.dms.vms.database.store.table.Table;
 
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.Hashtable;
 import java.util.Map;
 
 /**
@@ -11,31 +11,34 @@ import java.util.Map;
  */
 public class Schema {
 
+    // identification of columns that form the primary key. all tables must have a primary key
+    private int[] primaryKey;
+
+    private ForeignKeyReference[] foreignKeys;
+
     private final String[] columnNames;
     private final DataType[] columnDataTypes;
 
     // basically a map of column name to exact position in row values
-    private final Map<String,Integer> columnIndexMap;
+    private final Map<String,Integer> columnPositionMap;
 
     public Integer getColumnIndex(String columnName){
-        return columnIndexMap.get(columnName);
+        return columnPositionMap.get(columnName);
     }
 
     public DataType getColumnDataType(int columnIndex){
         return columnDataTypes[columnIndex];
     }
 
-    public Schema(String[] columnNames, DataType[] columnDataTypes) {
+    public Schema( String[] columnNames, DataType[] columnDataTypes) {
         this.columnNames = columnNames;
         this.columnDataTypes = columnDataTypes;
         int size = columnNames.length;
-        this.columnIndexMap = new HashMap<>(size);
+        this.columnPositionMap = new HashMap<>(size);
         // build index map
         for(int i = 0; i < size; i++){
-            columnIndexMap.put(columnNames[i],i);
+            columnPositionMap.put(columnNames[i],i);
         }
     }
-
-
 
 }

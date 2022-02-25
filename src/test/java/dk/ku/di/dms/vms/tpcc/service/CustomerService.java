@@ -11,7 +11,7 @@ import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderOut;
 import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderIn;
 import dk.ku.di.dms.vms.tpcc.repository.ICustomerRepository;
-import dk.ku.di.dms.vms.utils.Triplet;
+import dk.ku.di.dms.vms.utils.CustomerInfoDTO;
 
 import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
 
@@ -30,8 +30,6 @@ public class CustomerService {
     @Transactional
     public CustomerNewOrderOut provideCustomerDataToOrder(CustomerNewOrderIn in) throws BuilderException {
 
-        // CustomerInfoDTO customerInfoDTO = new CustomerInfoDTO();
-
         IQueryBuilder builder = QueryBuilderFactory.init();
         IStatement sql = builder.select("c_discount, c_last, c_credit")//.into(CustomerInfoDTO.class)
                             .from("customer")
@@ -40,22 +38,24 @@ public class CustomerService {
                             .and("c_id", EQUALS, in.c_id)
                             .build();
 
-        builder.select("o_id, c_id, c_last, c_discount")
-                .from("customer")
-                .join("order","o_c_id").on(EQUALS, "customer.c_id" )
-                .join( "order_line", "o_l_o_id" ).on(EQUALS, "order.o_id" )
-                .build();
+//        builder.select("o_id, c_id, c_last, c_discount")
+//                .from("customer")
+//                .join("order","o_c_id").on(EQUALS, "customer.c_id" )
+//                .join( "order_line", "o_l_o_id" ).on(EQUALS, "order.o_id" )
+//                .build();
 
         // TODO make query builder part of the repository
         // List<CustomerInfoDTO> customerInfoDTO =
-        Triplet<Float,String,String> customerData =
-                (Triplet<Float, String, String>) customerRepository.fetch(sql);
+        //Triplet<Float,String,String> customerData =
+        // CustomerInfoDTO customerInfo = (CustomerInfoDTO) customerRepository.fetch(sql, CustomerInfoDTO.class);
+        CustomerInfoDTO customerInfo = customerRepository.<CustomerInfoDTO>fetch(sql);
+        // SqlRepository.fetch( customerInfo, sql );
 
         CustomerNewOrderOut customerTaxData = new CustomerNewOrderOut();
-        customerTaxData.c_discount = customerData.getFirst();
+        customerTaxData.c_discount = customerInfo.c_discount;
         // these are not used anywhere...
-        customerTaxData.c_last = customerData.getSecond();
-        customerTaxData.c_credit = customerData.getThird();
+        customerTaxData.c_last = customerInfo.c_last;
+        customerTaxData.c_credit = customerInfo.c_credit;
         // simply forwarding
         customerTaxData.c_id = in.c_id;
 

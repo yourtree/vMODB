@@ -162,9 +162,7 @@ public final class Analyzer {
                         WherePredicate whereClause = new WherePredicate(columnReference, currWhere.expression, currWhere.value);
 
                         // The order of the columns declared in the index definition matters
-                        // I am assuming the developer defines the where clause with the order
-                        // on which an expected index definition matches
-                        queryTree.addWhereClause(whereClause);
+                        queryTree.addWhereClauseSortedByColumnIndex(whereClause);
                     }
 
                 }

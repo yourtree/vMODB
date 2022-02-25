@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.database.query.planner.node.join;
 import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
-import dk.ku.di.dms.vms.database.store.row.IKey;
+import dk.ku.di.dms.vms.database.store.common.IKey;
 
 import java.util.function.Supplier;
 

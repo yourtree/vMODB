@@ -2,12 +2,11 @@ package dk.ku.di.dms.vms.database.query.planner.node.join;
 
 import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
-import dk.ku.di.dms.vms.database.store.row.IKey;
+import dk.ku.di.dms.vms.database.store.common.IKey;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiConsumer;
-import java.util.function.Supplier;
 
 /**
  * A hash join where its dependencies are not fulfilled from the start

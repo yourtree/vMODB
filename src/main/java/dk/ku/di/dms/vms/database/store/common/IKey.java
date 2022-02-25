@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.store.row;
+package dk.ku.di.dms.vms.database.store.common;
 
 /**
  * An interface for keys of rows and indexes

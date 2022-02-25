@@ -13,8 +13,7 @@ import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 import dk.ku.di.dms.vms.database.store.index.IndexDataStructureEnum;
-import dk.ku.di.dms.vms.database.store.row.IKey;
-import dk.ku.di.dms.vms.database.store.row.SimpleKey;
+import dk.ku.di.dms.vms.database.store.common.IKey;
 import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.*;
@@ -22,47 +21,21 @@ import java.util.stream.Collectors;
 
 import static dk.ku.di.dms.vms.database.query.planner.node.join.JoinTypeEnum.*;
 
+/**
+ * Class responsible for deciding for a plan to run a query
+ * https://www.interdb.jp/pg/pgsql03.html
+ * "The planner receives a query tree from the rewriter and generates a (query)
+ *   plan tree that can be processed by the executor most effectively."
+ */
 public final class Planner {
 
-    // https://www.interdb.jp/pg/pgsql03.html
-    // "The planner receives a query tree from the rewriter and generates a (query)
-    // plan tree that can be processed by the executor most effectively."
-
+    // TODO we can also have the option: AUTO, meaning the planner will look for the possibility of building a bushy tree
     public PlanNode plan(final QueryTree queryTree) throws FilterBuilderException {
         return this.plan( queryTree, QueryTreeTypeEnum.LEFT_DEEP );
     }
 
     // plan and optimize in the same step
     public PlanNode plan(final QueryTree queryTree, final QueryTreeTypeEnum treeType) throws FilterBuilderException {
-
-        // https://github.com/hyrise/hyrise/tree/master/src/lib/operators
-        // https://github.com/hyrise/hyrise/tree/master/src/lib/optimizer
-        // https://github.com/hyrise/hyrise/tree/master/src/lib/logical_query_plan
-
-        // define the steps, indexes to use, do we need to sort, limit, group?....
-        // define the rules to apply based on the set of pre-defined rules
-
-        // join rule always prune the shortest relation...
-        // always apply the filter first
-        // do I have any matching index?
-        // do we have join? what is the outer table?
-        // what should come first, the join or the filter. should I apply the
-        // filter together with the join or before? cost optimization
-        // native main memory DBMS for data-intensive applications
-        // many layers orm introduces, codification and de-codification
-        // of application-defined objects into the underlying store. pays a performance price
-        // at the same time developers challenge with caching mechanisms. that should be handled natively
-        // by a MMDBMS
-
-        // group the where clauses by table
-        // https://stackoverflow.com/questions/40172551/static-context-cannot-access-non-static-in-collectors
-//        Map<Table<?,?>,List<Column>> columnsWhereClauseGroupedByTable =
-//                queryTree
-//                .whereClauses.stream()
-//                .collect(
-//                        Collectors.groupingBy( WhereClause::getTable,
-//                        Collectors.mapping( WhereClause::getColumn, Collectors.toList()))
-//                );
 
         final Map<String,Integer> tablesInvolvedInJoin = new HashMap<>();
 
@@ -71,10 +44,8 @@ public final class Planner {
             tablesInvolvedInJoin.put(join.getRightTable().getName(), 1);
         }
 
-        // cartesian product
-        // select tb3.id, tb1.id, tb2.id from tb1, tb2, tb3 where tb1.id = tb2.id and tb1.io = 1
-
         // TODO optimization. avoid stream by reusing the table list in query tree. simply maintain a bool (in_join?)
+        //  other approach is delivering these maps to the planner from the analyzer...
 
         final Map<Table,List<WherePredicate>> whereClauseGroupedByTableNotInAnyJoin =
                 queryTree
@@ -96,18 +67,9 @@ public final class Planner {
                                         Collectors.toList())
                         );
 
-        // right, what indexes can I use?
-        // but first, there are indexes available?
-
-        // combinatorics to see which index could be applied?
-        // is there any dynamic programming algorithm for that?
-
         // TODO annotate entities with index and read the index annotations
         // https://www.baeldung.com/jpa-indexes
         // https://dba.stackexchange.com/questions/253037/postgres-using-seq-scan-with-filter-on-indexed-column-exists-on-related-table
-
-        // naive, check joins, do I have an index? if so, use it, otherwise embrace the where clause during the join
-
 
         // TODO FINISH usually the projection is pushed down in disk-based DBMS,
         //  but here I will just create the final projection when I need to
@@ -120,71 +82,32 @@ public final class Planner {
         // if the pk or secIndex only applies to one of the columns, then others become filters
         for(final JoinPredicate joinPredicate : queryTree.joinPredicates){
 
-            boolean leftTableIsIndexed = false;
-            AbstractIndex<IKey> leftTableIndex = null;
-
             Table tableLeft = joinPredicate.getLeftTable();
 
-            // this approach used for composite key
-            //int[] colIdxArr = { joinPredicate.columnLeftReference.columnIndex };
-            //int colHash = Arrays.hashCode(colIdxArr);
+            // same approach used for composite key
+            int[] colPosArr = { joinPredicate.columnLeftReference.columnPosition };
 
-            // approach used for simple key
-            SimpleKey keyLeft = new SimpleKey( joinPredicate.columnLeftReference.columnIndex );
-
-            // if there is a join condition based on primary key then I can bypass the index selection step
-            // of course there may the case where the developer can define a tree-base pk and hash-based index
-            // but in our case we can constrain that through our annotation-based semantics...
-            if(tableLeft.hasPrimaryKey()){
-                int pIndexHash = tableLeft.getPrimaryIndex().hashCode();
-                if (pIndexHash == keyLeft.hashCode()){
-                    leftTableIndex = tableLeft.getPrimaryIndex();
-                    leftTableIsIndexed = true;
-                }
-            }
-
-            if( !leftTableIsIndexed && tableLeft.getSecondaryIndexForColumnSetHash(keyLeft) != null ){
-                leftTableIndex = tableLeft.getSecondaryIndexForColumnSetHash(keyLeft);
-                leftTableIsIndexed = true;
-
-            //else if(tableLeft.getSecondaryIndexes().size() > 0){
-                // then only consider the filters for this table
-                // maybe I should add the filters after I build all the join operators...
-                // exactly... the filters may even change the operator??? because the filter may have a better index...
-                // the question is: do I have an index to apply on a filter that is even better than the one chosen?
-
-            } //else {
-                // in this case the hope is finding an index for a filter...
-            //}
-
-            boolean rightTableIsIndexed = false;
-            AbstractIndex<IKey> rightTableIndex = null;
+            final Optional<AbstractIndex<IKey>> leftIndexOptional = findOptimalIndex( tableLeft, colPosArr );
 
             Table tableRight = joinPredicate.getRightTable();
 
-            SimpleKey keyRight = new SimpleKey( joinPredicate.columnRightReference.columnIndex );
+            colPosArr = new int[]{ joinPredicate.columnRightReference.columnPosition };
 
-            if(tableRight.hasPrimaryKey()){
-                int pIndexHash = tableRight.getPrimaryIndex().hashCode();
-                if (pIndexHash == keyRight.hashCode()){
-                    rightTableIndex = tableRight.getPrimaryIndex();
-                    rightTableIsIndexed = true;
-                }
-            }
-
-            if( !rightTableIsIndexed && tableRight.getSecondaryIndexForColumnSetHash(keyLeft) != null ) {
-                rightTableIndex = tableRight.getSecondaryIndexForColumnSetHash(keyLeft);
-                rightTableIsIndexed = true;
-            }
+            final Optional<AbstractIndex<IKey>> rightIndexOptional = findOptimalIndex( tableRight, colPosArr );
 
             final AbstractJoin join;
             final Table tableRef;
             final Table tableRefAux;
 
-            // now we have to decide the operators
-            if(leftTableIsIndexed && rightTableIsIndexed){
-                // does this case necessarily lead to symmetric HashJoin? https://cs.uwaterloo.ca/~david/cs448/
+            // TODO on app startup, I can "query" all the query builders.
+            //  or store the query plan after the first execution so startup time is faster
+            //      take care to leave the holes whenever the substitution is necessary
 
+            // now we have to decide the physical operators
+            if(leftIndexOptional.isPresent() && rightIndexOptional.isPresent()){
+                // does this case necessarily lead to symmetric HashJoin? https://cs.uwaterloo.ca/~david/cs448/
+                final AbstractIndex<IKey> leftTableIndex = leftIndexOptional.get();
+                final AbstractIndex<IKey> rightTableIndex = rightIndexOptional.get();
                 if(leftTableIndex.size() >= rightTableIndex.size()){
                     join = new HashJoin( rightTableIndex, leftTableIndex );
                     tableRef = tableRight;
@@ -195,24 +118,24 @@ public final class Planner {
                     tableRefAux = tableRight;
                 }
 
-            } else if( leftTableIsIndexed ){ // indexed nested loop join on inner table. the outer probes its rows
+            } else if( leftIndexOptional.isPresent() ){ // indexed nested loop join on inner table. the outer probes its rows
                 tableRef = tableRight;
                 tableRefAux = tableLeft;
-                join = new IndexedNestedLoopJoin( tableRight.getInternalIndex(), leftTableIndex );
-            } else if( rightTableIsIndexed ) {
+                join = new IndexedNestedLoopJoin( tableRight.getPrimaryKeyIndex(), leftIndexOptional.get() );
+            } else if( rightIndexOptional.isPresent() ) {
                 tableRef = tableLeft;
                 tableRefAux = tableRight;
-                join = new IndexedNestedLoopJoin( tableLeft.getInternalIndex(), rightTableIndex );
+                join = new IndexedNestedLoopJoin( tableLeft.getPrimaryKeyIndex(), rightIndexOptional.get() );
             } else { // nested loop join
                 // ideally this is pushed upstream to benefit from pruning performed by downstream nodes
-                if(tableLeft.getInternalIndex().size() >= tableRight.getInternalIndex().size()){
+                if(tableLeft.getPrimaryKeyIndex().size() >= tableRight.getPrimaryKeyIndex().size()){
                     tableRef = tableRight;
                     tableRefAux = tableLeft;
-                    join = new NestedLoopJoin(tableRight.getInternalIndex(), tableLeft.getInternalIndex());
+                    join = new NestedLoopJoin(tableRight.getPrimaryKeyIndex(), tableLeft.getPrimaryKeyIndex());
                 } else {
                     tableRef = tableLeft;
                     tableRefAux = tableRight;
-                    join = new NestedLoopJoin(tableLeft.getInternalIndex(), tableRight.getInternalIndex());
+                    join = new NestedLoopJoin(tableLeft.getPrimaryKeyIndex(), tableRight.getPrimaryKeyIndex());
                 }
 
             }
@@ -231,11 +154,13 @@ public final class Planner {
         // Merging the filters with the join
         // The heuristic now is just to apply the filter as early as possible. later we can revisit
         // remove from map after applying the additional filters
+        // TODO the indexes chosen so far may not be optimal given that, by considering the filters,
+        //      we may find better indexes that would make the join much faster
+        //      a first approach is simply deciding now an index and later
+        //      when applying the filters, we check whether there are better indexes
 
-        //Iterator<Map.Entry<Table,List<WherePredicate>>> iterator = filtersForJoinGroupedByTable.entrySet().iterator();
-        //while(iterator.hasNext()){
         for( Map.Entry<Table,List<WherePredicate>> tableFilter : filtersForJoinGroupedByTable.entrySet() ){
-            //Map.Entry<Table,List<WherePredicate>> tableFilter = iterator.next();
+
             // if find in joins per table, add filter to the first join and remove the table from the aux
             tableRef = tableFilter.getKey();
 
@@ -285,11 +210,10 @@ public final class Planner {
 
             for(final Map.Entry<Table,List<AbstractJoin>> joinEntry : joinsPerTable.entrySet()){
                 List<AbstractJoin> joins = joinEntry.getValue();
-                // TODO finish
                 for( final AbstractJoin join : joins ) {
                     final PlanNode node = new PlanNode(join);
                     node.left = previous;
-                    previous.father = node; // why do I need a father?
+                    if(previous != null) previous.father = node;
                     previous = node;
                 }
 
@@ -307,6 +231,7 @@ public final class Planner {
 
         } else{
             // TODO finish BUSHY TREE later
+
         }
 
 
@@ -325,11 +250,17 @@ public final class Planner {
             final FilterInfo filterInfo = buildFilterInfo( wherePredicates );
 
             // I need the index information to decide which operator, e.g., index scan
-            final AbstractIndex optimalIndex = findOptimalIndex( currTable, filterInfo.filterColumns, false );
-            if(optimalIndex.getType() == IndexDataStructureEnum.HASH){
-                // TODO finish new IndexScan()
+            final Optional<AbstractIndex<IKey>> optimalIndexOptional = findOptimalIndex( currTable, filterInfo.filterColumns );
+            if(optimalIndexOptional.isPresent()){
+                AbstractIndex<IKey> optimalIndex = optimalIndexOptional.get();
+                if( optimalIndex.getType() == IndexDataStructureEnum.HASH) {
+                    // TODO finish new IndexScan()
+
+                } else {
+                    final SequentialScan seqScan = new SequentialScan(optimalIndex, filterInfo);
+                }
             } else {
-                final SequentialScan seqScan = new SequentialScan(optimalIndex, filterInfo);
+                final SequentialScan seqScan = new SequentialScan(currTable.getPrimaryKeyIndex(), filterInfo);
             }
 
         }
@@ -354,7 +285,7 @@ public final class Planner {
                     || w.expression == ExpressionTypeEnum.IS_NULL;
 
             filters[ i ] = FilterBuilder.build( w );
-            filterColumns[ i ] = w.columnReference.columnIndex;
+            filterColumns[ i ] = w.columnReference.columnPosition;
             if( !nullableExpression ){
                 filterParams.add( new IdentifiableNode<>( i, w.value ) );
             }
@@ -372,7 +303,7 @@ public final class Planner {
      * with the "right" tables
      * when they appear as "left" (joinsPerTable) they are removed from the auxJoinsPerTable
      * FIXME right now I am not sorting the list as in addJoinToRespectiveTableInOrder (M)
-     *       to reuse M, I would need to modularize the condition of the inner/outer table
+     *       in order to reuse M, I would need to modularize the condition of the inner/outer table
      *       to a separate method, which could be defined by a boolean parameter (e.g., inner == false)
      * @param tableRef
      */
@@ -442,37 +373,34 @@ public final class Planner {
      *  Here we are relying on the fact that the developer has declared the columns
      *  in the where clause matching the actual index column order definition
      */
-    private AbstractIndex findOptimalIndex(final Table table, final int[] filterColumns, final boolean skipPrimaryKey){
+    private Optional<AbstractIndex<IKey>> findOptimalIndex(final Table table, final int[] filterColumns){
 
-        // all combinations... TODO this can be built in the previous step...
+        // all combinations... TODO this can be built in the analyzer
         final List<int[]> combinations = getAllPossibleColumnCombinations(filterColumns);
 
-        // TODO this can be done inside getAllPossibleColumnCombinations
         // build map of hash code
         Map<Integer,int[]> hashCodeMap = new HashMap<>(combinations.size());
 
         for(final int[] arr : combinations){
-            hashCodeMap.put( Arrays.hashCode( arr ), arr );
+            if( arr.length == 1 )
+                hashCodeMap.put( arr[0], arr );
+            else
+                hashCodeMap.put( Arrays.hashCode( arr ), arr );
         }
-
+        
         // for each index, check if the column set matches
         float bestSelectivity = Float.MAX_VALUE;
-        AbstractIndex optimalIndex = null;
+        AbstractIndex<IKey> optimalIndex = null;
 
-        // first try the primary index
-        if(!skipPrimaryKey && table.hasPrimaryKey()){
-            final AbstractIndex pIndex = table.getPrimaryIndex();
-            if( hashCodeMap.get( pIndex.hashCode() ) != null ){
-                // bestSelectivity = 1D / table.size();
-                return pIndex;
-            }
-        }
+        final List<AbstractIndex<IKey>> indexes = new ArrayList<>(table.getIndexes().size() + 1 );
+        indexes.addAll( table.getIndexes() );
+        indexes.add(0, table.getPrimaryKeyIndex() );
 
         // the selectivity may be unknown, we should use simple heuristic here to decide what is the best index
         // the heuristic is simply the number of columns an index covers
         // of course this can be misleading, since the selectivity can be poor, leading to scan the entire table anyway...
         // TODO we could insert a selectivity collector in the sequential scan so later this data can be used here
-        for( final AbstractIndex secIndex : table.getSecondaryIndexes() ){
+        for( final AbstractIndex<IKey> index : indexes ){
 
             /*
              * in case selectivity is not present,
@@ -480,11 +408,11 @@ public final class Planner {
              *  https://docs.oracle.com/javase/tutorial/java/nutsandbolts/datatypes.html
              */
             // for this algorithm I am only considering exact matches, so range indexes >,<,>=,=< are not included for now
-            int[] columns = hashCodeMap.getOrDefault( secIndex.hashCode(), null );
+            int[] columns = hashCodeMap.getOrDefault( index.hashCode(), null );
             if( columns != null ){
 
-                // optimistic belief that the number of columns would lead to a significant pruning of records
-                float heuristicSelectivity = (float) columns.length / table.size();
+                // optimistic belief that the number of columns would lead to higher pruning of records
+                float heuristicSelectivity = table.size() / columns.length;
 
                 // try next index then
                 if(heuristicSelectivity > bestSelectivity) continue;
@@ -492,36 +420,22 @@ public final class Planner {
                 // if tiebreak, hash index type is chosen as the tiebreaker criterion
                 if(heuristicSelectivity == bestSelectivity
                         && optimalIndex.getType() == IndexDataStructureEnum.TREE
-                        && secIndex.getType() == IndexDataStructureEnum.HASH){
+                        && index.getType() == IndexDataStructureEnum.HASH){
                     // do not need to check whether optimalIndex != null since totalSize
                     // can never be equals to FLOAT.MAX_VALUE
-                    optimalIndex = secIndex;
+                    optimalIndex = index;
                     continue;
                 }
 
                 // heuristicSelectivity < bestSelectivity
-                optimalIndex = secIndex;
+                optimalIndex = index;
                 bestSelectivity = heuristicSelectivity;
 
             }
 
         }
 
-        // no index was chosen
-        if(optimalIndex != null){
-            return optimalIndex;
-        } else {
-            // bestSelectivity = table.size();
-            if(!table.hasPrimaryKey()){
-                // we still need to return a reference to the table rows...
-                return table.getInternalIndex();
-            } else {
-                return table.getPrimaryIndex();
-            }
-        }
-
-        // other alternative is instead of getting all columns are checking against the indexes
-        // I can get all indexes and the columns not part of any index are removed from the search
+        return Optional.of(optimalIndex);
 
     }
 
@@ -589,11 +503,8 @@ public final class Planner {
         }
 
         listRef.add( Arrays.copyOfRange( filterColumns, length - 1, length ) );
-
         return listRef;
 
     }
-
-
 
 }

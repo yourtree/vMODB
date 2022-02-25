@@ -1,12 +1,13 @@
 package dk.ku.di.dms.vms.database.store.table;
 
-import dk.ku.di.dms.vms.database.store.row.IKey;
+import dk.ku.di.dms.vms.database.store.index.IIndexKey;
+import dk.ku.di.dms.vms.database.store.common.IKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 
-import java.util.Collection;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Basic building block
@@ -22,16 +23,14 @@ public abstract class Table {
 
     protected final Schema schema;
 
-    protected AbstractIndex<IKey> primaryIndex;
+    // for fast path on planner
+    protected AbstractIndex<IKey> primaryKeyIndex;
 
-    // Hashed by the column set
-    protected Map<IKey, AbstractIndex<IKey>> secondaryIndexes;
+    // Other indexes, hashed by the column set in order of the schema. The IKey is indexed by the order of columns in the index
+    protected Map<IIndexKey, Map<IKey,AbstractIndex<IKey>>> indexes;
 
-    /** System-defined index to iterate over the rows.
-     *  ATTENTION! Only used in case no primary index has been defined
-     *   and no secondary index can be used in the query
-     */
-    protected AbstractIndex<IKey> internalIndex;
+    // just a cached list of the indexes map
+    protected List<AbstractIndex<IKey>> indexList;
 
     public abstract int size();
 
@@ -44,10 +43,11 @@ public abstract class Table {
 
     public abstract Row retrieve(IKey key);
 
-    public Table(final String name, final Schema schema) {
+    public Table( final String name, final Schema schema) {
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
+        this.indexList = new ArrayList<>();
     }
 
     @Override
@@ -64,22 +64,38 @@ public abstract class Table {
     }
 
     public boolean hasPrimaryKey(){
-        return primaryIndex != null;
+        return primaryKeyIndex != null;
     }
 
-    public AbstractIndex<IKey> getPrimaryIndex(){
-        return primaryIndex;
+    public AbstractIndex<IKey> getPrimaryKeyIndex(){
+        return primaryKeyIndex;
     }
 
-    public AbstractIndex<IKey> getSecondaryIndexForColumnSetHash( final IKey key ){
-        return secondaryIndexes.getOrDefault( key, null );
+    // A key is formed by a column set ordered by the order specified in the schema definition
+    public AbstractIndex<IKey> getIndexByKey(final IIndexKey key){
+        if(indexes.containsKey( key )) {
+            return indexes.get( key ).get( key );
+        }
+        return null;
     }
 
-    public AbstractIndex<IKey> getInternalIndex(){
-        return internalIndex;
+    public Collection<AbstractIndex<IKey>> getIndexesByIndexKey(final IIndexKey key) {
+        return indexes.get( key ).values();
     }
 
-    public Collection<AbstractIndex<IKey>> getSecondaryIndexes() {
-        return secondaryIndexes.values();
+    public List<AbstractIndex<IKey>> getIndexes() {
+        // return indexes.values().stream().flatMap(List::stream).collect(Collectors.toList());
+        // to avoid resorting to stream() and java operators
+        return indexList;
     }
+
+    // logical key - column list in order that appear in the schema
+    // physical key - column list in order of index definition
+    public void addIndex( final IIndexKey indexLogicalKey, final IKey indexPhysicalKey, AbstractIndex<IKey> index ){
+        Map<IKey,AbstractIndex<IKey>> indexMap = this.indexes.getOrDefault( indexLogicalKey, new HashMap<>());
+        indexMap.put( indexPhysicalKey, index );
+        this.indexes.putIfAbsent( indexLogicalKey, indexMap );
+        this.indexList.add( index );
+    }
+
 }
