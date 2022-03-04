@@ -3,10 +3,12 @@ package dk.ku.di.dms.vms;
 import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
 import static org.junit.Assert.assertTrue;
 
+import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.RepositoryFacade;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.store.row.Row;
+import dk.ku.di.dms.vms.eShopOnContainers.events.CheckoutRequest;
 import dk.ku.di.dms.vms.operational.DataOperationExecutor;
 import dk.ku.di.dms.vms.event.EventRepository;
 import dk.ku.di.dms.vms.eShopOnContainers.events.AddProductRequest;
@@ -98,5 +100,21 @@ public class AppTest
 //        }
 //
 //    }
+
+    @Test
+    public void testParameterizedCall() throws BuilderException {
+        IProductRepository proxyInstance = (IProductRepository) Proxy.newProxyInstance(
+                AppTest.class.getClassLoader(),
+                new Class[] { IProductRepository.class },
+                new RepositoryFacade( IProductRepository.class ));
+
+        LogicDummyTest logic = new LogicDummyTest(proxyInstance);
+
+        CheckoutRequest request = new CheckoutRequest();
+
+        logic.checkoutCart(request);
+
+        assertTrue(true);
+    }
 
 }

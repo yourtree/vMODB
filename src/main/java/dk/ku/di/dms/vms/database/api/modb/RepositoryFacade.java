@@ -49,9 +49,11 @@ public final class RepositoryFacade implements InvocationHandler {
                 // TODO receive a plan tree from the planner
                 break;
             }
-            case "fetch":
-                break;
+            case "fetch": {
+                // TODO dispatch to analyzer passing the clazz param
 
+                break;
+            }
             default: throw new Exception("Unknown repository operation.");
         }
 

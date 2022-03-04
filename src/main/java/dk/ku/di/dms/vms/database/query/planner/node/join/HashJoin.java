@@ -17,8 +17,7 @@ import java.util.Set;
  * In other words, previous scanning and transformation steps are not necessary
  */
 
-public class HashJoin extends AbstractJoin
-{
+public class HashJoin extends AbstractJoin {
 
     public HashJoin(AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
         super(innerIndex, outerIndex);

@@ -22,8 +22,12 @@ public class Schema {
     // basically a map of column name to exact position in row values
     private final Map<String,Integer> columnPositionMap;
 
-    public Integer getColumnIndex(String columnName){
+    public Integer getColumnPosition(String columnName){
         return columnPositionMap.get(columnName);
+    }
+
+    public String getColumnName(int columnPosition){
+        return columnNames[columnPosition];
     }
 
     public DataType getColumnDataType(int columnIndex){

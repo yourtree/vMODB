@@ -64,24 +64,23 @@ public final class SequentialScan implements Supplier<OperatorResult> {
     public OperatorResult get() {
 
         final boolean noFilter = filters == null;
-        OperatorResult res = new OperatorResult();
 
         if (noFilter) {
-            res.rows = index.rows();
-            return res;
+            return new OperatorResult(index.rows());
         }
 
-        Collection<Row> result = new ArrayList<>();
+        // it avoids resizing in most cases array
+        OperatorResult result = new OperatorResult(index.rows().size());
 
         Collection<Row> rows = index.rows();
 
         for(Row row : rows){
-            boolean conditionHolds = check(row);
-            if(conditionHolds) result.add(row);
+            if(check(row)) {
+                result.accept(row);
+            }
         }
 
-        res.rows = result;
-        return res;
+        return result;
     }
 
     private boolean check(final Row row){

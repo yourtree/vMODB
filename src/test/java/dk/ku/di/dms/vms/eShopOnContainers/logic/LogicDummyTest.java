@@ -3,15 +3,21 @@ package dk.ku.di.dms.vms.eShopOnContainers.logic;
 import dk.ku.di.dms.vms.annotations.Inbound;
 import dk.ku.di.dms.vms.annotations.Outbound;
 import dk.ku.di.dms.vms.annotations.Transactional;
+import dk.ku.di.dms.vms.database.api.modb.BuilderException;
+import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
+import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
+import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.eShopOnContainers.entity.Product;
 import dk.ku.di.dms.vms.eShopOnContainers.events.AddProductRequest;
 import dk.ku.di.dms.vms.eShopOnContainers.events.CheckoutRequest;
 import dk.ku.di.dms.vms.eShopOnContainers.events.CheckoutStarted;
 import dk.ku.di.dms.vms.eShopOnContainers.events.ProductAdded;
 import dk.ku.di.dms.vms.eShopOnContainers.repository.IProductRepository;
+import dk.ku.di.dms.vms.utils.CustomerInfoDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
 import static dk.ku.di.dms.vms.enums.IsolationLevelEnum.SERIALIZABLE;
 import static dk.ku.di.dms.vms.enums.TransactionTypeEnum.RW;
 
@@ -42,8 +48,19 @@ public class LogicDummyTest {
     @Inbound(values = "checkout-requests")
     @Outbound("accepted-checkouts")
     @Transactional(type=RW, isolation=SERIALIZABLE)
-    public CheckoutStarted checkoutCart(CheckoutRequest checkoutRequest){
+    public CheckoutStarted checkoutCart(CheckoutRequest checkoutRequest) throws BuilderException {
         // TODO finish
+
+        IQueryBuilder builder = QueryBuilderFactory.init();
+        IStatement sql = builder.select("c_discount, c_last, c_credit")//.into(CustomerInfoDTO.class)
+                .from("customer")
+                .where("c_w_id", EQUALS, 1)
+                .and("c_d_id", EQUALS, 1)
+                .and("c_id", EQUALS, 1)
+                .build();
+
+        CustomerInfoDTO customerInfo = productRepository.<CustomerInfoDTO>fetch(sql, CustomerInfoDTO.class);
+
         log.info("I am executing, i am alive!!!");
         // send(CheckoutStarted.b)
         return null;

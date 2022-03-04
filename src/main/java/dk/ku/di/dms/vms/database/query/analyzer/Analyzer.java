@@ -13,6 +13,10 @@ import dk.ku.di.dms.vms.database.store.table.Table;
 import java.util.List;
 import java.util.Map;
 
+/**
+ *
+ * Class responsible for analyzing a statement
+ */
 public final class Analyzer {
 
     private final Catalog catalog;
@@ -21,10 +25,18 @@ public final class Analyzer {
         this.catalog = catalog;
     }
 
-    // basically transforms the raw input into known and safe metadata, e.g., whether a table, column exists
-    public QueryTree analyze(final IStatement statement) throws AnalyzerException {
+    public QueryTree analyze(final IStatement statement, final Class<?> clazz) throws AnalyzerException {
+        final QueryTree queryTree = new QueryTree(clazz);
+        return analyze( statement, queryTree );
+    }
 
+    public QueryTree analyze(final IStatement statement) throws AnalyzerException {
         final QueryTree queryTree = new QueryTree();
+        return analyze( statement, queryTree );
+    }
+
+    // basically transforms the raw input into known and safe metadata, e.g., whether a table, column exists
+    private QueryTree analyze(final IStatement statement, final QueryTree queryTree) throws AnalyzerException {
 
         /**
          * https://docs.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql?view=sql-server-ver15#logical-processing-order-of-the-select-statement
@@ -190,11 +202,10 @@ public final class Analyzer {
 
         for(Table table : tables.values()){
             final Schema schema = table.getSchema();
-            final Integer columnIndex = schema.getColumnIndex(columnStr);
+            final Integer columnIndex = schema.getColumnPosition(columnStr);
             if(columnIndex != null) {
                 if(columnReferenceToResult == null) {
-                    columnReferenceToResult = new ColumnReference(columnIndex,
-                            schema.getColumnDataType(columnIndex), table);
+                    columnReferenceToResult = new ColumnReference(columnStr, columnIndex, table);
                 } else {
                     throw new AnalyzerException("Cannot refer to a column name that appear in more than a table without proper reference in the query");
                 }
@@ -208,13 +219,22 @@ public final class Analyzer {
 
     private ColumnReference findColumnReference(String columnStr, Table table) throws AnalyzerException {
         final Schema schema = table.getSchema();
-        Integer columnIndex = schema.getColumnIndex(columnStr);
+        Integer columnIndex = schema.getColumnPosition(columnStr);
         if(columnIndex == null){
             throw new AnalyzerException("Column does not exist in the table");
         }
-        return new ColumnReference(columnIndex, schema.getColumnDataType(columnIndex), table);
+        return new ColumnReference(columnStr, columnIndex, table);
     }
 
+    /**
+     * Another strategy is giving to the constructor of ColumnReference the duty to check whether the columnIndex exists
+     * This way we avoid checking == null everytime.
+     * @param columnStr
+     * @param tableStr
+     * @param tables
+     * @return
+     * @throws AnalyzerException
+     */
     private ColumnReference findColumnReference(String columnStr, String tableStr, Map<String,Table> tables) throws AnalyzerException {
 
         if(tables.get(tableStr) == null ){
@@ -222,12 +242,11 @@ public final class Analyzer {
         }
         final Table table = tables.get(tableStr);
         final Schema schema = table.getSchema();
-        Integer columnIndex = schema.getColumnIndex(columnStr);
+        Integer columnIndex = schema.getColumnPosition(columnStr);
         if(columnIndex == null){
             throw new AnalyzerException("Column does not exist in the table "+ tableStr);
         }
-
-        return new ColumnReference(columnIndex, schema.getColumnDataType(columnIndex), table);
+        return new ColumnReference(columnStr, columnIndex, table);
     }
 
 }

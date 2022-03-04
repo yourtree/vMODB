@@ -24,8 +24,9 @@ public interface IRepository<PK extends Serializable,T extends AbstractEntity<PK
     /**
      * Used for issuing update statements and retrieving a single row (object)
       */
-    <DTO> DTO fetch( //List<DTO> c,
-                      IStatement statement);
+    <DTO> void issue(IStatement statement);
+
+    <DTO> DTO fetch( IStatement statement, Class<DTO> clazz);
 
     <DTO> List<DTO> fetchList( //List<DTO> c,
                      IStatement statement);

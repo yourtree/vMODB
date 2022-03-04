@@ -39,7 +39,7 @@ public final class Planner {
 
         final Map<String,Integer> tablesInvolvedInJoin = new HashMap<>();
 
-        for(JoinPredicate join : queryTree.joinPredicates){
+        for(final JoinPredicate join : queryTree.joinPredicates){
             tablesInvolvedInJoin.put(join.getLeftTable().getName(), 1);
             tablesInvolvedInJoin.put(join.getRightTable().getName(), 1);
         }
@@ -57,7 +57,7 @@ public final class Planner {
                                          Collectors.toList())
                         );
 
-            Map<Table,List<WherePredicate>> filtersForJoinGroupedByTable =
+        final Map<Table,List<WherePredicate>> filtersForJoinGroupedByTable =
                 queryTree
                         .wherePredicates.stream()
                         .filter( clause -> tablesInvolvedInJoin
@@ -75,8 +75,8 @@ public final class Planner {
         //  but here I will just create the final projection when I need to
         //  deliver the result back to the application
 
-        Map<Table,List<AbstractJoin>> joinsPerTable = new HashMap<>();
-        Map<Table,List<AbstractJoin>> auxJoinsPerTable = new HashMap<>();
+        final Map<Table,List<AbstractJoin>> joinsPerTable = new HashMap<>();
+        final Map<Table,List<AbstractJoin>> auxJoinsPerTable = new HashMap<>();
 
         // TODO I am not considering a JOIN predicate may contain more than a column....
         // if the pk or secIndex only applies to one of the columns, then others become filters
@@ -93,11 +93,11 @@ public final class Planner {
 
             colPosArr = new int[]{ joinPredicate.columnRightReference.columnPosition };
 
-            final Optional<AbstractIndex<IKey>> rightIndexOptional = findOptimalIndex( tableRight, colPosArr );
+            Optional<AbstractIndex<IKey>> rightIndexOptional = findOptimalIndex( tableRight, colPosArr );
 
-            final AbstractJoin join;
-            final Table tableRef;
-            final Table tableRefAux;
+            AbstractJoin join;
+            Table tableRef;
+            Table tableRefAux;
 
             // TODO on app startup, I can "query" all the query builders.
             //  or store the query plan after the first execution so startup time is faster
@@ -159,7 +159,7 @@ public final class Planner {
         //      a first approach is simply deciding now an index and later
         //      when applying the filters, we check whether there are better indexes
 
-        for( Map.Entry<Table,List<WherePredicate>> tableFilter : filtersForJoinGroupedByTable.entrySet() ){
+        for( final Map.Entry<Table,List<WherePredicate>> tableFilter : filtersForJoinGroupedByTable.entrySet() ){
 
             // if find in joins per table, add filter to the first join and remove the table from the aux
             tableRef = tableFilter.getKey();
@@ -202,18 +202,22 @@ public final class Planner {
         if(treeType == QueryTreeTypeEnum.LEFT_DEEP){
             // here I need to iterate over the joins defined earlier to build the plan tree for the joins
             PlanNode previous = null;
-
+            PlanNode leaf = null;
             // possible optimization
             // if(joinsPerTable.size() == 1){}
 
-            List<PlanNode> headers = new ArrayList<>(joinsPerTable.size());
+            final List<PlanNode> headers = new ArrayList<>(joinsPerTable.size());
 
             for(final Map.Entry<Table,List<AbstractJoin>> joinEntry : joinsPerTable.entrySet()){
                 List<AbstractJoin> joins = joinEntry.getValue();
                 for( final AbstractJoin join : joins ) {
                     final PlanNode node = new PlanNode(join);
                     node.left = previous;
-                    if(previous != null) previous.father = node;
+                    if(previous != null){
+                        previous.father = node;
+                    } else {
+                        leaf = node;
+                    }
                     previous = node;
                 }
 
@@ -224,7 +228,11 @@ public final class Planner {
 
             // == 1 means no cartesian product
             if(headers.size() == 1){
-                planNodeToReturn = headers.get(0);
+                planNodeToReturn = leaf;
+
+                // now build the projection
+                buildProjection( queryTree, headers.get(0) );
+
             } else {
                 // cartesian product
             }
@@ -268,7 +276,23 @@ public final class Planner {
         // TODO think about parallel seq scan,
         // SequentialScan sequentialScan = new SequentialScan( filterList, table);
 
+
+
         return planNodeToReturn;
+    }
+
+    private void buildProjection(final QueryTree queryTree, final PlanNode headerNode){
+
+        // case where we need to convert to a class type
+        if(queryTree.returnType != null){
+
+
+
+        } else {
+            // simply a return containing rows
+            // TODO later
+        }
+
     }
 
     private FilterInfo buildFilterInfo( final List<WherePredicate> wherePredicates ) throws FilterBuilderException {

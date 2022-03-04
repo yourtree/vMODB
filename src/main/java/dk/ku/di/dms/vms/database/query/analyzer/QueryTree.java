@@ -14,9 +14,12 @@ import java.util.*;
   */
 public class QueryTree {
 
+    public Class<?> returnType;
+
     // projection
     public List<ColumnReference> projections;
 
+    // store all tables included in this query, including those not participating in any join
     public Map<String,Table> tables;
 
     // join operations
@@ -30,7 +33,21 @@ public class QueryTree {
     // TODO order by predicate
     public List<OrderByPredicate> orderByPredicates;
 
+    /**
+     * No explicit return type. Must be used for testing-purpose solely,
+     * since this DBMS is an application-focused DBMS
+     */
     public QueryTree() {
+        this.returnType = null;
+        this.projections = new ArrayList<>();
+        this.tables = new Hashtable<>();
+        this.joinPredicates = new ArrayList<>();
+        this.wherePredicates = new ArrayList<>();
+        this.groupByPredicates = new ArrayList<>();
+    }
+
+    public QueryTree(final Class<?> returnType) {
+        this.returnType = returnType;
         this.projections = new ArrayList<>();
         this.tables = new Hashtable<>();
         this.joinPredicates = new ArrayList<>();

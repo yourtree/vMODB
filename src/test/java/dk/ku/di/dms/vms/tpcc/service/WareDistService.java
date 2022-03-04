@@ -94,7 +94,7 @@ public class WareDistService {
                 .and("d_id", EQUALS, districtUpdateRequest.d_id)
                 .build();
 
-        districtRepository.fetch(sql);
+        districtRepository.issue(sql);
 
         return;
 

@@ -8,16 +8,25 @@ import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
+import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
+import dk.ku.di.dms.vms.database.query.planner.node.projection.Projector;
+import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
 import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;
 import dk.ku.di.dms.vms.database.store.table.Table;
+import dk.ku.di.dms.vms.utils.CustomerInfoDTO;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 
 import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
 
@@ -81,6 +90,33 @@ public class QueryTest {
     }
 
     @Test
+    public void testProjection(){
+
+        ColumnReference column1 = new ColumnReference("c_discount",0);
+        ColumnReference column2 = new ColumnReference("c_last",1);
+        ColumnReference column3 = new ColumnReference("c_credit",2);
+
+        List<ColumnReference> columnReferenceList = new ArrayList<>(3);
+        columnReferenceList.add(column1);
+        columnReferenceList.add(column2);
+        columnReferenceList.add(column3);
+
+        Projector projector = new Projector(CustomerInfoDTO.class, columnReferenceList);
+
+        Collection<Row> rows = new ArrayList<>(2);
+        Collections.addAll(rows, new Row(1F,"1","1" ) );
+
+        OperatorResult operatorResult = new OperatorResult( rows );
+
+        projector.accept( operatorResult );
+
+        Object object = projector.get();
+
+        assert(object != null);
+
+    }
+
+    @Test
     public void testQueryParsing() throws Exception {
 
         IQueryBuilder builder = QueryBuilderFactory.init();
@@ -101,7 +137,7 @@ public class QueryTest {
         Planner planner = new Planner();
         PlanNode planTree = planner.plan(queryTree);
 
-        assert(true);
+        assert(planTree != null);
 
     }
 

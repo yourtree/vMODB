@@ -50,7 +50,7 @@ public class StockService {
                     return;
                 }
 
-                Integer s_quantity = stockRepository.<Integer>fetch(sql);
+                Integer s_quantity = stockRepository.<Integer>fetch(sql,Integer.class);
 
                 Integer ol_quantity = in.quantity.get(finalI);
                 if(s_quantity > ol_quantity){
@@ -71,7 +71,7 @@ public class StockService {
                     return;
                 }
 
-                stockRepository.fetch(update);
+                stockRepository.issue(update);
             });
 
         }

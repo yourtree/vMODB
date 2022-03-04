@@ -48,7 +48,7 @@ public class CustomerService {
         // List<CustomerInfoDTO> customerInfoDTO =
         //Triplet<Float,String,String> customerData =
         // CustomerInfoDTO customerInfo = (CustomerInfoDTO) customerRepository.fetch(sql, CustomerInfoDTO.class);
-        CustomerInfoDTO customerInfo = customerRepository.<CustomerInfoDTO>fetch(sql);
+        CustomerInfoDTO customerInfo = customerRepository.<CustomerInfoDTO>fetch(sql, CustomerInfoDTO.class);
         // SqlRepository.fetch( customerInfo, sql );
 
         CustomerNewOrderOut customerTaxData = new CustomerNewOrderOut();

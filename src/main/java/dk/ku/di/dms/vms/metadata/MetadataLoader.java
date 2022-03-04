@@ -62,23 +62,19 @@ public class MetadataLoader {
             String className = method.getDeclaringClass().getCanonicalName();
             Object obj = loadedClasses.get(className);
             if(obj == null){
-                Class cls = Class.forName(className);
+                Class<?> cls = Class.forName(className);
                 Constructor<?>[] constructors = cls.getDeclaredConstructors();
-                Constructor ctor = constructors[0];
-
-                //            Constructor ctor = cls.getDeclaredConstructor(IRepository.class);
-                //            IProductRepository proxyInstance = (IProductRepository) Proxy.newProxyInstance(
-                //                    AppTest.class.getClassLoader(),
-                //                    new Class[] { IProductRepository.class },
-                //                    new H2RepositoryFacade( IProductRepository.class ));
+                Constructor<?> constructor = constructors[0];
 
                 List<Object> repositoryList = new ArrayList<>();
 
-                for (Class parameterType : ctor.getParameterTypes()) {
+                for (Class parameterType : constructor.getParameterTypes()) {
                     try {
                         Object proxyInstance = Proxy.newProxyInstance(
                                 MetadataLoader.class.getClassLoader(),
                                 new Class[]{parameterType},
+                                // it works without casting as long as all services respect
+                                // the constructor rule to have only repositories
                                 new RepositoryFacade(parameterType));
                         repositoryList.add(proxyInstance);
                     } catch (Exception e){
@@ -86,15 +82,17 @@ public class MetadataLoader {
                     }
                 }
 
-                obj = ctor.newInstance(repositoryList.toArray());
+                obj = constructor.newInstance(repositoryList.toArray());
+
+                loadedClasses.put(className,obj);
             }
 
-            Class<IEvent> outputType = (Class<IEvent>) method.getReturnType();
+            Class<?> outputType = method.getReturnType();
 
-            List<Class<IEvent>> inputTypes = new ArrayList<>();
+            List<Class<?>> inputTypes = new ArrayList<>();
 
             for(int i = 0; i < method.getParameters().length; i++){
-                inputTypes.add( (Class<IEvent>) method.getParameters()[i].getType());
+                inputTypes.add(method.getParameters()[i].getType());
             }
 
             String[] inputQueues = null;
@@ -109,7 +107,7 @@ public class MetadataLoader {
                     for(int i = 0; i < inputQueues.length; i++) {
 
                         if(config.queueToEventMap.get(inputQueues[i]) == null){
-                            config.queueToEventMap.put(inputQueues[i], inputTypes.get(i));
+                            config.queueToEventMap.put(inputQueues[i], (Class<IEvent>) inputTypes.get(i));
                         } else {
                             throw new MappingException("Error mapping. An input queue cannot be mapped to tow or more event types.");
                         }
@@ -132,7 +130,7 @@ public class MetadataLoader {
                     // In other words, one event to an operation mapping.
                     // But one can achieve it by having two operations reacting
                     // to the same input event
-                    config.queueToEventMap.put(outputQueue,outputType);
+                    config.queueToEventMap.put(outputQueue, (Class<IEvent>) outputType);
                 }
             }
 
