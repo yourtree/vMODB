@@ -19,7 +19,7 @@ import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;
 import dk.ku.di.dms.vms.database.store.table.Table;
-import dk.ku.di.dms.vms.utils.CustomerInfoDTO;
+import dk.ku.di.dms.vms.tpcc.dto.CustomerInfoDTO;
 import org.junit.BeforeClass;
 import org.junit.Test;
 

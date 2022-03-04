@@ -1,5 +1,8 @@
 package dk.ku.di.dms.vms.database.api.modb;
 
+import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
+import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
+import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 import dk.ku.di.dms.vms.infra.IRepository;
 import dk.ku.di.dms.vms.proxy.DynamicInvocationHandler;
@@ -51,6 +54,9 @@ public final class RepositoryFacade implements InvocationHandler {
             }
             case "fetch": {
                 // TODO dispatch to analyzer passing the clazz param
+
+//                Analyzer analyzer = new Analyzer();
+//                QueryTree queryTree = analyzer.analyze( (IStatement) args[0], (Class<?>) args[1]);
 
                 break;
             }

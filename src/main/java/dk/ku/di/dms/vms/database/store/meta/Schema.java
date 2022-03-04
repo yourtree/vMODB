@@ -34,7 +34,7 @@ public class Schema {
         return columnDataTypes[columnIndex];
     }
 
-    public Schema( String[] columnNames, DataType[] columnDataTypes) {
+    public Schema(String[] columnNames, DataType[] columnDataTypes) {
         this.columnNames = columnNames;
         this.columnDataTypes = columnDataTypes;
         int size = columnNames.length;

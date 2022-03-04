@@ -9,10 +9,13 @@ import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.eShopOnContainers.events.CheckoutRequest;
+import dk.ku.di.dms.vms.exception.MappingException;
+import dk.ku.di.dms.vms.metadata.ApplicationMetadata;
+import dk.ku.di.dms.vms.metadata.MetadataLoader;
 import dk.ku.di.dms.vms.operational.DataOperationExecutor;
 import dk.ku.di.dms.vms.event.EventRepository;
 import dk.ku.di.dms.vms.eShopOnContainers.events.AddProductRequest;
-import dk.ku.di.dms.vms.eShopOnContainers.logic.LogicDummyTest;
+import dk.ku.di.dms.vms.eShopOnContainers.logic.DummyLogic;
 import dk.ku.di.dms.vms.eShopOnContainers.repository.IProductRepository;
 import dk.ku.di.dms.vms.tpcc.entity.Item;
 import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderIn;
@@ -23,11 +26,22 @@ import org.slf4j.LoggerFactory;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 
 public class AppTest 
 {
     private static Logger log = LoggerFactory.getLogger(AppTest.class);
+
+    @Test
+    public void testMetadataLoader() throws Exception {
+
+        MetadataLoader loader = new MetadataLoader();
+        ApplicationMetadata config = loader.load(null);
+
+
+
+    }
 
     @Test
     public void testDynamicProxying() {
@@ -36,7 +50,7 @@ public class AppTest
                 new Class[] { IProductRepository.class },
                 new RepositoryFacade( IProductRepository.class ));
 
-        LogicDummyTest logic = new LogicDummyTest(proxyInstance);
+        DummyLogic logic = new DummyLogic(proxyInstance);
 
         AddProductRequest request = new AddProductRequest();
 
@@ -108,7 +122,7 @@ public class AppTest
                 new Class[] { IProductRepository.class },
                 new RepositoryFacade( IProductRepository.class ));
 
-        LogicDummyTest logic = new LogicDummyTest(proxyInstance);
+        DummyLogic logic = new DummyLogic(proxyInstance);
 
         CheckoutRequest request = new CheckoutRequest();
 

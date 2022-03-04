@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.manager;
 
 import dk.ku.di.dms.vms.event.EventRepository;
+import dk.ku.di.dms.vms.event.IEventHandler;
 import dk.ku.di.dms.vms.metadata.ApplicationMetadata;
 import dk.ku.di.dms.vms.metadata.MetadataLoader;
 import dk.ku.di.dms.vms.operational.DataOperationExecutor;
@@ -8,7 +9,11 @@ import dk.ku.di.dms.vms.scheduler.Scheduler;
 
 import java.util.concurrent.*;
 
-public class Manager implements Runnable {
+/**
+ * Manager is a class that manages the lifecycle of components:
+ * {@link Scheduler}, {@link IEventHandler}, and {@link DataOperationExecutor}
+ */
+public final class Manager implements Runnable {
 
     private final ManagerMetadata metadata;
 

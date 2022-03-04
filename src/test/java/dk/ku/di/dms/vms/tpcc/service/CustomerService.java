@@ -11,7 +11,7 @@ import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderOut;
 import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderIn;
 import dk.ku.di.dms.vms.tpcc.repository.ICustomerRepository;
-import dk.ku.di.dms.vms.utils.CustomerInfoDTO;
+import dk.ku.di.dms.vms.tpcc.dto.CustomerInfoDTO;
 
 import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
 

@@ -14,8 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- *
- * Class responsible for analyzing a statement
+ * Class responsible for analyzing a statement {@link IStatement}
  */
 public final class Analyzer {
 

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.utils;
+package dk.ku.di.dms.vms.tpcc.dto;
 
 public class CustomerInfoDTO {
 

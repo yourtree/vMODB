@@ -13,7 +13,7 @@ import dk.ku.di.dms.vms.eShopOnContainers.events.CheckoutRequest;
 import dk.ku.di.dms.vms.eShopOnContainers.events.CheckoutStarted;
 import dk.ku.di.dms.vms.eShopOnContainers.events.ProductAdded;
 import dk.ku.di.dms.vms.eShopOnContainers.repository.IProductRepository;
-import dk.ku.di.dms.vms.utils.CustomerInfoDTO;
+import dk.ku.di.dms.vms.tpcc.dto.CustomerInfoDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,13 +21,13 @@ import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQ
 import static dk.ku.di.dms.vms.enums.IsolationLevelEnum.SERIALIZABLE;
 import static dk.ku.di.dms.vms.enums.TransactionTypeEnum.RW;
 
-public class LogicDummyTest {
+public class DummyLogic {
 
-    final private static Logger log = LoggerFactory.getLogger(LogicDummyTest.class);
+    final private static Logger log = LoggerFactory.getLogger(DummyLogic.class);
 
     final private IProductRepository productRepository;
 
-    public LogicDummyTest(final IProductRepository productRepository){
+    public DummyLogic(final IProductRepository productRepository){
         this.productRepository = productRepository;
     }
 
@@ -38,7 +38,7 @@ public class LogicDummyTest {
     @Transactional(type=RW, isolation=SERIALIZABLE)
     public ProductAdded addProduct(AddProductRequest addProductRequest){
 
-        Product product = new Product(3.45,"nada","algum");
+        Product product = new Product(3.45,"nada","sku","algum");
 
         productRepository.insert( product );
 
@@ -62,8 +62,8 @@ public class LogicDummyTest {
         CustomerInfoDTO customerInfo = productRepository.<CustomerInfoDTO>fetch(sql, CustomerInfoDTO.class);
 
         log.info("I am executing, i am alive!!!");
-        // send(CheckoutStarted.b)
-        return null;
+
+        return new CheckoutStarted();
     }
 
 }
