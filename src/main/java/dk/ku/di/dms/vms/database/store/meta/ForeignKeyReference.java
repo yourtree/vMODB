@@ -9,8 +9,11 @@ public class ForeignKeyReference {
     // the position of the columns that reference the other table
     private int[] columnSet;
 
+    private CardinalityTypeEnum cardinality;
+
     public ForeignKeyReference(Table table, int[] columnSet) {
         this.table = table;
         this.columnSet = columnSet;
     }
+
 }

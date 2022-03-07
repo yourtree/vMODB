@@ -16,11 +16,20 @@ public class Schema {
 
     private ForeignKeyReference[] foreignKeys;
 
+    // the name of the columns
     private final String[] columnNames;
+
+    // the data types of the columns
     private final DataType[] columnDataTypes;
+
+    // the constraints of this schema
+    private final ConstraintReference[] constraints;
 
     // basically a map of column name to exact position in row values
     private final Map<String,Integer> columnPositionMap;
+
+    // probably later should build a foreign key map
+    // private final Map<Integer,>
 
     public Integer getColumnPosition(String columnName){
         return columnPositionMap.get(columnName);
@@ -48,6 +57,20 @@ public class Schema {
             columnPositionMap.put(columnNames[i],i);
         }
         this.primaryKeyColumns = primaryKeyColumns;
+        this.constraints = null;
+    }
+
+    public Schema(final String[] columnNames, final DataType[] columnDataTypes, final int[] primaryKeyColumns, final ConstraintReference[] constraints) {
+        this.columnNames = columnNames;
+        this.columnDataTypes = columnDataTypes;
+        int size = columnNames.length;
+        this.columnPositionMap = new HashMap<>(size);
+        // build index map
+        for(int i = 0; i < size; i++){
+            columnPositionMap.put(columnNames[i],i);
+        }
+        this.primaryKeyColumns = primaryKeyColumns;
+        this.constraints = constraints;
     }
 
     public int[] buildColumnPositionArray(final String[] columnList){

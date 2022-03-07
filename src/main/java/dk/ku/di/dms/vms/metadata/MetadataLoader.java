@@ -8,8 +8,7 @@ import dk.ku.di.dms.vms.database.store.common.IKey;
 import dk.ku.di.dms.vms.database.store.common.SimpleKey;
 import dk.ku.di.dms.vms.database.store.index.HashIndex;
 import dk.ku.di.dms.vms.database.store.index.IIndexKey;
-import dk.ku.di.dms.vms.database.store.meta.DataType;
-import dk.ku.di.dms.vms.database.store.meta.Schema;
+import dk.ku.di.dms.vms.database.store.meta.*;
 import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;
 import dk.ku.di.dms.vms.event.IEvent;
 import dk.ku.di.dms.vms.exception.MappingException;
@@ -29,10 +28,11 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.persistence.Column;
-import javax.persistence.Id;
-import javax.persistence.Index;
-import javax.persistence.Table;
+import javax.persistence.*;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Null;
+import javax.validation.constraints.Positive;
+import javax.validation.constraints.PositiveOrZero;
 
 import static org.reflections.scanners.Scanners.FieldsAnnotated;
 
@@ -42,7 +42,7 @@ public class MetadataLoader {
 
     public ApplicationMetadata load(String forPackage) throws
             ClassNotFoundException, InvocationTargetException,
-            InstantiationException, IllegalAccessException, MappingException, NoPrimaryKeyFoundException, NoAcceptableTypeException {
+            InstantiationException, IllegalAccessException, MappingException, NoPrimaryKeyFoundException, NoAcceptableTypeException, UnsupportedConstraint {
 
         ApplicationMetadata applicationMetadata = new ApplicationMetadata();
 
@@ -79,7 +79,7 @@ public class MetadataLoader {
         );
 
         // group by class
-        Map<Class<?>,List<Field>> map = allEntityFields.stream()
+        Map<Class<?>,List<Field>> columnMap = allEntityFields.stream()
                 .collect( Collectors.groupingBy( Field::getDeclaringClass,
                 Collectors.toList()) );
 
@@ -96,21 +96,46 @@ public class MetadataLoader {
 
         //  should we keep metadata about associations? the query processing is oblivious to that
         //      but, without enforcing cardinality of relationships, the developer can write erroneous code
+        // get all associations
+        Set<Field> allAssociationFields = reflections.get(
+                FieldsAnnotated.with(OneToMany.class)
+                        .add(FieldsAnnotated.with(ManyToOne.class))
+                        .add(FieldsAnnotated.with(ManyToMany.class))
+                        .add(FieldsAnnotated.with(OneToOne.class))
+                        .as(Field.class, reflectionsConfig.getClassLoaders())
+        );
 
-        for(final Map.Entry<Class<?>,List<Field>> entry : map.entrySet()){
+        // group by entity type
+        Map<Class<?>,List<Field>> associationMap = allAssociationFields.stream()
+                .collect( Collectors.groupingBy( Field::getDeclaringClass,
+                        Collectors.toList()) );
+
+        // build schema of each table
+        // we build the schema in order to lookup the fields and define the pk hash index
+        for(final Map.Entry<Class<?>,List<Field>> entry : pkMap.entrySet()){
 
             Class<?> tableClass = entry.getKey();
-            List<Field> fields = entry.getValue();
-
-            // build schema of each table
-            // we build the schema in order to lookup the fields and define the pk hash index
-            List<Field> pkFields = pkMap.get( tableClass );
+            List<Field> pkFields = entry.getValue();
 
             if(pkFields == null || pkFields.size() == 0){
                 throw new NoPrimaryKeyFoundException("Table class "+tableClass.getCanonicalName()+" does not have a primary key.");
             }
+            int totalNumberOfFields = pkFields.size();
 
-            int totalNumberOfFields = pkFields.size() + fields.size();
+            List<Field> associationFields = associationMap.get( tableClass );
+            List<Field> columnFields = columnMap.get( tableClass );
+
+            if(associationFields != null) {
+                totalNumberOfFields += associationFields.size();
+            } else {
+                associationFields = Collections.emptyList();
+            }
+
+            if(columnFields != null) {
+                totalNumberOfFields += columnFields.size();
+            } else {
+                columnFields = Collections.emptyList();
+            }
 
             final String[] columnNames = new String[totalNumberOfFields];
             final DataType[] columnDataTypes = new DataType[totalNumberOfFields];
@@ -147,12 +172,42 @@ public class MetadataLoader {
                 i++;
             }
 
-            // iterating over non-pk columns
-            // int i = pkFields.size();
-            for(final Field field : fields){
+            // iterating over association columns
+            for(final Field field : associationFields){
+
+                // do we have a join column annotation ? @JoinColumn(name="checkout_id")
+                Optional<Annotation> joinColumnAnnotation = Arrays.stream(field.getAnnotations())
+                        .filter(p -> p.annotationType() == JoinColumn.class).findFirst();
+
+                String columnNameJoin;
+                if(joinColumnAnnotation.isPresent()){
+                    columnNameJoin = ((JoinColumn) joinColumnAnnotation.get()).name();
+                } else {
+
+                    Optional<Annotation> joinColumnsAnnotation = Arrays.stream(field.getAnnotations())
+                            .filter(p -> p.annotationType() == JoinColumns.class).findFirst();
+
+                    // TODO finish joinColumnsAnnotation... for now simply getting field name
+
+                    columnNameJoin = field.getName();
+                }
+
+                // FIXME the entity type may not be known at this time, so we defer the type definition to a later point
+                //  storing the pending type definition
+                //  <<the table class, the reference to the columnType array, the position>>
+                columnDataTypes[i] = DataType.INT;
+                columnNames[i] = columnNameJoin;
+                i++;
+
+            }
+
+            ConstraintReference[] constraints = null;
+
+            // iterating over non-pk and non-association columns;
+            for(final Field field : columnFields){
 
                 Class<?> attributeType = field.getType();
-                if (attributeType == Integer.class){
+                if (attributeType == Integer.class || attributeType.getCanonicalName().equalsIgnoreCase("int")){
                     columnDataTypes[i] = DataType.INT;
                 }
                 else if (attributeType == Float.class){
@@ -174,11 +229,38 @@ public class MetadataLoader {
                     throw new NoAcceptableTypeException( "Attribute "+field.getName()+ " type is not accepted." );
                 }
 
+                // get constraints ought to be applied to this column, e.g., non-negative, not null, nullable
+                List<Annotation> constraintAnnotations = Arrays.stream(field.getAnnotations())
+                        .filter(p -> p.annotationType() == Positive.class ||
+                                     p.annotationType() == PositiveOrZero.class ||
+                                     p.annotationType() == NotNull.class ||
+                                     p.annotationType() == Null.class
+                        ).collect(Collectors.toList());
+
+                constraints = new ConstraintReference[constraintAnnotations.size()];
+                int nC = 0;
+                for(Annotation constraint : constraintAnnotations){
+                    String constraintName = constraint.annotationType().getName();
+                    switch(constraintName){
+                        case "javax.validation.constraints.PositiveOrZero": constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE_OR_ZERO,i); break;
+                        case "javax.validation.constraints.Positive": constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE,i); break;
+                        case "javax.validation.constraints.Null" : constraints[nC] = new ConstraintReference(ConstraintEnum.NULL,i); break;
+                        case "javax.validation.constraints.NotNull" : constraints[nC] = new ConstraintReference(ConstraintEnum.NOT_NULL,i); break;
+                        default: throw new UnsupportedConstraint( "Constraint "+constraintName+" not supported." );
+                    }
+                    nC++;
+                }
+
                 columnNames[i] = field.getName();
                 i++;
             }
 
-            Schema schema = new Schema(columnNames, columnDataTypes, pkFieldsStr);
+            Schema schema;
+            if(constraints != null) {
+                schema = new Schema(columnNames, columnDataTypes, pkFieldsStr, constraints);
+            } else {
+                schema = new Schema(columnNames, columnDataTypes, pkFieldsStr);
+            }
 
             Annotation[] annotations = tableClass.getAnnotations();
             for (Annotation an : annotations) {
@@ -300,8 +382,8 @@ public class MetadataLoader {
 
                         if(applicationMetadata.queueToEventMap.get(inputQueues[i]) == null){
                             applicationMetadata.queueToEventMap.put(inputQueues[i], (Class<IEvent>) inputTypes.get(i));
-                        } else {
-                            throw new MappingException("Error mapping. An input queue cannot be mapped to tow or more event types.");
+                        } else if( applicationMetadata.queueToEventMap.get(inputQueues[i]) != inputTypes.get(i) ) {
+                            throw new MappingException("Error mapping. An input queue cannot be mapped to two or more event types.");
                         }
 
                         List<DataOperationSignature> list = applicationMetadata.eventToOperationMap.get(inputQueues[i]);

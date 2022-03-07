@@ -3,7 +3,10 @@ package dk.ku.di.dms.vms.eShopOnContainers.entity;
 import dk.ku.di.dms.vms.annotations.VmsTable;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 
+import javax.annotation.Nonnegative;
 import javax.persistence.*;
+import javax.validation.Constraint;
+import javax.validation.constraints.PositiveOrZero;
 
 @Entity
 @VmsTable(name="cart_items")
@@ -21,6 +24,7 @@ public class CartItem extends AbstractEntity<Long> {
     private Float price;
 
     @Column
+    @PositiveOrZero
     private int qtd;
 
     @ManyToOne
