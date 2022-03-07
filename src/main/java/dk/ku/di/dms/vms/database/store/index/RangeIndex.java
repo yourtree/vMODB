@@ -5,18 +5,21 @@ import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Basic implementation of a range index
  * Given a column and a data type
  */
-public class RangeIndex<T> extends AbstractIndex<T> {
+public class RangeIndex<T extends Comparable> extends AbstractIndex<T> {
 
     // TODO a range index can also be created using a condition
 
-    final SortedMap<T,Collection<Row>> map;
+    private final SortedMap<T,Collection<Row>> map;
 
-    final int columnIndex;
+    private final int columnIndex;
+    
+    private long counter;
 
     public RangeIndex(final DataType dataType, final Table table, final int columnIndex){
         super(table, columnIndex);
@@ -57,13 +60,22 @@ public class RangeIndex<T> extends AbstractIndex<T> {
 
     @Override
     public Row retrieve(T key) {
-        // VERY BAD!!!! the semantics of the interface does not help.
-        return map.get(key).stream().findFirst().get();
+        // returns the first row
+        if(map.get(key).size() > 0){
+            return map.get(key).iterator().next();
+        }
+        return null;
+    }
+
+    @Override
+    public Collection<Row> retrieveCollection(T key) {
+        return map.get(key);
     }
 
     @Override
     public boolean retrieve(T key, Row outputRow) {
-        return false;
+        outputRow = this.retrieve(key);
+        return outputRow != null;
     }
 
     @Override
@@ -77,7 +89,7 @@ public class RangeIndex<T> extends AbstractIndex<T> {
         // for a range index, this is an expensive operation
         // all collections require being aggregated
         // this index should be avoided in case no index can be applied
-        return null; // TODO finish map.values().stream().collect(Collectors.toList());
+        return map.values().stream().flatMap(coll -> coll.stream()).collect(Collectors.toList());
     }
 
     @Override

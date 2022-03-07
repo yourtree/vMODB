@@ -9,7 +9,7 @@ import javax.persistence.MappedSuperclass;
 public abstract class AbstractEntityDefault extends AbstractEntity<Long> {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     public Long id;
 
     public Long getId() {
@@ -20,7 +20,6 @@ public abstract class AbstractEntityDefault extends AbstractEntity<Long> {
         this.id = id;
     }
 
-    // TODO Find a way to set hash code on object construction
     @Override
     public int hashCode() {
         return Long.hashCode(id);

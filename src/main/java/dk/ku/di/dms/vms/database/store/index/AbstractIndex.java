@@ -10,7 +10,7 @@ import java.util.Set;
 
 public abstract class AbstractIndex<K> {
 
-    private final IndexTypeEnum type;
+    private final IndexKeyTypeEnum keyType;
     private final int hashCode;
 
     // respective table of this index
@@ -20,10 +20,10 @@ public abstract class AbstractIndex<K> {
         this.table = table;
         if(columnsIndex.length == 1) {
             this.hashCode = columnsIndex[0];
-            this.type = IndexTypeEnum.SIMPLE;
+            this.keyType = IndexKeyTypeEnum.SIMPLE;
         } else {
             this.hashCode = Arrays.hashCode(columnsIndex);
-            this.type = IndexTypeEnum.COMPOSITE;
+            this.keyType = IndexKeyTypeEnum.COMPOSITE;
         }
     }
 
@@ -39,6 +39,8 @@ public abstract class AbstractIndex<K> {
 
     public abstract Row retrieve(K key);
 
+    public abstract Collection<Row> retrieveCollection(K key);
+
     public abstract boolean retrieve(K key, Row outputRow);
 
     public abstract int size();
@@ -47,6 +49,10 @@ public abstract class AbstractIndex<K> {
 
     /** information used by the planner to decide for the appropriate operator */
     public abstract IndexDataStructureEnum getType();
+
+    public IndexKeyTypeEnum getIndexKeyType(){
+        return this.keyType;
+    }
 
     public Table getTable(){
         return this.table;

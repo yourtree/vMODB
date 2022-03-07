@@ -1,13 +1,18 @@
 package dk.ku.di.dms.vms.eShopOnContainers.entity;
 
-import dk.ku.di.dms.vms.infra.AbstractEntityDefault;
+import dk.ku.di.dms.vms.annotations.VmsTable;
+import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
 import java.util.List;
 
 @Entity
-@Table(name="checkouts")
-public class Checkout extends AbstractEntityDefault {
+@VmsTable(name="checkouts")
+public class Checkout extends AbstractEntity<Long> {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    public Long id;
 
     @ManyToMany
     private List<Discount> discounts;

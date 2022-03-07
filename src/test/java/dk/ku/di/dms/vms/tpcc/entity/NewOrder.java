@@ -1,15 +1,15 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.annotations.VmsTable;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.IdClass;
-import javax.persistence.Table;
 import java.io.Serializable;
 
 @Entity
-@Table(name="new_orders")
+@VmsTable(name="new_orders")
 @IdClass(NewOrder.NewOrderId.class)
 public class NewOrder extends AbstractEntity<NewOrder.NewOrderId> {
 

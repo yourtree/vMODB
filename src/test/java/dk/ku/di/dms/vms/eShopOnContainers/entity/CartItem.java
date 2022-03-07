@@ -1,12 +1,17 @@
 package dk.ku.di.dms.vms.eShopOnContainers.entity;
 
-import dk.ku.di.dms.vms.infra.AbstractEntityDefault;
+import dk.ku.di.dms.vms.annotations.VmsTable;
+import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
 
 @Entity
-@Table(name="cart_items")
-public class CartItem extends AbstractEntityDefault {
+@VmsTable(name="cart_items")
+public class CartItem extends AbstractEntity<Long> {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    public Long id;
 
     @ManyToOne
     @JoinColumn(name = "product_id")

@@ -11,14 +11,14 @@ import dk.ku.di.dms.vms.database.store.index.HashIndex;
  */
 public final class HashIndexedTable extends Table {
 
-    public HashIndexedTable(final String name, final Schema schema, int... columnsIndex) {
+    public HashIndexedTable(final String name, final Schema schema) {
         super(name, schema);
-        this.primaryKeyIndex = new HashIndex(this, columnsIndex);
+        this.primaryKeyIndex = new HashIndex(this, schema.getPrimaryKeyColumns());
     }
 
-    public HashIndexedTable(final String name, final Schema schema, final int initialSize, int... columnsIndex) {
+    public HashIndexedTable(final String name, final Schema schema, final int initialSize) {
         super(name, schema);
-        this.primaryKeyIndex = new HashIndex(this, initialSize, columnsIndex);
+        this.primaryKeyIndex = new HashIndex(this, initialSize, schema.getPrimaryKeyColumns());
     }
 
     @Override

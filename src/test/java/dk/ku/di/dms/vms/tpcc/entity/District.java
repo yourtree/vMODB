@@ -1,12 +1,13 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.annotations.VmsTable;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
 import java.io.Serializable;
 
 @Entity
-@Table(name="district")
+@VmsTable(name="district")
 @IdClass(District.DistrictId.class)
 public class District extends AbstractEntity<District.DistrictId> {
 

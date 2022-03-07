@@ -24,9 +24,9 @@ public final class TestCommon {
         final Catalog catalog = new Catalog();
         String[] columnNames = { "col1", "col2" };
         DataType[] columnDataTypes = { DataType.INT, DataType.INT };
-        final Schema schema = new Schema( columnNames, columnDataTypes );
-        catalog.insertTable( new HashIndexedTable( "tb1", schema, new int[]{0} ));
-        catalog.insertTable( new HashIndexedTable( "tb2", schema, new int[]{0} ));
+        final Schema schema = new Schema( columnNames, columnDataTypes, new int[]{0} );
+        catalog.insertTable( new HashIndexedTable( "tb1", schema ));
+        catalog.insertTable( new HashIndexedTable( "tb2", schema ));
 
         IQueryBuilder builder = QueryBuilderFactory.init();
         IStatement sql = builder.select("col1, col2")
@@ -45,10 +45,10 @@ public final class TestCommon {
         final Catalog catalog = new Catalog();
         String[] columnNames = { "col1", "col2" };
         DataType[] columnDataTypes = { DataType.INT, DataType.INT };
-        final Schema schema = new Schema( columnNames, columnDataTypes );
-        catalog.insertTable( new HashIndexedTable( "tb1", schema, new int[]{0} ));
-        catalog.insertTable( new HashIndexedTable( "tb2", schema, new int[]{0} ));
-        catalog.insertTable( new HashIndexedTable( "tb3", schema, new int[]{0} ));
+        final Schema schema = new Schema( columnNames, columnDataTypes, new int[]{0} );
+        catalog.insertTable( new HashIndexedTable( "tb1", schema ));
+        catalog.insertTable( new HashIndexedTable( "tb2", schema ));
+        catalog.insertTable( new HashIndexedTable( "tb3", schema ));
 
         IQueryBuilder builder = QueryBuilderFactory.init();
         IStatement sql = builder.select("tb1.col1, tb2.col2")

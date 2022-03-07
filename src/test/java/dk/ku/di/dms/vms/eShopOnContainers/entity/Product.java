@@ -1,18 +1,24 @@
 package dk.ku.di.dms.vms.eShopOnContainers.entity;
 
-import dk.ku.di.dms.vms.infra.AbstractEntityDefault;
+import dk.ku.di.dms.vms.annotations.VmsIndex;
+import dk.ku.di.dms.vms.annotations.VmsTable;
+import dk.ku.di.dms.vms.infra.AbstractEntity;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Index;
-import javax.persistence.Table;
+import javax.persistence.*;
 import javax.validation.constraints.NotNull;
 
 @Entity
-@Table(name="products",
-        indexes = @Index(name = "uniqueSkuIndex", columnList = "sku", unique = true)
+@VmsTable(name="products",
+        indexes = {@VmsIndex(name = "uniqueSkuIndex", columnList = "sku", unique = true),
+                @VmsIndex(name="testCompositeIndex", columnList = "sku,price"),
+                @VmsIndex(name = "rangePriceIndex", columnList = "price", range = true)
+        }
 )
-public class Product extends AbstractEntityDefault {
+public class Product extends AbstractEntity<Long> {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    public Long id;
 
     @Column
     private Double price;

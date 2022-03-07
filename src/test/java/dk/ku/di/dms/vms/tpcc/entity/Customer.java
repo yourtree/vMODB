@@ -1,14 +1,13 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.annotations.VmsTable;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Objects;
 
 @Entity
-@Table(name="customer")
+@VmsTable(name="customer")
 @IdClass(Customer.CustomerId.class)
 public class Customer extends AbstractEntity<Customer.CustomerId> {
 

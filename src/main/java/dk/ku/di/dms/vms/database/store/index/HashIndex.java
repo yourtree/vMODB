@@ -40,6 +40,11 @@ public class HashIndex extends AbstractIndex<IKey> {
         return lookupMap.get(key);
     }
 
+    @Override
+    public Collection<Row> retrieveCollection(IKey key) {
+        return Collections.singletonList(lookupMap.get(key));
+    }
+
     public boolean retrieve(IKey key, Row outputRow){
         outputRow = lookupMap.getOrDefault(key, null);
         return outputRow == null;

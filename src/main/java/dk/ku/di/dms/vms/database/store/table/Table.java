@@ -7,7 +7,6 @@ import dk.ku.di.dms.vms.database.store.meta.Schema;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Basic building block
@@ -43,10 +42,11 @@ public abstract class Table {
 
     public abstract Row retrieve(IKey key);
 
-    public Table( final String name, final Schema schema) {
+    public Table(final String name, final Schema schema) {
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
+        this.indexes = new HashMap<>();
         this.indexList = new ArrayList<>();
     }
 
@@ -92,7 +92,12 @@ public abstract class Table {
     // logical key - column list in order that appear in the schema
     // physical key - column list in order of index definition
     public void addIndex( final IIndexKey indexLogicalKey, final IKey indexPhysicalKey, AbstractIndex<IKey> index ){
-        Map<IKey,AbstractIndex<IKey>> indexMap = this.indexes.getOrDefault( indexLogicalKey, new HashMap<>());
+        Map<IKey,AbstractIndex<IKey>> indexMap = this.indexes.get(indexLogicalKey);
+
+        if( indexMap == null ){
+            indexMap = new HashMap<>();
+        }
+
         indexMap.put( indexPhysicalKey, index );
         this.indexes.putIfAbsent( indexLogicalKey, indexMap );
         this.indexList.add( index );

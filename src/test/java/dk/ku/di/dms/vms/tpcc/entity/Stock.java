@@ -1,12 +1,13 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.annotations.VmsTable;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
 import java.io.Serializable;
 
 @Entity
-@Table(name="stock")
+@VmsTable(name="stock")
 @IdClass(Stock.StockId.class)
 public class Stock extends AbstractEntity<Stock.StockId> {
 

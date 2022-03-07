@@ -1,16 +1,18 @@
 package dk.ku.di.dms.vms.eShopOnContainers.entity;
 
-import dk.ku.di.dms.vms.infra.AbstractEntityDefault;
+import dk.ku.di.dms.vms.annotations.VmsTable;
+import dk.ku.di.dms.vms.infra.AbstractEntity;
 
-import javax.persistence.Entity;
-import javax.persistence.JoinColumn;
-import javax.persistence.OneToOne;
-import javax.persistence.Table;
+import javax.persistence.*;
 import javax.validation.constraints.Min;
 
 @Entity
-@Table(name="stock_item")
-public class StockItem extends AbstractEntityDefault {
+@VmsTable(name="stock_item")
+public class StockItem extends AbstractEntity<Long> {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    public Long id;
 
     @OneToOne
     @JoinColumn(name="product_id")

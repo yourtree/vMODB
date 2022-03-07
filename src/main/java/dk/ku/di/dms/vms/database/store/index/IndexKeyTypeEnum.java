@@ -1,15 +1,15 @@
 package dk.ku.di.dms.vms.database.store.index;
 
-public enum IndexTypeEnum {
+public enum IndexKeyTypeEnum {
 
     SIMPLE("SIMPLE"),
     COMPOSITE("COMPOSITE");
 
     public final String name;
 
-    IndexTypeEnum(){ this.name = name(); }
+    IndexKeyTypeEnum(){ this.name = name(); }
 
-    IndexTypeEnum(String name) {
+    IndexKeyTypeEnum(String name) {
         this.name = name;
     }
 

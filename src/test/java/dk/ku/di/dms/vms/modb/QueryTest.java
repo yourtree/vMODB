@@ -42,7 +42,7 @@ public class QueryTest {
         String[] itemColumns = { "i_id", "i_price", "i_name", "i_data" };
         DataType[] dataTypes = { DataType.INT, DataType.FLOAT, DataType.STRING, DataType.STRING  };
 
-        Schema schema = new Schema(itemColumns, dataTypes);
+        Schema schema = new Schema(itemColumns, dataTypes, new int[]{0});
 
         Table table = new HashIndexedTable("item", schema);
 
@@ -66,9 +66,9 @@ public class QueryTest {
         final Catalog catalog = new Catalog();
         String[] columnNames = { "col1", "col2" };
         DataType[] columnDataTypes = { DataType.INT, DataType.INT };
-        final Schema schema = new Schema( columnNames, columnDataTypes );
-        catalog.insertTable( new HashIndexedTable( "tb1", schema, new int[]{0} ));
-        catalog.insertTable( new HashIndexedTable( "tb2", schema, new int[]{0} ));
+        final Schema schema = new Schema( columnNames, columnDataTypes, new int[]{0} );
+        catalog.insertTable( new HashIndexedTable( "tb1", schema ));
+        catalog.insertTable( new HashIndexedTable( "tb2", schema ));
 
         try {
             // TODO move this test to query test

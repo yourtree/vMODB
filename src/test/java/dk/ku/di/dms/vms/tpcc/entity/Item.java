@@ -1,11 +1,12 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.annotations.VmsTable;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
 
 @Entity
-@Table(name="item")
+@VmsTable(name="item")
 public class Item extends AbstractEntity<Integer> {
 
     @Id

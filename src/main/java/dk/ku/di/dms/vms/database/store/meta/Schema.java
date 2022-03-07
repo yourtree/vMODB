@@ -12,7 +12,7 @@ import java.util.Map;
 public class Schema {
 
     // identification of columns that form the primary key. all tables must have a primary key
-    private int[] primaryKey;
+    private int[] primaryKeyColumns;
 
     private ForeignKeyReference[] foreignKeys;
 
@@ -34,7 +34,11 @@ public class Schema {
         return columnDataTypes[columnIndex];
     }
 
-    public Schema(String[] columnNames, DataType[] columnDataTypes) {
+    public int[] getPrimaryKeyColumns(){
+        return this.primaryKeyColumns;
+    }
+
+    public Schema(final String[] columnNames, final DataType[] columnDataTypes, final int[] primaryKeyColumns) {
         this.columnNames = columnNames;
         this.columnDataTypes = columnDataTypes;
         int size = columnNames.length;
@@ -43,6 +47,15 @@ public class Schema {
         for(int i = 0; i < size; i++){
             columnPositionMap.put(columnNames[i],i);
         }
+        this.primaryKeyColumns = primaryKeyColumns;
+    }
+
+    public int[] buildColumnPositionArray(final String[] columnList){
+        final int[] columnPosArray = new int[ columnList.length ];
+        for(int j = 0; j < columnList.length; j++){
+            columnPosArray[j] = getColumnPosition( columnList[j] );
+        }
+        return columnPosArray;
     }
 
 }

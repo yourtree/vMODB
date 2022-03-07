@@ -1,16 +1,17 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
-import dk.ku.di.dms.vms.infra.AbstractEntityDefault;
+import dk.ku.di.dms.vms.annotations.VmsTable;
+import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
 
 @Entity
-@Table(name="history")
-public class History extends AbstractEntityDefault {
+@VmsTable(name="history")
+public class History extends AbstractEntity<Long> {
 
-//    @Id
-//    @GeneratedValue(AUTO)
-//    private Long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    public Long id;
 
     @Column
     public Integer h_c_id;

@@ -1,22 +1,23 @@
 package dk.ku.di.dms.vms.metadata;
 
-import dk.ku.di.dms.vms.annotations.Inbound;
-import dk.ku.di.dms.vms.annotations.Outbound;
-import dk.ku.di.dms.vms.annotations.Transactional;
+import dk.ku.di.dms.vms.annotations.*;
 import dk.ku.di.dms.vms.database.api.modb.RepositoryFacade;
 import dk.ku.di.dms.vms.database.catalog.Catalog;
+import dk.ku.di.dms.vms.database.store.common.CompositeKey;
+import dk.ku.di.dms.vms.database.store.common.IKey;
+import dk.ku.di.dms.vms.database.store.common.SimpleKey;
+import dk.ku.di.dms.vms.database.store.index.HashIndex;
+import dk.ku.di.dms.vms.database.store.index.IIndexKey;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
+import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;
 import dk.ku.di.dms.vms.event.IEvent;
 import dk.ku.di.dms.vms.exception.MappingException;
 import dk.ku.di.dms.vms.operational.DataOperationSignature;
 import org.reflections.Configuration;
 import org.reflections.Reflections;
 
-import org.reflections.scanners.FieldAnnotationsScanner;
-import org.reflections.scanners.MethodAnnotationsScanner;
-import org.reflections.scanners.SubTypesScanner;
-import org.reflections.scanners.TypeAnnotationsScanner;
+import org.reflections.scanners.*;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
 
@@ -29,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.persistence.Column;
+import javax.persistence.Id;
 import javax.persistence.Index;
 import javax.persistence.Table;
 
@@ -40,7 +42,7 @@ public class MetadataLoader {
 
     public ApplicationMetadata load(String forPackage) throws
             ClassNotFoundException, InvocationTargetException,
-            InstantiationException, IllegalAccessException, MappingException {
+            InstantiationException, IllegalAccessException, MappingException, NoPrimaryKeyFoundException, NoAcceptableTypeException {
 
         ApplicationMetadata applicationMetadata = new ApplicationMetadata();
 
@@ -55,10 +57,10 @@ public class MetadataLoader {
         Configuration reflectionsConfig = new ConfigurationBuilder()
                 .setUrls(ClasspathHelper.forPackage(forPackage)) //,
                 .setScanners(
-                        new SubTypesScanner(),
-                        new TypeAnnotationsScanner(),
-                        new MethodAnnotationsScanner(),
-                        new FieldAnnotationsScanner()
+                        Scanners.SubTypes,
+                        Scanners.TypesAnnotated,
+                        Scanners.MethodsAnnotated,
+                        Scanners.FieldsAnnotated
                 );
 
         Reflections reflections = new Reflections(reflectionsConfig);
@@ -72,32 +74,81 @@ public class MetadataLoader {
 
         // get all fields annotated with column
         Set<Field> allEntityFields = reflections.get(
-                FieldsAnnotated.with( Column.class )
+                FieldsAnnotated.with( Column.class )// .add(FieldsAnnotated.with(Id.class))
                 .as(Field.class, reflectionsConfig.getClassLoaders())
         );
 
-        // group by entity type
+        // group by class
         Map<Class<?>,List<Field>> map = allEntityFields.stream()
                 .collect( Collectors.groupingBy( Field::getDeclaringClass,
                 Collectors.toList()) );
 
+        // get all fields annotated with column
+        Set<Field> allPrimaryKeyFields = reflections.get(
+                FieldsAnnotated.with( Id.class )
+                        .as(Field.class, reflectionsConfig.getClassLoaders())
+        );
+
+        // group by entity type
+        Map<Class<?>,List<Field>> pkMap = allPrimaryKeyFields.stream()
+                .collect( Collectors.groupingBy( Field::getDeclaringClass,
+                        Collectors.toList()) );
+
+        //  should we keep metadata about associations? the query processing is oblivious to that
+        //      but, without enforcing cardinality of relationships, the developer can write erroneous code
+
         for(final Map.Entry<Class<?>,List<Field>> entry : map.entrySet()){
 
-
-
-            Class<?> entity = entry.getKey();
-
-            if( entity.getCanonicalName().contains("Product") ){
-
-
-
+            Class<?> tableClass = entry.getKey();
             List<Field> fields = entry.getValue();
 
             // build schema of each table
+            // we build the schema in order to lookup the fields and define the pk hash index
+            List<Field> pkFields = pkMap.get( tableClass );
 
-            final String[] columnNames = new String[fields.size()];
-            final DataType[] columnDataTypes = new DataType[fields.size()];
+            if(pkFields == null || pkFields.size() == 0){
+                throw new NoPrimaryKeyFoundException("Table class "+tableClass.getCanonicalName()+" does not have a primary key.");
+            }
+
+            int totalNumberOfFields = pkFields.size() + fields.size();
+
+            final String[] columnNames = new String[totalNumberOfFields];
+            final DataType[] columnDataTypes = new DataType[totalNumberOfFields];
+
+            int[] pkFieldsStr = new int[pkFields.size()];
+
+            // iterating over pk columns
             int i = 0;
+            for(final Field field : pkFields){
+                Class<?> attributeType = field.getType();
+                if (attributeType == Integer.class){
+                    columnDataTypes[i] = DataType.INT;
+                }
+                else if (attributeType == Float.class){
+                    columnDataTypes[i] = DataType.FLOAT;
+                }
+                else if (attributeType == Double.class){
+                    columnDataTypes[i] = DataType.DOUBLE;
+                }
+                else if (attributeType == Character.class){
+                    columnDataTypes[i] = DataType.CHAR;
+                }
+                else if (attributeType == String.class){
+                    columnDataTypes[i] = DataType.STRING;
+                }
+                else if (attributeType == Long.class){
+                    columnDataTypes[i] = DataType.LONG;
+                }
+                else {
+                    throw new NoAcceptableTypeException( "Attribute "+field.getName()+ " type is not accepted." );
+                }
+                pkFieldsStr[i] = i;
+                columnNames[i] = field.getName();
+                i++;
+            }
+
+            // iterating over non-pk columns
+            // int i = pkFields.size();
             for(final Field field : fields){
 
                 Class<?> attributeType = field.getType();
@@ -116,36 +167,73 @@ public class MetadataLoader {
                 else if (attributeType == String.class){
                     columnDataTypes[i] = DataType.STRING;
                 }
+                else if (attributeType == Long.class){
+                    columnDataTypes[i] = DataType.LONG;
+                }
+                else {
+                    throw new NoAcceptableTypeException( "Attribute "+field.getName()+ " type is not accepted." );
+                }
 
                 columnNames[i] = field.getName();
-
+                i++;
             }
 
-            // check the indexes
-            // https://www.baeldung.com/jpa-indexes
+            Schema schema = new Schema(columnNames, columnDataTypes, pkFieldsStr);
 
-            Annotation[] annotations = entity.getAnnotations();
+            Annotation[] annotations = tableClass.getAnnotations();
             for (Annotation an : annotations) {
                 // the developer may need to use other annotations
-                if(an instanceof Table){
-                    Index[] indexes = ((Table) an).indexes();
-                    for( Index index : indexes ){
+                if(an instanceof VmsTable){
+
+                    // table name
+                    String tableName = ((VmsTable) an).name();
+                    HashIndexedTable table = new HashIndexedTable( tableName, schema );
+
+                    // table indexes
+                    VmsIndex[] indexes = ((VmsTable) an).indexes();
+                    for( VmsIndex index : indexes ){
                         String[] columnList = index.columnList().split(",\\s|,");
+
                         // TODO finish
+                        int[] columnPosArray = schema.buildColumnPositionArray( columnList );
+
+                        IIndexKey logicalIndexKey;
+                        IKey physicalIndexKey;
+                        if(columnList.length > 1){
+                            physicalIndexKey = new CompositeKey(columnPosArray);
+                            int[] columnPosArrayInColumnPositionOrder = Arrays.stream(columnPosArray).sorted().toArray();
+                            logicalIndexKey = new CompositeKey( columnPosArrayInColumnPositionOrder );
+                        }else{
+                            physicalIndexKey = new SimpleKey(columnPosArray[0]);
+                            logicalIndexKey = new SimpleKey(columnPosArray[0]);;
+                        }
+
+                        if(index.unique()){
+
+                            // get column position in schema
+
+                            HashIndex hashIndex = new HashIndex(table, columnPosArray);
+                            table.addIndex( logicalIndexKey, physicalIndexKey, hashIndex );
+
+                        } else if(index.range()) {
+                            // no range indexes in JPA....
+                        } else {
+                            // btree...
+                        }
+
                     }
 
-                    // TODO get id annotation, which becomes the primary key index
-
-                    break;
+                    catalog.insertTable(table);
+                    break; // the only important annotation is vms table, thus we can break the iteration
                 }
+
             }
 
-            Schema schema = new Schema(columnNames, columnDataTypes);
-
-
-            // TODO finish. set pk and indexes
-            }
         }
+
+
+        // TODO finish --
+
 
         /* TODO look at this. we should provide this implementation
         SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
@@ -243,5 +331,7 @@ public class MetadataLoader {
         return applicationMetadata;
 
     }
+
+
 
 }
