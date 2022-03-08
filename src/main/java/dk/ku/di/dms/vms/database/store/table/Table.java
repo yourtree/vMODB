@@ -22,7 +22,7 @@ public abstract class Table {
 
     protected final Schema schema;
 
-    // for fast path on planner
+    // all tables must have a pk. besides, used for fast path on planner
     protected AbstractIndex<IKey> primaryKeyIndex;
 
     // Other indexes, hashed by the column set in order of the schema. The IKey is indexed by the order of columns in the index
@@ -30,17 +30,6 @@ public abstract class Table {
 
     // just a cached list of the indexes map
     protected List<AbstractIndex<IKey>> indexList;
-
-    public abstract int size();
-
-    /** no primary index */
-    public abstract boolean upsert(Row row) throws Exception;
-
-    public abstract boolean upsert(IKey key, Row row);
-
-    public abstract boolean delete(IKey key);
-
-    public abstract Row retrieve(IKey key);
 
     public Table(final String name, final Schema schema) {
         this.name = name;

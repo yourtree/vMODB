@@ -7,6 +7,9 @@ import java.util.function.Supplier;
 
 public class PlanNode {
 
+    // applies only to projections to data classes
+    // public Consumer<Object> projector;
+
     // applies to any execution
     public Supplier<OperatorResult> supplier;
 
@@ -28,6 +31,8 @@ public class PlanNode {
     public PlanNode(Supplier<OperatorResult> supplier){
         this.supplier = supplier;
     }
+
+    public PlanNode(){}
 
     public PlanNode(Supplier<OperatorResult> supplier,
                     Consumer<CompletableFuture<OperatorResult>> consumerFuture,

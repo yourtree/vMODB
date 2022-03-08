@@ -1,5 +1,10 @@
 package dk.ku.di.dms.vms.database.query.planner.node.filter;
 
+/**
+ * Basic interface for filtering values of different types
+ * See {@link FilterBuilder} to understand how these are built
+ * @param <T>
+ */
 public interface IFilter<T> {
 
     default boolean eval(T x) {
@@ -10,6 +15,9 @@ public interface IFilter<T> {
         return false;
     }
 
+    /*
+     * For IN clause
+     */
     default boolean eval(T x, T... y){
         return false;
     }

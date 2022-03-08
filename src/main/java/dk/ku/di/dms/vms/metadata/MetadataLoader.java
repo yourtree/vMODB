@@ -6,7 +6,7 @@ import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.common.IKey;
 import dk.ku.di.dms.vms.database.store.common.SimpleKey;
-import dk.ku.di.dms.vms.database.store.index.HashIndex;
+import dk.ku.di.dms.vms.database.store.index.UniqueHashIndex;
 import dk.ku.di.dms.vms.database.store.index.IIndexKey;
 import dk.ku.di.dms.vms.database.store.meta.*;
 import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;
@@ -294,7 +294,7 @@ public class MetadataLoader {
 
                             // get column position in schema
 
-                            HashIndex hashIndex = new HashIndex(table, columnPosArray);
+                            UniqueHashIndex hashIndex = new UniqueHashIndex(table, columnPosArray);
                             table.addIndex( logicalIndexKey, physicalIndexKey, hashIndex );
 
                         } else if(index.range()) {

@@ -2,7 +2,11 @@ package dk.ku.di.dms.vms.database.api.modb;
 
 import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
+import dk.ku.di.dms.vms.database.query.executor.ConcurrentQueryExecutor;
+import dk.ku.di.dms.vms.database.query.executor.SequentialQueryExecutor;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
+import dk.ku.di.dms.vms.database.query.planner.PlanNode;
+import dk.ku.di.dms.vms.database.query.planner.Planner;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 import dk.ku.di.dms.vms.infra.IRepository;
 import dk.ku.di.dms.vms.proxy.DynamicInvocationHandler;
@@ -20,8 +24,13 @@ public final class RepositoryFacade implements InvocationHandler {
 
     private final Class<? extends IRepository<?,?>> repositoryClazz;
 
-    final private Class<?> idClazz;
-    final private Class<? extends AbstractEntity<?>> entityClazz;
+    private final Class<?> idClazz;
+
+    private final Class<? extends AbstractEntity<?>> entityClazz;
+
+    // DBMS components
+    private Analyzer analyzer;
+    private Planner planner;
 
     public RepositoryFacade(final Class<? extends IRepository<?,?>> repositoryClazz){
         this.repositoryClazz = repositoryClazz;
@@ -35,8 +44,13 @@ public final class RepositoryFacade implements InvocationHandler {
         this.idClazz = (Class<?>) types[0];
     }
 
-    // manage the connection of each method, making sure all connections are released
-    //  at the end of the method
+    public void setAnalyzer(final Analyzer analyzer){
+        this.analyzer = analyzer;
+    }
+
+    public void setPlanner(final Planner planner){
+        this.planner = planner;
+    }
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args)
@@ -45,7 +59,6 @@ public final class RepositoryFacade implements InvocationHandler {
 
         String methodName = method.getName();
 
-
         switch(methodName){
 
             case "insert": {
@@ -53,19 +66,18 @@ public final class RepositoryFacade implements InvocationHandler {
                 break;
             }
             case "fetch": {
-                // TODO dispatch to analyzer passing the clazz param
 
-//                Analyzer analyzer = new Analyzer();
-//                QueryTree queryTree = analyzer.analyze( (IStatement) args[0], (Class<?>) args[1]);
+                // dispatch to analyzer passing the clazz param
+                QueryTree queryTree = analyzer.analyze( (IStatement) args[0], (Class<?>) args[1]);
+                PlanNode node = planner.plan( queryTree );
+                SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(node);
 
-                break;
+                return queryExecutor.get();
+
             }
             default: throw new Exception("Unknown repository operation.");
         }
 
-//        JsonObject jsonObject = new JsonObject();
-//        jsonObject.add("result",new JsonPrimitive("success"));
-//        return jsonObject;
         return null;
     }
 }

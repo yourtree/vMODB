@@ -54,9 +54,4 @@ public class Customer extends AbstractEntity<Customer.CustomerId> {
     @Column
     public Float c_ytd_payment;
 
-//    @Override
-//    public int hashCode() {
-//        return Objects.hash( this.c_id,  this.c_d_id, this.c_w_id);
-//    }
-
 }

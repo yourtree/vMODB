@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 import dk.ku.di.dms.vms.database.store.common.IKey;
+import dk.ku.di.dms.vms.database.store.index.UnsupportedIndexOperationException;
 import dk.ku.di.dms.vms.database.store.row.Row;
 
 import java.util.Collection;
@@ -31,7 +32,14 @@ public class HashJoin extends AbstractJoin {
     @Override
     public OperatorResult get() {
 
-        Set<Map.Entry<IKey,Row>> entries = innerIndex.entrySet();
+        Set<Map.Entry<IKey,Row>> entries = null;
+        try {
+            entries = innerIndex.entrySet();
+        } catch (UnsupportedIndexOperationException e) {
+            e.printStackTrace();
+            return null;
+        }
+
         for(final Map.Entry<IKey,Row> rowEntry : entries){
 
             IKey currRowKey = rowEntry.getKey();
@@ -75,7 +83,7 @@ public class HashJoin extends AbstractJoin {
 
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked","rawtypes"})
     private boolean check(final Row row,
                           final IFilter<?>[] filters,
                           final int[] filterColumns,

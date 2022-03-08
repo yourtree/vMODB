@@ -11,6 +11,9 @@ import java.util.Set;
 public abstract class AbstractIndex<K> {
 
     private final IndexKeyTypeEnum keyType;
+
+    private final int[] columns;
+
     private final int hashCode;
 
     // respective table of this index
@@ -18,6 +21,7 @@ public abstract class AbstractIndex<K> {
 
     public AbstractIndex(final Table table, final int... columnsIndex) {
         this.table = table;
+        this.columns = columnsIndex;
         if(columnsIndex.length == 1) {
             this.hashCode = columnsIndex[0];
             this.keyType = IndexKeyTypeEnum.SIMPLE;
@@ -58,6 +62,10 @@ public abstract class AbstractIndex<K> {
         return this.table;
     }
 
-    public abstract Set<Map.Entry<K,Row>> entrySet();
+    public abstract Set<Map.Entry<K,Row>> entrySet() throws UnsupportedIndexOperationException;
+
+    public int[] getColumns(){
+        return this.columns;
+    }
 
 }

@@ -5,13 +5,19 @@ import static org.junit.Assert.assertTrue;
 
 import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.RepositoryFacade;
+import dk.ku.di.dms.vms.database.catalog.Catalog;
+import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
+import dk.ku.di.dms.vms.database.query.planner.Planner;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
 import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
+import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
+import dk.ku.di.dms.vms.database.store.table.Table;
 import dk.ku.di.dms.vms.eShopOnContainers.events.CheckoutRequest;
 import dk.ku.di.dms.vms.exception.MappingException;
 import dk.ku.di.dms.vms.metadata.ApplicationMetadata;
 import dk.ku.di.dms.vms.metadata.MetadataLoader;
+import dk.ku.di.dms.vms.modb.TestCommon;
 import dk.ku.di.dms.vms.operational.DataOperationExecutor;
 import dk.ku.di.dms.vms.event.EventRepository;
 import dk.ku.di.dms.vms.eShopOnContainers.events.AddProductRequest;
@@ -117,10 +123,26 @@ public class AppTest
 
     @Test
     public void testParameterizedCall() throws BuilderException {
+
+        RepositoryFacade facade = new RepositoryFacade( IProductRepository.class );
+
+        Catalog catalog = TestCommon.getDefaultCatalog();
+        Analyzer analyzer = new Analyzer( catalog );
+        facade.setAnalyzer(analyzer);
+        Planner planner = new Planner();
+        facade.setPlanner( planner );
+
+        Table table = catalog.getTable("customer");
+
+        CompositeKey key = new CompositeKey(1L,1,1);
+        Row row = new Row(1L,1,1,1F,"","",1F,1F);
+
+        table.getPrimaryKeyIndex().upsert(key, row);
+
         IProductRepository proxyInstance = (IProductRepository) Proxy.newProxyInstance(
                 AppTest.class.getClassLoader(),
                 new Class[] { IProductRepository.class },
-                new RepositoryFacade( IProductRepository.class ));
+                facade);
 
         DummyLogic logic = new DummyLogic(proxyInstance);
 

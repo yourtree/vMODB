@@ -30,4 +30,11 @@ public class Catalog {
         return true;
     }
 
+    public boolean insertTables(Table... tables){
+        for(Table table : tables) {
+            tableMap.put(table.getName(), table);
+        }
+        return true;
+    }
+
 }

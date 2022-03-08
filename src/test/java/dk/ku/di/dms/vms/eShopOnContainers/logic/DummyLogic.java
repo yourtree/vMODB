@@ -56,7 +56,7 @@ public class DummyLogic {
                 .from("customer")
                 .where("c_w_id", EQUALS, 1)
                 .and("c_d_id", EQUALS, 1)
-                .and("c_id", EQUALS, 1)
+                .and("c_id", EQUALS, 1L) // FIXME analyzer must check the type!!!!
                 .build();
 
         CustomerInfoDTO customerInfo = productRepository.<CustomerInfoDTO>fetch(sql, CustomerInfoDTO.class);

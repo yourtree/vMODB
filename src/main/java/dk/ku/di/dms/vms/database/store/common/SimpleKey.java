@@ -15,4 +15,9 @@ public class SimpleKey implements IKey, IIndexKey {
         return value.hashCode();
     }
 
+    @Override
+    public boolean equals(Object key){
+        return this.hashCode() == key.hashCode();
+    }
+
 }

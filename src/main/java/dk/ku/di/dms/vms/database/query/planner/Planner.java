@@ -4,13 +4,14 @@ import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum;
-import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilderException;
-import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
-import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
-import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilder;
+import dk.ku.di.dms.vms.database.query.planner.node.filter.*;
 import dk.ku.di.dms.vms.database.query.planner.node.join.*;
+import dk.ku.di.dms.vms.database.query.planner.node.projection.Projector;
+import dk.ku.di.dms.vms.database.query.planner.node.scan.IndexScan;
 import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
+import dk.ku.di.dms.vms.database.store.common.CompositeKey;
+import dk.ku.di.dms.vms.database.store.common.SimpleKey;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 import dk.ku.di.dms.vms.database.store.index.IndexDataStructureEnum;
 import dk.ku.di.dms.vms.database.store.common.IKey;
@@ -66,14 +67,6 @@ public final class Planner {
                                 Collectors.groupingByConcurrent( WherePredicate::getTable,
                                         Collectors.toList())
                         );
-
-        // TODO annotate entities with index and read the index annotations
-        // https://www.baeldung.com/jpa-indexes
-        // https://dba.stackexchange.com/questions/253037/postgres-using-seq-scan-with-filter-on-indexed-column-exists-on-related-table
-
-        // TODO FINISH usually the projection is pushed down in disk-based DBMS,
-        //  but here I will just create the final projection when I need to
-        //  deliver the result back to the application
 
         final Map<Table,List<AbstractJoin>> joinsPerTable = new HashMap<>();
         final Map<Table,List<AbstractJoin>> auxJoinsPerTable = new HashMap<>();
@@ -231,7 +224,10 @@ public final class Planner {
                 planNodeToReturn = leaf;
 
                 // now build the projection
-                buildProjection( queryTree, headers.get(0) );
+                PlanNode projection = buildProjection( queryTree );
+                projection.left = planNodeToReturn;
+                planNodeToReturn.father = projection;
+
 
             } else {
                 // cartesian product
@@ -255,19 +251,66 @@ public final class Planner {
 
             final List<WherePredicate> wherePredicates = entry.getValue();
             final Table currTable = entry.getKey();
-            final FilterInfo filterInfo = buildFilterInfo( wherePredicates );
+
+            int[] filterColumns = wherePredicates.stream().mapToInt( WherePredicate::getColumnPosition ).toArray();
 
             // I need the index information to decide which operator, e.g., index scan
-            final Optional<AbstractIndex<IKey>> optimalIndexOptional = findOptimalIndex( currTable, filterInfo.filterColumns );
+            final Optional<AbstractIndex<IKey>> optimalIndexOptional = findOptimalIndex( currTable, filterColumns );
             if(optimalIndexOptional.isPresent()){
                 AbstractIndex<IKey> optimalIndex = optimalIndexOptional.get();
                 if( optimalIndex.getType() == IndexDataStructureEnum.HASH) {
-                    // TODO finish new IndexScan()
+                    // what columns are not subject for hash probing?
+                    int[] indexColumns = optimalIndex.getColumns();
+
+                    Object[] indexParams = new Object[indexColumns.length];
+
+                    // build a new list of where predicates without the columns involved in the index,
+                    // since the index will only lead to the interested values
+                    List<WherePredicate> wherePredicatesNoIndex = new ArrayList<>();
+                    // FIXME naive n^2 ... indexColumns can be a map
+                    boolean found = false;
+                    int idxParamPos = 0;
+                    for(WherePredicate wherePredicate : wherePredicates){
+                        for(int indexColumn : indexColumns){
+                            if( indexColumn == wherePredicate.columnReference.columnPosition ){
+                                indexParams[idxParamPos] = wherePredicate.value;
+                                idxParamPos++;
+                                found = true;
+                                break;
+                            }
+                        }
+                        if(!found) wherePredicatesNoIndex.add( wherePredicate );
+                        found = false;
+                    }
+
+                    // build hash probe
+                    // the key to probe in the hash index
+                    IKey probeKey;
+                    if (indexColumns.length > 1) {
+                        probeKey = new CompositeKey(indexParams);
+                    } else {
+                        probeKey = new SimpleKey(indexParams[0]);
+                    }
+
+                    IndexScan indexScan;
+                    if(wherePredicatesNoIndex.size() == 0){
+                        indexScan = new IndexScan( optimalIndex, probeKey );
+                    } else {
+                        final FilterInfo filterInfo = buildFilterInfo(wherePredicates);
+                        indexScan = new IndexScan(  optimalIndex, probeKey, filterInfo );
+                    }
+
+                    planNodeToReturn = new PlanNode(indexScan);
+                    PlanNode projection = buildProjection( queryTree );
+                    projection.left = planNodeToReturn;
+                    planNodeToReturn.father = projection;
 
                 } else {
+                    final FilterInfo filterInfo = buildFilterInfo( wherePredicates );
                     final SequentialScan seqScan = new SequentialScan(optimalIndex, filterInfo);
                 }
             } else {
+                final FilterInfo filterInfo = buildFilterInfo( wherePredicates );
                 final SequentialScan seqScan = new SequentialScan(currTable.getPrimaryKeyIndex(), filterInfo);
             }
 
@@ -276,23 +319,23 @@ public final class Planner {
         // TODO think about parallel seq scan,
         // SequentialScan sequentialScan = new SequentialScan( filterList, table);
 
-
-
         return planNodeToReturn;
     }
 
-    private void buildProjection(final QueryTree queryTree, final PlanNode headerNode){
+    private PlanNode buildProjection(final QueryTree queryTree){
+
+        PlanNode projectionPlanNode = null;
 
         // case where we need to convert to a class type
         if(queryTree.returnType != null){
-
-
-
+            Projector projector = new Projector( queryTree.returnType, queryTree.projections );
+            projectionPlanNode = new PlanNode();
+            projectionPlanNode.consumer = projector;
         } else {
             // simply a return containing rows
             // TODO later
         }
-
+        return projectionPlanNode;
     }
 
     private FilterInfo buildFilterInfo( final List<WherePredicate> wherePredicates ) throws FilterBuilderException {
@@ -406,10 +449,11 @@ public final class Planner {
         Map<Integer,int[]> hashCodeMap = new HashMap<>(combinations.size());
 
         for(final int[] arr : combinations){
-            if( arr.length == 1 )
-                hashCodeMap.put( arr[0], arr );
-            else
-                hashCodeMap.put( Arrays.hashCode( arr ), arr );
+            if( arr.length == 1 ) {
+                hashCodeMap.put(arr[0], arr);
+            } else {
+                hashCodeMap.put(Arrays.hashCode(arr), arr);
+            }
         }
         
         // for each index, check if the column set matches
@@ -436,7 +480,7 @@ public final class Planner {
             if( columns != null ){
 
                 // optimistic belief that the number of columns would lead to higher pruning of records
-                float heuristicSelectivity = table.size() / columns.length;
+                float heuristicSelectivity = table.getPrimaryKeyIndex().size() / columns.length;
 
                 // try next index then
                 if(heuristicSelectivity > bestSelectivity) continue;

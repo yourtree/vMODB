@@ -8,9 +8,11 @@ import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
+import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
 import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;
+import dk.ku.di.dms.vms.database.store.table.Table;
 
 import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
 
@@ -18,6 +20,29 @@ import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQ
  * Common set of methods for two or more tests (e.g., {@link PlannerTest} and {@link ExecutorTest}
  */
 public final class TestCommon {
+
+    public static Catalog getDefaultCatalog(){
+
+        // item
+        String[] itemColumns = { "i_id", "i_price", "i_name", "i_data" };
+        DataType[] itemDataTypes = { DataType.INT, DataType.FLOAT, DataType.STRING, DataType.STRING  };
+        Schema itemSchema = new Schema(itemColumns, itemDataTypes, new int[]{0});
+        Table itemTable = new HashIndexedTable("item", itemSchema);
+
+        // customer
+        String[] customerColumns = { "c_id", "c_d_id", "c_w_id", "c_discount", "c_last", "c_credit", "c_balance", "c_ytd_payment" };
+        DataType[] customerDataTypes = { DataType.LONG, DataType.INT, DataType.INT,
+                DataType.FLOAT, DataType.STRING, DataType.STRING, DataType.FLOAT, DataType.FLOAT };
+        Schema customerSchema = new Schema(customerColumns, customerDataTypes, new int[]{0,1,2});
+        Table customerTable = new HashIndexedTable("customer", customerSchema);
+
+        Catalog catalog = new Catalog();
+
+        catalog.insertTables(itemTable,customerTable);
+
+        return catalog;
+
+    }
 
     public static QueryTree getSimpleQueryTree() throws BuilderException, AnalyzerException {
 

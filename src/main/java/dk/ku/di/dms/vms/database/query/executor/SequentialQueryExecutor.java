@@ -13,7 +13,6 @@ public class SequentialQueryExecutor implements Supplier<OperatorResult> {
         this.node = node;
     }
 
-
     /**
      * while there are remaining tasks, continue in a loop
      * to schedule the tasks when their dependencies have been
@@ -38,8 +37,9 @@ public class SequentialQueryExecutor implements Supplier<OperatorResult> {
 
             if(node == null) break;
 
-            node.consumer.accept( result );
-
+            if(node.consumer != null) {
+                node.consumer.accept(result);
+            }
         }
 
         return result;

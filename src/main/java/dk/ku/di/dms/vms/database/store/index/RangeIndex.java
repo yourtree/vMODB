@@ -61,7 +61,7 @@ public class RangeIndex<T extends Comparable> extends AbstractIndex<T> {
     @Override
     public Row retrieve(T key) {
         // returns the first row
-        if(map.get(key).size() > 0){
+        if(map.get(key) != null && map.get(key).size() > 0){
             return map.get(key).iterator().next();
         }
         return null;
@@ -89,7 +89,7 @@ public class RangeIndex<T extends Comparable> extends AbstractIndex<T> {
         // for a range index, this is an expensive operation
         // all collections require being aggregated
         // this index should be avoided in case no index can be applied
-        return map.values().stream().flatMap(coll -> coll.stream()).collect(Collectors.toList());
+        return map.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
     }
 
     @Override
@@ -101,6 +101,5 @@ public class RangeIndex<T extends Comparable> extends AbstractIndex<T> {
     public Set<Map.Entry<T, Row>> entrySet() {
         return null;
     }
-
 
 }

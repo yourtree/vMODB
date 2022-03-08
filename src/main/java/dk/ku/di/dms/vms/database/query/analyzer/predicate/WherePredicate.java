@@ -27,4 +27,9 @@ public class WherePredicate {
         return columnReference.table;
     }
 
+
+    public Integer getColumnPosition() {
+        return columnReference.columnPosition;
+    }
+
 }

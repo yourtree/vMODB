@@ -11,15 +11,15 @@ import java.util.Collection;
 public final class FilterInfo {
 
     /** The actual predicates */
-    public final IFilter[] filters;
+    public final IFilter<?>[] filters;
 
-    /** The columns to probe */
+    /** The columns to filter */
     public final int[] filterColumns;
 
-    /** The respective params of the predicates */
+    /** The respective parameters of the predicates */
     public final Collection<IdentifiableNode<Object>> filterParams;
 
-    public FilterInfo(IFilter[] filters, int[] filterColumns, Collection<IdentifiableNode<Object>> filterParams) {
+    public FilterInfo(IFilter<?>[] filters, int[] filterColumns, Collection<IdentifiableNode<Object>> filterParams) {
         this.filters = filters;
         this.filterColumns = filterColumns;
         this.filterParams = filterParams;

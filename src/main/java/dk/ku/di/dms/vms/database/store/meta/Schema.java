@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.database.store.meta;
 
 import dk.ku.di.dms.vms.database.store.table.Table;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 

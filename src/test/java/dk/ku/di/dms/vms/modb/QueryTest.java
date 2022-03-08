@@ -37,21 +37,14 @@ public class QueryTest {
     @BeforeClass
     public static void buildCatalog(){
 
+        catalog = TestCommon.getDefaultCatalog();
+
+        Table table = catalog.getTable("item");
+
         CompositeKey key = new CompositeKey(3,2L);
-
-        String[] itemColumns = { "i_id", "i_price", "i_name", "i_data" };
-        DataType[] dataTypes = { DataType.INT, DataType.FLOAT, DataType.STRING, DataType.STRING  };
-
-        Schema schema = new Schema(itemColumns, dataTypes, new int[]{0});
-
-        Table table = new HashIndexedTable("item", schema);
-
-        catalog = new Catalog();
-        catalog.insertTable(table);
-
         Row row = new Row(3,2L,"HAHA","HEHE");
 
-        table.upsert( key, row);
+        table.getPrimaryKeyIndex().upsert(key, row);
 
     }
 
