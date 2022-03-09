@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.executor.ConcurrentQueryExecutor;
 import dk.ku.di.dms.vms.database.query.executor.SequentialQueryExecutor;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
+import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
@@ -72,7 +73,9 @@ public final class RepositoryFacade implements InvocationHandler {
                 PlanNode node = planner.plan( queryTree );
                 SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(node);
 
-                return queryExecutor.get();
+                OperatorResult result = queryExecutor.get();
+                return result.getDataTransferObjects().size() > 1 ?
+                        result.getDataTransferObjects() : result.getDataTransferObjects().get(0);
 
             }
             default: throw new Exception("Unknown repository operation.");

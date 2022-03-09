@@ -304,7 +304,6 @@ public final class Planner {
                     PlanNode projection = buildProjection( queryTree );
                     projection.left = planNodeToReturn;
                     planNodeToReturn.father = projection;
-
                 } else {
                     final FilterInfo filterInfo = buildFilterInfo( wherePredicates );
                     final SequentialScan seqScan = new SequentialScan(optimalIndex, filterInfo);
@@ -331,6 +330,7 @@ public final class Planner {
             Projector projector = new Projector( queryTree.returnType, queryTree.projections );
             projectionPlanNode = new PlanNode();
             projectionPlanNode.consumer = projector;
+            projectionPlanNode.supplier = projector;
         } else {
             // simply a return containing rows
             // TODO later

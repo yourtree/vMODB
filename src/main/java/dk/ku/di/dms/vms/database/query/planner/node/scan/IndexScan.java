@@ -29,7 +29,7 @@ public class IndexScan extends AbstractScan {
         Row row = index.retrieve( hashProbeKey );
 
         if(filters == null || check(row)){
-            buildResult(row);
+            return buildResult(row);
         }
 
         // perhaps can avoid the overhead of creating the object

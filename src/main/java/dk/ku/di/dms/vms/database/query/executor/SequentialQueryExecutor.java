@@ -21,8 +21,6 @@ public class SequentialQueryExecutor implements Supplier<OperatorResult> {
     @Override
     public OperatorResult get() {
 
-        //CompletableFuture<OperatorResult> finalTask = null;
-
         OperatorResult result = null;
 
         // while we still have a node to schedule

@@ -10,6 +10,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -19,7 +20,7 @@ import java.util.function.Supplier;
  * This "operator" is simply taking a class and transforming the rows
  * contained in an {@link OperatorResult} into the class type
  */
-public class Projector implements Supplier<Object>, Consumer<OperatorResult> {
+public class Projector implements Supplier<OperatorResult>, Consumer<OperatorResult> {
 
     private final Class<?> clazz;
 
@@ -38,7 +39,7 @@ public class Projector implements Supplier<Object>, Consumer<OperatorResult> {
     }
 
     @Override
-    public Object get() {
+    public OperatorResult get() {
 
         try {
             Constructor<?> constructor = clazz.getDeclaredConstructor();
@@ -51,11 +52,11 @@ public class Projector implements Supplier<Object>, Consumer<OperatorResult> {
             int i = 0;
             for(final ColumnReference columnReference : projections){
                 Field field = clazz.getField(columnReference.columnName);
-                setters[columnReference.columnPosition] = MethodHandles.lookup().unreflectSetter( field );
+                setters[i] = MethodHandles.lookup().unreflectSetter( field );
                 i++;
             }
 
-            final Collection<Row> rows = input.get();
+            final Collection<Row> rows = input.getRows();
 
             if(rows.size() > 1) {
 
@@ -66,7 +67,7 @@ public class Projector implements Supplier<Object>, Consumer<OperatorResult> {
                     final Object currObj = constructor.newInstance();
 
                     for (MethodHandle setter : setters) {
-                        setter.invoke(currObj, row.get(i));
+                        setter.invoke(currObj, row.get( projections.get( i ).columnPosition ));
                         i++;
                     }
 
@@ -74,7 +75,7 @@ public class Projector implements Supplier<Object>, Consumer<OperatorResult> {
 
                 }
 
-                return result;
+                return new OperatorResult(result);
 
             } else {
                 // only one
@@ -86,11 +87,11 @@ public class Projector implements Supplier<Object>, Consumer<OperatorResult> {
 
                 i = 0;
                 for (MethodHandle setter : setters) {
-                    setter.invoke(currObj, row.get(i));
+                    setter.invoke(currObj, row.get( projections.get( i ).columnPosition ));
                     i++;
                 }
 
-                return currObj;
+                return new OperatorResult(Collections.singletonList(currObj));
 
             }
 
