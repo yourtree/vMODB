@@ -6,8 +6,8 @@ import dk.ku.di.dms.vms.database.store.common.IKey;
 
 public class IndexedNestedLoopJoin extends AbstractJoin {
 
-    public IndexedNestedLoopJoin(AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
-        super(innerIndex, outerIndex);
+    public IndexedNestedLoopJoin(int identifier, AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
+        super(identifier, innerIndex, outerIndex);
     }
 
     @Override

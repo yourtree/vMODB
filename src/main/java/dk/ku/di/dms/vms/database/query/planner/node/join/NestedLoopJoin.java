@@ -8,8 +8,8 @@ public class NestedLoopJoin extends AbstractJoin {
 
     // private JoinCondition filterJoin;
 
-    public NestedLoopJoin(AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
-        super(innerIndex, outerIndex);
+    public NestedLoopJoin(int identifier, AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
+        super(identifier, innerIndex, outerIndex);
     }
 
     @Override

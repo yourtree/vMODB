@@ -14,13 +14,17 @@ import java.util.function.Supplier;
  */
 public abstract class AbstractJoin implements Supplier<OperatorResult> {
 
+    // used to uniquely identify this join operation in a query plan
+    private final int identifier;
+
     protected final AbstractIndex<IKey> innerIndex;
     protected final AbstractIndex<IKey> outerIndex;
 
     protected FilterInfo filterInner;
     protected FilterInfo filterOuter;
 
-    public AbstractJoin(AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
+    public AbstractJoin(final int identifier, AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
+        this.identifier = identifier;
         this.innerIndex = innerIndex;
         this.outerIndex = outerIndex;
     }
@@ -43,4 +47,7 @@ public abstract class AbstractJoin implements Supplier<OperatorResult> {
         return outerIndex;
     }
 
+    public int getIdentifier() {
+        return identifier;
+    }
 }

@@ -21,8 +21,8 @@ public class HashConsumerJoin extends AbstractJoin
     private CompletableFuture<OperatorResult> operatorResultFutureLeft;
     private CompletableFuture<OperatorResult> operatorResultFutureRight;
 
-    public HashConsumerJoin(AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
-        super(innerIndex, outerIndex);
+    public HashConsumerJoin(int identifier, AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
+        super(identifier, innerIndex, outerIndex);
     }
 
     @Override

@@ -20,8 +20,8 @@ import java.util.Set;
 
 public class HashJoin extends AbstractJoin {
 
-    public HashJoin(AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
-        super(innerIndex, outerIndex);
+    public HashJoin(int identifier, AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
+        super(identifier, innerIndex, outerIndex);
     }
 
     @Override
