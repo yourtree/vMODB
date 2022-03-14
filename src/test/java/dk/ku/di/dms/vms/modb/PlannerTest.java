@@ -13,7 +13,7 @@ import java.util.List;
 public class PlannerTest {
 
     @Test
-    public void testJoinPlan() throws BuilderException, AnalyzerException, FilterBuilderException {
+    public void testJoinPlan() throws AnalyzerException, FilterBuilderException {
 
         final QueryTree queryTree = TestCommon.getJoinQueryTree();
 
@@ -25,7 +25,7 @@ public class PlannerTest {
     }
 
     @Test
-    public void testSimplePlan() throws BuilderException, AnalyzerException {
+    public void testSimplePlan() throws AnalyzerException {
         final QueryTree queryTree = TestCommon.getSimpleQueryTree();
         assert true;
     }

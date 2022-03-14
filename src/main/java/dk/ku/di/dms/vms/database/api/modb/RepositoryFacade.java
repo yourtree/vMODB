@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.database.api.modb;
 
 import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
-import dk.ku.di.dms.vms.database.query.executor.ConcurrentQueryExecutor;
 import dk.ku.di.dms.vms.database.query.executor.SequentialQueryExecutor;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.database.query.planner.OperatorResult;

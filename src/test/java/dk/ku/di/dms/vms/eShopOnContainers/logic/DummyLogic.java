@@ -50,7 +50,7 @@ public class DummyLogic {
     @Inbound(values = "checkout-requests")
     @Outbound("accepted-checkouts")
     @Transactional(type=RW, isolation=SERIALIZABLE)
-    public CheckoutStarted checkoutCart(CheckoutRequest checkoutRequest) throws BuilderException {
+    public CheckoutStarted checkoutCart(CheckoutRequest checkoutRequest) {
         // TODO finish
 
         SelectStatementBuilder builder = QueryBuilderFactory.select();

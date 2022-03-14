@@ -45,7 +45,7 @@ public final class TestCommon {
 
     }
 
-    public static QueryTree getSimpleQueryTree() throws BuilderException, AnalyzerException {
+    public static QueryTree getSimpleQueryTree() throws AnalyzerException {
 
         final Catalog catalog = new Catalog();
         String[] columnNames = { "col1", "col2" };
@@ -66,7 +66,7 @@ public final class TestCommon {
         return queryTree;
     }
 
-    public static QueryTree getJoinQueryTree() throws BuilderException, AnalyzerException {
+    public static QueryTree getJoinQueryTree() throws AnalyzerException {
 
         final Catalog catalog = new Catalog();
         String[] columnNames = { "col1", "col2" };
