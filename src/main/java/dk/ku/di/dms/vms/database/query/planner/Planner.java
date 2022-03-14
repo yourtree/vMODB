@@ -158,6 +158,7 @@ public final class Planner {
      * Consider that the base table is always the left one in the join
      * So I just need to check to order the plan nodes according to the size of the right table
      * TODO binary search -- but for that we need a priority concept
+     * TODO perhaps the {@link Comparator} interface can abstract the insertion
      * Priority order of sorting conditions: type of join, selectivity (we are lacking this right now), size of (right) table
      * @param table
      * @param join

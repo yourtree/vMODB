@@ -4,6 +4,10 @@ import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
+import dk.ku.di.dms.vms.database.query.parser.builder.UpdateStatementBuilder;
+import dk.ku.di.dms.vms.database.query.parser.clause.JoinClauseElement;
+import dk.ku.di.dms.vms.database.query.parser.clause.WhereClauseElement;
+import dk.ku.di.dms.vms.database.query.parser.enums.GroupByOperationEnum;
 import dk.ku.di.dms.vms.database.query.parser.enums.JoinTypeEnum;
 import dk.ku.di.dms.vms.database.query.parser.stmt.*;
 import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
@@ -34,72 +38,87 @@ public final class Analyzer {
         return analyze( statement, queryTree );
     }
 
-    // basically transforms the raw input into known and safe metadata, e.g., whether a table, column exists
-    private QueryTree analyze(final IStatement statement, final QueryTree queryTree) throws AnalyzerException {
+    private void analyzeSelectStatement(final SelectStatement statement, final QueryTree queryTree ) throws AnalyzerException {
 
-        /**
-         * https://docs.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql?view=sql-server-ver15#logical-processing-order-of-the-select-statement
-         */
-        if(statement instanceof SelectStatement){
+        // from
+        // obtain the tables to look for the columns in projection first
+        List<String> fromClause = statement.fromClause;
 
-            final SelectStatement select = (SelectStatement) statement;
+        for(String tableStr : fromClause){
+            Table table = catalog.getTable(tableStr);
+            if(table != null) queryTree.tables.put(tableStr,table);
+        }
 
-            // from
-            // obtain the tables to look for the columns in projection first
-            List<String> fromClause = select.fromClause;
+        // join
+        if(statement.joinClause != null) {
+            List<JoinClauseElement> joinClauseElements = statement.joinClause;
+            for (JoinClauseElement join : joinClauseElements) {
+                // TODO an optimization is iterating through the foreign keys of the table to find the match faster
 
-            for(String tableStr : fromClause){
-                Table table = catalog.getTable(tableStr);
-                if(table != null) queryTree.tables.put(tableStr,table);
+                Table tableLeft = queryTree.tables.getOrDefault(join.tableLeft, null);
+
+                // find in catalog if not found in query yet
+                if (tableLeft == null) {
+                    tableLeft = catalog.getTable(join.tableLeft);
+                    if (tableLeft != null) {
+                        queryTree.tables.put(join.tableLeft, tableLeft);
+                    } else {
+                        throw new AnalyzerException("Unknown " + join.tableLeft + " table.");
+                    }
+                }
+
+                // find left column
+                ColumnReference columnLeftReference = findColumnReference(join.columnLeft, tableLeft);
+
+                Table tableRight = queryTree.tables.getOrDefault(join.tableRight, null);
+                if (tableRight == null) {
+                    tableRight = catalog.getTable(join.tableRight);
+                    if (tableRight != null) {
+                        queryTree.tables.put(join.tableRight, tableRight);
+                    } else {
+                        throw new AnalyzerException("Unknown " + join.tableRight + " table.");
+                    }
+                }
+
+                // find right column
+                ColumnReference columnRightReference = findColumnReference(join.columnRight, tableRight);
+
+                // build typed join clause
+                JoinPredicate joinClause = new JoinPredicate(columnLeftReference, columnRightReference, join.expression, join.joinType);
+
+                queryTree.joinPredicates.add(joinClause);
+
             }
+        }
 
-            // join
-            if(select.joinClause != null) {
-                List<JoinClauseElement> joinClauseElements = select.joinClause;
-                for (JoinClauseElement join : joinClauseElements) {
-                    // TODO an optimization is iterating through the foreign keys of the table to find the match faster
+        // projection
+        // columns in projection may come from join
+        List<String> columns = statement.selectClause;
 
-                    Table tableLeft = queryTree.tables.getOrDefault(join.tableLeft, null);
+        // case where the user input is '*'
+        if(columns.size() == 1 && columns.get(0).contentEquals("*")){
 
-                    // find in catalog if not found in query yet
-                    if (tableLeft == null) {
-                        tableLeft = catalog.getTable(join.tableLeft);
-                        if (tableLeft != null) {
-                            queryTree.tables.put(join.tableLeft, tableLeft);
-                        } else {
-                            throw new AnalyzerException("Unknown " + join.tableLeft + " table.");
-                        }
-                    }
-
-                    // find left column
-                    ColumnReference columnLeftReference = findColumnReference(join.columnLeft, tableLeft);
-
-                    Table tableRight = queryTree.tables.getOrDefault(join.tableRight, null);
-                    if (tableRight == null) {
-                        tableRight = catalog.getTable(join.tableRight);
-                        if (tableRight != null) {
-                            queryTree.tables.put(join.tableRight, tableRight);
-                        } else {
-                            throw new AnalyzerException("Unknown " + join.tableRight + " table.");
-                        }
-                    }
-
-                    // find right column
-                    ColumnReference columnRightReference = findColumnReference(join.columnRight, tableRight);
-
-                    // build typed join clause
-                    JoinPredicate joinClause = new JoinPredicate(columnLeftReference, columnRightReference, join.expression, join.joinType);
-
-                    queryTree.joinPredicates.add(joinClause);
-
+            // iterate over all tables involved
+            for(final Table table : queryTree.tables.values()){
+                Schema tableSchema = table.getSchema();
+                int colPos = 0;
+                for( String columnName : tableSchema.getColumnNames() ){
+                    queryTree.projections.add( new ColumnReference( columnName, colPos, table ) );
+                    colPos++;
                 }
             }
 
-            // projection
-            // columns in projection may come from join
-            List<String> columns = select.selectClause;
+        } else {
             // cannot allow same column name without AS from multiple tables
             for(String columnRefStr : columns){
+
+                if(columnRefStr.matches(GroupByOperationEnum.AVG.name())){
+                    // TODO finish group by column
+
+                    // queryTree.
+
+                }
+
                 if( columnRefStr.contains(".") ){
                     String[] splitted = columnRefStr.split("\\."); // FIXME check if there are 2 indexes in array
                     ColumnReference columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
@@ -110,84 +129,95 @@ public final class Analyzer {
                 }
 
             }
+        }
 
-            // where
-            if(select.whereClause != null) {
-                List<WhereClauseElement<?>> where = select.whereClause;
-                for (WhereClauseElement<?> currWhere : where) {
+        // where
+        if(statement.whereClause != null) {
+            List<WhereClauseElement<?>> where = statement.whereClause;
+            for (WhereClauseElement<?> currWhere : where) {
 
-                    if (currWhere.value == null) {
-                        throw new AnalyzerException("Parameter of where clause cannot be null value");
+                if (currWhere.value == null) {
+                    throw new AnalyzerException("Parameter of where clause cannot be null value");
+                }
+
+                ColumnReference columnReference;
+
+                String tableName;
+                String columnName;
+
+                if (currWhere.column.contains(".")) {
+                    String[] split = currWhere.column.split("\\.");
+                    tableName = split[0];
+                    columnName = split[1];
+                    Table table = queryTree.tables.getOrDefault(tableName, null);
+                    if (table != null) {
+                        columnReference = findColumnReference(columnName, table);
+                    } else {
+                        throw new AnalyzerException("Table not defined in the query: " + tableName);
                     }
+                } else {
+                    columnReference = findColumnReference(currWhere.column, queryTree.tables);
+                }
 
-                    ColumnReference columnReference;
+                // is it a reference to a table or a char? e.g., "'something'"
+                // FIXME for now I am considering all strings are joins
 
-                    String tableName;
-                    String columnName;
+                // check if there is some inner join. i.e., the object is a literal?
+                if (currWhere.value instanceof String) {
 
-                    if (currWhere.column.contains(".")) {
-                        String[] split = currWhere.column.split("\\.");
+                    ColumnReference columnReference1;
+                    String value = (String) currWhere.value;
+
+                    if (value.contains(".")) {
+                        // <table>.<column>
+                        String[] split = value.split("\\.");
                         tableName = split[0];
                         columnName = split[1];
                         Table table = queryTree.tables.getOrDefault(tableName, null);
                         if (table != null) {
-                            columnReference = findColumnReference(columnName, table);
+                            columnReference1 = findColumnReference(columnName, table);
                         } else {
                             throw new AnalyzerException("Table not defined in the query: " + tableName);
                         }
                     } else {
-                        columnReference = findColumnReference(currWhere.column, queryTree.tables);
+                        columnReference1 = findColumnReference(currWhere.column, queryTree.tables);
                     }
 
-                    // is it a reference to a table or a char? e.g., "'something'"
-                    // FIXME for now I am considering all strings are joins
+                    // build typed join clause
+                    JoinPredicate joinClause = new JoinPredicate(columnReference, columnReference1, currWhere.expression, JoinTypeEnum.INNER_JOIN);
 
-                    // check if there is some inner join. i.e., the object is a literal?
-                    if (currWhere.value instanceof String) {
+                    queryTree.joinPredicates.add(joinClause);
 
-                        ColumnReference columnReference1;
-                        String value = (String) currWhere.value;
+                } else {
+                    // simple where
+                    WherePredicate whereClause = new WherePredicate(columnReference, currWhere.expression, currWhere.value);
 
-                        if (value.contains(".")) {
-                            // <table>.<column>
-                            String[] split = value.split("\\.");
-                            tableName = split[0];
-                            columnName = split[1];
-                            Table table = queryTree.tables.getOrDefault(tableName, null);
-                            if (table != null) {
-                                columnReference1 = findColumnReference(columnName, table);
-                            } else {
-                                throw new AnalyzerException("Table not defined in the query: " + tableName);
-                            }
-                        } else {
-                            columnReference1 = findColumnReference(currWhere.column, queryTree.tables);
-                        }
-
-                        // build typed join clause
-                        JoinPredicate joinClause = new JoinPredicate(columnReference, columnReference1, currWhere.expression, JoinTypeEnum.INNER_JOIN);
-
-                        queryTree.joinPredicates.add(joinClause);
-
-                    } else {
-                        // simple where
-                        WherePredicate whereClause = new WherePredicate(columnReference, currWhere.expression, currWhere.value);
-
-                        // The order of the columns declared in the index definition matters
-                        queryTree.addWhereClauseSortedByColumnIndex(whereClause);
-                    }
-
+                    // The order of the columns declared in the index definition matters
+                    queryTree.addWhereClauseSortedByColumnIndex(whereClause);
                 }
+
             }
+        }
 
-            // TODO FINISH sort and group by
+    }
 
-        } else if(statement instanceof UpdateStatement){
+    /**
+     * basically transforms the raw input into known and safe metadata, e.g., whether a table, column exists
+     * https://docs.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql?view=sql-server-ver15#logical-processing-order-of-the-select-statement
+     * @param statement
+     * @param queryTree
+     * @return The query tree
+     * @throws AnalyzerException
+     */
+    private QueryTree analyze(final IStatement statement, final QueryTree queryTree) throws AnalyzerException {
 
-            final UpdateStatement select = (UpdateStatement) statement;
-
+        if(statement instanceof SelectStatement){
+            analyzeSelectStatement( (SelectStatement) statement, queryTree );
+        } else if(statement instanceof UpdateStatementBuilder){
+            final UpdateStatement update = (UpdateStatement) statement;
             // TODO FINISH
-
         } else {
+            // TODO FINISH sort and group by
             throw new AnalyzerException("Unknown statement type.");
         }
 

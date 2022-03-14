@@ -4,10 +4,9 @@ import dk.ku.di.dms.vms.annotations.Inbound;
 import dk.ku.di.dms.vms.annotations.Microservice;
 import dk.ku.di.dms.vms.annotations.Outbound;
 import dk.ku.di.dms.vms.annotations.Transactional;
-import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
-import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
+import dk.ku.di.dms.vms.database.query.parser.builder.SelectStatementBuilder;
 import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderOut;
 import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderIn;
 import dk.ku.di.dms.vms.tpcc.repository.ICustomerRepository;
@@ -28,9 +27,9 @@ public class CustomerService {
     @Inbound(values = {"customer-new-order-in"})
     @Outbound("customer-new-order-out")
     @Transactional
-    public CustomerNewOrderOut provideCustomerDataToOrder(CustomerNewOrderIn in) throws BuilderException {
+    public CustomerNewOrderOut provideCustomerDataToOrder(CustomerNewOrderIn in) {
 
-        IQueryBuilder builder = QueryBuilderFactory.init();
+        SelectStatementBuilder builder = QueryBuilderFactory.select();
         IStatement sql = builder.select("c_discount, c_last, c_credit")//.into(CustomerInfoDTO.class)
                             .from("customer")
                             .where("c_w_id", EQUALS, in.c_w_id)
@@ -45,18 +44,12 @@ public class CustomerService {
 //                .build();
 
         // TODO make query builder part of the repository
-        // List<CustomerInfoDTO> customerInfoDTO =
-        //Triplet<Float,String,String> customerData =
-        // CustomerInfoDTO customerInfo = (CustomerInfoDTO) customerRepository.fetch(sql, CustomerInfoDTO.class);
         CustomerInfoDTO customerInfo = customerRepository.<CustomerInfoDTO>fetch(sql, CustomerInfoDTO.class);
-        // SqlRepository.fetch( customerInfo, sql );
 
         CustomerNewOrderOut customerTaxData = new CustomerNewOrderOut();
         customerTaxData.c_discount = customerInfo.c_discount;
-        // these are not used anywhere...
         customerTaxData.c_last = customerInfo.c_last;
         customerTaxData.c_credit = customerInfo.c_credit;
-        // simply forwarding
         customerTaxData.c_id = in.c_id;
 
         return customerTaxData;

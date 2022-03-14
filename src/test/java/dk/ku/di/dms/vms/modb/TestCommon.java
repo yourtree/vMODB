@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
+import dk.ku.di.dms.vms.database.query.parser.builder.SelectStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
@@ -53,7 +54,7 @@ public final class TestCommon {
         catalog.insertTable( new HashIndexedTable( "tb1", schema ));
         catalog.insertTable( new HashIndexedTable( "tb2", schema ));
 
-        IQueryBuilder builder = QueryBuilderFactory.init();
+        SelectStatementBuilder builder = QueryBuilderFactory.select();
         IStatement sql = builder.select("col1, col2")
                 .from("tb1")
                 .where("col1", EQUALS, 1)
@@ -75,11 +76,11 @@ public final class TestCommon {
         catalog.insertTable( new HashIndexedTable( "tb2", schema ));
         catalog.insertTable( new HashIndexedTable( "tb3", schema ));
 
-        IQueryBuilder builder = QueryBuilderFactory.init();
+        SelectStatementBuilder builder = QueryBuilderFactory.select();
         IStatement sql = builder.select("tb1.col1, tb2.col2")
                 .from("tb1")
-                .join("tb2","col1").on(EQUALS, "tb1.col1")
-                .join("tb3","col1").on(EQUALS, "tb1.col1")
+                .join("tb2","col1").on(EQUALS, "tb1", "col1")
+                .join("tb3","col1").on(EQUALS, "tb1", "col1")
                 .where("tb1.col2", EQUALS, 2)
                 .and("tb2.col2",EQUALS,1)
                 .build();

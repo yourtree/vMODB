@@ -2,8 +2,6 @@ package dk.ku.di.dms.vms.database.query.parser.enums;
 
 public enum JoinTypeEnum {
 
-    JOIN("JOIN"),
-
     LEFT_JOIN("LEFT JOIN"),
 
     RIGHT_JOIN("RIGHT JOIN"),

@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.database.query.parser.stmt;
 
-import java.util.ArrayList;
+import dk.ku.di.dms.vms.database.query.parser.clause.SetClauseElement;
+
 import java.util.List;
 
 public class UpdateStatement extends AbstractStatement {
@@ -9,8 +10,4 @@ public class UpdateStatement extends AbstractStatement {
 
     public List<SetClauseElement> setClause;
 
-    public UpdateStatement() {
-        this.setClause = new ArrayList<>();
-        this.whereClause = new ArrayList<>();
-    }
 }

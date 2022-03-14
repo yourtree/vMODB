@@ -1,21 +1,22 @@
 package dk.ku.di.dms.vms.modb;
 
-import dk.ku.di.dms.vms.database.api.modb.BuilderException;
-import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
+import dk.ku.di.dms.vms.database.query.parser.builder.SelectStatementBuilder;
+import dk.ku.di.dms.vms.database.query.parser.builder.UpdateStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
+import dk.ku.di.dms.vms.database.query.parser.stmt.SelectStatement;
 import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
 import dk.ku.di.dms.vms.database.query.planner.node.projection.Projector;
+import dk.ku.di.dms.vms.database.store.common.SimpleKey;
 import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
-import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;
 import dk.ku.di.dms.vms.database.store.table.Table;
@@ -41,15 +42,18 @@ public class QueryTest {
 
         Table table = catalog.getTable("item");
 
-        CompositeKey key = new CompositeKey(3,2L);
+        SimpleKey key = new SimpleKey(3);
         Row row = new Row(3,2L,"HAHA","HEHE");
 
-        table.getPrimaryKeyIndex().upsert(key, row);
+        SimpleKey key1 = new SimpleKey(4);
+        Row row1 = new Row(4,3L,"HAHAdedede","HEHEdeded");
 
+        table.getPrimaryKeyIndex().upsert(key, row);
+        table.getPrimaryKeyIndex().upsert(key1, row1);
     }
 
     @Test
-    public void isCatalogNotEmpty() throws Exception {
+    public void isCatalogNotEmpty() {
         assert catalog.getTable("item") != null;
     }
 
@@ -65,17 +69,17 @@ public class QueryTest {
 
         try {
             // TODO move this test to query test
-            IQueryBuilder builder = QueryBuilderFactory.init();
+            SelectStatementBuilder builder = QueryBuilderFactory.select();
             IStatement sql = builder.select("col1, col2") // this should raise an error
                     .from("tb1")
-                    .join("tb2","col1").on(EQUALS, "tb2.col1")
+                    .join("tb2","col1").on(EQUALS, "tb1", "col1")//.and
                     .where("col2", EQUALS, 2) // this should raise an error
                     .build();
 
             Analyzer analyzer = new Analyzer(catalog);
             QueryTree queryTree = analyzer.analyze( sql );
 
-        } catch(AnalyzerException | BuilderException e){
+        } catch(AnalyzerException e){
             System.out.println(e.getMessage());
             assert true;
         }
@@ -110,9 +114,24 @@ public class QueryTest {
     }
 
     @Test
+    public void testGroupByQuery() throws Exception {
+
+        SelectStatementBuilder builder = QueryBuilderFactory.select();
+        SelectStatement sql = builder.select("col1, AVG(tb1.i_price") // this should raise an error
+                .from("tb1")
+                .groupBy("i_price")
+                //.where("col2", EQUALS, 2) // this should raise an error
+                .build();
+
+        Analyzer analyzer = new Analyzer(catalog);
+        QueryTree queryTree = analyzer.analyze( sql );
+
+    }
+
+    @Test
     public void testQueryParsing() throws Exception {
 
-        IQueryBuilder builder = QueryBuilderFactory.init();
+        UpdateStatementBuilder builder = QueryBuilderFactory.update();
         IStatement sql = builder.update("district")
                                 .set("d_next_o_id",1)
                                 .where("d_w_id", EQUALS, 2)

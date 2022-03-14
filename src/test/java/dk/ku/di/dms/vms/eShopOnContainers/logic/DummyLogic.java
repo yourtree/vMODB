@@ -6,6 +6,8 @@ import dk.ku.di.dms.vms.annotations.Transactional;
 import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
+import dk.ku.di.dms.vms.database.query.parser.builder.SelectStatementBuilder;
+import dk.ku.di.dms.vms.database.query.parser.stmt.AbstractStatement;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.eShopOnContainers.entity.Product;
 import dk.ku.di.dms.vms.eShopOnContainers.events.AddProductRequest;
@@ -51,7 +53,7 @@ public class DummyLogic {
     public CheckoutStarted checkoutCart(CheckoutRequest checkoutRequest) throws BuilderException {
         // TODO finish
 
-        IQueryBuilder builder = QueryBuilderFactory.init();
+        SelectStatementBuilder builder = QueryBuilderFactory.select();
         IStatement sql = builder.select("c_discount, c_last, c_credit")//.into(CustomerInfoDTO.class)
                 .from("customer")
                 .where("c_w_id", EQUALS, 1)

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.query.parser.stmt;
+package dk.ku.di.dms.vms.database.query.parser.clause;
 
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum;
 
@@ -13,4 +13,5 @@ public class WhereClauseElement<T> {
         this.expression = expression;
         this.value = value;
     }
+
 }

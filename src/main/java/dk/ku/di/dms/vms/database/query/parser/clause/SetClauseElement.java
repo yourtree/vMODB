@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.query.parser.stmt;
+package dk.ku.di.dms.vms.database.query.parser.clause;
 
 public class SetClauseElement {
 

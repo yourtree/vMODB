@@ -6,6 +6,9 @@ import dk.ku.di.dms.vms.annotations.Transactional;
 import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
 import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
+import dk.ku.di.dms.vms.database.query.parser.builder.SelectStatementBuilder;
+import dk.ku.di.dms.vms.database.query.parser.builder.UpdateStatementBuilder;
+import dk.ku.di.dms.vms.database.query.parser.stmt.AbstractStatement;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.tpcc.events.StockNewOrderIn;
 import dk.ku.di.dms.vms.tpcc.repository.IStockRepository;
@@ -37,18 +40,15 @@ public class StockService {
             final int finalI = i;
             futures[finalI] = CompletableFuture.runAsync(() -> {
 
-                IQueryBuilder builder = QueryBuilderFactory.init();
+                SelectStatementBuilder selBuilder = QueryBuilderFactory.select();
                 IStatement sql = null;
-                try {
-                    sql = builder.select("s_quantity")
-                            .from("stock")
-                            .where("s_i_id", EQUALS, in.itemsIds.get(finalI))
-                            .and("s_w_id", EQUALS, in.supware.get(finalI))
-                            .build();
-                } catch (BuilderException e) {
-                    e.printStackTrace();
-                    return;
-                }
+
+                sql = selBuilder.select("s_quantity")
+                        .from("stock")
+                        .where("s_i_id", EQUALS, in.itemsIds.get(finalI))
+                        .and("s_w_id", EQUALS, in.supware.get(finalI))
+                        .build();
+
 
                 Integer s_quantity = stockRepository.<Integer>fetch(sql,Integer.class);
 
@@ -59,17 +59,15 @@ public class StockService {
                     s_quantity = s_quantity - ol_quantity + 91;
                 }
 
+                UpdateStatementBuilder updateBuilder = QueryBuilderFactory.update();
                 IStatement update = null;
-                try {
-                    update = builder.update("stock")
-                            .set("s_quantity",s_quantity)
-                            .where("s_i_id", EQUALS, in.itemsIds.get(finalI))
-                            .and("s_w_id", EQUALS, in.supware.get(finalI))
-                            .build();
-                } catch (BuilderException e) {
-                    e.printStackTrace();
-                    return;
-                }
+
+                update = updateBuilder.update("stock")
+                        .set("s_quantity",s_quantity)
+                        .where("s_i_id", EQUALS, in.itemsIds.get(finalI))
+                        .and("s_w_id", EQUALS, in.supware.get(finalI))
+                        .build();
+
 
                 stockRepository.issue(update);
             });

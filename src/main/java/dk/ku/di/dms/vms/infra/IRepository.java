@@ -29,6 +29,6 @@ public interface IRepository<PK extends Serializable,T extends AbstractEntity<PK
     <DTO> DTO fetch( IStatement statement, Class<DTO> clazz);
 
     <DTO> List<DTO> fetchList( //List<DTO> c,
-                     IStatement statement);
+                               IStatement statement);
 
 }

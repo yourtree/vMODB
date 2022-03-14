@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.annotations.Transactional;
 import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
 import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
+import dk.ku.di.dms.vms.database.query.parser.builder.UpdateStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.tpcc.events.WareDistNewOrderIn;
 import dk.ku.di.dms.vms.tpcc.events.WareDistNewOrderOut;
@@ -87,7 +88,7 @@ public class WareDistService {
 
         Integer nextOid = districtData.getFirst();
 
-        IQueryBuilder builder = QueryBuilderFactory.init();
+        UpdateStatementBuilder builder = QueryBuilderFactory.update();
         IStatement sql = builder.update("district")
                 .set("d_next_o_id",nextOid+1)
                 .where("d_w_id", EQUALS, districtUpdateRequest.d_w_id)

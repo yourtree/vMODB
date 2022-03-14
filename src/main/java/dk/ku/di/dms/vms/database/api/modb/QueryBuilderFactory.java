@@ -1,5 +1,7 @@
 package dk.ku.di.dms.vms.database.api.modb;
 
+import dk.ku.di.dms.vms.database.query.parser.builder.SelectStatementBuilder;
+import dk.ku.di.dms.vms.database.query.parser.builder.UpdateStatementBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -10,17 +12,15 @@ import org.slf4j.LoggerFactory;
 
 public final class QueryBuilderFactory {
 
-     final private static Logger logger = LoggerFactory.getLogger(QueryBuilder.class);
+     final private static Logger logger = LoggerFactory.getLogger(QueryBuilderFactory.class);
 
-    public static IQueryBuilder init() {
-//        try{
-//            Class cls = Class.forName(QueryBuilder.class.getCanonicalName());
-//            return (QueryBuilder) cls.newInstance();
-//        } catch(ClassNotFoundException | InstantiationException | IllegalAccessException e){
-//            logger.error(e.getMessage());
-//            return null;
-//        }
-        return new QueryBuilder();
+
+    public static SelectStatementBuilder select() {
+        return new SelectStatementBuilder();
+    }
+
+    public static UpdateStatementBuilder update() {
+        return new UpdateStatementBuilder();
     }
 
 }

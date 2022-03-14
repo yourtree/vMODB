@@ -34,8 +34,8 @@ public class Schema {
         return columnPositionMap.get(columnName);
     }
 
-    public String getColumnName(int columnPosition){
-        return columnNames[columnPosition];
+    public String[] getColumnNames(){
+        return columnNames;
     }
 
     public DataType getColumnDataType(int columnIndex){
