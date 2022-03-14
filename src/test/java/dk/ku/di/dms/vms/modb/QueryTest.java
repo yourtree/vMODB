@@ -117,13 +117,13 @@ public class QueryTest {
     public void testGroupByQuery() throws Exception {
 
         SelectStatementBuilder builder = QueryBuilderFactory.select();
-        SelectStatement sql = builder.select("col1, AVG(tb1.i_price") // this should raise an error
-                .from("tb1")
-                .groupBy("i_price")
+        SelectStatement sql = builder.select("AVG(item.i_price)")
+                .from("item")
+                //.groupBy("i_price")
                 //.where("col2", EQUALS, 2) // this should raise an error
                 .build();
 
-        Analyzer analyzer = new Analyzer(catalog);
+        Analyzer analyzer = new Analyzer( catalog );
         QueryTree queryTree = analyzer.analyze( sql );
 
     }

@@ -3,7 +3,6 @@ package dk.ku.di.dms.vms;
 import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
 import static org.junit.Assert.assertTrue;
 
-import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.RepositoryFacade;
 import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
@@ -14,7 +13,6 @@ import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.table.Table;
 import dk.ku.di.dms.vms.eShopOnContainers.events.CheckoutRequest;
-import dk.ku.di.dms.vms.exception.MappingException;
 import dk.ku.di.dms.vms.metadata.ApplicationMetadata;
 import dk.ku.di.dms.vms.metadata.MetadataLoader;
 import dk.ku.di.dms.vms.modb.TestCommon;
@@ -32,7 +30,6 @@ import org.slf4j.LoggerFactory;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 
 public class AppTest 
@@ -44,8 +41,6 @@ public class AppTest
 
         MetadataLoader loader = new MetadataLoader();
         ApplicationMetadata config = loader.load(null);
-
-
 
     }
 
@@ -122,7 +117,7 @@ public class AppTest
 //    }
 
     @Test
-    public void testParameterizedCall() throws BuilderException {
+    public void testParameterizedCall() {
 
         RepositoryFacade facade = new RepositoryFacade( IProductRepository.class );
 

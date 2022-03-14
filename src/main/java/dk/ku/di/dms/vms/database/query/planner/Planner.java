@@ -434,6 +434,8 @@ public final class Planner {
             joins = planJoins( joinsPerTable, treeType );
         }
 
+        // TODO process group by predicates
+
         /*
          * Processing projection
          */
@@ -461,7 +463,7 @@ public final class Planner {
             }
 
         } else {
-            // it can be a cartesian product or a simple scaan
+            // it can be a cartesian product or a simple scan
             PlanNode scanPlan = planScans(scans);
             projection.left = scanPlan;
             scanPlan.father = projection;

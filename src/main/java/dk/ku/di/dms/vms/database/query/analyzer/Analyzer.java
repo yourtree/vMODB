@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.database.query.analyzer;
 
 import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
+import dk.ku.di.dms.vms.database.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.query.parser.builder.UpdateStatementBuilder;
@@ -16,6 +17,7 @@ import dk.ku.di.dms.vms.database.store.table.Table;
 
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Class responsible for analyzing a statement {@link IStatement}
@@ -112,13 +114,23 @@ public final class Analyzer {
             // cannot allow same column name without AS from multiple tables
             for(String columnRefStr : columns){
 
-                if(columnRefStr.matches(GroupByOperationEnum.AVG.name())){
-                    // TODO finish group by column
+                // TODO finish group by for other operations GroupByOperationEnum.AVG.name()
+                if(columnRefStr.matches("(.*)AVG(.*)")){
 
-                    // queryTree.
+                    // TODO instead of string manipulation, better to offer appropriate API in the builder...
+                    String columnRef = columnRefStr.substring(columnRefStr.indexOf("(")+1, columnRefStr.indexOf(")"));
+
+                    if( columnRef.contains(".") ){
+                        String[] splitted = columnRef.split("\\.");
+                        ColumnReference columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
+                        queryTree.groupByPredicates.add( new GroupByPredicate( columnReference, GroupByOperationEnum.AVG ) );
+                    } else {
+                        ColumnReference columnReference = findColumnReference(columnRef, queryTree.tables);
+                        queryTree.groupByPredicates.add( new GroupByPredicate( columnReference, GroupByOperationEnum.AVG ) );
+                    }
 
                 }
-
+                else
                 if( columnRefStr.contains(".") ){
                     String[] splitted = columnRefStr.split("\\."); // FIXME check if there are 2 indexes in array
                     ColumnReference columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
