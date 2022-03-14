@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.modb;
 
-import dk.ku.di.dms.vms.database.api.modb.BuilderException;
-import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
@@ -9,7 +7,6 @@ import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.database.query.parser.builder.SelectStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
-import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
 import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;

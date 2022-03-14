@@ -4,8 +4,6 @@ import dk.ku.di.dms.vms.annotations.Inbound;
 import dk.ku.di.dms.vms.annotations.Microservice;
 import dk.ku.di.dms.vms.annotations.Outbound;
 import dk.ku.di.dms.vms.annotations.Transactional;
-import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
-import dk.ku.di.dms.vms.database.api.modb.BuilderException;
 import dk.ku.di.dms.vms.database.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.database.query.parser.builder.UpdateStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
@@ -71,7 +69,7 @@ public class WareDistService {
 
     @Inbound(values = "waredist-new-order-in")
     @Transactional
-    public void processDistrictUpdate(WareDistNewOrderIn districtUpdateRequest) throws BuilderException {
+    public void processDistrictUpdate(WareDistNewOrderIn districtUpdateRequest) {
 
         // repository query, much simpler
         /*
