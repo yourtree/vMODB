@@ -204,7 +204,6 @@ public final class Planner {
      * The position of the join in the list reflects
      * @param joinsPerTable
      * @param filtersForJoinGroupedByTable
-     * @return
      */
     private void applyFiltersToJoins(final Map<Table,List<AbstractJoin>> joinsPerTable, final Map<Table, List<WherePredicate>> filtersForJoinGroupedByTable) throws FilterBuilderException {
 
@@ -436,6 +435,7 @@ public final class Planner {
 
         // TODO process group by predicates
 
+
         /*
          * Processing projection
          */
@@ -612,7 +612,7 @@ public final class Planner {
     public List<int[]> getAllPossibleColumnCombinations( final int[] filterColumns ){
 
         // in case only one condition for join and single filter
-        if(filterColumns.length == 1) return Arrays.asList(filterColumns);
+        if(filterColumns.length == 1) return Collections.singletonList(filterColumns);
 
         if(filterColumns.length == 2) return getCombinationsFor2SizeColumnList(filterColumns);
 

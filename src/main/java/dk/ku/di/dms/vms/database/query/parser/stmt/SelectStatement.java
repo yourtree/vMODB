@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.database.query.parser.stmt;
 
+import dk.ku.di.dms.vms.database.query.parser.clause.GroupBySelectElement;
 import dk.ku.di.dms.vms.database.query.parser.clause.OrderByClauseElement;
 
 import java.util.List;
@@ -7,6 +8,8 @@ import java.util.List;
 public class SelectStatement extends AbstractStatement {
 
     public List<String> selectClause;
+
+    public List<GroupBySelectElement> groupBySelectClause;
 
     public List<String> fromClause;
 

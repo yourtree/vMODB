@@ -1,7 +1,9 @@
 package dk.ku.di.dms.vms.database.query.parser.builder;
 
 import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
+import dk.ku.di.dms.vms.database.query.parser.clause.GroupBySelectElement;
 import dk.ku.di.dms.vms.database.query.parser.clause.OrderByClauseElement;
+import dk.ku.di.dms.vms.database.query.parser.enums.GroupByOperationEnum;
 import dk.ku.di.dms.vms.database.query.parser.enums.OrderBySortOrderEnum;
 import dk.ku.di.dms.vms.database.query.parser.stmt.SelectStatement;
 
@@ -15,29 +17,62 @@ import java.util.List;
  */
 public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
-    private final SelectStatement statement;
+    private final EntryPoint entryPoint;
 
     public SelectStatementBuilder(){
-        this.statement = new SelectStatement();
+        SelectStatement statement = new SelectStatement();
+        this.entryPoint = new EntryPoint(statement);
     }
 
     /**
-     * TODO later, this method should return a type that allows both aggregates and from clause being specified
      * @param param
      * @return
      */
-    public FromClause select(String param) {
-        String[] projection = param.replace(" ","").split(",");
-        this.statement.selectClause = new ArrayList<>(Arrays.asList(projection));
-        return new FromClause(this.statement);
+    public NewProjectionOrFromClause select(String param) {
+        return this.entryPoint.select(param);
     }
 
-    public class FromClause {
+    public NewProjectionOrFromClause avg(String param){
+        return this.entryPoint.avg(param);
+    }
+
+    protected class EntryPoint{
 
         private final SelectStatement statement;
+        public EntryPoint(SelectStatement statement){
+            this.statement = statement;
+        }
 
-        public FromClause(SelectStatement selectStatement){
+        public NewProjectionOrFromClause select(String param) {
+            String[] projection = param.replace(" ","").split(",");
+            this.statement.selectClause = new ArrayList<>(Arrays.asList(projection));
+            return new NewProjectionOrFromClause(this.statement,this);
+        }
+
+        public NewProjectionOrFromClause avg(String param){
+            GroupBySelectElement element = new GroupBySelectElement( param, GroupByOperationEnum.AVG );
+            this.statement.groupBySelectClause = new ArrayList<>();
+            this.statement.groupBySelectClause.add( element );
+            return new NewProjectionOrFromClause(statement,this);
+        }
+    }
+
+    public class NewProjectionOrFromClause {
+
+        private final SelectStatement statement;
+        private final EntryPoint entryPoint;
+
+        protected NewProjectionOrFromClause(SelectStatement selectStatement, EntryPoint entryPoint){
             this.statement = selectStatement;
+            this.entryPoint = entryPoint;
+        }
+
+        public NewProjectionOrFromClause select(String param) {
+            return this.entryPoint.select(param);
+        }
+
+        public NewProjectionOrFromClause avg(String param){
+            return this.entryPoint.avg(param);
         }
 
         public OrderByGroupByJoinWhereClauseBridge from(String param) {
@@ -52,7 +87,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
         private final SelectStatement statement;
 
-        public OrderByGroupByJoinWhereClauseBridge(SelectStatement statement) {
+        protected OrderByGroupByJoinWhereClauseBridge(SelectStatement statement) {
             super(statement);
             this.statement = statement; // to avoid cast
         }
@@ -71,8 +106,8 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
             List<OrderByClauseElement> orderByClauseElements = new ArrayList<>();
 
-            for( int i = 0; i < params.length; i++ ) {
-                orderByClauseElements.add( new OrderByClauseElement( params[i].replace(" ", "") ) );
+            for (String param : params) {
+                orderByClauseElements.add(new OrderByClauseElement(param.replace(" ", "")));
             }
             this.statement.orderByClause = orderByClauseElements;
 
@@ -86,7 +121,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
         private final SelectStatement statement;
 
-        public OrderByClause(SelectStatement selectStatement){
+        protected OrderByClause(SelectStatement selectStatement){
             this.statement = selectStatement;
         }
 
@@ -94,8 +129,8 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
             List<OrderByClauseElement> orderByClauseElements = new ArrayList<>();
 
-            for( int i = 0; i < params.length; i++ ) {
-                orderByClauseElements.add( new OrderByClauseElement( params[i].replace(" ", "") ) );
+            for (String param : params) {
+                orderByClauseElements.add(new OrderByClauseElement(param.replace(" ", "")));
             }
             this.statement.orderByClause = orderByClauseElements;
 
@@ -113,20 +148,19 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
         private final SelectStatement statement;
 
-        public OrderByClausePredicate(SelectStatement selectStatement){
+        protected OrderByClausePredicate(SelectStatement selectStatement){
             this.statement = selectStatement;
         }
 
-        // default
 //        public OrderByClause asc(){
 //
 //        }
 
-        public TheEnd desc(){
-            for( OrderByClauseElement pred : this.statement.orderByClause ){
-                pred.expression = OrderBySortOrderEnum.DESC;
+        public QuerySeal desc(){
+            for( OrderByClauseElement predicate : this.statement.orderByClause ){
+                predicate.expression = OrderBySortOrderEnum.DESC;
             }
-            return new TheEnd(this.statement);
+            return new QuerySeal(this.statement);
         }
 
         public SelectStatement build(){
@@ -135,11 +169,11 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
     }
 
-    public class TheEnd implements IQueryBuilder<SelectStatement> {
+    public static class QuerySeal implements IQueryBuilder<SelectStatement> {
 
         private final SelectStatement statement;
 
-        public TheEnd(SelectStatement selectStatement){
+        protected QuerySeal(SelectStatement selectStatement){
             this.statement = selectStatement;
         }
 
