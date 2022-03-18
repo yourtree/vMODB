@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.modb;
 
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
-import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilderException;
 import org.junit.Test;
 
 public class ExecutorTest {
@@ -14,7 +13,7 @@ public class ExecutorTest {
     }
 
     @Test
-    public void testExecutor() throws AnalyzerException, FilterBuilderException {
+    public void testExecutor() throws AnalyzerException {
 
 //        final QueryTree queryTree = getJoinQueryTree();
 //

@@ -1,6 +1,6 @@
-package dk.ku.di.dms.vms.database.query.planner.node.join;
+package dk.ku.di.dms.vms.database.query.planner.operator.join;
 
-import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 import dk.ku.di.dms.vms.database.store.common.IKey;
 

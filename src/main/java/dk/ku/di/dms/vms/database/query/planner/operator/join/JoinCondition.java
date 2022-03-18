@@ -1,6 +1,6 @@
-package dk.ku.di.dms.vms.database.query.planner.node.join;
+package dk.ku.di.dms.vms.database.query.planner.operator.join;
 
-import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
+import dk.ku.di.dms.vms.database.query.planner.operator.filter.IFilter;
 
 /**
  * A data class to encapsulate the join-related information

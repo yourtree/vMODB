@@ -4,12 +4,14 @@ import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum;
-import dk.ku.di.dms.vms.database.query.planner.node.filter.*;
-import dk.ku.di.dms.vms.database.query.planner.node.join.*;
-import dk.ku.di.dms.vms.database.query.planner.node.projection.Projector;
-import dk.ku.di.dms.vms.database.query.planner.node.scan.AbstractScan;
-import dk.ku.di.dms.vms.database.query.planner.node.scan.IndexScan;
-import dk.ku.di.dms.vms.database.query.planner.node.scan.SequentialScan;
+import dk.ku.di.dms.vms.database.query.planner.operator.filter.*;
+import dk.ku.di.dms.vms.database.query.planner.operator.join.*;
+import dk.ku.di.dms.vms.database.query.planner.operator.projection.Projector;
+import dk.ku.di.dms.vms.database.query.planner.operator.scan.AbstractScan;
+import dk.ku.di.dms.vms.database.query.planner.operator.scan.IndexScan;
+import dk.ku.di.dms.vms.database.query.planner.operator.scan.SequentialScan;
+import dk.ku.di.dms.vms.database.query.planner.tree.PlanNode;
+import dk.ku.di.dms.vms.database.query.planner.tree.QueryTreeTypeEnum;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.common.SimpleKey;
@@ -21,7 +23,7 @@ import dk.ku.di.dms.vms.database.store.table.Table;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static dk.ku.di.dms.vms.database.query.planner.node.join.JoinTypeEnum.*;
+import static dk.ku.di.dms.vms.database.query.planner.operator.join.JoinTypeEnum.*;
 
 /**
  * Class responsible for deciding for a plan to run a query
@@ -32,7 +34,7 @@ import static dk.ku.di.dms.vms.database.query.planner.node.join.JoinTypeEnum.*;
 public final class Planner {
 
     // TODO we can also have the option: AUTO, meaning the planner will look for the possibility of building a bushy tree
-    public PlanNode plan(final QueryTree queryTree) throws FilterBuilderException {
+    public PlanNode plan(final QueryTree queryTree) {
         return this.plan( queryTree, QueryTreeTypeEnum.LEFT_DEEP );
     }
 
@@ -205,7 +207,7 @@ public final class Planner {
      * @param joinsPerTable
      * @param filtersForJoinGroupedByTable
      */
-    private void applyFiltersToJoins(final Map<Table,List<AbstractJoin>> joinsPerTable, final Map<Table, List<WherePredicate>> filtersForJoinGroupedByTable) throws FilterBuilderException {
+    private void applyFiltersToJoins(final Map<Table,List<AbstractJoin>> joinsPerTable, final Map<Table, List<WherePredicate>> filtersForJoinGroupedByTable) {
 
         Table currTable;
         // TODO Merging the filters with the join
@@ -251,9 +253,8 @@ public final class Planner {
      *
      * @param whereClauseGroupedByTableNotInAnyJoin
      * @return A list of independent scan operators
-     * @throws FilterBuilderException
      */
-    private List<AbstractScan> buildScanOperators(Map<Table,List<WherePredicate>> whereClauseGroupedByTableNotInAnyJoin) throws FilterBuilderException {
+    private List<AbstractScan> buildScanOperators(Map<Table,List<WherePredicate>> whereClauseGroupedByTableNotInAnyJoin) {
 
         List<AbstractScan> planNodes = new ArrayList<>();
 
@@ -403,7 +404,7 @@ public final class Planner {
         return null;
     }
 
-    public PlanNode plan(final QueryTree queryTree, final QueryTreeTypeEnum treeType) throws FilterBuilderException {
+    public PlanNode plan(final QueryTree queryTree, final QueryTreeTypeEnum treeType) {
 
         /*
          * Processing joins
@@ -490,7 +491,7 @@ public final class Planner {
         return projectionPlanNode;
     }
 
-    private FilterInfo buildFilterInfo( final List<WherePredicate> wherePredicates ) throws FilterBuilderException {
+    private FilterInfo buildFilterInfo( final List<WherePredicate> wherePredicates ) {
 
         final int size = wherePredicates.size();
         IFilter<?>[] filters = new IFilter<?>[size];

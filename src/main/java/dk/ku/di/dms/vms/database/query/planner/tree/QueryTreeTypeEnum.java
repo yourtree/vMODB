@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.query.planner;
+package dk.ku.di.dms.vms.database.query.planner.tree;
 
 public enum QueryTreeTypeEnum {
 

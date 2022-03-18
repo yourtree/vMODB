@@ -1,8 +1,8 @@
-package dk.ku.di.dms.vms.database.query.planner.node.scan;
+package dk.ku.di.dms.vms.database.query.planner.operator.scan;
 
-import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
-import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterInfo;
-import dk.ku.di.dms.vms.database.query.planner.node.filter.IFilter;
+import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.filter.FilterInfo;
+import dk.ku.di.dms.vms.database.query.planner.operator.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.database.store.common.IKey;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;

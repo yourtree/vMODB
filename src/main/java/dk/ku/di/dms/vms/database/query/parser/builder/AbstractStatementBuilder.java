@@ -26,7 +26,7 @@ public abstract class AbstractStatementBuilder {
 
         protected final T statement;
 
-        public JoinWhereClauseBridge(T statement){
+        protected JoinWhereClauseBridge(T statement){
             this.statement = statement;
         }
 
@@ -59,7 +59,7 @@ public abstract class AbstractStatementBuilder {
 
         private final JoinClauseElement joinClauseElement;
 
-        public CondJoinWhereClauseBridge(JoinClauseElement joinClauseElement, T statement){
+        protected CondJoinWhereClauseBridge(JoinClauseElement joinClauseElement, T statement){
             super(statement);
             this.joinClauseElement = joinClauseElement;
         }

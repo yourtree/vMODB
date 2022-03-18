@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.query.planner.node.filter;
+package dk.ku.di.dms.vms.database.query.planner.operator.filter;
 
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 

@@ -1,4 +1,6 @@
-package dk.ku.di.dms.vms.database.query.planner;
+package dk.ku.di.dms.vms.database.query.planner.tree;
+
+import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;

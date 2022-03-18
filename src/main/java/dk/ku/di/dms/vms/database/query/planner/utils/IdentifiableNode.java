@@ -5,7 +5,7 @@ package dk.ku.di.dms.vms.database.query.planner.utils;
  * Used in filters params and query plan tree
  * @param <T>
  */
-public class IdentifiableNode<T> {
+public final class IdentifiableNode<T> {
 
     public final int id;
     public final T object;

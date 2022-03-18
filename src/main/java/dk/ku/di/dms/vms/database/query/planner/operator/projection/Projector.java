@@ -1,6 +1,6 @@
-package dk.ku.di.dms.vms.database.query.planner.node.projection;
+package dk.ku.di.dms.vms.database.query.planner.operator.projection;
 
-import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
 import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.database.store.row.Row;
 

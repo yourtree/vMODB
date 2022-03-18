@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.query.planner.node.join;
+package dk.ku.di.dms.vms.database.query.planner.operator.join;
 
 public enum JoinTypeEnum {
 

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.database.query.planner.node;
+package dk.ku.di.dms.vms.database.query.planner.operator;
 
 import dk.ku.di.dms.vms.database.query.parser.enums.OrderBySortOrderEnum;
 

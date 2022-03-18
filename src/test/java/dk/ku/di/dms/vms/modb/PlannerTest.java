@@ -2,9 +2,8 @@ package dk.ku.di.dms.vms.modb;
 
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
-import dk.ku.di.dms.vms.database.query.planner.PlanNode;
+import dk.ku.di.dms.vms.database.query.planner.tree.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
-import dk.ku.di.dms.vms.database.query.planner.node.filter.FilterBuilderException;
 import org.junit.Test;
 
 import java.util.List;
@@ -12,7 +11,7 @@ import java.util.List;
 public class PlannerTest {
 
     @Test
-    public void testJoinPlan() throws AnalyzerException, FilterBuilderException {
+    public void testJoinPlan() throws AnalyzerException {
 
         final QueryTree queryTree = TestCommon.getJoinQueryTree();
 

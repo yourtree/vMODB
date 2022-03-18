@@ -137,6 +137,8 @@ public final class Analyzer {
             }
         }
 
+        // TODO make sure these exceptions coming from where clause are thrown in the analyzer
+        //  e.g., numeric comparisons between numbers and string/characters
         // where
         if(statement.whereClause != null) {
             List<WhereClauseElement<?>> where = statement.whereClause;

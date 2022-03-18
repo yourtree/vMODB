@@ -2,7 +2,9 @@ package dk.ku.di.dms.vms.database.query.parser.builder;
 
 import dk.ku.di.dms.vms.database.api.modb.IQueryBuilder;
 import dk.ku.di.dms.vms.database.query.parser.clause.GroupBySelectElement;
+import dk.ku.di.dms.vms.database.query.parser.clause.HavingClauseElement;
 import dk.ku.di.dms.vms.database.query.parser.clause.OrderByClauseElement;
+import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.database.query.parser.enums.GroupByOperationEnum;
 import dk.ku.di.dms.vms.database.query.parser.enums.OrderBySortOrderEnum;
 import dk.ku.di.dms.vms.database.query.parser.stmt.SelectStatement;
@@ -36,7 +38,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
         return this.entryPoint.avg(param);
     }
 
-    protected class EntryPoint{
+    protected class EntryPoint {
 
         private final SelectStatement statement;
         public EntryPoint(SelectStatement statement){
@@ -73,6 +75,14 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
         public NewProjectionOrFromClause avg(String param){
             return this.entryPoint.avg(param);
+        }
+
+        public NewProjectionOrFromClause having(ExpressionTypeEnum expression, Number value){
+            if(this.statement.havingClause == null) {
+                this.statement.havingClause = new ArrayList<>();
+            }
+            this.statement.havingClause.add( new HavingClauseElement<>(expression,value));
+            return this;
         }
 
         public OrderByGroupByJoinWhereClauseBridge from(String param) {
@@ -169,7 +179,8 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
     }
 
-    public static class QuerySeal implements IQueryBuilder<SelectStatement> {
+    // not of my interest to make it static, otherwise developers could instantiate it directly (in case the constructor were public)
+    public class QuerySeal implements IQueryBuilder<SelectStatement> {
 
         private final SelectStatement statement;
 

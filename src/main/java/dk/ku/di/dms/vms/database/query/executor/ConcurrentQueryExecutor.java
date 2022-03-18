@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.database.query.executor;
 
-import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
-import dk.ku.di.dms.vms.database.query.planner.PlanNode;
+import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.tree.PlanNode;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;

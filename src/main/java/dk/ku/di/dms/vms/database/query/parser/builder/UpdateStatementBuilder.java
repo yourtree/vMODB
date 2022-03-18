@@ -20,7 +20,7 @@ public class UpdateStatementBuilder extends AbstractStatementBuilder  {
 
         private final UpdateStatement statement;
 
-        public SetClause(UpdateStatement selectStatement){
+        protected SetClause(UpdateStatement selectStatement){
             this.statement = selectStatement;
         }
 

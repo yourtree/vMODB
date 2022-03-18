@@ -9,10 +9,10 @@ import dk.ku.di.dms.vms.database.query.parser.builder.SelectStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.builder.UpdateStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.database.query.parser.stmt.SelectStatement;
-import dk.ku.di.dms.vms.database.query.planner.OperatorResult;
-import dk.ku.di.dms.vms.database.query.planner.PlanNode;
+import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.tree.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
-import dk.ku.di.dms.vms.database.query.planner.node.projection.Projector;
+import dk.ku.di.dms.vms.database.query.planner.operator.projection.Projector;
 import dk.ku.di.dms.vms.database.store.common.SimpleKey;
 import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.EQUALS;
+import static dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum.GREATER_THAN;
 
 public class QueryTest {
 
@@ -118,7 +119,7 @@ public class QueryTest {
 
         SelectStatementBuilder builder = QueryBuilderFactory.select();
         SelectStatement sql = builder //.select("AVG(item.i_price)")
-                .avg("item.i_price")
+                .avg("item.i_price").having(GREATER_THAN, 10)
                 .from("item")
                 //.groupBy("i_price")
                 //.where("col2", EQUALS, 2) // this should raise an error
