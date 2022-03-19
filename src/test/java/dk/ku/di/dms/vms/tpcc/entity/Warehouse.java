@@ -11,13 +11,13 @@ public class Warehouse extends AbstractEntity<Integer> {
 
     @Id
     @GeneratedValue
-    public Integer w_id;
+    public int w_id;
 
     @Column
-    public Float w_tax;
+    public double w_tax;
 
     @Column
-    public Float w_ytd;
+    public double w_ytd;
 
     /*
     w_id smallint not null,
@@ -33,5 +33,11 @@ public class Warehouse extends AbstractEntity<Integer> {
  */
 
     public Warehouse(){}
+
+    public Warehouse(int w_id, double w_tax, double w_ytd) {
+        this.w_id = w_id;
+        this.w_tax = w_tax;
+        this.w_ytd = w_ytd;
+    }
 
 }

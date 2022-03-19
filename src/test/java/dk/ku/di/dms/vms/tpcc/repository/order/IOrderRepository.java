@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.tpcc.repository;
+package dk.ku.di.dms.vms.tpcc.repository.order;
 
 import dk.ku.di.dms.vms.annotations.Repository;
 import dk.ku.di.dms.vms.infra.IRepository;

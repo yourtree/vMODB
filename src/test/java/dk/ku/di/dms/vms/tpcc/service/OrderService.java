@@ -7,9 +7,9 @@ import dk.ku.di.dms.vms.tpcc.entity.NewOrder;
 import dk.ku.di.dms.vms.tpcc.entity.Order;
 import dk.ku.di.dms.vms.tpcc.entity.OrderLine;
 import dk.ku.di.dms.vms.tpcc.events.*;
-import dk.ku.di.dms.vms.tpcc.repository.INewOrderRepository;
-import dk.ku.di.dms.vms.tpcc.repository.IOrderLineRepository;
-import dk.ku.di.dms.vms.tpcc.repository.IOrderRepository;
+import dk.ku.di.dms.vms.tpcc.repository.order.INewOrderRepository;
+import dk.ku.di.dms.vms.tpcc.repository.order.IOrderLineRepository;
+import dk.ku.di.dms.vms.tpcc.repository.order.IOrderRepository;
 import dk.ku.di.dms.vms.utils.Pair;
 
 import java.util.concurrent.CompletableFuture;

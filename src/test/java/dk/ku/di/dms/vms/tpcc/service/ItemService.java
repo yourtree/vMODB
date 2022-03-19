@@ -12,10 +12,4 @@ public class ItemService {
         this.itemRepository = itemRepository;
     }
 
-//    @Inbound(values = "items-price-request")
-//    @Outbound("items-price")
-//    public Map<Integer,Float> getItemsById(ItemsNewOrderIn itemsPriceRequest){
-//        return itemRepository.getItemsById(itemsPriceRequest.itemsIds, itemsPriceRequest.s_w_id);
-//    }
-
 }

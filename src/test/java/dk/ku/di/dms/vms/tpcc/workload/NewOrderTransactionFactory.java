@@ -2,13 +2,14 @@ package dk.ku.di.dms.vms.tpcc.workload;
 
 import dk.ku.di.dms.vms.utils.Utils;
 
-import java.util.Date;
+import static dk.ku.di.dms.vms.tpcc.workload.Constants.*;
 
-import static dk.ku.di.dms.vms.tpcc.workload.TPCCConstants.*;
-
+/**
+ * Creates the input for a NewOrder transaction.
+ */
 public class NewOrderTransactionFactory {
 
-    public static NewOrderWorkPackage buildWorkPackage(final Integer num_ware, final Integer max_items, Integer dist_per_ware){
+    public static NewOrderTransactionInput buildWorkPackage(final Integer num_ware, final Integer max_items, Integer dist_per_ware){
 
         int dist_per_ware_ = DIST_PER_WARE;
         if (dist_per_ware != null){
@@ -28,25 +29,17 @@ public class NewOrderTransactionFactory {
         int ol_cnt = Utils.randomNumber(MIN_NUM_ITEMS, MAX_NUM_ITEMS);
         int all_local = 1;
 
-        int notfound = MAX_ITEMS + 1;
         int rbk = 0;
 
         int[] itemid = new int[MAX_NUM_ITEMS];
         int[] supware = new int[MAX_NUM_ITEMS];
         int[] qty = new int[MAX_NUM_ITEMS];
 
-        // TODO implement rbk later. this forces a transaction to abort
-        // rbk = Utils.randomNumber(1, 100);
-        rbk = 2;
-
         // TODO adjust to make use of all_local variable...
 
         for (int i = 0; i < ol_cnt; i++) {
 
             itemid[i] = Utils.nuRand(8191, 1, max_items_);
-            if ((i == ol_cnt - 1) && (rbk == 1)) {
-                itemid[i] = notfound;
-            }
 
             if (Utils.randomNumber(1, 100) != 1) {
                 supware[i] = w_id;
@@ -58,9 +51,7 @@ public class NewOrderTransactionFactory {
             qty[i] = Utils.randomNumber(MIN_ITEM_QTD, MAX_ITEM_QTD);
         }
 
-        final NewOrderWorkPackage workPackage = new NewOrderWorkPackage(w_id, d_id, c_id, ol_cnt, itemid, supware, qty, new Date().getTime());
-
-        return workPackage;
+        return new NewOrderTransactionInput(w_id, d_id, c_id, ol_cnt, itemid, supware, qty);
     }
 
     /*

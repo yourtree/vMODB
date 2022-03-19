@@ -64,7 +64,7 @@ public class Average implements IAggregate {
 
             // compute avg
             OptionalDouble optionalDouble = stream.average();
-            Double avg = optionalDouble.isPresent() ? optionalDouble.getAsDouble() : 0; // TODO log
+            double avg = optionalDouble.isPresent() ? optionalDouble.getAsDouble() : 0; // TODO log
 
             //store in operator result
             Object[] rowOutput = columnsForAggregation.get(entry.getKey());

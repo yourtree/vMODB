@@ -11,13 +11,16 @@ public class Item extends AbstractEntity<Integer> {
 
     @Id
     @GeneratedValue
-    public Integer i_id;
+    public int i_id;
 
     @Column
-    public Float i_price;
+    public int i_im_id;
 
     @Column
     public String i_name;
+
+    @Column
+    public float i_price;
 
     @Column
     public String i_data;
@@ -32,5 +35,13 @@ public class Item extends AbstractEntity<Integer> {
      */
 
     public Item(){}
+
+    public Item(int i_id, int i_im_id, String i_name, float i_price, String i_data) {
+        this.i_id = i_id;
+        this.i_im_id = i_im_id;
+        this.i_name = i_name;
+        this.i_price = i_price;
+        this.i_data = i_data;
+    }
 
 }

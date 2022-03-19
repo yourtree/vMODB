@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.annotations.VmsTable;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 
@@ -31,16 +32,18 @@ public class Customer extends AbstractEntity<Customer.CustomerId> {
     }
 
     @Id
-    public Long c_id;
+    public int c_id;
 
     @Id
-    public Integer c_d_id;
+    @VmsForeignKey(table=District.class,column = "d_id")
+    public int c_d_id;
 
     @Id
-    public Integer c_w_id;
+    @VmsForeignKey(table=Warehouse.class,column = "w_id")
+    public int c_w_id;
 
     @Column
-    public Float c_discount;
+    public float c_discount;
 
     @Column
     public String c_last;
@@ -49,9 +52,21 @@ public class Customer extends AbstractEntity<Customer.CustomerId> {
     public String c_credit;
 
     @Column
-    public Float c_balance;
+    public float c_balance;
 
     @Column
-    public Float c_ytd_payment;
+    public float c_ytd_payment;
 
+    public Customer(){}
+
+    public Customer(int c_id, int c_d_id, int c_w_id, float c_discount, String c_last, String c_credit, float c_balance, float c_ytd_payment) {
+        this.c_id = c_id;
+        this.c_d_id = c_d_id;
+        this.c_w_id = c_w_id;
+        this.c_discount = c_discount;
+        this.c_last = c_last;
+        this.c_credit = c_credit;
+        this.c_balance = c_balance;
+        this.c_ytd_payment = c_ytd_payment;
+    }
 }

@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.annotations.VmsTable;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 
@@ -22,19 +23,20 @@ public class District extends AbstractEntity<District.DistrictId> {
     }
 
     @Id
-    public Integer d_id;
+    public int d_id;
 
     @Id
-    public Integer d_w_id;
+    @VmsForeignKey(table=Warehouse.class,column = "w_id")
+    public int d_w_id;
 
     @Column
-    public Float d_tax;
+    public double d_tax;
 
     @Column
-    public Float d_ytd;
+    public double d_ytd;
 
     @Column
-    public Integer d_next_o_id;
+    public int d_next_o_id;
 
     /*
     d_id ]] .. tinyint_type .. [[ not null,
@@ -53,4 +55,11 @@ public class District extends AbstractEntity<District.DistrictId> {
 
     public District(){}
 
+    public District(int d_id, int d_w_id, double d_tax, double d_ytd, int d_next_o_id) {
+        this.d_id = d_id;
+        this.d_w_id = d_w_id;
+        this.d_tax = d_tax;
+        this.d_ytd = d_ytd;
+        this.d_next_o_id = d_next_o_id;
+    }
 }

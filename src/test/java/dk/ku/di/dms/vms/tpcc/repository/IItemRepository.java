@@ -6,7 +6,6 @@ import dk.ku.di.dms.vms.annotations.Query;
 import dk.ku.di.dms.vms.annotations.Repository;
 import dk.ku.di.dms.vms.infra.IRepository;
 import dk.ku.di.dms.vms.tpcc.entity.Item;
-import dk.ku.di.dms.vms.tpcc.entity.Stock;
 
 import java.util.List;
 import java.util.Map;
