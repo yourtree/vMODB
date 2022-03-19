@@ -1,12 +1,17 @@
 package dk.ku.di.dms.vms.database.query.planner;
 
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
+import dk.ku.di.dms.vms.database.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum;
+import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.aggregate.Average;
+import dk.ku.di.dms.vms.database.query.planner.operator.aggregate.IAggregate;
 import dk.ku.di.dms.vms.database.query.planner.operator.filter.*;
 import dk.ku.di.dms.vms.database.query.planner.operator.join.*;
-import dk.ku.di.dms.vms.database.query.planner.operator.projection.Projector;
+import dk.ku.di.dms.vms.database.query.planner.operator.projection.RawProjector;
+import dk.ku.di.dms.vms.database.query.planner.operator.projection.TypedProjector;
 import dk.ku.di.dms.vms.database.query.planner.operator.scan.AbstractScan;
 import dk.ku.di.dms.vms.database.query.planner.operator.scan.IndexScan;
 import dk.ku.di.dms.vms.database.query.planner.operator.scan.SequentialScan;
@@ -48,15 +53,24 @@ public final class Planner {
         return tablesInvolvedInJoin;
     }
 
-    private Map<Table,List<WherePredicate>> getWherePredicatesGroupedByTableNotInAnyJoin(
-            final QueryTree queryTree, final Map<String,Integer> tablesInvolvedInJoin ){
+    // tables involved in aggregate
+    private Map<String,Integer> getTablesInvolvedInAggregate(final QueryTree queryTree, Map<String,Integer> baseMap){
+        if(baseMap == null) baseMap = new HashMap<>();
+        for(final GroupByPredicate predicate : queryTree.groupByPredicates){
+            baseMap.put(predicate.columnReference.table.getName(), 1);
+        }
+        return baseMap;
+    }
+
+    private Map<Table,List<WherePredicate>> getWherePredicatesGroupedByTableNotInAnyJoinOrAggregate(
+            final QueryTree queryTree, final Map<String,Integer> tablesInvolvedInJoinOrAggregate ){
 
         // TODO optimization. avoid stream by reusing the table list in query tree. simply maintain a bool (in_join?)
         //  other approach is delivering these maps to the planner from the analyzer...
 
         return queryTree
                 .wherePredicates.stream()
-                .filter( clause -> !tablesInvolvedInJoin
+                .filter( clause -> !tablesInvolvedInJoinOrAggregate
                         .containsKey(clause.getTable().getName()) )
                 .collect(
                         Collectors.groupingBy( WherePredicate::getTable,
@@ -251,10 +265,10 @@ public final class Planner {
 
     /**
      *
-     * @param whereClauseGroupedByTableNotInAnyJoin
+     * @param wherePredicatesGroupedByTableNotInAnyJoinOrAggregate
      * @return A list of independent scan operators
      */
-    private List<AbstractScan> buildScanOperators(Map<Table,List<WherePredicate>> whereClauseGroupedByTableNotInAnyJoin) {
+    private List<AbstractScan> buildScanOperators(Map<Table,List<WherePredicate>> wherePredicatesGroupedByTableNotInAnyJoinOrAggregate) {
 
         List<AbstractScan> planNodes = new ArrayList<>();
 
@@ -266,7 +280,7 @@ public final class Planner {
         //      E.g., eval2(predicate1, values2, predicate2, values2) ...
         //      each one of the tables here lead to a cartesian product operation
         //      if there are any join, so it should be pushed upstream to avoid high cost
-        for( final Map.Entry<Table, List<WherePredicate>> entry : whereClauseGroupedByTableNotInAnyJoin.entrySet() ){
+        for( final Map.Entry<Table, List<WherePredicate>> entry : wherePredicatesGroupedByTableNotInAnyJoinOrAggregate.entrySet() ){
 
             final List<WherePredicate> wherePredicates = entry.getValue();
             final Table currTable = entry.getKey();
@@ -365,6 +379,21 @@ public final class Planner {
         return null;
     }
 
+    private PlanNode planAggregates( List<IAggregate> aggregates, final boolean embedScan ){
+        // TODO finish TODO consider filters in case embedded scan
+        if(embedScan){
+
+            IAggregate aggregate = aggregates.get(0);
+
+            OperatorResult input = new OperatorResult( aggregate.getTable().getPrimaryKeyIndex().rows() );
+
+            aggregate.accept( input );
+
+        }
+
+        return new PlanNode( aggregates.get(0) );
+    }
+
     /**
      *
      * @return List of independent tree of join operations
@@ -419,14 +448,17 @@ public final class Planner {
             applyFiltersToJoins(joinsPerTable, filtersForJoinGroupedByTable);
         }
 
+        getTablesInvolvedInAggregate(queryTree, tablesInvolvedInJoin);
+
         /*
          * Processing scans
          */
-        final Map<Table,List<WherePredicate>> wherePredicatesGroupedByTableNotInAnyJoin = getWherePredicatesGroupedByTableNotInAnyJoin( queryTree, tablesInvolvedInJoin );
+        final Map<Table,List<WherePredicate>> wherePredicatesGroupedByTableNotInAnyJoinOrAggregate =
+                getWherePredicatesGroupedByTableNotInAnyJoinOrAggregate( queryTree, tablesInvolvedInJoin );
 
         List<AbstractScan> scans = null;
-        if( !wherePredicatesGroupedByTableNotInAnyJoin.isEmpty() ){
-            scans = buildScanOperators(wherePredicatesGroupedByTableNotInAnyJoin);
+        if( !wherePredicatesGroupedByTableNotInAnyJoinOrAggregate.isEmpty() ){
+            scans = buildScanOperators(wherePredicatesGroupedByTableNotInAnyJoinOrAggregate);
         }
 
         List<PlanNode> joins = null;
@@ -434,8 +466,16 @@ public final class Planner {
             joins = planJoins( joinsPerTable, treeType );
         }
 
-        // TODO process group by predicates
-
+        // TODO process other group by predicates
+        List<IAggregate> aggregates = null;
+        if(!queryTree.groupByPredicates.isEmpty()) {
+            aggregates = new ArrayList<>();
+            for (GroupByPredicate groupByPredicate : queryTree.groupByPredicates) {
+                // for now I only have avg
+                Average average = new Average(groupByPredicate.columnReference, groupByPredicate.groupByColumnsReference);
+                aggregates.add(average);
+            }
+        }
 
         /*
          * Processing projection
@@ -447,7 +487,7 @@ public final class Planner {
          */
 
         // do we have both joins and scans?
-        if( !joinsPerTable.isEmpty() && !wherePredicatesGroupedByTableNotInAnyJoin.isEmpty() ){
+        if( !joinsPerTable.isEmpty() && !wherePredicatesGroupedByTableNotInAnyJoinOrAggregate.isEmpty() ){
             PlanNode cartesianProductNode = planCartesianProduct( scans, joins );
             projection.left = cartesianProductNode;
             cartesianProductNode.father = projection;
@@ -465,9 +505,19 @@ public final class Planner {
 
         } else {
             // it can be a cartesian product or a simple scan
-            PlanNode scanPlan = planScans(scans);
-            projection.left = scanPlan;
-            scanPlan.father = projection;
+            if(scans != null) {
+                PlanNode scanPlan = planScans(scans);
+                projection.left = scanPlan;
+                scanPlan.father = projection;
+            } else if (aggregates != null) {
+
+                PlanNode aggregatesPlan = planAggregates(aggregates,true);
+                //projection.left = aggregatesPlan;
+                //aggregatesPlan.father = projection;
+
+                projection = aggregatesPlan;
+
+            }
         }
 
         return projection;
@@ -479,13 +529,13 @@ public final class Planner {
 
         // case where we need to convert to a class type
         if(queryTree.returnType != null){
-            Projector projector = new Projector( queryTree.returnType, queryTree.projections );
+            TypedProjector projector = new TypedProjector( queryTree.returnType, queryTree.projections );
             projectionPlanNode = new PlanNode();
             projectionPlanNode.consumer = projector;
             projectionPlanNode.supplier = projector;
         } else {
             // simply a return containing rows
-            // TODO later
+            // RawProjector projector = new RawProjector( queryTree.projections, queryTree.groupByPredicates );
         }
 
         return projectionPlanNode;

@@ -52,10 +52,6 @@ public abstract class Table {
         return this.name;
     }
 
-    public boolean hasPrimaryKey(){
-        return primaryKeyIndex != null;
-    }
-
     public AbstractIndex<IKey> getPrimaryKeyIndex(){
         return primaryKeyIndex;
     }

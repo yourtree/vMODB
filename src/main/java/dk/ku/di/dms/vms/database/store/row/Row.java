@@ -25,7 +25,7 @@ public class Row {
     }
 
     public double getDouble(int id) {
-        return (Double) values[id];
+        return (double) values[id];
     }
 
     public long getLong(int id) {

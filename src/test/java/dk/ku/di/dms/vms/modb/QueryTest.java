@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.database.catalog.Catalog;
 import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
+import dk.ku.di.dms.vms.database.query.executor.SequentialQueryExecutor;
 import dk.ku.di.dms.vms.database.query.parser.builder.SelectStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.builder.UpdateStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
@@ -12,7 +13,7 @@ import dk.ku.di.dms.vms.database.query.parser.stmt.SelectStatement;
 import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.tree.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
-import dk.ku.di.dms.vms.database.query.planner.operator.projection.Projector;
+import dk.ku.di.dms.vms.database.query.planner.operator.projection.TypedProjector;
 import dk.ku.di.dms.vms.database.store.common.SimpleKey;
 import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.database.store.meta.DataType;
@@ -99,7 +100,7 @@ public class QueryTest {
         columnReferenceList.add(column2);
         columnReferenceList.add(column3);
 
-        Projector projector = new Projector(CustomerInfoDTO.class, columnReferenceList);
+        TypedProjector projector = new TypedProjector(CustomerInfoDTO.class, columnReferenceList);
 
         Collection<Row> rows = new ArrayList<>(2);
         Collections.addAll(rows, new Row(1F,"1","1" ) );
@@ -127,6 +128,15 @@ public class QueryTest {
 
         Analyzer analyzer = new Analyzer( catalog );
         QueryTree queryTree = analyzer.analyze( sql );
+
+        Planner planner = new Planner();
+        PlanNode planTree = planner.plan(queryTree);
+
+        SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(planTree);
+
+        OperatorResult result = queryExecutor.get();
+
+        assert(result != null);
 
     }
 

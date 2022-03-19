@@ -16,6 +16,7 @@ import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.database.store.meta.Schema;
 import dk.ku.di.dms.vms.database.store.table.Table;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -95,47 +96,72 @@ public final class Analyzer {
 
         // projection
         // columns in projection may come from join
-        List<String> columns = statement.selectClause;
+        if(statement.selectClause != null) {
+            List<String> columns = statement.selectClause;
 
-        // case where the user input is '*'
-        if(columns.size() == 1 && columns.get(0).contentEquals("*")){
+            // case where the user input is '*'
+            if (columns.size() == 1 && columns.get(0).contentEquals("*")) {
 
-            // iterate over all tables involved
-            for(final Table table : queryTree.tables.values()){
-                Schema tableSchema = table.getSchema();
-                int colPos = 0;
-                for( String columnName : tableSchema.getColumnNames() ){
-                    queryTree.projections.add( new ColumnReference( columnName, colPos, table ) );
-                    colPos++;
-                }
-            }
-
-        } else {
-            // cannot allow same column name without AS from multiple tables
-            for(String columnRefStr : columns){
-                if( columnRefStr.contains(".") ){
-                    String[] splitted = columnRefStr.split("\\."); // FIXME check if there are 2 indexes in array
-                    ColumnReference columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
-                    queryTree.projections.add(columnReference);
-                } else {
-                    ColumnReference columnReference = findColumnReference(columnRefStr, queryTree.tables);
-                    queryTree.projections.add(columnReference);
+                // iterate over all tables involved
+                for (final Table table : queryTree.tables.values()) {
+                    Schema tableSchema = table.getSchema();
+                    int colPos = 0;
+                    for (String columnName : tableSchema.getColumnNames()) {
+                        queryTree.projections.add(new ColumnReference(columnName, colPos, table));
+                        colPos++;
+                    }
                 }
 
-            }
-        }
-
-        List<GroupBySelectElement> groupByProjections = statement.groupBySelectClause;
-        for(GroupBySelectElement element : groupByProjections){
-            if( element.column.contains(".") ){
-                String[] splitted = element.column.split("\\.");
-                ColumnReference columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
-                queryTree.groupByPredicates.add( new GroupByPredicate( columnReference, element.operation ) );
             } else {
-                ColumnReference columnReference = findColumnReference(element.column, queryTree.tables);
-                queryTree.groupByPredicates.add( new GroupByPredicate( columnReference, element.operation ) );
+                // cannot allow same column name without AS from multiple tables
+                for (String columnRefStr : columns) {
+                    if (columnRefStr.contains(".")) {
+                        String[] splitted = columnRefStr.split("\\."); // FIXME check if there are 2 indexes in array
+                        ColumnReference columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
+                        queryTree.projections.add(columnReference);
+                    } else {
+                        ColumnReference columnReference = findColumnReference(columnRefStr, queryTree.tables);
+                        queryTree.projections.add(columnReference);
+                    }
+
+                }
             }
         }
+
+        List<ColumnReference> groupByColumnsReference = null;
+        if(statement.groupByClause != null) {
+            for (String column : statement.groupByClause) {
+                if (groupByColumnsReference == null) {
+                    groupByColumnsReference = new ArrayList<>(statement.groupByClause.size());
+                }
+
+                ColumnReference columnReference;
+                if (column.contains(".")) {
+                    String[] splitted = column.split("\\.");
+                    columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
+                } else {
+                    columnReference = findColumnReference(column, queryTree.tables);
+                }
+
+                groupByColumnsReference.add(columnReference);
+            }
+        }
+
+        if(statement.groupBySelectClause != null) {
+            List<GroupBySelectElement> groupByProjections = statement.groupBySelectClause;
+            for (GroupBySelectElement element : groupByProjections) {
+                ColumnReference columnReference;
+                if (element.column.contains(".")) {
+                    String[] splitted = element.column.split("\\.");
+                    columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
+                } else {
+                    columnReference = findColumnReference(element.column, queryTree.tables);
+                }
+                queryTree.groupByPredicates.add(new GroupByPredicate(columnReference, element.operation, groupByColumnsReference));
+            }
+        }
+
+        // TODO having clause
 
         // TODO make sure these exceptions coming from where clause are thrown in the analyzer
         //  e.g., numeric comparisons between numbers and string/characters

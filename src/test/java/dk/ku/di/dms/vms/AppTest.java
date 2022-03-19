@@ -80,7 +80,7 @@ public class AppTest
 
         Row row = new Row( 1, 2, 3, 10L );
         // filter.and
-         assertTrue(filter.eval( row.getInt(0) ));
+         assertTrue(filter.eval( row.get(0) ));
 
     }
 

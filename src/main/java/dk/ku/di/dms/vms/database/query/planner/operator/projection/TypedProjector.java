@@ -20,7 +20,7 @@ import java.util.function.Supplier;
  * This "operator" is simply taking a class and transforming the rows
  * contained in an {@link OperatorResult} into the class type
  */
-public class Projector implements Supplier<OperatorResult>, Consumer<OperatorResult> {
+public class TypedProjector implements Supplier<OperatorResult>, Consumer<OperatorResult> {
 
     private final Class<?> clazz;
 
@@ -28,7 +28,7 @@ public class Projector implements Supplier<OperatorResult>, Consumer<OperatorRes
 
     private final List<ColumnReference> projections;
 
-    public Projector(final Class<?> clazz, final List<ColumnReference> projections){
+    public TypedProjector(final Class<?> clazz, final List<ColumnReference> projections){
         this.clazz = clazz;
         this.projections = projections;
     }

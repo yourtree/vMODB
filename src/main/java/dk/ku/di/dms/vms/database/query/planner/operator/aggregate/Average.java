@@ -3,18 +3,19 @@ package dk.ku.di.dms.vms.database.query.planner.operator.aggregate;
 import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
 import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.database.store.row.Row;
+import dk.ku.di.dms.vms.database.store.table.Table;
+import dk.ku.di.dms.vms.utils.Pair;
 
 import java.util.*;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
+import java.util.stream.DoubleStream;
+
+import static java.util.stream.DoubleStream.Builder;
 
 /**
  * https://www.tutorialandexample.com/aggregate-functions-in-dbms
  * TODO embrace filters (beneficial in case no joins are previously employed) and having clause
  */
-public class Average<T extends Number> implements Supplier<OperatorResult>, Consumer<OperatorResult> {
+public class Average implements IAggregate {
 
     private OperatorResult input;
 
@@ -35,43 +36,76 @@ public class Average<T extends Number> implements Supplier<OperatorResult>, Cons
     @Override
     public OperatorResult get() {
 
-        HashMap<Integer, List<Object>> groupedValues = new HashMap<>();
-
-        IntStream intStream = IntStream.of(2,3,4);
-//        intStream.filter()
-//        intStream.average()
+        HashMap<Integer, Builder> valuesForAggregation = new HashMap<>();
+        HashMap<Integer, Object[]> columnsForAggregation = new HashMap<>();
 
         // having a number of maps equals to the number of groupBy columns can be overwhelming.
         // a better, more general solution to track the dependencies of sets fo values is required
 
-        // the grouping values are hashed
-        int sizeOfGroupByClause = groupByColumns.size();
-
-        Object[] valuesForHashing = new Object[sizeOfGroupByClause];
-        int i = 0;
         for( final Row row : input.getRows() ){
-
-            for(ColumnReference columnReference : groupByColumns){
-                valuesForHashing[i] = row.get(columnReference.columnPosition);
-                i++;
+            Pair<Integer,Object[]> pair = getGroupIdentifier(row);
+            if(valuesForAggregation.get( pair.getFirst() ) == null) {
+                Builder stream = DoubleStream.builder();
+                valuesForAggregation.put( pair.getFirst(), stream );
+                columnsForAggregation.put( pair.getFirst(), pair.getSecond() );
             }
-            i = 0;
-
-            // hash values
-            int hash = Arrays.hashCode( valuesForHashing );
-            List<Object> values = groupedValues.get( hash );
-            if(groupedValues.get( hash ) == null) {
-                values = new ArrayList<>();
-                groupedValues.put( hash, values );
-            }
-            values.add( row.get(column.columnPosition) );
+            // TODO check whether there is a better strategy, e.g., https://stackoverflow.com/questions/34446626/java-using-streams-on-abstract-datatypes
+            valuesForAggregation.get( pair.getFirst() ).add( ((Number) row.get(column.columnPosition)).doubleValue() );
 
         }
 
-        // TODO finish
-        // Stream<T> stream = (Stream<T>) groupedValues.get(1).stream();
+        List<Row> output = new ArrayList<>( valuesForAggregation.size() );
 
-        return null;
+        // iterate through each group of values
+        for(Map.Entry<Integer, Builder> entry : valuesForAggregation.entrySet()){
+
+            // build stream
+            DoubleStream stream = entry.getValue().build();
+
+            // compute avg
+            OptionalDouble optionalDouble = stream.average();
+            Double avg = optionalDouble.isPresent() ? optionalDouble.getAsDouble() : 0; // TODO log
+
+            //store in operator result
+            Object[] rowOutput = columnsForAggregation.get(entry.getKey());
+            rowOutput[columnsForAggregation.size()] = avg;
+            Row row = new Row( rowOutput );
+
+            output.add( row );
+
+        }
+
+        return new OperatorResult( output );
     }
 
+    private Pair<Integer,Object[]> getGroupIdentifier(Row row){
+
+        if(groupByColumns != null) {
+
+            Object[] valuesForHashing = new Object[groupByColumns.size() + 1];
+
+            int i = 0;
+            for (ColumnReference columnReference : this.groupByColumns) {
+                valuesForHashing[i] = row.get(columnReference.columnPosition);
+                i++;
+            }
+
+            // hash values
+            int hash = Arrays.hashCode(valuesForHashing);
+
+            return new Pair<>( hash, valuesForHashing );
+
+        }
+
+        Object[] rowOutput = new Object[2];
+        rowOutput[0] = 1; // can be anything...
+        return new Pair<>( 1, rowOutput );
+
+    }
+
+
+    @Override
+    public Table getTable() {
+        return this.column.table;
+    }
 }

@@ -28,6 +28,7 @@ public class QueryTree {
     // predicates
     public List<WherePredicate> wherePredicates;
 
+    // aggregate operations
     public List<GroupByPredicate> groupByPredicates;
 
     // TODO order by predicate

@@ -5,9 +5,7 @@ import dk.ku.di.dms.vms.database.store.row.Row;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 public class OperatorResult implements //Supplier<Collection<Row>>,
         Consumer<Row> {
@@ -33,6 +31,7 @@ public class OperatorResult implements //Supplier<Collection<Row>>,
     public OperatorResult(int size){
         this.rows = new ArrayList<>(size);
     }
+
     public OperatorResult(final List<Object> dataTransferObjects){
         this.dataTransferObjects = dataTransferObjects;
     }
