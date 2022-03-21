@@ -6,10 +6,14 @@ import dk.ku.di.dms.vms.tpcc.entity.*;
 import dk.ku.di.dms.vms.tpcc.repository.ICustomerRepository;
 import dk.ku.di.dms.vms.tpcc.repository.IItemRepository;
 import dk.ku.di.dms.vms.tpcc.repository.IStockRepository;
+import dk.ku.di.dms.vms.tpcc.repository.order.INewOrderRepository;
+import dk.ku.di.dms.vms.tpcc.repository.order.IOrderLineRepository;
+import dk.ku.di.dms.vms.tpcc.repository.order.IOrderRepository;
 import dk.ku.di.dms.vms.tpcc.repository.waredist.IDistrictRepository;
 import dk.ku.di.dms.vms.tpcc.repository.waredist.IWarehouseRepository;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 import static dk.ku.di.dms.vms.tpcc.workload.Constants.*;
@@ -22,45 +26,54 @@ public class SyntheticDataLoader {
     private ICustomerRepository customerRepository;
     private IItemRepository itemRepository;
     private IStockRepository stockRepository;
+    private IOrderRepository orderRepository;
+    private INewOrderRepository newOrderRepository;
+    private IOrderLineRepository orderLineRepository;
 
     public SyntheticDataLoader(IWarehouseRepository warehouseRepository,
                                IDistrictRepository districtRepository,
                                ICustomerRepository customerRepository,
                                IItemRepository itemRepository,
-                               IStockRepository stockRepository){
+                               IStockRepository stockRepository,
+                               IOrderRepository orderRepository,
+                               INewOrderRepository newOrderRepository,
+                               IOrderLineRepository orderLineRepository){
         this.warehouseRepository = warehouseRepository;
         this.districtRepository = districtRepository;
         this.customerRepository = customerRepository;
         this.itemRepository = itemRepository;
         this.stockRepository = stockRepository;
+        this.orderRepository = orderRepository;
+        this.newOrderRepository = newOrderRepository;
+        this.orderLineRepository = orderLineRepository;
     }
 
-    public void load(int num_ware, int max_items){
+    public void load(int num_ware, int max_items) {
 
         List<Warehouse> warehouses = new ArrayList<>(num_ware);
         // creating warehouse(s)
-        for(int i = 0; i < num_ware; i++){
-            warehouses.add( new Warehouse( i+1, ((double) Utils.randomNumber(10, 20) / 100.0), 3000000.00 ) );
+        for (int i = 0; i < num_ware; i++) {
+            warehouses.add(new Warehouse(i + 1, ((double) Utils.randomNumber(10, 20) / 100.0), 3000000.00));
         }
 
-        this.warehouseRepository.insertAll( warehouses );
+        this.warehouseRepository.insertAll(warehouses);
 
         List<District> warehouseDistricts = new ArrayList<>(num_ware * DIST_PER_WARE);
         int d_next_o_id = 3001;
 
         // creating districts
-        for(int i = 0; i < num_ware; i++){
+        for (int i = 0; i < num_ware; i++) {
 
-            for(int j = 0; j < DIST_PER_WARE; j++){
+            for (int j = 0; j < DIST_PER_WARE; j++) {
 
                 District district = new District(
-                        j+1, // district
-                        i+1, // warehouse
-                        (( Utils.randomNumber(10, 20)) / 100.0),
+                        j + 1, // district
+                        i + 1, // warehouse
+                        ((Utils.randomNumber(10, 20)) / 100.0),
                         30000.0,
                         d_next_o_id);
 
-                this.districtRepository.insertAll( warehouseDistricts );
+                this.districtRepository.insertAll(warehouseDistricts);
 
             }
 
@@ -69,13 +82,15 @@ public class SyntheticDataLoader {
         List<Customer> customers = new ArrayList<>(num_ware + DIST_PER_WARE * DIST_PER_WARE);
 
         // creating customers
-        for(int i = 0; i < num_ware; i++) {
+        for (int i = 0; i < num_ware; i++) {
 
-            for(int j = 0; j < DIST_PER_WARE; j++){
+            for (int j = 0; j < DIST_PER_WARE; j++) {
 
                 for (int l = 0; l < CUST_PER_DIST; l++) {
 
-                    int c_id = l+1;
+                    int c_id = l + 1;
+
+                    String c_first = Utils.makeAlphaString(8, 16);
 
                     String c_last;
                     if (c_id <= 1000) {
@@ -88,9 +103,10 @@ public class SyntheticDataLoader {
 
                     Customer customer = new Customer(
                             c_id,
-                            j+1,
-                            i+1,
+                            j + 1,
+                            i + 1,
                             ((Utils.randomNumber(0, 50)) / 100.0f),
+                            c_first,
                             c_last,
                             c_credit,
                             -10.0f,
@@ -103,12 +119,12 @@ public class SyntheticDataLoader {
             }
         }
 
-        customerRepository.insertAll( customers );
+        customerRepository.insertAll(customers);
 
         List<Item> items = new ArrayList<>(MAX_ITEMS);
 
         // creating items
-        for(int i = 0; i < max_items; i++){
+        for (int i = 0; i < max_items; i++) {
 
             int i_im_id = Utils.randomNumber(1, 10000);
 
@@ -117,27 +133,99 @@ public class SyntheticDataLoader {
             // FIXME embrace orig[]
             String i_data = Utils.makeAlphaString(26, 50);
 
-            items.add( new Item( i+1,  i_im_id, i_name, ((Utils.randomNumber(100, 10000)) / 100.0f), i_data ) );
+            items.add(new Item(i + 1, i_im_id, i_name, ((Utils.randomNumber(100, 10000)) / 100.0f), i_data));
         }
 
         List<Stock> stock = new ArrayList<>(num_ware * max_items);
 
         // creating stock items
-        for(int i = 0; i < num_ware; i++) {
+        for (int i = 0; i < num_ware; i++) {
 
             // creating stock for each item
-            for(int j = 0; j < max_items; j++){
+            for (int j = 0; j < max_items; j++) {
 
                 int s_quantity = Utils.randomNumber(MIN_STOCK_QTY, MAX_STOCK_QTY);
                 String s_data = Utils.makeAlphaString(26, 50);
                 String s_dist = Utils.makeAlphaString(24, 24);
 
-                stock.add( new Stock( j+1,i+1, s_quantity, s_data, s_dist ) );
+                stock.add(new Stock(j + 1, i + 1, s_quantity, s_data, s_dist));
             }
 
         }
 
-        stockRepository.insertAll( stock );
+        stockRepository.insertAll(stock);
+
+        /*
+         * ==================================================================+ |
+         * Order-related tables
+         * +==================================================================
+         */
+
+        int o_c_id;
+        int o_carrier_id;
+        int o_ol_cnt;
+        Date date;
+
+        int ol_i_id;
+        int ol_supply_w_id;
+        int ol_quantity;
+        float ol_amount;
+        String ol_dist_info;
+
+        Order order;
+        NewOrder newOrder;
+
+        List<Order> orders = new ArrayList<>(num_ware * DIST_PER_WARE * CUST_PER_DIST);
+        List<NewOrder> newOrders = new ArrayList<>(num_ware * DIST_PER_WARE * CUST_PER_DIST);
+
+        List<OrderLine> orderLines = new ArrayList<>(num_ware * DIST_PER_WARE * CUST_PER_DIST * MAX_NUM_ITEMS);
+
+        // for each warehouse
+        for (int w_id = 1; w_id <= num_ware; w_id++) {
+            // for each district
+            for (int d_id = 1; d_id <= DIST_PER_WARE; d_id++) {
+                // generate orders
+                for (int o_id = 1; o_id <= ORD_PER_DIST; o_id++) {
+
+                    o_c_id = Utils.randomNumber(1, CUST_PER_DIST);
+                    o_carrier_id = Utils.randomNumber(1, 10);
+                    o_ol_cnt = Utils.randomNumber(MIN_NUM_ITEMS, MAX_NUM_ITEMS);
+
+                    date = new Date(System.currentTimeMillis());
+
+                    if (o_id <= 2100) {
+                        orders.add(new Order(o_id, d_id, w_id, o_c_id, date, o_carrier_id, o_ol_cnt, 1));
+                    } else {
+                        orders.add(new Order(o_id, d_id, w_id, o_c_id, date, 0, o_ol_cnt, 1));
+                        newOrders.add(new NewOrder(o_id, d_id, w_id));
+                    }
+
+                    // order lines
+                    for (int ol = 1; ol <= o_ol_cnt; ol++) {
+
+                        ol_i_id = Utils.randomNumber(1, MAX_ITEMS);
+                        ol_supply_w_id = w_id;
+                        ol_quantity = DEFAULT_ITEM_QTY;
+                        ol_dist_info = Utils.makeAlphaString(24, 24);
+
+                        if (o_id <= 2100) {
+                            ol_amount = (Utils.randomNumber(10, 10000)) / 100.0f;
+                            orderLines.add(new OrderLine(o_id, d_id, w_id, ol, ol_i_id, ol_supply_w_id, date, ol_quantity, ol_amount, ol_dist_info));
+                        } else {
+                            ol_amount = 0.0f;
+                            orderLines.add(new OrderLine(o_id, d_id, w_id, ol, ol_i_id, ol_supply_w_id, null, ol_quantity, ol_amount, ol_dist_info));
+                        }
+
+                    }
+
+                }
+            }
+
+            orderRepository.insertAll(orders);
+            newOrderRepository.insertAll(newOrders);
+
+
+        }
 
     }
 

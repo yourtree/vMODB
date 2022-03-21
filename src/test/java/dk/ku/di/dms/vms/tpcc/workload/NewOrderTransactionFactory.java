@@ -48,7 +48,7 @@ public class NewOrderTransactionFactory {
                 all_local = 0;
             }
 
-            qty[i] = Utils.randomNumber(MIN_ITEM_QTD, MAX_ITEM_QTD);
+            qty[i] = Utils.randomNumber(MIN_ITEM_QTY, MAX_ITEM_QTY);
         }
 
         return new NewOrderTransactionInput(w_id, d_id, c_id, ol_cnt, itemid, supware, qty);

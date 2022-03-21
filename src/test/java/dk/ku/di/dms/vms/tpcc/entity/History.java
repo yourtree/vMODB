@@ -1,38 +1,50 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.annotations.VmsForeignKey;
+import dk.ku.di.dms.vms.annotations.VmsIndex;
 import dk.ku.di.dms.vms.annotations.VmsTable;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
+import java.util.Date;
 
 @Entity
-@VmsTable(name="history")
+@VmsTable(name="history",
+        indexes = {@VmsIndex(name = "fkey_history_1", columnList = "h_c_w_id,h_c_d_id,h_c_id"),
+                @VmsIndex(name = "fkey_history_2", columnList = "h_w_id,h_d_id")
+        })
 public class History extends AbstractEntity<Long> {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
-    public Long id;
+    public int id;
 
     @Column
-    public Integer h_c_id;
+    @VmsForeignKey(table=Customer.class,column = "c_id")
+    public int h_c_id;
 
     @Column
-    public Integer h_c_d_id;
+    @VmsForeignKey(table=Customer.class,column = "c_w_id")
+    public int h_c_w_id;
 
     @Column
-    public Integer h_c_w_id;
+    @VmsForeignKey(table=Customer.class,column = "c_d_id")
+    public int h_c_d_id;
 
     @Column
-    public Integer h_d_id;
+    @VmsForeignKey(table=District.class,column = "d_w_id")
+    public int h_w_id;
 
     @Column
-    public Integer h_w_id;
+    @VmsForeignKey(table=District.class,column = "d_id")
+    public int h_d_id;
+
 
     @Column
-    public Long h_date;
+    public Date h_date;
 
     @Column
-    public Float h_amount;
+    public float h_amount;
 
     @Column
     public String h_data;

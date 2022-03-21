@@ -1,5 +1,7 @@
 package dk.ku.di.dms.vms.tpcc.entity;
 
+import dk.ku.di.dms.vms.annotations.VmsForeignKey;
+import dk.ku.di.dms.vms.annotations.VmsIndex;
 import dk.ku.di.dms.vms.annotations.VmsTable;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 
@@ -7,7 +9,9 @@ import javax.persistence.*;
 import java.io.Serializable;
 
 @Entity
-@VmsTable(name="stock")
+@VmsTable(name="stock",
+        indexes = {@VmsIndex(name = "fkey_stock_2", columnList = "s_i_id")
+})
 @IdClass(Stock.StockId.class)
 public class Stock extends AbstractEntity<Stock.StockId> {
 
@@ -22,9 +26,11 @@ public class Stock extends AbstractEntity<Stock.StockId> {
     }
 
     @Id
+    @VmsForeignKey(table=Item.class,column = "i_id")
     public int s_i_id;
 
     @Id
+    @VmsForeignKey(table=Warehouse.class,column = "w_id")
     public int s_w_id;
 
     @Column

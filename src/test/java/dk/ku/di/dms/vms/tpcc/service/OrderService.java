@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.tpcc.repository.order.IOrderLineRepository;
 import dk.ku.di.dms.vms.tpcc.repository.order.IOrderRepository;
 import dk.ku.di.dms.vms.utils.Pair;
 
+import java.util.Date;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -52,7 +53,10 @@ public class OrderService {
                     wareDistNewOrderOut.d_id,
                     wareDistNewOrderOut.d_w_id,
                     customerNewOrderOut.c_id,
-                    n  // <====== ol_count is necessary from the number of item list
+                    new Date(),
+                    0, // FIXME
+                    n,  // <====== ol_count is necessary from the number of item list
+                    1 // FIXME
             );
 
             orderRepository.insert(orderToInsert);
