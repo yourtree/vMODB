@@ -24,14 +24,14 @@ public final class TestCommon {
         // item
         String[] itemColumns = { "i_id", "i_price", "i_name", "i_data" };
         DataType[] itemDataTypes = { DataType.INT, DataType.FLOAT, DataType.STRING, DataType.STRING  };
-        Schema itemSchema = new Schema(itemColumns, itemDataTypes, new int[]{0});
+        Schema itemSchema = new Schema(itemColumns, itemDataTypes, new int[]{0}, null, null );
         Table itemTable = new HashIndexedTable("item", itemSchema);
 
         // customer
         String[] customerColumns = { "c_id", "c_d_id", "c_w_id", "c_discount", "c_last", "c_credit", "c_balance", "c_ytd_payment" };
         DataType[] customerDataTypes = { DataType.LONG, DataType.INT, DataType.INT,
                 DataType.FLOAT, DataType.STRING, DataType.STRING, DataType.FLOAT, DataType.FLOAT };
-        Schema customerSchema = new Schema(customerColumns, customerDataTypes, new int[]{0,1,2});
+        Schema customerSchema = new Schema(customerColumns, customerDataTypes, new int[]{0,1,2}, null, null );
         Table customerTable = new HashIndexedTable("customer", customerSchema);
 
         Catalog catalog = new Catalog();
@@ -47,7 +47,7 @@ public final class TestCommon {
         final Catalog catalog = new Catalog();
         String[] columnNames = { "col1", "col2" };
         DataType[] columnDataTypes = { DataType.INT, DataType.INT };
-        final Schema schema = new Schema( columnNames, columnDataTypes, new int[]{0} );
+        final Schema schema = new Schema( columnNames, columnDataTypes, new int[]{0}, null, null );
         catalog.insertTable( new HashIndexedTable( "tb1", schema ));
         catalog.insertTable( new HashIndexedTable( "tb2", schema ));
 
@@ -68,7 +68,7 @@ public final class TestCommon {
         final Catalog catalog = new Catalog();
         String[] columnNames = { "col1", "col2" };
         DataType[] columnDataTypes = { DataType.INT, DataType.INT };
-        final Schema schema = new Schema( columnNames, columnDataTypes, new int[]{0} );
+        final Schema schema = new Schema( columnNames, columnDataTypes, new int[]{0}, null, null );
         catalog.insertTable( new HashIndexedTable( "tb1", schema ));
         catalog.insertTable( new HashIndexedTable( "tb2", schema ));
         catalog.insertTable( new HashIndexedTable( "tb3", schema ));

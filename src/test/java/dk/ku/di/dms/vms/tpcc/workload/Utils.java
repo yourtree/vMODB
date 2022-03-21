@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms;
+package dk.ku.di.dms.vms.tpcc.workload;
 
 import java.util.Random;
 

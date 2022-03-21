@@ -45,11 +45,9 @@ public class OrderLine extends AbstractEntity<OrderLine.OrderLineId> {
     @Id
     public int ol_number;
 
-    @Column
     @VmsForeignKey(table=Stock.class,column = "s_i_id")
     public int ol_i_id;
 
-    @Column
     @VmsForeignKey(table=Stock.class,column = "s_w_id")
     public int ol_supply_w_id;
 

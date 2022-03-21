@@ -13,8 +13,8 @@ import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.table.Table;
 import dk.ku.di.dms.vms.eShopOnContainers.events.CheckoutRequest;
-import dk.ku.di.dms.vms.metadata.ApplicationMetadata;
-import dk.ku.di.dms.vms.metadata.MetadataLoader;
+import dk.ku.di.dms.vms.metadata.VmsMetadata;
+import dk.ku.di.dms.vms.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.modb.TestCommon;
 import dk.ku.di.dms.vms.operational.DataOperationExecutor;
 import dk.ku.di.dms.vms.event.EventRepository;
@@ -23,6 +23,8 @@ import dk.ku.di.dms.vms.eShopOnContainers.logic.DummyLogic;
 import dk.ku.di.dms.vms.eShopOnContainers.repository.IProductRepository;
 import dk.ku.di.dms.vms.tpcc.entity.Item;
 import dk.ku.di.dms.vms.tpcc.events.CustomerNewOrderIn;
+import dk.ku.di.dms.vms.tpcc.workload.NewOrderTransaction;
+import dk.ku.di.dms.vms.tpcc.workload.SyntheticDataLoader;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,8 +41,24 @@ public class AppTest
     @Test
     public void testMetadataLoader() throws Exception {
 
-        MetadataLoader loader = new MetadataLoader();
-        ApplicationMetadata config = loader.load(null);
+        VmsMetadataLoader loader = new VmsMetadataLoader();
+        VmsMetadata config = loader.load("dk.ku.di.dms.vms.tpcc");
+
+    }
+
+    @Test
+    public void testDataLoader() throws Exception {
+
+        VmsMetadataLoader loader = new VmsMetadataLoader();
+        VmsMetadata metadata = loader.load("dk.ku.di.dms.vms.tpcc");
+
+        SyntheticDataLoader dataLoader = metadata.getMicroservice(SyntheticDataLoader.class);
+
+        dataLoader.load( 1, 1 );
+
+        NewOrderTransaction newOrderTransaction = metadata.getMicroservice(NewOrderTransaction.class);
+
+        // newOrderTransaction.
 
     }
 
@@ -100,21 +118,6 @@ public class AppTest
 
         Thread.sleep(100000);
     }
-
-//    @Test
-//    public void testExport() {
-//
-//        try {
-//            HibernateExporter exporter =
-//                    new HibernateExporter("org.hibernate.dialect.H2Dialect", "dk.ku.di.dms.vms");
-//            exporter.exportToConsole();
-//            exporter.export(new File("schema.sql"),true,false);
-//        }
-//        catch(Exception e){
-//            System.out.println(e.getMessage());
-//        }
-//
-//    }
 
     @Test
     public void testParameterizedCall() {

@@ -10,7 +10,6 @@ import dk.ku.di.dms.vms.database.query.planner.operator.aggregate.Average;
 import dk.ku.di.dms.vms.database.query.planner.operator.aggregate.IAggregate;
 import dk.ku.di.dms.vms.database.query.planner.operator.filter.*;
 import dk.ku.di.dms.vms.database.query.planner.operator.join.*;
-import dk.ku.di.dms.vms.database.query.planner.operator.projection.RawProjector;
 import dk.ku.di.dms.vms.database.query.planner.operator.projection.TypedProjector;
 import dk.ku.di.dms.vms.database.query.planner.operator.scan.AbstractScan;
 import dk.ku.di.dms.vms.database.query.planner.operator.scan.IndexScan;
@@ -37,6 +36,11 @@ import static dk.ku.di.dms.vms.database.query.planner.operator.join.JoinTypeEnum
  *   plan tree that can be processed by the executor most effectively."
  */
 public final class Planner {
+
+    public PlanNode planBulkInsert(){
+        // TODO finish
+        return null;
+    }
 
     // TODO we can also have the option: AUTO, meaning the planner will look for the possibility of building a bushy tree
     public PlanNode plan(final QueryTree queryTree) {
@@ -182,7 +186,7 @@ public final class Planner {
      */
     private void addJoinToRespectiveTableInOrderOfJoinOperation(final Table table, final AbstractJoin join, Map<Table,List<AbstractJoin>> joinsPerTable ){
 
-        List<AbstractJoin> joins = joinsPerTable.getOrDefault(table,new ArrayList<>());
+        List<AbstractJoin> joins = joinsPerTable.getOrDefault( table, new ArrayList<>() );
 
         if(joins.size() == 0){
             joins.add(join);
@@ -411,7 +415,7 @@ public final class Planner {
             for(final Map.Entry<Table,List<AbstractJoin>> joinEntry : joinsPerTable.entrySet()){
                 List<AbstractJoin> joins = joinEntry.getValue();
                 for( final AbstractJoin join : joins ) {
-                    final PlanNode node = new PlanNode(join);
+                    PlanNode node = new PlanNode(join);
                     node.left = previous;
                     if(previous != null){
                         previous.father = node;

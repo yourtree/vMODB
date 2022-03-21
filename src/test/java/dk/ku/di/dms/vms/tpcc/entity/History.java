@@ -19,23 +19,18 @@ public class History extends AbstractEntity<Integer> {
     @GeneratedValue(strategy = GenerationType.AUTO)
     public int id;
 
-    @Column
     @VmsForeignKey(table=Customer.class,column = "c_id")
     public int h_c_id;
 
-    @Column
     @VmsForeignKey(table=Customer.class,column = "c_w_id")
     public int h_c_w_id;
 
-    @Column
     @VmsForeignKey(table=Customer.class,column = "c_d_id")
     public int h_c_d_id;
 
-    @Column
     @VmsForeignKey(table=District.class,column = "d_w_id")
     public int h_w_id;
 
-    @Column
     @VmsForeignKey(table=District.class,column = "d_id")
     public int h_d_id;
 

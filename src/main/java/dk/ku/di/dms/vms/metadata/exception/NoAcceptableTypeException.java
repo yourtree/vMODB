@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.metadata;
+package dk.ku.di.dms.vms.metadata.exception;
 
 public class NoAcceptableTypeException extends Exception{
     public NoAcceptableTypeException(String message) {

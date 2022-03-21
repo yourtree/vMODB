@@ -11,7 +11,9 @@ import dk.ku.di.dms.vms.database.store.index.IIndexKey;
 import dk.ku.di.dms.vms.database.store.meta.*;
 import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;
 import dk.ku.di.dms.vms.event.IEvent;
-import dk.ku.di.dms.vms.exception.MappingException;
+import dk.ku.di.dms.vms.metadata.exception.QueueMappingException;
+import dk.ku.di.dms.vms.metadata.exception.NoAcceptableTypeException;
+import dk.ku.di.dms.vms.metadata.exception.NoPrimaryKeyFoundException;
 import dk.ku.di.dms.vms.operational.DataOperationSignature;
 import org.reflections.Configuration;
 import org.reflections.Reflections;
@@ -36,15 +38,15 @@ import javax.validation.constraints.PositiveOrZero;
 
 import static org.reflections.scanners.Scanners.FieldsAnnotated;
 
-public class MetadataLoader {
+public class VmsMetadataLoader {
 
-    private static final Logger logger = LoggerFactory.getLogger(MetadataLoader.class);
+    private static final Logger logger = LoggerFactory.getLogger(VmsMetadataLoader.class);
 
-    public ApplicationMetadata load(String forPackage) throws
+    public VmsMetadata load(String forPackage) throws
             ClassNotFoundException, InvocationTargetException,
-            InstantiationException, IllegalAccessException, MappingException, NoPrimaryKeyFoundException, NoAcceptableTypeException, UnsupportedConstraint {
+            InstantiationException, IllegalAccessException, QueueMappingException, NoPrimaryKeyFoundException, NoAcceptableTypeException, UnsupportedConstraint {
 
-        ApplicationMetadata applicationMetadata = new ApplicationMetadata();
+        final VmsMetadata applicationMetadata = new VmsMetadata();
 
         if(forPackage == null) {
             forPackage = "dk.ku.di.dms.vms";
@@ -70,7 +72,7 @@ public class MetadataLoader {
          */
 
         // DatabaseMetadata databaseMetadata
-        Catalog catalog = new Catalog();
+        final Catalog catalog = applicationMetadata.getCatalog();
 
         // get all fields annotated with column
         Set<Field> allEntityFields = reflections.get(
@@ -94,14 +96,9 @@ public class MetadataLoader {
                 .collect( Collectors.groupingBy( Field::getDeclaringClass,
                         Collectors.toList()) );
 
-        //  should we keep metadata about associations? the query processing is oblivious to that
-        //      but, without enforcing cardinality of relationships, the developer can write erroneous code
-        // get all associations
+        // get all foreign keys
         Set<Field> allAssociationFields = reflections.get(
-                FieldsAnnotated.with(OneToMany.class)
-                        .add(FieldsAnnotated.with(ManyToOne.class))
-                        .add(FieldsAnnotated.with(ManyToMany.class))
-                        .add(FieldsAnnotated.with(OneToOne.class))
+                FieldsAnnotated.with(VmsForeignKey.class)
                         .as(Field.class, reflectionsConfig.getClassLoaders())
         );
 
@@ -111,7 +108,7 @@ public class MetadataLoader {
                         Collectors.toList()) );
 
         // build schema of each table
-        // we build the schema in order to lookup the fields and define the pk hash index
+        // we build the schema in order to look up the fields and define the pk hash index
         for(final Map.Entry<Class<?>,List<Field>> entry : pkMap.entrySet()){
 
             Class<?> tableClass = entry.getKey();
@@ -122,19 +119,15 @@ public class MetadataLoader {
             }
             int totalNumberOfFields = pkFields.size();
 
-            List<Field> associationFields = associationMap.get( tableClass );
+            List<Field> foreignKeyFields = associationMap.get( tableClass );
             List<Field> columnFields = columnMap.get( tableClass );
 
-            if(associationFields != null) {
-                totalNumberOfFields += associationFields.size();
-            } else {
-                associationFields = Collections.emptyList();
+            if(foreignKeyFields != null) {
+                totalNumberOfFields += foreignKeyFields.size();
             }
 
             if(columnFields != null) {
                 totalNumberOfFields += columnFields.size();
-            } else {
-                columnFields = Collections.emptyList();
             }
 
             final String[] columnNames = new String[totalNumberOfFields];
@@ -146,121 +139,77 @@ public class MetadataLoader {
             int i = 0;
             for(final Field field : pkFields){
                 Class<?> attributeType = field.getType();
-                if (attributeType == Integer.class){
-                    columnDataTypes[i] = DataType.INT;
-                }
-                else if (attributeType == Float.class){
-                    columnDataTypes[i] = DataType.FLOAT;
-                }
-                else if (attributeType == Double.class){
-                    columnDataTypes[i] = DataType.DOUBLE;
-                }
-                else if (attributeType == Character.class){
-                    columnDataTypes[i] = DataType.CHAR;
-                }
-                else if (attributeType == String.class){
-                    columnDataTypes[i] = DataType.STRING;
-                }
-                else if (attributeType == Long.class){
-                    columnDataTypes[i] = DataType.LONG;
-                }
-                else {
-                    throw new NoAcceptableTypeException( "Attribute "+field.getName()+ " type is not accepted." );
-                }
+                columnDataTypes[i] = getColumnDataTypeFromAttributeType(attributeType);
                 pkFieldsStr[i] = i;
                 columnNames[i] = field.getName();
                 i++;
             }
 
-            // iterating over association columns
-            for(final Field field : associationFields){
+            ForeignKeyReference[] foreignKeyReferences = null;
+            if(foreignKeyFields != null) {
+                foreignKeyReferences = new ForeignKeyReference[foreignKeyFields.size()];
+                int j = 0;
+                // iterating over association columns
+                for (final Field field : foreignKeyFields) {
 
-                // do we have a join column annotation ? @JoinColumn(name="checkout_id")
-                Optional<Annotation> joinColumnAnnotation = Arrays.stream(field.getAnnotations())
-                        .filter(p -> p.annotationType() == JoinColumn.class).findFirst();
+                    Class<?> attributeType = field.getType();
+                    columnDataTypes[i] = getColumnDataTypeFromAttributeType(attributeType);
+                    columnNames[i] = field.getName();
+                    i++;
 
-                String columnNameJoin;
-                if(joinColumnAnnotation.isPresent()){
-                    columnNameJoin = ((JoinColumn) joinColumnAnnotation.get()).name();
-                } else {
+                    VmsForeignKey fkAnnotation = (VmsForeignKey) Arrays.stream(field.getAnnotations())
+                            .filter(p -> p.annotationType() == VmsForeignKey.class).findFirst().get();
 
-                    Optional<Annotation> joinColumnsAnnotation = Arrays.stream(field.getAnnotations())
-                            .filter(p -> p.annotationType() == JoinColumns.class).findFirst();
-
-                    // TODO finish joinColumnsAnnotation... for now simply getting field name
-
-                    columnNameJoin = field.getName();
+                    // later we parse into a Vms Table and check whether the types match
+                    foreignKeyReferences[j] = new ForeignKeyReference(fkAnnotation.table(), fkAnnotation.column());
                 }
-
-                // FIXME the entity type may not be known at this time, so we defer the type definition to a later point
-                //  storing the pending type definition
-                //  <<the table class, the reference to the columnType array, the position>>
-                columnDataTypes[i] = DataType.INT;
-                columnNames[i] = columnNameJoin;
-                i++;
-
             }
 
             ConstraintReference[] constraints = null;
+            if(columnFields != null) {
+                // iterating over non-pk and non-fk columns;
+                for (final Field field : columnFields) {
 
-            // iterating over non-pk and non-association columns;
-            for(final Field field : columnFields){
+                    Class<?> attributeType = field.getType();
+                    columnDataTypes[i] = getColumnDataTypeFromAttributeType(attributeType);
 
-                Class<?> attributeType = field.getType();
-                if (attributeType == Integer.class || attributeType.getCanonicalName().equalsIgnoreCase("int")){
-                    columnDataTypes[i] = DataType.INT;
-                }
-                else if (attributeType == Float.class){
-                    columnDataTypes[i] = DataType.FLOAT;
-                }
-                else if (attributeType == Double.class){
-                    columnDataTypes[i] = DataType.DOUBLE;
-                }
-                else if (attributeType == Character.class){
-                    columnDataTypes[i] = DataType.CHAR;
-                }
-                else if (attributeType == String.class){
-                    columnDataTypes[i] = DataType.STRING;
-                }
-                else if (attributeType == Long.class){
-                    columnDataTypes[i] = DataType.LONG;
-                }
-                else {
-                    throw new NoAcceptableTypeException( "Attribute "+field.getName()+ " type is not accepted." );
-                }
+                    // get constraints ought to be applied to this column, e.g., non-negative, not null, nullable
+                    List<Annotation> constraintAnnotations = Arrays.stream(field.getAnnotations())
+                            .filter(p -> p.annotationType() == Positive.class ||
+                                    p.annotationType() == PositiveOrZero.class ||
+                                    p.annotationType() == NotNull.class ||
+                                    p.annotationType() == Null.class
+                            ).collect(Collectors.toList());
 
-                // get constraints ought to be applied to this column, e.g., non-negative, not null, nullable
-                List<Annotation> constraintAnnotations = Arrays.stream(field.getAnnotations())
-                        .filter(p -> p.annotationType() == Positive.class ||
-                                     p.annotationType() == PositiveOrZero.class ||
-                                     p.annotationType() == NotNull.class ||
-                                     p.annotationType() == Null.class
-                        ).collect(Collectors.toList());
-
-                constraints = new ConstraintReference[constraintAnnotations.size()];
-                int nC = 0;
-                for(Annotation constraint : constraintAnnotations){
-                    String constraintName = constraint.annotationType().getName();
-                    switch(constraintName){
-                        case "javax.validation.constraints.PositiveOrZero": constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE_OR_ZERO,i); break;
-                        case "javax.validation.constraints.Positive": constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE,i); break;
-                        case "javax.validation.constraints.Null" : constraints[nC] = new ConstraintReference(ConstraintEnum.NULL,i); break;
-                        case "javax.validation.constraints.NotNull" : constraints[nC] = new ConstraintReference(ConstraintEnum.NOT_NULL,i); break;
-                        default: throw new UnsupportedConstraint( "Constraint "+constraintName+" not supported." );
+                    constraints = new ConstraintReference[constraintAnnotations.size()];
+                    int nC = 0;
+                    for (Annotation constraint : constraintAnnotations) {
+                        String constraintName = constraint.annotationType().getName();
+                        switch (constraintName) {
+                            case "javax.validation.constraints.PositiveOrZero":
+                                constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE_OR_ZERO, i);
+                                break;
+                            case "javax.validation.constraints.Positive":
+                                constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE, i);
+                                break;
+                            case "javax.validation.constraints.Null":
+                                constraints[nC] = new ConstraintReference(ConstraintEnum.NULL, i);
+                                break;
+                            case "javax.validation.constraints.NotNull":
+                                constraints[nC] = new ConstraintReference(ConstraintEnum.NOT_NULL, i);
+                                break;
+                            default:
+                                throw new UnsupportedConstraint("Constraint " + constraintName + " not supported.");
+                        }
+                        nC++;
                     }
-                    nC++;
+
+                    columnNames[i] = field.getName();
+                    i++;
                 }
-
-                columnNames[i] = field.getName();
-                i++;
             }
 
-            Schema schema;
-            if(constraints != null) {
-                schema = new Schema(columnNames, columnDataTypes, pkFieldsStr, constraints);
-            } else {
-                schema = new Schema(columnNames, columnDataTypes, pkFieldsStr);
-            }
+            Schema schema = new Schema(columnNames, columnDataTypes, pkFieldsStr, foreignKeyReferences, constraints);
 
             Annotation[] annotations = tableClass.getAnnotations();
             for (Annotation an : annotations) {
@@ -323,18 +272,26 @@ public class MetadataLoader {
         SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
          */
 
-        /*
-         * Map transactions to input and output events
-         */
-        Set<Method> transactionalMethods = reflections.getMethodsAnnotatedWith(Transactional.class);
+        mapTransactionInputOutput(applicationMetadata, reflections);
 
-        Map<String,Object> loadedClasses = new HashMap<>();
+        return applicationMetadata;
+
+    }
+
+    /**
+     * Map transactions to input and output events
+     */
+    private void mapTransactionInputOutput(VmsMetadata applicationMetadata, Reflections reflections)
+            throws ClassNotFoundException, InstantiationException, IllegalAccessException, InvocationTargetException, QueueMappingException {
+
+        Set<Method> transactionalMethods = reflections.getMethodsAnnotatedWith(Transactional.class);
 
         for (final Method method : transactionalMethods) {
             logger.info("Mapped = " + method.getName());
 
             String className = method.getDeclaringClass().getCanonicalName();
-            Object obj = loadedClasses.get(className);
+            Object obj = applicationMetadata.getMicroservice(className);
+
             if(obj == null){
                 Class<?> cls = Class.forName(className);
                 Constructor<?>[] constructors = cls.getDeclaredConstructors();
@@ -345,7 +302,7 @@ public class MetadataLoader {
                 for (Class parameterType : constructor.getParameterTypes()) {
                     try {
                         Object proxyInstance = Proxy.newProxyInstance(
-                                MetadataLoader.class.getClassLoader(),
+                                VmsMetadataLoader.class.getClassLoader(),
                                 new Class[]{parameterType},
                                 // it works without casting as long as all services respect
                                 // the constructor rule to have only repositories
@@ -358,7 +315,7 @@ public class MetadataLoader {
 
                 obj = constructor.newInstance(repositoryList.toArray());
 
-                loadedClasses.put(className,obj);
+                applicationMetadata.registerMicroservice(className,obj);
             }
 
             Class<?> outputType = method.getReturnType();
@@ -383,7 +340,7 @@ public class MetadataLoader {
                         if(applicationMetadata.queueToEventMap.get(inputQueues[i]) == null){
                             applicationMetadata.queueToEventMap.put(inputQueues[i], (Class<IEvent>) inputTypes.get(i));
                         } else if( applicationMetadata.queueToEventMap.get(inputQueues[i]) != inputTypes.get(i) ) {
-                            throw new MappingException("Error mapping. An input queue cannot be mapped to two or more event types.");
+                            throw new QueueMappingException("Error mapping. An input queue cannot be mapped to two or more event types.");
                         }
 
                         List<DataOperationSignature> list = applicationMetadata.eventToOperationMap.get(inputQueues[i]);
@@ -409,11 +366,31 @@ public class MetadataLoader {
             }
 
         }
-
-        return applicationMetadata;
-
     }
 
+    private DataType getColumnDataTypeFromAttributeType(Class<?> attributeType) throws NoAcceptableTypeException {
+        if (attributeType == Integer.class || attributeType.getCanonicalName().equalsIgnoreCase("int")){
+            return DataType.INT;
+        }
+        else if (attributeType == Float.class || attributeType.getCanonicalName().equalsIgnoreCase("float")){
+            return DataType.FLOAT;
+        }
+        else if (attributeType == Double.class || attributeType.getCanonicalName().equalsIgnoreCase("double")){
+            return DataType.DOUBLE;
+        }
+        else if (attributeType == Character.class || attributeType.getCanonicalName().equalsIgnoreCase("char")){
+            return DataType.CHAR;
+        }
+        else if (attributeType == String.class){
+            return DataType.STRING;
+        }
+        else if (attributeType == Long.class || attributeType.getCanonicalName().equalsIgnoreCase("long")){
+            return DataType.LONG;
+        }
+        else {
+            throw new NoAcceptableTypeException(attributeType.getCanonicalName() + " is not accepted");
+        }
+    }
 
 
 }

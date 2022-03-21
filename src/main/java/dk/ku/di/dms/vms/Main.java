@@ -2,17 +2,16 @@ package dk.ku.di.dms.vms;
 
 import dk.ku.di.dms.vms.manager.Manager;
 import dk.ku.di.dms.vms.manager.ManagerMetadata;
-import dk.ku.di.dms.vms.exception.MappingException;
+import dk.ku.di.dms.vms.metadata.exception.QueueMappingException;
 
 import java.lang.reflect.InvocationTargetException;
-import java.util.concurrent.*;
 
 import static java.lang.Thread.sleep;
 
 public class Main {
 
     // TODO read application config and apply the proper configuration
-    public static void main(String[] args) throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException, MappingException {
+    public static void main(String[] args) throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException, QueueMappingException {
 
         // periodical task to check whether threads are working correctly
         // https://stackoverflow.com/questions/7814089/how-to-schedule-a-periodic-task-in-java

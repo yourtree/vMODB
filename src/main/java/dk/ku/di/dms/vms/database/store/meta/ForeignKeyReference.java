@@ -1,19 +1,27 @@
 package dk.ku.di.dms.vms.database.store.meta;
 
-import dk.ku.di.dms.vms.database.store.table.Table;
+import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 public class ForeignKeyReference {
 
-    private Table table;
+    private final Class<? extends AbstractEntity<?>> entityClazz;
 
     // the position of the columns that reference the other table
-    private int[] columnSet;
+    private final String columnName;
 
-    private CardinalityTypeEnum cardinality;
+    // private CardinalityTypeEnum cardinality; TODO check whether this is necessary
 
-    public ForeignKeyReference(Table table, int[] columnSet) {
-        this.table = table;
-        this.columnSet = columnSet;
+    public ForeignKeyReference(final Class<? extends AbstractEntity<?>> entityClazz, final String columnName) {
+        this.entityClazz = entityClazz;
+        this.columnName = columnName;
+    }
+
+    public Class<? extends AbstractEntity<?>> getEntity() {
+        return entityClazz;
+    }
+
+    public String getColumnName() {
+        return columnName;
     }
 
 }

@@ -1,6 +1,5 @@
-package dk.ku.di.dms.vms.tpcc_monolithic;
+package dk.ku.di.dms.vms.tpcc.workload;
 
-import dk.ku.di.dms.vms.Utils;
 import dk.ku.di.dms.vms.annotations.Microservice;
 import dk.ku.di.dms.vms.annotations.Transactional;
 import dk.ku.di.dms.vms.tpcc.entity.*;
@@ -145,7 +144,7 @@ public class SyntheticDataLoader {
         customerRepository.insertAll(customers);
         historyRepository.insertAll( historyRecords );
 
-        List<Item> items = new ArrayList<>(MAX_ITEMS);
+        List<Item> items = new ArrayList<>(max_items);
 
         // creating items
         for (int i = 0; i < max_items; i++) {
@@ -225,7 +224,7 @@ public class SyntheticDataLoader {
                     // order lines
                     for (int ol = 1; ol <= o_ol_cnt; ol++) {
 
-                        ol_i_id = Utils.randomNumber(1, MAX_ITEMS);
+                        ol_i_id = Utils.randomNumber(1, max_items);
                         ol_supply_w_id = w_id;
                         ol_quantity = DEFAULT_ITEM_QTY;
                         ol_dist_info = Utils.makeAlphaString(24, 24);

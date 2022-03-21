@@ -1,8 +1,6 @@
 package dk.ku.di.dms.vms.operational;
 
 import java.lang.reflect.Method;
-import java.util.List;
-import java.util.Set;
 
 /**
  * A data class that stores the method, respective class,

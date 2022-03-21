@@ -40,7 +40,6 @@ public class Order extends AbstractEntity<Order.OrderId> {
     @VmsForeignKey(table=Customer.class,column = "c_w_id")
     public int o_w_id;
 
-    @Column
     @VmsForeignKey(table=Customer.class,column = "c_id")
     public int o_c_id;
 

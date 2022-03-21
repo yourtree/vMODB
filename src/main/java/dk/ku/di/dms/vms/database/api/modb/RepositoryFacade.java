@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.database.api.modb;
 
 import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
+import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.database.query.executor.SequentialQueryExecutor;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
@@ -52,9 +53,16 @@ public final class RepositoryFacade implements InvocationHandler {
         this.planner = planner;
     }
 
+    /**
+     * The actual facade for database operations called by the application-level code.
+     * @param proxy
+     * @param method
+     * @param args
+     * @return A DTO (i.e., any class where attribute values are final), a row {@link dk.ku.di.dms.vms.database.store.row.Row}, or set of rows
+     * @throws AnalyzerException
+     */
     @Override
-    public Object invoke(Object proxy, Method method, Object[] args)
-            throws Throwable {
+    public Object invoke(Object proxy, Method method, Object[] args) throws AnalyzerException {
         LOGGER.info("Invoked method: {}", method.getName());
 
         String methodName = method.getName();
@@ -65,11 +73,21 @@ public final class RepositoryFacade implements InvocationHandler {
                 // TODO receive a plan tree from the planner
                 break;
             }
+            case "insertAll": {
+
+                // acts as a single transaction, so all coinstraints, of every single row must be present
+
+                PlanNode node = planner.planBulkInsert(); //(args[0]);
+
+                break;
+            }
             case "fetch": {
 
                 // dispatch to analyzer passing the clazz param
                 QueryTree queryTree = analyzer.analyze( (IStatement) args[0], (Class<?>) args[1]);
                 PlanNode node = planner.plan( queryTree );
+
+                // get concrete executor from application metadata
                 SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(node);
 
                 OperatorResult result = queryExecutor.get();
@@ -77,7 +95,7 @@ public final class RepositoryFacade implements InvocationHandler {
                         result.getDataTransferObjects() : result.getDataTransferObjects().get(0);
 
             }
-            default: throw new Exception("Unknown repository operation.");
+            default: throw new IllegalStateException("Unknown repository operation.");
         }
 
         return null;

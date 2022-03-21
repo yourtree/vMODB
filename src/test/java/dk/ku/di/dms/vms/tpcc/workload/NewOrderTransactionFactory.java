@@ -9,7 +9,7 @@ import static dk.ku.di.dms.vms.tpcc.workload.Constants.*;
  */
 public class NewOrderTransactionFactory {
 
-    public static NewOrderTransactionInput buildWorkPackage(final Integer num_ware, final Integer max_items, Integer dist_per_ware){
+    public static NewOrderTransactionInput build(final Integer num_ware, final Integer max_items, Integer dist_per_ware){
 
         int dist_per_ware_ = DIST_PER_WARE;
         if (dist_per_ware != null){

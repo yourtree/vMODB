@@ -2,8 +2,8 @@ package dk.ku.di.dms.vms.manager;
 
 import dk.ku.di.dms.vms.event.EventRepository;
 import dk.ku.di.dms.vms.event.IEventHandler;
-import dk.ku.di.dms.vms.metadata.ApplicationMetadata;
-import dk.ku.di.dms.vms.metadata.MetadataLoader;
+import dk.ku.di.dms.vms.metadata.VmsMetadata;
+import dk.ku.di.dms.vms.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.operational.DataOperationExecutor;
 import dk.ku.di.dms.vms.scheduler.Scheduler;
 
@@ -39,9 +39,9 @@ public final class Manager implements Runnable {
             this.metadata.eventRepository = EventRepository.get();
 
             // application loader
-            MetadataLoader loader = new MetadataLoader();
+            VmsMetadataLoader loader = new VmsMetadataLoader();
 
-            ApplicationMetadata config = loader.load(null);
+            VmsMetadata config = loader.load(null);
 
             // event handler
             // TPCCEventHandler eventHandler = new TPCCEventHandler(eventRepository);

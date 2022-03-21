@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.annotations.VmsTable;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
+import javax.validation.constraints.PositiveOrZero;
 import java.io.Serializable;
 
 @Entity
@@ -34,6 +35,7 @@ public class Stock extends AbstractEntity<Stock.StockId> {
     public int s_w_id;
 
     @Column
+    @PositiveOrZero // just for testing...
     public int s_quantity;
 
     @Column

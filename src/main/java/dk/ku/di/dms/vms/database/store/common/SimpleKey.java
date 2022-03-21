@@ -2,6 +2,10 @@ package dk.ku.di.dms.vms.database.store.common;
 
 import dk.ku.di.dms.vms.database.store.index.IIndexKey;
 
+/**
+ * A value that serves both for identifying a unique row (e.g., as PK) or a unique index entry.
+ * In this case, the hash code is the hash of the object itself rather than the composition of values as in {@link CompositeKey}
+ */
 public class SimpleKey implements IKey, IIndexKey {
 
     private final Object value;

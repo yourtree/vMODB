@@ -5,6 +5,10 @@ import dk.ku.di.dms.vms.database.store.row.Row;
 
 import java.util.Arrays;
 
+/**
+ * A sequence of values that serves both for identifying a unique row (e.g., as PK) or a unique index entry.
+ * The hash code is the hash of the array composed by all values involved in this composition.
+ */
 public class CompositeKey extends Row implements IKey, IIndexKey {
 
     private final int hashKey;
@@ -21,9 +25,7 @@ public class CompositeKey extends Row implements IKey, IIndexKey {
 
     @Override
     public boolean equals(Object key){
-        // if(this.hashKey == ((CompositeKey)key).hashKey) return true;
         return this.hashCode() == key.hashCode();
-//        return false;
     }
 
 }
