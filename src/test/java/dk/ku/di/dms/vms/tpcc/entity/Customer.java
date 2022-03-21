@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import javax.persistence.*;
 import java.io.Serializable;
+import java.util.Date;
 
 @Entity
 @VmsTable(name="customer",
@@ -55,6 +56,9 @@ public class Customer extends AbstractEntity<Customer.CustomerId> {
     public String c_last;
 
     @Column
+    public Date c_since;
+
+    @Column
     public String c_credit;
 
     @Column
@@ -65,13 +69,14 @@ public class Customer extends AbstractEntity<Customer.CustomerId> {
 
     public Customer(){}
 
-    public Customer(int c_id, int c_d_id, int c_w_id, float c_discount, String c_first, String c_last, String c_credit, float c_balance, float c_ytd_payment) {
+    public Customer(int c_id, int c_d_id, int c_w_id, float c_discount, String c_first, String c_last, Date c_since, String c_credit, float c_balance, float c_ytd_payment) {
         this.c_id = c_id;
         this.c_d_id = c_d_id;
         this.c_w_id = c_w_id;
         this.c_discount = c_discount;
         this.c_first = c_first;
         this.c_last = c_last;
+        this.c_since = c_since;
         this.c_credit = c_credit;
         this.c_balance = c_balance;
         this.c_ytd_payment = c_ytd_payment;

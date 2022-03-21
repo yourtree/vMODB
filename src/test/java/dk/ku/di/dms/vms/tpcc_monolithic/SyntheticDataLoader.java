@@ -2,8 +2,10 @@ package dk.ku.di.dms.vms.tpcc_monolithic;
 
 import dk.ku.di.dms.vms.Utils;
 import dk.ku.di.dms.vms.annotations.Microservice;
+import dk.ku.di.dms.vms.annotations.Transactional;
 import dk.ku.di.dms.vms.tpcc.entity.*;
 import dk.ku.di.dms.vms.tpcc.repository.ICustomerRepository;
+import dk.ku.di.dms.vms.tpcc.repository.IHistoryRepository;
 import dk.ku.di.dms.vms.tpcc.repository.IItemRepository;
 import dk.ku.di.dms.vms.tpcc.repository.IStockRepository;
 import dk.ku.di.dms.vms.tpcc.repository.order.INewOrderRepository;
@@ -21,18 +23,20 @@ import static dk.ku.di.dms.vms.tpcc.workload.Constants.*;
 @Microservice("loader")
 public class SyntheticDataLoader {
 
-    private IWarehouseRepository warehouseRepository;
-    private IDistrictRepository districtRepository;
-    private ICustomerRepository customerRepository;
-    private IItemRepository itemRepository;
-    private IStockRepository stockRepository;
-    private IOrderRepository orderRepository;
-    private INewOrderRepository newOrderRepository;
-    private IOrderLineRepository orderLineRepository;
+    private final IWarehouseRepository warehouseRepository;
+    private final IDistrictRepository districtRepository;
+    private final ICustomerRepository customerRepository;
+    private final IHistoryRepository historyRepository;
+    private final IItemRepository itemRepository;
+    private final IStockRepository stockRepository;
+    private final IOrderRepository orderRepository;
+    private final INewOrderRepository newOrderRepository;
+    private final IOrderLineRepository orderLineRepository;
 
     public SyntheticDataLoader(IWarehouseRepository warehouseRepository,
                                IDistrictRepository districtRepository,
                                ICustomerRepository customerRepository,
+                               IHistoryRepository historyRepository,
                                IItemRepository itemRepository,
                                IStockRepository stockRepository,
                                IOrderRepository orderRepository,
@@ -41,6 +45,7 @@ public class SyntheticDataLoader {
         this.warehouseRepository = warehouseRepository;
         this.districtRepository = districtRepository;
         this.customerRepository = customerRepository;
+        this.historyRepository = historyRepository;
         this.itemRepository = itemRepository;
         this.stockRepository = stockRepository;
         this.orderRepository = orderRepository;
@@ -48,6 +53,7 @@ public class SyntheticDataLoader {
         this.orderLineRepository = orderLineRepository;
     }
 
+    @Transactional
     public void load(int num_ware, int max_items) {
 
         List<Warehouse> warehouses = new ArrayList<>(num_ware);
@@ -58,28 +64,28 @@ public class SyntheticDataLoader {
 
         this.warehouseRepository.insertAll(warehouses);
 
-        List<District> warehouseDistricts = new ArrayList<>(num_ware * DIST_PER_WARE);
+        List<District> districts = new ArrayList<>(num_ware * DIST_PER_WARE);
         int d_next_o_id = 3001;
 
         // creating districts
         for (int i = 0; i < num_ware; i++) {
-
             for (int j = 0; j < DIST_PER_WARE; j++) {
-
-                District district = new District(
+                districts.add( new District(
                         j + 1, // district
                         i + 1, // warehouse
                         ((Utils.randomNumber(10, 20)) / 100.0),
                         30000.0,
-                        d_next_o_id);
-
-                this.districtRepository.insertAll(warehouseDistricts);
-
+                        d_next_o_id) );
             }
-
         }
 
+        this.districtRepository.insertAll(districts);
+
         List<Customer> customers = new ArrayList<>(num_ware + DIST_PER_WARE * DIST_PER_WARE);
+        List<History> historyRecords = new ArrayList<>(num_ware + DIST_PER_WARE * DIST_PER_WARE);
+
+        // generated given the lack of PK
+        int hist_id = 0;
 
         // creating customers
         for (int i = 0; i < num_ware; i++) {
@@ -87,6 +93,8 @@ public class SyntheticDataLoader {
             for (int j = 0; j < DIST_PER_WARE; j++) {
 
                 for (int l = 0; l < CUST_PER_DIST; l++) {
+
+                    hist_id++;
 
                     int c_id = l + 1;
 
@@ -99,20 +107,35 @@ public class SyntheticDataLoader {
                         c_last = Utils.lastName(Utils.nuRand(255, 0, 999));
                     }
 
+                    Date c_since = new Date();
+
                     String c_credit = Utils.randomNumber(0, 1) == 1 ? "GC" : "BC";
 
-                    Customer customer = new Customer(
+                    customers.add( new Customer(
                             c_id,
                             j + 1,
                             i + 1,
                             ((Utils.randomNumber(0, 50)) / 100.0f),
                             c_first,
                             c_last,
+                            c_since,
                             c_credit,
                             -10.0f,
-                            10.0f);
+                            10.0f) );
 
-                    customers.add(customer);
+                    // respective history
+                    historyRecords.add(
+                            new History(hist_id,
+                                    c_id,
+                                    j + 1,
+                                    i + 1,
+                                    j + 1,
+                                    i + 1,
+                                    c_since,
+                                    10.0f,
+                                    Utils.makeAlphaString(12, 24)
+                            )
+                    );
 
                 }
 
@@ -120,6 +143,7 @@ public class SyntheticDataLoader {
         }
 
         customerRepository.insertAll(customers);
+        historyRepository.insertAll( historyRecords );
 
         List<Item> items = new ArrayList<>(MAX_ITEMS);
 
@@ -135,6 +159,8 @@ public class SyntheticDataLoader {
 
             items.add(new Item(i + 1, i_im_id, i_name, ((Utils.randomNumber(100, 10000)) / 100.0f), i_data));
         }
+
+        itemRepository.insertAll( items );
 
         List<Stock> stock = new ArrayList<>(num_ware * max_items);
 
@@ -172,12 +198,8 @@ public class SyntheticDataLoader {
         float ol_amount;
         String ol_dist_info;
 
-        Order order;
-        NewOrder newOrder;
-
         List<Order> orders = new ArrayList<>(num_ware * DIST_PER_WARE * CUST_PER_DIST);
         List<NewOrder> newOrders = new ArrayList<>(num_ware * DIST_PER_WARE * CUST_PER_DIST);
-
         List<OrderLine> orderLines = new ArrayList<>(num_ware * DIST_PER_WARE * CUST_PER_DIST * MAX_NUM_ITEMS);
 
         // for each warehouse
@@ -221,11 +243,11 @@ public class SyntheticDataLoader {
                 }
             }
 
-            orderRepository.insertAll(orders);
-            newOrderRepository.insertAll(newOrders);
-
-
         }
+
+        orderRepository.insertAll(orders);
+        newOrderRepository.insertAll(newOrders);
+        orderLineRepository.insertAll( orderLines );
 
     }
 

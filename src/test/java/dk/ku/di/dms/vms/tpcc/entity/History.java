@@ -13,7 +13,7 @@ import java.util.Date;
         indexes = {@VmsIndex(name = "fkey_history_1", columnList = "h_c_w_id,h_c_d_id,h_c_id"),
                 @VmsIndex(name = "fkey_history_2", columnList = "h_w_id,h_d_id")
         })
-public class History extends AbstractEntity<Long> {
+public class History extends AbstractEntity<Integer> {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
@@ -39,7 +39,6 @@ public class History extends AbstractEntity<Long> {
     @VmsForeignKey(table=District.class,column = "d_id")
     public int h_d_id;
 
-
     @Column
     public Date h_date;
 
@@ -51,4 +50,15 @@ public class History extends AbstractEntity<Long> {
 
     public History(){}
 
+    public History(int id, int h_c_id, int h_c_w_id, int h_c_d_id, int h_w_id, int h_d_id, Date h_date, float h_amount, String h_data) {
+        this.id = id;
+        this.h_c_id = h_c_id;
+        this.h_c_w_id = h_c_w_id;
+        this.h_c_d_id = h_c_d_id;
+        this.h_w_id = h_w_id;
+        this.h_d_id = h_d_id;
+        this.h_date = h_date;
+        this.h_amount = h_amount;
+        this.h_data = h_data;
+    }
 }
