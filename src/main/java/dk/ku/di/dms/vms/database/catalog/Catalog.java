@@ -13,7 +13,7 @@ import java.util.Map;
  * For now, we don't have views, but we can implement the application-defined
  * queries as views and store hem here
  */
-public class Catalog {
+public final class Catalog {
 
     private Map<String, Table> tableMap;
 

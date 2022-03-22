@@ -13,7 +13,7 @@ public class Schema {
     private final int[] primaryKeyColumns;
 
     // foreign key map: key: column position value: foreign key reference
-    private final Map<Integer,List<ForeignKeyReference>> foreignKeyMap;
+    private Map<Integer,ForeignKeyReference> foreignKeyMap;
 
     // the name of the columns
     private final String[] columnNames;
@@ -22,7 +22,7 @@ public class Schema {
     private final DataType[] columnDataTypes;
 
     // the constraints of this schema
-    private final ConstraintReference[] constraints;
+    private Map<Integer,ConstraintReference> constraintMap;
 
     // basically a map of column name to exact position in row values
     private final Map<String,Integer> columnPositionMap;
@@ -43,7 +43,7 @@ public class Schema {
         return this.primaryKeyColumns;
     }
 
-    public Schema(final String[] columnNames, final DataType[] columnDataTypes, final int[] primaryKeyColumns, final ForeignKeyReference[] foreignKeyColumns, final ConstraintReference[] constraints) {
+    public Schema(final String[] columnNames, final DataType[] columnDataTypes, final int[] primaryKeyColumns, final ConstraintReference[] constraints) {
         this.columnNames = columnNames;
         this.columnDataTypes = columnDataTypes;
         int size = columnNames.length;
@@ -53,24 +53,36 @@ public class Schema {
             columnPositionMap.put(columnNames[i],i);
         }
         this.primaryKeyColumns = primaryKeyColumns;
+        addConstraints( constraints );
+    }
 
-        if(foreignKeyColumns != null){
-            this.foreignKeyMap = new HashMap<>(foreignKeyColumns.length);
-            for(ForeignKeyReference foreignKeyReference : foreignKeyColumns){
-                List<ForeignKeyReference> list;
-                int columnPos = columnPositionMap.get( foreignKeyReference.getColumnName() );
-                if(foreignKeyMap.get( columnPos ) == null){
-                    list = new ArrayList<>(2); // usual number of foreign keys per table
-                    foreignKeyMap.put( columnPos, list );
-                } else {
-                    list = foreignKeyMap.get( columnPos );
-                }
-                list.add(foreignKeyReference);
+    private void addConstraints( final ConstraintReference[] constraints ){
+
+        if(constraints != null && constraints.length > 0){
+            this.constraintMap = new HashMap<>( constraints.length );
+            for( ConstraintReference constraintReference : constraints ){
+                this.constraintMap.put( constraintReference.column, constraintReference );
             }
-        } else {
-            this.foreignKeyMap = null;
         }
-        this.constraints = constraints;
+
+    }
+
+    public void addForeignKeyConstraints(final List<ForeignKeyReference> foreignKeyReferences){
+        if(foreignKeyReferences != null && foreignKeyReferences.size() > 0){
+            this.foreignKeyMap = new HashMap<>();
+            for(ForeignKeyReference foreignKeyReference : foreignKeyReferences){
+                int columnPos =  foreignKeyReference.getColumnPosition();
+                this.foreignKeyMap.putIfAbsent(columnPos, foreignKeyReference);
+            }
+        }
+    }
+
+    public ForeignKeyReference isForeignKey(final int columnPosition){
+        return this.foreignKeyMap.getOrDefault(columnPosition, null);
+    }
+
+    public ConstraintReference isConstraint(final int columnPosition){
+        return this.constraintMap.getOrDefault(columnPosition, null);
     }
 
     public int[] buildColumnPositionArray(final String[] columnList){

@@ -23,6 +23,7 @@ import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 import dk.ku.di.dms.vms.database.store.index.IndexDataStructureEnum;
 import dk.ku.di.dms.vms.database.store.common.IKey;
 import dk.ku.di.dms.vms.database.store.table.Table;
+import dk.ku.di.dms.vms.infra.AbstractEntity;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -37,7 +38,7 @@ import static dk.ku.di.dms.vms.database.query.planner.operator.join.JoinTypeEnum
  */
 public final class Planner {
 
-    public PlanNode planBulkInsert(){
+    public PlanNode planBulkInsert(List<? extends AbstractEntity<?>> entities, Class<? extends AbstractEntity<?>> entityClazz){
         // TODO finish
         return null;
     }
@@ -180,11 +181,11 @@ public final class Planner {
      * TODO binary search -- but for that we need a priority concept
      * TODO perhaps the {@link Comparator} interface can abstract the insertion
      * Priority order of sorting conditions: type of join, selectivity (we are lacking this right now), size of (right) table
-     * @param table
-     * @param join
-     * @param joinsPerTable
+     * @param table Associated table
+     * @param join Associated join
+     * @param joinsPerTable Joins per table mapped so far
      */
-    private void addJoinToRespectiveTableInOrderOfJoinOperation(final Table table, final AbstractJoin join, Map<Table,List<AbstractJoin>> joinsPerTable ){
+    private void addJoinToRespectiveTableInOrderOfJoinOperation(final Table table, final AbstractJoin join, final Map<Table,List<AbstractJoin>> joinsPerTable ){
 
         List<AbstractJoin> joins = joinsPerTable.getOrDefault( table, new ArrayList<>() );
 
@@ -222,8 +223,8 @@ public final class Planner {
 
     /**
      * The position of the join in the list reflects
-     * @param joinsPerTable
-     * @param filtersForJoinGroupedByTable
+     * @param joinsPerTable Joins per table mapped so far
+     * @param filtersForJoinGroupedByTable Filters ought to be applied to join operations grouped by table
      */
     private void applyFiltersToJoins(final Map<Table,List<AbstractJoin>> joinsPerTable, final Map<Table, List<WherePredicate>> filtersForJoinGroupedByTable) {
 
@@ -475,7 +476,7 @@ public final class Planner {
         if(!queryTree.groupByPredicates.isEmpty()) {
             aggregates = new ArrayList<>();
             for (GroupByPredicate groupByPredicate : queryTree.groupByPredicates) {
-                // for now I only have avg
+                // for now, only avg
                 Average average = new Average(groupByPredicate.columnReference, groupByPredicate.groupByColumnsReference);
                 aggregates.add(average);
             }
@@ -515,11 +516,10 @@ public final class Planner {
                 scanPlan.father = projection;
             } else if (aggregates != null) {
 
-                PlanNode aggregatesPlan = planAggregates(aggregates,true);
                 //projection.left = aggregatesPlan;
                 //aggregatesPlan.father = projection;
 
-                projection = aggregatesPlan;
+                projection = planAggregates(aggregates,true);
 
             }
         }
@@ -617,7 +617,7 @@ public final class Planner {
             if( columns != null ){
 
                 // optimistic belief that the number of columns would lead to higher pruning of records
-                float heuristicSelectivity = table.getPrimaryKeyIndex().size() / columns.length;
+                int heuristicSelectivity = table.getPrimaryKeyIndex().size() / columns.length;
 
                 // try next index then
                 if(heuristicSelectivity > bestSelectivity) continue;

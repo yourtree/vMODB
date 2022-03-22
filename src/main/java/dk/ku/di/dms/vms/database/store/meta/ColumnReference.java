@@ -13,21 +13,16 @@ public final class ColumnReference {
 
     public final Table table;
 
-    /**
-     * Constructor called when testing projection only
-     * @param columnName
-     * @param columnPosition
-     */
-    public ColumnReference(final String columnName, final int columnPosition) {
-        this.columnName = columnName;
-        this.columnPosition = columnPosition;
-        this.dataType = null;
-        this.table = null;
-    }
-
     public ColumnReference(final String columnName, final int columnPosition, final Table table) {
         this.columnName = columnName;
         this.columnPosition = columnPosition;
+        this.dataType = table.getSchema().getColumnDataType(columnPosition);
+        this.table = table;
+    }
+
+    public ColumnReference(final String columnName, final Table table) {
+        this.columnName = columnName;
+        this.columnPosition = table.getSchema().getColumnPosition( columnName );
         this.dataType = table.getSchema().getColumnDataType(columnPosition);
         this.table = table;
     }

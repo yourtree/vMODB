@@ -36,7 +36,7 @@ import java.lang.reflect.Proxy;
 
 public class AppTest 
 {
-    private static Logger log = LoggerFactory.getLogger(AppTest.class);
+    private static final Logger log = LoggerFactory.getLogger(AppTest.class);
 
     @Test
     public void testMetadataLoader() throws Exception {
@@ -92,7 +92,7 @@ public class AppTest
     }
 
     @Test
-    public void testCreatingFilter() throws Throwable {
+    public void testCreatingFilter() {
 
         IFilter filter = FilterBuilder.getFilter(EQUALS, Integer::compareTo);
 

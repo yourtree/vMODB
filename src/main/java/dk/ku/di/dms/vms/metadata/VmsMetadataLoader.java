@@ -3,6 +3,8 @@ package dk.ku.di.dms.vms.metadata;
 import dk.ku.di.dms.vms.annotations.*;
 import dk.ku.di.dms.vms.database.api.modb.RepositoryFacade;
 import dk.ku.di.dms.vms.database.catalog.Catalog;
+import dk.ku.di.dms.vms.database.query.analyzer.Analyzer;
+import dk.ku.di.dms.vms.database.query.planner.Planner;
 import dk.ku.di.dms.vms.database.store.common.CompositeKey;
 import dk.ku.di.dms.vms.database.store.common.IKey;
 import dk.ku.di.dms.vms.database.store.common.SimpleKey;
@@ -10,9 +12,11 @@ import dk.ku.di.dms.vms.database.store.index.UniqueHashIndex;
 import dk.ku.di.dms.vms.database.store.index.IIndexKey;
 import dk.ku.di.dms.vms.database.store.meta.*;
 import dk.ku.di.dms.vms.database.store.table.HashIndexedTable;
+import dk.ku.di.dms.vms.database.store.table.Table;
 import dk.ku.di.dms.vms.event.IEvent;
+import dk.ku.di.dms.vms.infra.AbstractEntity;
 import dk.ku.di.dms.vms.metadata.exception.QueueMappingException;
-import dk.ku.di.dms.vms.metadata.exception.NoAcceptableTypeException;
+import dk.ku.di.dms.vms.metadata.exception.NotAcceptableTypeException;
 import dk.ku.di.dms.vms.metadata.exception.NoPrimaryKeyFoundException;
 import dk.ku.di.dms.vms.operational.DataOperationSignature;
 import org.reflections.Configuration;
@@ -44,7 +48,7 @@ public class VmsMetadataLoader {
 
     public VmsMetadata load(String forPackage) throws
             ClassNotFoundException, InvocationTargetException,
-            InstantiationException, IllegalAccessException, QueueMappingException, NoPrimaryKeyFoundException, NoAcceptableTypeException, UnsupportedConstraint {
+            InstantiationException, IllegalAccessException, QueueMappingException, NoPrimaryKeyFoundException, NotAcceptableTypeException, UnsupportedConstraint {
 
         final VmsMetadata applicationMetadata = new VmsMetadata();
 
@@ -107,11 +111,16 @@ public class VmsMetadataLoader {
                 .collect( Collectors.groupingBy( Field::getDeclaringClass,
                         Collectors.toList()) );
 
+        // table name and respective not parsed foreign keys
+        Map<String, NotParsedForeignKeyReference[]> foreignKeysPerEntity = new HashMap<>();
+        // map entity clazz to table
+        Map<Class<? extends AbstractEntity<?>>,Table> mapEntityClazzToTable = new HashMap<>();
+
         // build schema of each table
         // we build the schema in order to look up the fields and define the pk hash index
-        for(final Map.Entry<Class<?>,List<Field>> entry : pkMap.entrySet()){
+        for(final Map.Entry<Class<?>, List<Field>> entry : pkMap.entrySet()){
 
-            Class<?> tableClass = entry.getKey();
+            Class<? extends AbstractEntity<?>> tableClass = (Class<? extends AbstractEntity<?>>) entry.getKey();
             List<Field> pkFields = entry.getValue();
 
             if(pkFields == null || pkFields.size() == 0){
@@ -145,9 +154,9 @@ public class VmsMetadataLoader {
                 i++;
             }
 
-            ForeignKeyReference[] foreignKeyReferences = null;
+            NotParsedForeignKeyReference[] foreignKeyReferences = null;
             if(foreignKeyFields != null) {
-                foreignKeyReferences = new ForeignKeyReference[foreignKeyFields.size()];
+                foreignKeyReferences = new NotParsedForeignKeyReference[foreignKeyFields.size()];
                 int j = 0;
                 // iterating over association columns
                 for (final Field field : foreignKeyFields) {
@@ -161,107 +170,22 @@ public class VmsMetadataLoader {
                             .filter(p -> p.annotationType() == VmsForeignKey.class).findFirst().get();
 
                     // later we parse into a Vms Table and check whether the types match
-                    foreignKeyReferences[j] = new ForeignKeyReference(fkAnnotation.table(), fkAnnotation.column());
-                }
-            }
-
-            ConstraintReference[] constraints = null;
-            if(columnFields != null) {
-                // iterating over non-pk and non-fk columns;
-                for (final Field field : columnFields) {
-
-                    Class<?> attributeType = field.getType();
-                    columnDataTypes[i] = getColumnDataTypeFromAttributeType(attributeType);
-
-                    // get constraints ought to be applied to this column, e.g., non-negative, not null, nullable
-                    List<Annotation> constraintAnnotations = Arrays.stream(field.getAnnotations())
-                            .filter(p -> p.annotationType() == Positive.class ||
-                                    p.annotationType() == PositiveOrZero.class ||
-                                    p.annotationType() == NotNull.class ||
-                                    p.annotationType() == Null.class
-                            ).collect(Collectors.toList());
-
-                    constraints = new ConstraintReference[constraintAnnotations.size()];
-                    int nC = 0;
-                    for (Annotation constraint : constraintAnnotations) {
-                        String constraintName = constraint.annotationType().getName();
-                        switch (constraintName) {
-                            case "javax.validation.constraints.PositiveOrZero":
-                                constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE_OR_ZERO, i);
-                                break;
-                            case "javax.validation.constraints.Positive":
-                                constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE, i);
-                                break;
-                            case "javax.validation.constraints.Null":
-                                constraints[nC] = new ConstraintReference(ConstraintEnum.NULL, i);
-                                break;
-                            case "javax.validation.constraints.NotNull":
-                                constraints[nC] = new ConstraintReference(ConstraintEnum.NOT_NULL, i);
-                                break;
-                            default:
-                                throw new UnsupportedConstraint("Constraint " + constraintName + " not supported.");
-                        }
-                        nC++;
-                    }
-
-                    columnNames[i] = field.getName();
-                    i++;
-                }
-            }
-
-            Schema schema = new Schema(columnNames, columnDataTypes, pkFieldsStr, foreignKeyReferences, constraints);
-
-            Annotation[] annotations = tableClass.getAnnotations();
-            for (Annotation an : annotations) {
-                // the developer may need to use other annotations
-                if(an instanceof VmsTable){
-
-                    // table name
-                    String tableName = ((VmsTable) an).name();
-                    HashIndexedTable table = new HashIndexedTable( tableName, schema );
-
-                    // table indexes
-                    VmsIndex[] indexes = ((VmsTable) an).indexes();
-                    for( VmsIndex index : indexes ){
-                        String[] columnList = index.columnList().split(",\\s|,");
-
-                        // TODO finish
-                        int[] columnPosArray = schema.buildColumnPositionArray( columnList );
-
-                        IIndexKey logicalIndexKey;
-                        IKey physicalIndexKey;
-                        if(columnList.length > 1){
-                            physicalIndexKey = new CompositeKey(columnPosArray);
-                            int[] columnPosArrayInColumnPositionOrder = Arrays.stream(columnPosArray).sorted().toArray();
-                            logicalIndexKey = new CompositeKey( columnPosArrayInColumnPositionOrder );
-                        }else{
-                            physicalIndexKey = new SimpleKey(columnPosArray[0]);
-                            logicalIndexKey = new SimpleKey(columnPosArray[0]);;
-                        }
-
-                        if(index.unique()){
-
-                            // get column position in schema
-
-                            UniqueHashIndex hashIndex = new UniqueHashIndex(table, columnPosArray);
-                            table.addIndex( logicalIndexKey, physicalIndexKey, hashIndex );
-
-                        } else if(index.range()) {
-                            // no range indexes in JPA....
-                        } else {
-                            // btree...
-                        }
-
-                    }
-
-                    catalog.insertTable(table);
-                    break; // the only important annotation is vms table, thus we can break the iteration
+                    foreignKeyReferences[j] = new NotParsedForeignKeyReference(fkAnnotation.table(), fkAnnotation.column());
+                    j++;
                 }
 
             }
+
+            // non-foreign key column constraints are inherent to the table, not referring to other tables
+            ConstraintReference[] constraints = getConstraintReferences(columnFields, columnNames, columnDataTypes, i);
+
+            Schema schema = new Schema(columnNames, columnDataTypes, pkFieldsStr, constraints);
+
+            createVmsTableAndRespectiveIndexes(catalog, foreignKeysPerEntity, mapEntityClazzToTable, tableClass, foreignKeyReferences, schema);
 
         }
 
+        parseForeignKeyReferences(catalog, foreignKeysPerEntity, mapEntityClazzToTable);
 
         // TODO finish --
 
@@ -278,19 +202,171 @@ public class VmsMetadataLoader {
 
     }
 
+    private ConstraintReference[] getConstraintReferences(List<Field> columnFields, String[] columnNames, DataType[] columnDataTypes, int columnPosition) throws NotAcceptableTypeException, UnsupportedConstraint {
+        if(columnFields != null) {
+
+            ConstraintReference[] constraints = null;
+
+            // iterating over non-pk and non-fk columns;
+            for (final Field field : columnFields) {
+
+                Class<?> attributeType = field.getType();
+                columnDataTypes[columnPosition] = getColumnDataTypeFromAttributeType(attributeType);
+
+                // get constraints ought to be applied to this column, e.g., non-negative, not null, nullable
+                List<Annotation> constraintAnnotations = Arrays.stream(field.getAnnotations())
+                        .filter(p -> p.annotationType() == Positive.class ||
+                                p.annotationType() == PositiveOrZero.class ||
+                                p.annotationType() == NotNull.class ||
+                                p.annotationType() == Null.class
+                        ).collect(Collectors.toList());
+
+                constraints = new ConstraintReference[constraintAnnotations.size()];
+                int nC = 0;
+                for (Annotation constraint : constraintAnnotations) {
+                    String constraintName = constraint.annotationType().getName();
+                    switch (constraintName) {
+                        case "javax.validation.constraints.PositiveOrZero":
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE_OR_ZERO, columnPosition);
+                            break;
+                        case "javax.validation.constraints.Positive":
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE, columnPosition);
+                            break;
+                        case "javax.validation.constraints.Null":
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.NULL, columnPosition);
+                            break;
+                        case "javax.validation.constraints.NotNull":
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.NOT_NULL, columnPosition);
+                            break;
+                        default:
+                            throw new UnsupportedConstraint("Constraint " + constraintName + " not supported.");
+                    }
+                    nC++;
+                }
+
+                columnNames[columnPosition] = field.getName();
+                columnPosition++;
+            }
+
+            return constraints;
+
+        }
+        return null;
+    }
+
+    private void createVmsTableAndRespectiveIndexes(Catalog catalog,
+                                                    Map<String, NotParsedForeignKeyReference[]> foreignKeysPerEntity,
+                                                    Map<Class<? extends AbstractEntity<?>>, Table> mapEntityClazzToTable,
+                                                    Class<? extends AbstractEntity<?>> tableClass,
+                                                    NotParsedForeignKeyReference[] foreignKeyReferences,
+                                                    Schema schema) {
+        Annotation[] annotations = tableClass.getAnnotations();
+        for (Annotation an : annotations) {
+            // the developer may need to use other annotations
+            if(an instanceof VmsTable){
+
+                // table name
+                String tableName = ((VmsTable) an).name();
+                HashIndexedTable table = new HashIndexedTable( tableName, schema);
+
+                if (foreignKeyReferences != null) foreignKeysPerEntity.put( tableName, foreignKeyReferences);
+                mapEntityClazzToTable.put(tableClass, table);
+
+                // table indexes
+                VmsIndex[] indexes = ((VmsTable) an).indexes();
+                for( VmsIndex index : indexes ){
+                    String[] columnList = index.columnList().split(",\\s|,");
+
+                    // TODO finish
+                    int[] columnPosArray = schema.buildColumnPositionArray( columnList );
+
+                    IIndexKey logicalIndexKey;
+                    IKey physicalIndexKey;
+                    if(columnList.length > 1){
+                        physicalIndexKey = new CompositeKey(columnPosArray);
+                        int[] columnPosArrayInColumnPositionOrder = Arrays.stream(columnPosArray).sorted().toArray();
+                        logicalIndexKey = new CompositeKey( columnPosArrayInColumnPositionOrder );
+                    }else{
+                        physicalIndexKey = new SimpleKey(columnPosArray[0]);
+                        logicalIndexKey = new SimpleKey(columnPosArray[0]);
+                    }
+
+                    if(index.unique()){
+
+                        // get column position in schema
+
+                        UniqueHashIndex hashIndex = new UniqueHashIndex(table, columnPosArray);
+                        table.addIndex( logicalIndexKey, physicalIndexKey, hashIndex );
+
+                    } else if(index.range()) {
+                        // no range indexes in JPA....
+                    } else {
+                        // btree...
+                    }
+
+                }
+
+                catalog.insertTable(table);
+                break; // the only important annotation is vms table, thus we can break the iteration
+            }
+
+        }
+    }
+
+    private void parseForeignKeyReferences(Catalog catalog, Map<String, NotParsedForeignKeyReference[]> foreignKeysPerEntity, Map<Class<? extends AbstractEntity<?>>, Table> mapEntityClazzToTable) {
+        // after reading all entities, then I can parse the foreign keys to actual tables
+        // the reason is that I need the references to all tables before reasoning about their associations
+        for( final Map.Entry<String,NotParsedForeignKeyReference[]> entry : foreignKeysPerEntity.entrySet()){
+            Table table = catalog.getTable( entry.getKey() );
+
+            // iterate and parse to table and column position
+            Schema schema = table.getSchema();
+
+            NotParsedForeignKeyReference[] notParsedForeignKeyReferences = entry.getValue();
+            int size = notParsedForeignKeyReferences.length;
+            List<ForeignKeyReference> parsedForeignKeyReferences = new ArrayList<>(size);
+
+            for(int i = 0; i < size; i++){
+
+                Schema foreignSchema = mapEntityClazzToTable.get( notParsedForeignKeyReferences[i].entityClazz ).getSchema();
+
+                parsedForeignKeyReferences.add( new ForeignKeyReference(
+                        mapEntityClazzToTable.get( notParsedForeignKeyReferences[i].entityClazz ),
+                        foreignSchema.getColumnPosition( notParsedForeignKeyReferences[i].columnName )
+                ) );
+            }
+
+            schema.addForeignKeyConstraints( parsedForeignKeyReferences );
+
+        }
+    }
+
+    private class NotParsedForeignKeyReference{
+        public final Class<? extends AbstractEntity<?>> entityClazz;
+        public final String columnName;
+
+        public NotParsedForeignKeyReference(Class<? extends AbstractEntity<?>> entityClazz, String columnName) {
+            this.entityClazz = entityClazz;
+            this.columnName = columnName;
+        }
+    }
+
     /**
      * Map transactions to input and output events
      */
-    private void mapTransactionInputOutput(VmsMetadata applicationMetadata, Reflections reflections)
+    private void mapTransactionInputOutput(VmsMetadata vmsMetadata, Reflections reflections)
             throws ClassNotFoundException, InstantiationException, IllegalAccessException, InvocationTargetException, QueueMappingException {
 
         Set<Method> transactionalMethods = reflections.getMethodsAnnotatedWith(Transactional.class);
+
+        final Analyzer analyzer = new Analyzer(vmsMetadata.getCatalog());
+        final Planner planner = new Planner();
 
         for (final Method method : transactionalMethods) {
             logger.info("Mapped = " + method.getName());
 
             String className = method.getDeclaringClass().getCanonicalName();
-            Object obj = applicationMetadata.getMicroservice(className);
+            Object obj = vmsMetadata.getMicroservice(className);
 
             if(obj == null){
                 Class<?> cls = Class.forName(className);
@@ -301,13 +377,22 @@ public class VmsMetadataLoader {
 
                 for (Class parameterType : constructor.getParameterTypes()) {
                     try {
+
+                        RepositoryFacade facade = new RepositoryFacade(parameterType);
+
+                        // instrumenting DBMS components
+                        facade.setAnalyzer(analyzer);
+                        facade.setPlanner( planner );
+
                         Object proxyInstance = Proxy.newProxyInstance(
                                 VmsMetadataLoader.class.getClassLoader(),
                                 new Class[]{parameterType},
                                 // it works without casting as long as all services respect
                                 // the constructor rule to have only repositories
-                                new RepositoryFacade(parameterType));
+                                facade);
+
                         repositoryList.add(proxyInstance);
+
                     } catch (Exception e){
                         logger.error(e.getMessage());
                     }
@@ -315,7 +400,7 @@ public class VmsMetadataLoader {
 
                 obj = constructor.newInstance(repositoryList.toArray());
 
-                applicationMetadata.registerMicroservice(className,obj);
+                vmsMetadata.registerMicroservice(className,obj);
             }
 
             Class<?> outputType = method.getReturnType();
@@ -337,17 +422,17 @@ public class VmsMetadataLoader {
                     dataOperation.inputQueues = inputQueues;
                     for(int i = 0; i < inputQueues.length; i++) {
 
-                        if(applicationMetadata.queueToEventMap.get(inputQueues[i]) == null){
-                            applicationMetadata.queueToEventMap.put(inputQueues[i], (Class<IEvent>) inputTypes.get(i));
-                        } else if( applicationMetadata.queueToEventMap.get(inputQueues[i]) != inputTypes.get(i) ) {
+                        if(vmsMetadata.queueToEventMap.get(inputQueues[i]) == null){
+                            vmsMetadata.queueToEventMap.put(inputQueues[i], (Class<IEvent>) inputTypes.get(i));
+                        } else if( vmsMetadata.queueToEventMap.get(inputQueues[i]) != inputTypes.get(i) ) {
                             throw new QueueMappingException("Error mapping. An input queue cannot be mapped to two or more event types.");
                         }
 
-                        List<DataOperationSignature> list = applicationMetadata.eventToOperationMap.get(inputQueues[i]);
+                        List<DataOperationSignature> list = vmsMetadata.eventToOperationMap.get(inputQueues[i]);
                         if(list == null){
                             list = new ArrayList<>();
                             list.add(dataOperation);
-                            applicationMetadata.eventToOperationMap.put(inputQueues[i], list);
+                            vmsMetadata.eventToOperationMap.put(inputQueues[i], list);
                         } else {
                             list.add(dataOperation);
                         }
@@ -361,34 +446,38 @@ public class VmsMetadataLoader {
                     // In other words, one event to an operation mapping.
                     // But one can achieve it by having two operations reacting
                     // to the same input event
-                    applicationMetadata.queueToEventMap.put(outputQueue, (Class<IEvent>) outputType);
+                    vmsMetadata.queueToEventMap.put(outputQueue, (Class<IEvent>) outputType);
                 }
             }
 
         }
     }
 
-    private DataType getColumnDataTypeFromAttributeType(Class<?> attributeType) throws NoAcceptableTypeException {
-        if (attributeType == Integer.class || attributeType.getCanonicalName().equalsIgnoreCase("int")){
+    private DataType getColumnDataTypeFromAttributeType(Class<?> attributeType) throws NotAcceptableTypeException {
+        String attributeCanonicalName = attributeType.getCanonicalName();
+        if (attributeCanonicalName.equalsIgnoreCase("int") || attributeType == Integer.class){
             return DataType.INT;
         }
-        else if (attributeType == Float.class || attributeType.getCanonicalName().equalsIgnoreCase("float")){
+        else if (attributeCanonicalName.equalsIgnoreCase("float") || attributeType == Float.class){
             return DataType.FLOAT;
         }
-        else if (attributeType == Double.class || attributeType.getCanonicalName().equalsIgnoreCase("double")){
+        else if (attributeCanonicalName.equalsIgnoreCase("double") || attributeType == Double.class){
             return DataType.DOUBLE;
         }
-        else if (attributeType == Character.class || attributeType.getCanonicalName().equalsIgnoreCase("char")){
+        else if (attributeCanonicalName.equalsIgnoreCase("char") || attributeType == Character.class){
             return DataType.CHAR;
         }
         else if (attributeType == String.class){
             return DataType.STRING;
         }
-        else if (attributeType == Long.class || attributeType.getCanonicalName().equalsIgnoreCase("long")){
+        else if (attributeCanonicalName.equalsIgnoreCase("long") || attributeType == Long.class){
             return DataType.LONG;
         }
+        else if (attributeType == Date.class){
+            return DataType.DATE;
+        }
         else {
-            throw new NoAcceptableTypeException(attributeType.getCanonicalName() + " is not accepted");
+            throw new NotAcceptableTypeException(attributeType.getCanonicalName() + " is not accepted");
         }
     }
 

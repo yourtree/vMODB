@@ -12,6 +12,8 @@ public enum DataType {
 
     FLOAT,
 
-    DOUBLE;
+    DOUBLE,
+
+    DATE
 
 }

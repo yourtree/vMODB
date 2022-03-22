@@ -65,7 +65,7 @@ public class QueryTest {
         final Catalog catalog = new Catalog();
         String[] columnNames = { "col1", "col2" };
         DataType[] columnDataTypes = { DataType.INT, DataType.INT };
-        final Schema schema = new Schema( columnNames, columnDataTypes, new int[]{0}, null, null );
+        final Schema schema = new Schema( columnNames, columnDataTypes, new int[]{0}, null );
         catalog.insertTable( new HashIndexedTable( "tb1", schema ));
         catalog.insertTable( new HashIndexedTable( "tb2", schema ));
 
@@ -91,9 +91,11 @@ public class QueryTest {
     @Test
     public void testProjection(){
 
-        ColumnReference column1 = new ColumnReference("c_discount",0);
-        ColumnReference column2 = new ColumnReference("c_last",1);
-        ColumnReference column3 = new ColumnReference("c_credit",2);
+        Table table = catalog.getTable("customer");
+
+        ColumnReference column1 = new ColumnReference("c_discount", table);
+        ColumnReference column2 = new ColumnReference("c_last",table);
+        ColumnReference column3 = new ColumnReference("c_credit", table);
 
         List<ColumnReference> columnReferenceList = new ArrayList<>(3);
         columnReferenceList.add(column1);

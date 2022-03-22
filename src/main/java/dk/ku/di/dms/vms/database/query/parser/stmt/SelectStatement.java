@@ -20,6 +20,10 @@ public class SelectStatement extends AbstractStatement {
 
     public List<String> groupByClause;
 
-    // No support for having yet
+    @Override
+    public SelectStatement getAsSelectStatement() {
+        return this;
+    }
+
     // No support for UNION, EXCEPT, INTERSECT yet
 }

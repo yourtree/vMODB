@@ -10,4 +10,9 @@ public class UpdateStatement extends AbstractStatement {
 
     public List<SetClauseElement> setClause;
 
+    @Override
+    public UpdateStatement getAsUpdateStatement() {
+        return this;
+    }
+
 }

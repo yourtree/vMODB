@@ -18,6 +18,7 @@ import sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.util.List;
 
 public final class RepositoryFacade implements InvocationHandler {
 
@@ -25,7 +26,7 @@ public final class RepositoryFacade implements InvocationHandler {
 
     private final Class<? extends IRepository<?,?>> repositoryClazz;
 
-    private final Class<?> idClazz;
+    private final Class<?> pkClazz;
 
     private final Class<? extends AbstractEntity<?>> entityClazz;
 
@@ -42,7 +43,7 @@ public final class RepositoryFacade implements InvocationHandler {
         Type[] types = typeImpl.getActualTypeArguments();
 
         this.entityClazz = (Class<? extends AbstractEntity<?>>) types[1];
-        this.idClazz = (Class<?>) types[0];
+        this.pkClazz = (Class<?>) types[0];
     }
 
     public void setAnalyzer(final Analyzer analyzer){
@@ -75,9 +76,9 @@ public final class RepositoryFacade implements InvocationHandler {
             }
             case "insertAll": {
 
-                // acts as a single transaction, so all coinstraints, of every single row must be present
+                // acts as a single transaction, so all constraints, of every single row must be present
 
-                PlanNode node = planner.planBulkInsert(); //(args[0]);
+                PlanNode node = planner.planBulkInsert((List<? extends AbstractEntity<?>>) args[0], entityClazz); //(args[0]);
 
                 break;
             }

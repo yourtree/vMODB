@@ -9,7 +9,6 @@ import dk.ku.di.dms.vms.database.query.parser.builder.UpdateStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.clause.GroupBySelectElement;
 import dk.ku.di.dms.vms.database.query.parser.clause.JoinClauseElement;
 import dk.ku.di.dms.vms.database.query.parser.clause.WhereClauseElement;
-import dk.ku.di.dms.vms.database.query.parser.enums.GroupByOperationEnum;
 import dk.ku.di.dms.vms.database.query.parser.enums.JoinTypeEnum;
 import dk.ku.di.dms.vms.database.query.parser.stmt.*;
 import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
@@ -238,17 +237,17 @@ public final class Analyzer {
     /**
      * basically transforms the raw input into known and safe metadata, e.g., whether a table, column exists
      * https://docs.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql?view=sql-server-ver15#logical-processing-order-of-the-select-statement
-     * @param statement
-     * @param queryTree
+     * @param statement The statement to process
+     * @param queryTree The query tree received from the analyzer
      * @return The query tree
-     * @throws AnalyzerException
+     * @throws AnalyzerException Unexpected statement type
      */
     private QueryTree analyze(final IStatement statement, final QueryTree queryTree) throws AnalyzerException {
 
         if(statement instanceof SelectStatement){
-            analyzeSelectStatement( (SelectStatement) statement, queryTree );
+            analyzeSelectStatement( statement.getAsSelectStatement(), queryTree );
         } else if(statement instanceof UpdateStatementBuilder){
-            final UpdateStatement update = (UpdateStatement) statement;
+            final UpdateStatement update = statement.getAsUpdateStatement();
             // TODO FINISH
         } else {
             // TODO FINISH sort and group by
@@ -292,24 +291,24 @@ public final class Analyzer {
     /**
      * Another strategy is giving to the constructor of ColumnReference the duty to check whether the columnIndex exists
      * This way we avoid checking == null everytime.
-     * @param columnStr
-     * @param tableStr
-     * @param tables
-     * @return
-     * @throws AnalyzerException
+     * @param columnName The column name
+     * @param tableName The table name
+     * @param tables The tables mapped in the query tree (to be formed) so far
+     * @return The column reference
+     * @throws AnalyzerException Column does not exist in the table
      */
-    private ColumnReference findColumnReference(String columnStr, String tableStr, Map<String,Table> tables) throws AnalyzerException {
+    private ColumnReference findColumnReference(final String columnName, final String tableName, final Map<String,Table> tables) throws AnalyzerException {
 
-        if(tables.get(tableStr) == null ){
-            throw new AnalyzerException("Table "+ tableStr + " does not exist in the catalog.");
+        if(tables.get(tableName) == null ){
+            throw new AnalyzerException("Table "+ tableName + " does not exist in the catalog.");
         }
-        final Table table = tables.get(tableStr);
+        final Table table = tables.get(tableName);
         final Schema schema = table.getSchema();
-        Integer columnIndex = schema.getColumnPosition(columnStr);
+        Integer columnIndex = schema.getColumnPosition(columnName);
         if(columnIndex == null){
-            throw new AnalyzerException("Column does not exist in the table "+ tableStr);
+            throw new AnalyzerException("Column does not exist in the table "+ tableName);
         }
-        return new ColumnReference(columnStr, columnIndex, table);
+        return new ColumnReference(columnName, columnIndex, table);
     }
 
 }
