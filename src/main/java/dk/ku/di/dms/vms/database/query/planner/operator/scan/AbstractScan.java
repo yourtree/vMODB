@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.planner.operator.scan;
 
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.interfaces.IOperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.operator.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.query.planner.operator.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
@@ -12,7 +12,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.function.Supplier;
 
-public abstract class AbstractScan implements Supplier<OperatorResult> {
+public abstract class AbstractScan implements Supplier<IOperatorResult> {
 
     /**
      * The index to iterate with

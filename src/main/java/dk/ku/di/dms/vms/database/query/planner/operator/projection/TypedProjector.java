@@ -1,6 +1,8 @@
 package dk.ku.di.dms.vms.database.query.planner.operator.projection;
 
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.DataTransferObjectOperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.RowOperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.interfaces.IOperatorResult;
 import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.database.store.row.Row;
 
@@ -18,13 +20,13 @@ import java.util.function.Supplier;
 /**
  *
  * This "operator" is simply taking a class and transforming the rows
- * contained in an {@link OperatorResult} into the class type
+ * contained in an {@link RowOperatorResult} into the class type
  */
-public class TypedProjector implements Supplier<OperatorResult>, Consumer<OperatorResult> {
+public class TypedProjector implements Supplier<IOperatorResult>, Consumer<IOperatorResult> {
 
     private final Class<?> clazz;
 
-    private OperatorResult input;
+    private RowOperatorResult input;
 
     private final List<ColumnReference> projections;
 
@@ -34,17 +36,16 @@ public class TypedProjector implements Supplier<OperatorResult>, Consumer<Operat
     }
 
     @Override
-    public void accept(OperatorResult operatorResult) {
-        this.input = operatorResult;
+    public void accept(IOperatorResult operatorResult) {
+        this.input = operatorResult.asRowOperatorResult();
     }
 
     @Override
-    public OperatorResult get() {
+    public IOperatorResult get() {
 
         try {
             Constructor<?> constructor = clazz.getDeclaredConstructor();
 
-            // MethodHandle h = MethodHandles.lookup().unreflectSetter(field);
             MethodHandle[] setters = new MethodHandle[ projections.size() ];
 
             // TODO capture all of this on startup. get all calls to builder and then cache it
@@ -75,7 +76,7 @@ public class TypedProjector implements Supplier<OperatorResult>, Consumer<Operat
 
                 }
 
-                return new OperatorResult(result);
+                return new DataTransferObjectOperatorResult(result);
 
             } else {
                 // only one
@@ -91,7 +92,7 @@ public class TypedProjector implements Supplier<OperatorResult>, Consumer<Operat
                     i++;
                 }
 
-                return new OperatorResult(Collections.singletonList(currObj));
+                return new DataTransferObjectOperatorResult(Collections.singletonList(currObj));
 
             }
 

@@ -12,8 +12,7 @@ public class Schema {
     // identification of columns that form the primary key. all tables must have a primary key
     private final int[] primaryKeyColumns;
 
-    // foreign key map: key: column position value: foreign key reference
-    private Map<Integer,ForeignKeyReference> foreignKeyMap;
+    private Map<Table, int[]> foreignKeysGroupedByTableMap;
 
     // the name of the columns
     private final String[] columnNames;
@@ -21,8 +20,8 @@ public class Schema {
     // the data types of the columns
     private final DataType[] columnDataTypes;
 
-    // the constraints of this schema
-    private Map<Integer,ConstraintReference> constraintMap;
+    // the constraints of this schema, where key: column position and value is the actual constraint
+    private Map<Integer, ConstraintReference> constraintMap;
 
     // basically a map of column name to exact position in row values
     private final Map<String,Integer> columnPositionMap;
@@ -67,22 +66,12 @@ public class Schema {
 
     }
 
-    public void addForeignKeyConstraints(final List<ForeignKeyReference> foreignKeyReferences){
-        if(foreignKeyReferences != null && foreignKeyReferences.size() > 0){
-            this.foreignKeyMap = new HashMap<>();
-            for(ForeignKeyReference foreignKeyReference : foreignKeyReferences){
-                int columnPos =  foreignKeyReference.getColumnPosition();
-                this.foreignKeyMap.putIfAbsent(columnPos, foreignKeyReference);
-            }
-        }
+    public void addForeignKeyConstraints(Map<Table,int[]> foreignKeysGroupedByTableMap) {
+        this.foreignKeysGroupedByTableMap = foreignKeysGroupedByTableMap;
     }
 
-    public ForeignKeyReference isForeignKey(final int columnPosition){
-        return this.foreignKeyMap.getOrDefault(columnPosition, null);
-    }
-
-    public ConstraintReference isConstraint(final int columnPosition){
-        return this.constraintMap.getOrDefault(columnPosition, null);
+    public Map<Table, int[]> getForeignKeysGroupedByTable(){
+        return this.foreignKeysGroupedByTableMap;
     }
 
     public int[] buildColumnPositionArray(final String[] columnList){

@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.planner.operator.join;
 
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 import dk.ku.di.dms.vms.database.store.common.IKey;
 
@@ -16,10 +16,10 @@ import java.util.function.BiConsumer;
  */
 
 public class HashConsumerJoin extends AbstractJoin
-        implements BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>> {
+        implements BiConsumer<CompletableFuture<RowOperatorResult>,CompletableFuture<RowOperatorResult>> {
 
-    private CompletableFuture<OperatorResult> operatorResultFutureLeft;
-    private CompletableFuture<OperatorResult> operatorResultFutureRight;
+    private CompletableFuture<RowOperatorResult> operatorResultFutureLeft;
+    private CompletableFuture<RowOperatorResult> operatorResultFutureRight;
 
     public HashConsumerJoin(int identifier, AbstractIndex<IKey> innerIndex, AbstractIndex<IKey> outerIndex) {
         super(identifier, innerIndex, outerIndex);
@@ -31,18 +31,18 @@ public class HashConsumerJoin extends AbstractJoin
     }
 
     @Override
-    public void accept(CompletableFuture<OperatorResult> operatorResultFutureLeft, CompletableFuture<OperatorResult> operatorResultFutureRight) {
+    public void accept(CompletableFuture<RowOperatorResult> operatorResultFutureLeft, CompletableFuture<RowOperatorResult> operatorResultFutureRight) {
         this.operatorResultFutureLeft = operatorResultFutureLeft;
         this.operatorResultFutureRight = operatorResultFutureRight;
     }
 
     @Override
-    public OperatorResult get() {
+    public RowOperatorResult get() {
 
         // CompletableFuture.allOf( operatorResultFutureLeft, operatorResultFutureRight ).
         try {
-            OperatorResult left = operatorResultFutureLeft.get();
-            OperatorResult right = operatorResultFutureRight.get();
+            RowOperatorResult left = operatorResultFutureLeft.get();
+            RowOperatorResult right = operatorResultFutureRight.get();
 
             // TODO continue
 

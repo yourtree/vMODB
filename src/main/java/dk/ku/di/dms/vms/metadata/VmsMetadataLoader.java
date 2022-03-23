@@ -50,7 +50,7 @@ public class VmsMetadataLoader {
             ClassNotFoundException, InvocationTargetException,
             InstantiationException, IllegalAccessException, QueueMappingException, NoPrimaryKeyFoundException, NotAcceptableTypeException, UnsupportedConstraint {
 
-        final VmsMetadata applicationMetadata = new VmsMetadata();
+        final VmsMetadata vmsMetadata = new VmsMetadata();
 
         if(forPackage == null) {
             forPackage = "dk.ku.di.dms.vms";
@@ -76,7 +76,7 @@ public class VmsMetadataLoader {
          */
 
         // DatabaseMetadata databaseMetadata
-        final Catalog catalog = applicationMetadata.getCatalog();
+        final Catalog catalog = vmsMetadata.getCatalog();
 
         // get all fields annotated with column
         Set<Field> allEntityFields = reflections.get(
@@ -113,8 +113,6 @@ public class VmsMetadataLoader {
 
         // table name and respective not parsed foreign keys
         Map<String, NotParsedForeignKeyReference[]> foreignKeysPerEntity = new HashMap<>();
-        // map entity clazz to table
-        Map<Class<? extends AbstractEntity<?>>,Table> mapEntityClazzToTable = new HashMap<>();
 
         // build schema of each table
         // we build the schema in order to look up the fields and define the pk hash index
@@ -181,11 +179,11 @@ public class VmsMetadataLoader {
 
             Schema schema = new Schema(columnNames, columnDataTypes, pkFieldsStr, constraints);
 
-            createVmsTableAndRespectiveIndexes(catalog, foreignKeysPerEntity, mapEntityClazzToTable, tableClass, foreignKeyReferences, schema);
+            createVmsTableAndRespectiveIndexes(catalog, foreignKeysPerEntity, vmsMetadata, tableClass, foreignKeyReferences, schema);
 
         }
 
-        parseForeignKeyReferences(catalog, foreignKeysPerEntity, mapEntityClazzToTable);
+        parseForeignKeyReferences(catalog, foreignKeysPerEntity, vmsMetadata);
 
         // TODO finish --
 
@@ -196,9 +194,9 @@ public class VmsMetadataLoader {
         SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
          */
 
-        mapTransactionInputOutput(applicationMetadata, reflections);
+        mapTransactionInputOutput(vmsMetadata, reflections);
 
-        return applicationMetadata;
+        return vmsMetadata;
 
     }
 
@@ -256,7 +254,8 @@ public class VmsMetadataLoader {
 
     private void createVmsTableAndRespectiveIndexes(Catalog catalog,
                                                     Map<String, NotParsedForeignKeyReference[]> foreignKeysPerEntity,
-                                                    Map<Class<? extends AbstractEntity<?>>, Table> mapEntityClazzToTable,
+                                                    // Map<Class<? extends AbstractEntity<?>>, Table> mapEntityClazzToTable,
+                                                    VmsMetadata vmsMetadata,
                                                     Class<? extends AbstractEntity<?>> tableClass,
                                                     NotParsedForeignKeyReference[] foreignKeyReferences,
                                                     Schema schema) {
@@ -270,7 +269,7 @@ public class VmsMetadataLoader {
                 HashIndexedTable table = new HashIndexedTable( tableName, schema);
 
                 if (foreignKeyReferences != null) foreignKeysPerEntity.put( tableName, foreignKeyReferences);
-                mapEntityClazzToTable.put(tableClass, table);
+                vmsMetadata.registerEntityClazzMapToTable(tableClass, table);
 
                 // table indexes
                 VmsIndex[] indexes = ((VmsTable) an).indexes();
@@ -313,30 +312,63 @@ public class VmsMetadataLoader {
         }
     }
 
-    private void parseForeignKeyReferences(Catalog catalog, Map<String, NotParsedForeignKeyReference[]> foreignKeysPerEntity, Map<Class<? extends AbstractEntity<?>>, Table> mapEntityClazzToTable) {
-        // after reading all entities, then I can parse the foreign keys to actual tables
-        // the reason is that I need the references to all tables before reasoning about their associations
+    /**
+     * after reading all entities, then I can parse the foreign keys to actual tables
+     * the reason is that I need the references to all tables before reasoning about their associations
+     * @param catalog
+     * @param foreignKeysPerEntity
+     * @param vmsMetadata
+     */
+    private void parseForeignKeyReferences(Catalog catalog,
+                                           Map<String, NotParsedForeignKeyReference[]> foreignKeysPerEntity,
+                                           VmsMetadata vmsMetadata) {
+
         for( final Map.Entry<String,NotParsedForeignKeyReference[]> entry : foreignKeysPerEntity.entrySet()){
             Table table = catalog.getTable( entry.getKey() );
+
+            Map<Table, List<Integer>> foreignKeysGroupedByTableMap = new HashMap<>();
 
             // iterate and parse to table and column position
             Schema schema = table.getSchema();
 
             NotParsedForeignKeyReference[] notParsedForeignKeyReferences = entry.getValue();
             int size = notParsedForeignKeyReferences.length;
-            List<ForeignKeyReference> parsedForeignKeyReferences = new ArrayList<>(size);
 
             for(int i = 0; i < size; i++){
 
-                Schema foreignSchema = mapEntityClazzToTable.get( notParsedForeignKeyReferences[i].entityClazz ).getSchema();
+                Table foreignTable = vmsMetadata.getTableByEntityClazz( notParsedForeignKeyReferences[i].entityClazz );
 
-                parsedForeignKeyReferences.add( new ForeignKeyReference(
-                        mapEntityClazzToTable.get( notParsedForeignKeyReferences[i].entityClazz ),
-                        foreignSchema.getColumnPosition( notParsedForeignKeyReferences[i].columnName )
-                ) );
+                int column = foreignTable.getSchema().getColumnPosition( notParsedForeignKeyReferences[i].columnName );
+
+
+                if(foreignKeysGroupedByTableMap.get(foreignTable) == null){
+                    List<Integer> fkList = new ArrayList<>();
+                    fkList.add(column);
+                    foreignKeysGroupedByTableMap.put(foreignTable, fkList);
+                } else {
+                    // add in order
+                    Iterator<Integer> iterator = foreignKeysGroupedByTableMap.get(foreignTable).iterator();
+                    int pos = 0;
+                    while(iterator.hasNext() && column > iterator.next()){
+                        pos++;
+                    }
+                    foreignKeysGroupedByTableMap.get(foreignTable).add( pos, column );
+                }
+
             }
 
-            schema.addForeignKeyConstraints( parsedForeignKeyReferences );
+            Map<Table, int[]> finalMap = new HashMap<>(foreignKeysGroupedByTableMap.size());
+            int[] columns;
+            // now store as ordered array in the schema
+            for( Map.Entry<Table, List<Integer>> entry2 : foreignKeysGroupedByTableMap.entrySet()){
+                columns = new int[entry2.getValue().size()];
+                for(int j = 0; j < entry2.getValue().size(); j++) {
+                    columns[j] = entry2.getValue().get(j);
+                }
+                finalMap.put(entry2.getKey(),columns);
+            }
+
+            schema.addForeignKeyConstraints( finalMap );
 
         }
     }
@@ -379,6 +411,9 @@ public class VmsMetadataLoader {
                     try {
 
                         RepositoryFacade facade = new RepositoryFacade(parameterType);
+
+                        // vms metadata
+                        facade.setVmsMetadata( vmsMetadata );
 
                         // instrumenting DBMS components
                         facade.setAnalyzer(analyzer);

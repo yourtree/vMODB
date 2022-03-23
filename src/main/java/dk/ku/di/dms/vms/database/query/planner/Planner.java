@@ -5,9 +5,11 @@ import dk.ku.di.dms.vms.database.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.database.query.parser.enums.ExpressionTypeEnum;
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.constraint.BulkInsert;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.operator.aggregate.Average;
 import dk.ku.di.dms.vms.database.query.planner.operator.aggregate.IAggregate;
+import dk.ku.di.dms.vms.database.query.planner.operator.constraint.ConstraintEnforcer;
 import dk.ku.di.dms.vms.database.query.planner.operator.filter.*;
 import dk.ku.di.dms.vms.database.query.planner.operator.join.*;
 import dk.ku.di.dms.vms.database.query.planner.operator.projection.TypedProjector;
@@ -38,9 +40,33 @@ import static dk.ku.di.dms.vms.database.query.planner.operator.join.JoinTypeEnum
  */
 public final class Planner {
 
-    public PlanNode planBulkInsert(List<? extends AbstractEntity<?>> entities, Class<? extends AbstractEntity<?>> entityClazz){
-        // TODO finish
-        return null;
+    public Planner(){}
+
+    public PlanNode planBulkInsert(final Table table, List<? extends AbstractEntity<?>> entities){
+
+        // get the indexes to check for foreign key first
+        Map<Table, int[]> foreignKeysGroupedByTable = table.getSchema().getForeignKeysGroupedByTable();
+
+        Map<Table, AbstractIndex<IKey>> indexPerFk = new HashMap<>();
+
+        // for each table, get appropriate index
+        for( Map.Entry<Table, int[]> fkEntry : foreignKeysGroupedByTable.entrySet() ){
+            Optional<AbstractIndex<IKey>> index = findOptimalIndex(fkEntry.getKey(), fkEntry.getValue() );
+            indexPerFk.put(fkEntry.getKey(), index.get());
+        }
+
+        ConstraintEnforcer constraintEnforcer = new ConstraintEnforcer(entities, indexPerFk, table);
+
+        PlanNode constraintPlanNode = new PlanNode( constraintEnforcer );
+
+        BulkInsert bulkInsert = new BulkInsert();
+
+        PlanNode bulkInsertPlanNode = new PlanNode(bulkInsert);
+
+        constraintPlanNode.father = bulkInsertPlanNode;
+        bulkInsertPlanNode.left = constraintPlanNode;
+
+        return constraintPlanNode;
     }
 
     // TODO we can also have the option: AUTO, meaning the planner will look for the possibility of building a bushy tree
@@ -270,7 +296,7 @@ public final class Planner {
 
     /**
      *
-     * @param wherePredicatesGroupedByTableNotInAnyJoinOrAggregate
+     * @param wherePredicatesGroupedByTableNotInAnyJoinOrAggregate Filters ought for use in scan
      * @return A list of independent scan operators
      */
     private List<AbstractScan> buildScanOperators(Map<Table,List<WherePredicate>> wherePredicatesGroupedByTableNotInAnyJoinOrAggregate) {
@@ -390,7 +416,7 @@ public final class Planner {
 
             IAggregate aggregate = aggregates.get(0);
 
-            OperatorResult input = new OperatorResult( aggregate.getTable().getPrimaryKeyIndex().rows() );
+            RowOperatorResult input = new RowOperatorResult( aggregate.getTable().getPrimaryKeyIndex().rows() );
 
             aggregate.accept( input );
 

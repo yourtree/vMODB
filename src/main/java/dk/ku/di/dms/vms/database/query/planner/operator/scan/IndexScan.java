@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.planner.operator.scan;
 
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.operator.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.store.common.IKey;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
@@ -24,7 +24,7 @@ public class IndexScan extends AbstractScan {
     }
 
     @Override
-    public OperatorResult get() {
+    public RowOperatorResult get() {
 
         Row row = index.retrieve( hashProbeKey );
 
@@ -33,11 +33,11 @@ public class IndexScan extends AbstractScan {
         }
 
         // perhaps can avoid the overhead of creating the object
-        return new OperatorResult(0);
+        return new RowOperatorResult(0);
     }
 
-    private OperatorResult buildResult(Row row){
-        OperatorResult result = new OperatorResult(1);
+    private RowOperatorResult buildResult(Row row){
+        RowOperatorResult result = new RowOperatorResult(1);
         result.accept( row );
         return result;
     }

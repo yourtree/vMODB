@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.planner.operator.aggregate;
 
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.database.store.row.Row;
 import dk.ku.di.dms.vms.database.store.table.Table;
@@ -17,7 +17,7 @@ import static java.util.stream.DoubleStream.Builder;
  */
 public class Average implements IAggregate {
 
-    private OperatorResult input;
+    private RowOperatorResult input;
 
     private final ColumnReference column;
 
@@ -29,12 +29,12 @@ public class Average implements IAggregate {
     }
 
     @Override
-    public void accept(OperatorResult operatorResult) {
+    public void accept(RowOperatorResult operatorResult) {
         this.input = operatorResult;
     }
 
     @Override
-    public OperatorResult get() {
+    public RowOperatorResult get() {
 
         HashMap<Integer, Builder> valuesForAggregation = new HashMap<>();
         HashMap<Integer, Object[]> columnsForAggregation = new HashMap<>();
@@ -75,7 +75,7 @@ public class Average implements IAggregate {
 
         }
 
-        return new OperatorResult( output );
+        return new RowOperatorResult( output );
     }
 
     private Pair<Integer,Object[]> getGroupIdentifier(Row row){

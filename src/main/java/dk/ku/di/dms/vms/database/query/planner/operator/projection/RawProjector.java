@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.database.query.planner.operator.projection;
 
 import dk.ku.di.dms.vms.database.query.analyzer.predicate.GroupByPredicate;
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.database.store.meta.ColumnReference;
 
 import java.util.List;
@@ -11,7 +11,7 @@ import java.util.function.Supplier;
 /**
  * Default, row-oriented projection
  */
-public class RawProjector implements Supplier<OperatorResult>, Consumer<OperatorResult> {
+public class RawProjector implements Supplier<RowOperatorResult>, Consumer<RowOperatorResult> {
 
 
 
@@ -21,12 +21,12 @@ public class RawProjector implements Supplier<OperatorResult>, Consumer<Operator
 
 
     @Override
-    public void accept(OperatorResult operatorResult) {
+    public void accept(RowOperatorResult operatorResult) {
 
     }
 
     @Override
-    public OperatorResult get() {
+    public RowOperatorResult get() {
         return null;
     }
 }

@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.planner.tree;
 
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.interfaces.IOperatorResult;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
@@ -13,42 +13,31 @@ public class PlanNode {
     // public Consumer<Object> projector;
 
     // applies to any execution
-    public Supplier<OperatorResult> supplier;
+    public Supplier<IOperatorResult> supplier;
 
     // single thread execution
-    public Consumer<OperatorResult> consumer;
+    public Consumer<IOperatorResult> consumer;
 
     // parallel execution
-    public Consumer<CompletableFuture<OperatorResult>> consumerFuture;
-    public BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>> biConsumerFuture;
+    public Consumer<CompletableFuture<IOperatorResult>> consumerFuture;
+    public BiConsumer<CompletableFuture<IOperatorResult>,CompletableFuture<IOperatorResult>> biConsumerFuture;
 
     public PlanNode father;
     public PlanNode left;
-    public PlanNode right;
-
-    public boolean isLeaf;
+//    public PlanNode right;
+//
+//    public boolean isLeaf;
 
     // https://www.interdb.jp/pg/pgsql03.html
 
-    public PlanNode(Supplier<OperatorResult> supplier){
+    public PlanNode(Supplier<IOperatorResult> supplier){
         this.supplier = supplier;
+    }
+
+    public PlanNode(Consumer<IOperatorResult> consumer){
+        this.consumer = consumer;
     }
 
     public PlanNode(){}
 
-    public PlanNode(Supplier<OperatorResult> supplier,
-                    Consumer<CompletableFuture<OperatorResult>> consumerFuture,
-                    BiConsumer<CompletableFuture<OperatorResult>,CompletableFuture<OperatorResult>> biConsumerFuture,
-                    PlanNode father,
-                    PlanNode left,
-                    PlanNode right,
-                    boolean isLeaf) {
-        this.supplier = supplier;
-        this.consumerFuture = consumerFuture;
-        this.biConsumerFuture = biConsumerFuture;
-        this.father = father;
-        this.left = left;
-        this.right = right;
-        this.isLeaf = isLeaf;
-    }
 }

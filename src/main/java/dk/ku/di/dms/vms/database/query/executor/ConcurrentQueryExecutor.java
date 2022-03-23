@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.executor;
 
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.interfaces.IOperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.tree.PlanNode;
 
 import java.util.Map;
@@ -10,7 +10,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class ConcurrentQueryExecutor implements Supplier<CompletableFuture<OperatorResult>> {
+public class ConcurrentQueryExecutor implements Supplier<CompletableFuture<IOperatorResult>> {
 
     private final Executor executor;
 
@@ -32,9 +32,9 @@ public class ConcurrentQueryExecutor implements Supplier<CompletableFuture<Opera
      * fulfilled
      */
     @Override
-    public CompletableFuture<OperatorResult> get() {
+    public CompletableFuture<IOperatorResult> get() {
 
-        CompletableFuture<OperatorResult> finalTask = null;
+        CompletableFuture<IOperatorResult> finalTask = null;
 
         // while we still have a predecessor to schedule
         while (predecessorLeafNodes.size() > 0) {
@@ -45,18 +45,18 @@ public class ConcurrentQueryExecutor implements Supplier<CompletableFuture<Opera
                 PlanNode iNode = entry.getKey();
 
                 if (childrenList.length == 2) {
-                    // two children always lead to a biconsumer
+                    // two children always lead to a bi consumer
 
-                    BiConsumer<CompletableFuture<OperatorResult>, CompletableFuture<OperatorResult>> node =
+                    BiConsumer<CompletableFuture<IOperatorResult>, CompletableFuture<IOperatorResult>> node =
                             iNode.biConsumerFuture;
                     PlanNode left = childrenList[0];
                     PlanNode right = childrenList[1];
 
                     // TODO make sure the push order is guaranteed by the executor
                     // concurrent queue should guarantee the order of queuing
-                    CompletableFuture<OperatorResult> op1 =
+                    CompletableFuture<IOperatorResult> op1 =
                             CompletableFuture.supplyAsync(left.supplier,executor);
-                    CompletableFuture<OperatorResult> op2 =
+                    CompletableFuture<IOperatorResult> op2 =
                             CompletableFuture.supplyAsync(right.supplier,executor);
 
                     // avoid blocking now, so we can continue building the execution tree
@@ -73,11 +73,11 @@ public class ConcurrentQueryExecutor implements Supplier<CompletableFuture<Opera
 
                 } else if (childrenList.length == 1) { // == 1
 
-                    Consumer<CompletableFuture<OperatorResult>> node = iNode.consumerFuture;
+                    Consumer<CompletableFuture<IOperatorResult>> node = iNode.consumerFuture;
 
                     PlanNode children = childrenList[0];
 
-                    CompletableFuture<OperatorResult> op =
+                    CompletableFuture<IOperatorResult> op =
                             CompletableFuture.supplyAsync(children.supplier,executor);
 
                     node.accept(op);

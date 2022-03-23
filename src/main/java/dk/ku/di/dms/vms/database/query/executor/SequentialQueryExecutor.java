@@ -1,11 +1,11 @@
 package dk.ku.di.dms.vms.database.query.executor;
 
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.interfaces.IOperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.tree.PlanNode;
 
 import java.util.function.Supplier;
 
-public class SequentialQueryExecutor implements Supplier<OperatorResult> {
+public class SequentialQueryExecutor implements Supplier<IOperatorResult> {
 
     private PlanNode node;
 
@@ -14,14 +14,14 @@ public class SequentialQueryExecutor implements Supplier<OperatorResult> {
     }
 
     /**
-     * while there are remaining tasks, continue in a loop
+     * While there are remaining tasks, continue in a loop
      * to schedule the tasks when their dependencies have been
      * fulfilled
      */
     @Override
-    public OperatorResult get() {
+    public IOperatorResult get() {
 
-        OperatorResult result = null;
+        IOperatorResult result = null;
 
         // while we still have a node to schedule
         while(true){

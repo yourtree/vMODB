@@ -5,11 +5,13 @@ import dk.ku.di.dms.vms.database.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.database.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.database.query.executor.SequentialQueryExecutor;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.DataTransferObjectOperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.tree.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
+import dk.ku.di.dms.vms.database.store.table.Table;
 import dk.ku.di.dms.vms.infra.AbstractEntity;
 import dk.ku.di.dms.vms.infra.IRepository;
+import dk.ku.di.dms.vms.metadata.VmsMetadata;
 import dk.ku.di.dms.vms.proxy.DynamicInvocationHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,9 +33,11 @@ public final class RepositoryFacade implements InvocationHandler {
     private final Class<? extends AbstractEntity<?>> entityClazz;
 
     // DBMS components
+    private VmsMetadata vmsMetadata;
     private Analyzer analyzer;
     private Planner planner;
 
+    @SuppressWarnings({"unchecked"})
     public RepositoryFacade(final Class<? extends IRepository<?,?>> repositoryClazz){
         this.repositoryClazz = repositoryClazz;
 
@@ -52,6 +56,10 @@ public final class RepositoryFacade implements InvocationHandler {
 
     public void setPlanner(final Planner planner){
         this.planner = planner;
+    }
+
+    public void setVmsMetadata(VmsMetadata vmsMetadata) {
+        this.vmsMetadata = vmsMetadata;
     }
 
     /**
@@ -78,7 +86,13 @@ public final class RepositoryFacade implements InvocationHandler {
 
                 // acts as a single transaction, so all constraints, of every single row must be present
 
-                PlanNode node = planner.planBulkInsert((List<? extends AbstractEntity<?>>) args[0], entityClazz); //(args[0]);
+                Table tableForInsertion = this.vmsMetadata.getTableByEntityClazz( entityClazz );
+
+                PlanNode node = planner.planBulkInsert(tableForInsertion, (List<? extends AbstractEntity<?>>) args[0]); //(args[0]);
+
+                SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(node);
+
+                queryExecutor.get();
 
                 break;
             }
@@ -88,10 +102,10 @@ public final class RepositoryFacade implements InvocationHandler {
                 QueryTree queryTree = analyzer.analyze( (IStatement) args[0], (Class<?>) args[1]);
                 PlanNode node = planner.plan( queryTree );
 
-                // get concrete executor from application metadata
+                // TODO get concrete executor from application metadata
                 SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(node);
 
-                OperatorResult result = queryExecutor.get();
+                DataTransferObjectOperatorResult result = queryExecutor.get().asDataTransferObjectOperatorResult();
                 return result.getDataTransferObjects().size() > 1 ?
                         result.getDataTransferObjects() : result.getDataTransferObjects().get(0);
 

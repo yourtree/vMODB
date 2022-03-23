@@ -10,7 +10,7 @@ import dk.ku.di.dms.vms.database.query.parser.builder.SelectStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.builder.UpdateStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.database.query.parser.stmt.SelectStatement;
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.tree.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
 import dk.ku.di.dms.vms.database.query.planner.operator.projection.TypedProjector;
@@ -107,7 +107,7 @@ public class QueryTest {
         Collection<Row> rows = new ArrayList<>(2);
         Collections.addAll(rows, new Row(1F,"1","1" ) );
 
-        OperatorResult operatorResult = new OperatorResult( rows );
+        RowOperatorResult operatorResult = new RowOperatorResult( rows );
 
         projector.accept( operatorResult );
 
@@ -136,7 +136,7 @@ public class QueryTest {
 
         SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(planTree);
 
-        OperatorResult result = queryExecutor.get();
+        RowOperatorResult result = queryExecutor.get();
 
         assert(result != null);
 

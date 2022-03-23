@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.planner.operator.join;
 
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.operator.filter.IFilter;
 import dk.ku.di.dms.vms.database.query.planner.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
@@ -30,7 +30,7 @@ public class HashJoin extends AbstractJoin {
     }
 
     @Override
-    public OperatorResult get() {
+    public RowOperatorResult get() {
 
         Set<Map.Entry<IKey,Row>> entries = null;
         try {

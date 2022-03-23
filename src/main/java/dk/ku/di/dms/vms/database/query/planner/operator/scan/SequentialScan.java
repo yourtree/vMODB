@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.database.query.planner.operator.scan;
 
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.operator.filter.FilterInfo;
 import dk.ku.di.dms.vms.database.store.common.IKey;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
@@ -25,16 +25,16 @@ public final class SequentialScan extends AbstractScan {
     }
 
     @Override
-    public OperatorResult get() {
+    public RowOperatorResult get() {
 
         final boolean noFilter = filters == null;
 
         if (noFilter) {
-            return new OperatorResult(index.rows());
+            return new RowOperatorResult(index.rows());
         }
 
         // it avoids resizing in most cases array
-        OperatorResult result = new OperatorResult(index.rows().size());
+        RowOperatorResult result = new RowOperatorResult(index.rows().size());
 
         Collection<Row> rows = index.rows();
 

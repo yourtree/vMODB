@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.database.query.planner.operator.join;
 
-import dk.ku.di.dms.vms.database.query.planner.operator.OperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.operator.filter.FilterInfo;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.interfaces.IOperatorResult;
 import dk.ku.di.dms.vms.database.store.index.AbstractIndex;
 import dk.ku.di.dms.vms.database.store.common.IKey;
 
@@ -12,7 +12,7 @@ import java.util.function.Supplier;
  * A class implementing IJoin simply means a type of JOIN operator.
  * All types of join operators supply a result.
  */
-public abstract class AbstractJoin implements Supplier<OperatorResult> {
+public abstract class AbstractJoin implements Supplier<IOperatorResult> {
 
     // used to uniquely identify this join operation in a query plan
     private final int identifier;
