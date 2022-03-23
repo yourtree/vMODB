@@ -15,18 +15,16 @@ import dk.ku.di.dms.vms.metadata.VmsMetadata;
 import dk.ku.di.dms.vms.proxy.DynamicInvocationHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.List;
 
 public final class RepositoryFacade implements InvocationHandler {
 
     private static Logger LOGGER = LoggerFactory.getLogger(DynamicInvocationHandler.class);
-
-    private final Class<? extends IRepository<?,?>> repositoryClazz;
 
     private final Class<?> pkClazz;
 
@@ -39,12 +37,8 @@ public final class RepositoryFacade implements InvocationHandler {
 
     @SuppressWarnings({"unchecked"})
     public RepositoryFacade(final Class<? extends IRepository<?,?>> repositoryClazz){
-        this.repositoryClazz = repositoryClazz;
 
-        ParameterizedTypeImpl typeImpl = ((ParameterizedTypeImpl) repositoryClazz.
-                getGenericInterfaces()[0]);
-
-        Type[] types = typeImpl.getActualTypeArguments();
+        Type[] types = ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
 
         this.entityClazz = (Class<? extends AbstractEntity<?>>) types[1];
         this.pkClazz = (Class<?>) types[0];

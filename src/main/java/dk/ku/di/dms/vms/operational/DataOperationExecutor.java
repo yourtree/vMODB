@@ -44,30 +44,6 @@ public final class DataOperationExecutor implements Runnable  {
                                 dataOperation.methodClazz,
                                 input);
 
-//                    switch (input.size()){
-//                        case 1: output  = (Event) dataOperation.method.invoke(
-//                                dataOperation.methodClazz,
-//                                input.get(0));
-//                                break;
-//                        case 2: output  = (Event) dataOperation.method.invoke(
-//                                dataOperation.methodClazz,
-//                                input.get(0), input.get(1));
-//                            break;
-//                        case 3: output  = (Event) dataOperation.method.invoke(
-//                                dataOperation.methodClazz,
-//                                input.get(0), input.get(1), input.get(2));
-//                            break;
-//                        case 4: output  = (Event) dataOperation.method.invoke(
-//                                dataOperation.methodClazz,
-//                                input.get(0), input.get(1), input.get(2), input.get(3));
-//                            break;
-//                        case 5: output  = (Event) dataOperation.method.invoke(
-//                                dataOperation.methodClazz,
-//                                input.get(0), input.get(1), input.get(2), input.get(3), input.get(4));
-//                            break;
-//                        default: log.error("TODO: implement for more events!");
-//                    }
-
                     if(output != null){
                         eventRepository.outputQueue.add(output);
                     }

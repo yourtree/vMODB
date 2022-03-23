@@ -11,6 +11,7 @@ import dk.ku.di.dms.vms.database.query.parser.builder.UpdateStatementBuilder;
 import dk.ku.di.dms.vms.database.query.parser.stmt.IStatement;
 import dk.ku.di.dms.vms.database.query.parser.stmt.SelectStatement;
 import dk.ku.di.dms.vms.database.query.planner.operator.result.RowOperatorResult;
+import dk.ku.di.dms.vms.database.query.planner.operator.result.interfaces.IOperatorResult;
 import dk.ku.di.dms.vms.database.query.planner.tree.PlanNode;
 import dk.ku.di.dms.vms.database.query.planner.Planner;
 import dk.ku.di.dms.vms.database.query.planner.operator.projection.TypedProjector;
@@ -136,7 +137,7 @@ public class QueryTest {
 
         SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(planTree);
 
-        RowOperatorResult result = queryExecutor.get();
+        IOperatorResult result = queryExecutor.get();
 
         assert(result != null);
 
