@@ -1,8 +1,0 @@
-package dk.ku.di.dms.vms.event.redis;
-
-import dk.ku.di.dms.vms.event.Event;
-
-public class RedisEvent implements Event {
-
-
-}
