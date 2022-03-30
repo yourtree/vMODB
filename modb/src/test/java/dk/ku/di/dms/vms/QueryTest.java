@@ -1,15 +1,15 @@
 package dk.ku.di.dms.vms;
 
-import dk.ku.di.dms.vms.sidecar.api.modb.QueryBuilderFactory;
 import dk.ku.di.dms.vms.modb.catalog.Catalog;
+import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.executor.SequentialQueryExecutor;
-import dk.ku.di.dms.vms.modb.common.query.parser.builder.SelectStatementBuilder;
-import dk.ku.di.dms.vms.modb.common.query.parser.builder.UpdateStatementBuilder;
-import dk.ku.di.dms.vms.statement.IStatement;
-import dk.ku.di.dms.vms.statement.SelectStatement;
+import dk.ku.di.dms.vms.modb.common.query.builder.SelectStatementBuilder;
+import dk.ku.di.dms.vms.modb.common.query.builder.UpdateStatementBuilder;
+import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
+import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.interfaces.IOperatorResult;
 import dk.ku.di.dms.vms.modb.query.planner.tree.PlanNode;
@@ -22,7 +22,6 @@ import dk.ku.di.dms.vms.modb.store.meta.Schema;
 import dk.ku.di.dms.vms.modb.store.row.Row;
 import dk.ku.di.dms.vms.modb.store.table.HashIndexedTable;
 import dk.ku.di.dms.vms.modb.store.table.Table;
-import dk.ku.di.dms.vms.tpcc.dto.CustomerInfoDTO;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -31,8 +30,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-import static dk.ku.di.dms.vms.modb.common.query.parser.enums.ExpressionTypeEnum.EQUALS;
-import static dk.ku.di.dms.vms.modb.common.query.parser.enums.ExpressionTypeEnum.GREATER_THAN;
+import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.EQUALS;
+import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.GREATER_THAN;
 
 public class QueryTest {
 

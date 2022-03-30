@@ -1,18 +1,19 @@
 package dk.ku.di.dms.vms;
 
-import dk.ku.di.dms.vms.sidecar.api.modb.QueryBuilderFactory;
+
 import dk.ku.di.dms.vms.modb.catalog.Catalog;
+import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
-import dk.ku.di.dms.vms.modb.common.query.parser.builder.SelectStatementBuilder;
-import dk.ku.di.dms.vms.statement.IStatement;
+import dk.ku.di.dms.vms.modb.common.query.builder.SelectStatementBuilder;
+import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.common.meta.DataType;
 import dk.ku.di.dms.vms.modb.store.meta.Schema;
 import dk.ku.di.dms.vms.modb.store.table.HashIndexedTable;
 import dk.ku.di.dms.vms.modb.store.table.Table;
 
-import static dk.ku.di.dms.vms.modb.common.query.parser.enums.ExpressionTypeEnum.EQUALS;
+import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.EQUALS;
 
 /**
  * Common set of methods for two or more tests (e.g., {@link PlannerTest} and {@link ExecutorTest}

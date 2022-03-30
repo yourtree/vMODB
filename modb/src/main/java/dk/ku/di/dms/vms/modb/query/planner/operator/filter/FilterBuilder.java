@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.query.planner.operator.filter;
 
-import dk.ku.di.dms.vms.modb.common.query.parser.enums.ExpressionTypeEnum;
+import dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.common.meta.DataType;
 

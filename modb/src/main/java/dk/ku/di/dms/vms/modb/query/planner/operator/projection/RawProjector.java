@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.query.planner.operator.projection;
 
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
-import dk.ku.di.dms.vms.store.meta.ColumnReference;
+import dk.ku.di.dms.vms.modb.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.RowOperatorResult;
 
 import java.util.List;

@@ -4,10 +4,6 @@ import dk.ku.di.dms.vms.modb.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.modb.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.modb.store.row.Row;
 import dk.ku.di.dms.vms.modb.store.table.Table;
-import dk.ku.di.dms.vms.store.meta.ColumnReference;
-import dk.ku.di.dms.vms.store.row.Row;
-import dk.ku.di.dms.vms.store.table.Table;
-import dk.ku.di.dms.vms.utils.Pair;
 
 import java.util.*;
 import java.util.stream.DoubleStream;
@@ -46,14 +42,14 @@ public class Average implements IAggregate {
         // a better, more general solution to track the dependencies of sets fo values is required
 
         for( final Row row : input.getRows() ){
-            Pair<Integer,Object[]> pair = getGroupIdentifier(row);
-            if(valuesForAggregation.get( pair.getFirst() ) == null) {
+            GroupIdentifier group = getGroupWhereRowLiesIn(row);
+            if(valuesForAggregation.get( group.hash() ) == null) {
                 Builder stream = DoubleStream.builder();
-                valuesForAggregation.put( pair.getFirst(), stream );
-                columnsForAggregation.put( pair.getFirst(), pair.getSecond() );
+                valuesForAggregation.put( group.hash(), stream );
+                columnsForAggregation.put( group.hash(), group.valuesForHashing() );
             }
             // TODO check whether there is a better strategy, e.g., https://stackoverflow.com/questions/34446626/java-using-streams-on-abstract-datatypes
-            valuesForAggregation.get( pair.getFirst() ).add( ((Number) row.get(column.columnPosition)).doubleValue() );
+            valuesForAggregation.get( group.hash() ).add( ((Number) row.get(column.columnPosition)).doubleValue() );
 
         }
 
@@ -81,7 +77,12 @@ public class Average implements IAggregate {
         return new RowOperatorResult( output );
     }
 
-    private Pair<Integer,Object[]> getGroupIdentifier(Row row){
+    private record GroupIdentifier(
+        int hash,
+        Object[] valuesForHashing)
+        {};
+
+    private GroupIdentifier getGroupWhereRowLiesIn(Row row){
 
         if(groupByColumns != null) {
 
@@ -96,13 +97,13 @@ public class Average implements IAggregate {
             // hash values
             int hash = Arrays.hashCode(valuesForHashing);
 
-            return new Pair<>( hash, valuesForHashing );
+            return new GroupIdentifier( hash, valuesForHashing );
 
         }
 
         Object[] rowOutput = new Object[2];
-        rowOutput[0] = 1; // can be anything...
-        return new Pair<>( 1, rowOutput );
+        rowOutput[0] = -1; // can be anything...
+        return new GroupIdentifier( -1, rowOutput );
 
     }
 
