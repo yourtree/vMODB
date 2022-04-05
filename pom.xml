@@ -18,6 +18,7 @@
     <module>sidecar</module>
     <module>micro-tpcc</module>
     <module>eShopOnVms</module>
+      <module>web_common</module>
   </modules>
 
   <name>vms-runtime-java</name>

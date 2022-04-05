@@ -2,9 +2,7 @@ package dk.ku.di.dms.vms.micro_tpcc.events;
 
 import dk.ku.di.dms.vms.modb.common.event.IEvent;
 
-import java.io.Serializable;
-
 public record CustomerNewOrderIn(
      int c_w_id,
      int c_d_id,
-     int c_id) implements IEvent, Serializable {}
+     int c_id) implements IEvent {}

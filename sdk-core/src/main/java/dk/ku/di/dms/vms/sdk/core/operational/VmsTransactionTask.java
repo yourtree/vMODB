@@ -9,14 +9,45 @@ import dk.ku.di.dms.vms.modb.common.event.IEvent;
  */
 public class VmsTransactionTask {
 
-    public final VmsTransactionSignature signature;
+    private final int tid;
 
-    // TODO DOes the list must obey the order of the parameters? Can I use a set?
-    public IEvent[] inputs;
+    private final VmsTransactionSignature signature;
 
-    public VmsTransactionTask(VmsTransactionSignature signature, IEvent[] inputs) {
+    private final IEvent[] inputs;
+
+    private int remainingTasks;
+
+    public VmsTransactionTask (int tid, VmsTransactionSignature signature, int inputSize){
+        this.tid = tid;
         this.signature = signature;
-        this.inputs = inputs;
+        this.inputs = new IEvent[inputSize];
+        this.remainingTasks = inputSize;
+    }
+
+    @Override
+    public int hashCode() {
+        return super.hashCode();
+    }
+
+    public void putEventInput(int index, IEvent event){
+        this.inputs[index] = event;
+        this.remainingTasks--;
+    }
+
+    public int tid() {
+        return tid;
+    }
+
+    public VmsTransactionSignature signature(){
+        return signature;
+    }
+
+    public IEvent[] inputs(){
+        return inputs;
+    }
+
+    public boolean isReady(){
+        return remainingTasks == 0;
     }
 
 }

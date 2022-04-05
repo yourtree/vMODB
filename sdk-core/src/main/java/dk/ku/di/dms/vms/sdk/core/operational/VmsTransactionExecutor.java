@@ -1,25 +1,28 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
-import dk.ku.di.dms.vms.sdk.core.event.EventChannel;
+import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 import dk.ku.di.dms.vms.modb.common.event.IEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.function.Supplier;
+import java.util.logging.Logger;
+
+import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
+import static java.util.logging.Logger.getLogger;
 
 /**
  * The responsible for actually executing a data operation task
  *
  * TODO in the future, a scheduled thread pool executor may suffice to save CPU cycles
  */
-public final class VmsTransactionExecutor implements Runnable {
+public final class VmsTransactionExecutor implements Supplier<TransactionalEvent> {
 
-    private static final Logger logger = LoggerFactory.getLogger(VmsTransactionExecutor.class);
+    //private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
-    final private EventChannel eventChannel;
+    private final VmsTransactionTask task;
 
-    public VmsTransactionExecutor(final EventChannel eventChannel){
-        this.eventChannel = eventChannel;
+    public VmsTransactionExecutor(final VmsTransactionTask task){
+        this.task = task;
     }
 
     // by design may not need coordination
@@ -29,40 +32,25 @@ public final class VmsTransactionExecutor implements Runnable {
     // TODO see http://www.h2database.com/html/advanced.html#two_phase_commit
 
     @Override
-    public void run() {
+    public TransactionalEvent get() {
 
-        while(true){
-            // input queue handler
-            while(!eventChannel.readyQueue.isEmpty()) {
-                VmsTransactionTask task = eventChannel.readyQueue.poll();
-                VmsTransactionSignature dataOperation = task.signature;
-                IEvent[] inputEvents = task.inputs;
-                try {
-                    IEvent output = (IEvent) dataOperation.method().invoke(
-                                dataOperation.vmsInstance(),
-                            inputEvents);
+        VmsTransactionSignature vmsTransactionSignature = task.signature();
+        IEvent[] inputEvents = task.inputs();
+        try {
+            IEvent output = (IEvent) vmsTransactionSignature.method().invoke(
+                        vmsTransactionSignature.vmsInstance(), inputEvents);
 
-                    if(output != null){
-                        eventChannel.outputQueue.add(output);
-                    }
-
-                } catch (IllegalAccessException | InvocationTargetException  e) {
-                    e.printStackTrace();
-                }
+            // if null, something went wrong, thus look at the logs
+            if(output != null){
+                return new TransactionalEvent( task.tid(), vmsTransactionSignature.outputQueue(), output );
             }
 
-            try {
-                // TODO use wait();
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
+        } catch (IllegalAccessException | InvocationTargetException  e) {
+            //logger.info(e.getLocalizedMessage());
         }
+
+        return null;
+
     }
-
-
-
-
 
 }

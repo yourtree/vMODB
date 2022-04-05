@@ -78,7 +78,7 @@ public class VMSServer implements Runnable {
     }
 
     public void deRegisterClient(Socket clientSocket){
-        this.connectedClients.remove( clientSocket.getLocalSocketAddress() );
+        this.connectedClients.remove( clientSocket.getRemoteSocketAddress() );
     }
 
     private class SocketClientSupplier implements Supplier<Socket> {
@@ -188,32 +188,32 @@ public class VMSServer implements Runnable {
         // not blocking the vms server
         // TODO do we need a particular executor for this?
         //      yes if we want to have more control over the number of available workers for clients
-        if(this.socketClientFuture == null){
+        if(socketClientFuture == null){
             // https://stackoverflow.com/questions/43019126/completablefuture-thenapply-vs-thencompose
-            this.socketClientFuture = CompletableFuture.
-                    supplyAsync( new SocketClientSupplier(this.serverSocket) )
+            socketClientFuture = CompletableFuture
+                    .supplyAsync( new SocketClientSupplier(this.serverSocket) )
                     .thenApplyAsync(
-                            // I am not returning a completable future, so use apply instead of compose
-                            socket -> new HandshakeHandler().apply(socket)
+                        // I am not returning a completable future, so use apply instead of compose
+                        socket -> new HandshakeHandler().apply(socket)
                     );
         } else if( socketClientFuture.isDone() ){
             try {
                 Socket clientSocket = socketClientFuture.get();
                 // handshake failed
                 if(clientSocket == null) {
-                    this.socketClientFuture = null;
+                    socketClientFuture = null;
                     return;
                 }
                 // store socket
-                connectedClients.put(clientSocket.getLocalSocketAddress(), clientSocket);
+                connectedClients.put(clientSocket.getRemoteSocketAddress(), clientSocket);
 
                 logger.info("Creating new client handler.");
 
                 clientHandlerPool.submit(new WebSocketClientHandler(this, clientSocket));
-                this.socketClientFuture = null;
+                socketClientFuture = null;
 
             } catch (ExecutionException | InterruptedException e) {
-                this.socketClientFuture = null;
+                socketClientFuture = null;
                 logger.info("Error obtaining future: "+e.getLocalizedMessage());
             }
         }
