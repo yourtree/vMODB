@@ -83,55 +83,55 @@ public final class FilterBuilder {
 
         switch(expression){
             case EQUALS:
-                return new Filter<V>(comparator) {
+                return new Filter<>(comparator) {
                     @Override
                     public boolean eval(V x, V y) {
-                        return this.comparator.compare( x, y ) == 0;
+                        return this.comparator.compare(x, y) == 0;
                     }
                 };
             case NOT_EQUALS:
-                return new Filter<V>(comparator) {
+                return new Filter<>(comparator) {
                     @Override
                     public boolean eval(V x, V y) {
                         return this.comparator.compare( x, y ) != 0;
                     }
                 };
             case LESS_THAN_OR_EQUAL:
-                return new Filter<V>(comparator) {
+                return new Filter<>(comparator) {
                     @Override
                     public boolean eval(V x, V y) {
                         return this.comparator.compare( x, y ) <= 0;
                     }
                 };
             case LESS_THAN:
-                return new Filter<V>(comparator) {
+                return new Filter<>(comparator) {
                     @Override
                     public boolean eval(V x, V y) {
                         return this.comparator.compare( x, y ) < 0;
                     }
                 };
             case GREATER_THAN:
-                return new Filter<V>(comparator) {
+                return new Filter<>(comparator) {
                     @Override
                     public boolean eval(V x, V y) {
                         return this.comparator.compare( x, y ) > 0;
                     }
                 };
             case GREATER_THAN_OR_EQUAL:
-                return new Filter<V>(comparator) {
+                return new Filter<>(comparator) {
                     @Override
                     public boolean eval(V x, V y) {
                         return this.comparator.compare( x, y ) >= 0;
                     }
                 };
             case IS_NULL:
-                return new IFilter<V>() {
+                return new IFilter<>() {
                     public boolean eval(V v) {
                         return v == null;
                     }
                 };
             case IS_NOT_NULL:
-                return new IFilter<V>() {
+                return new IFilter<>() {
                     public boolean eval(V v) {
                         return v != null;
                     }

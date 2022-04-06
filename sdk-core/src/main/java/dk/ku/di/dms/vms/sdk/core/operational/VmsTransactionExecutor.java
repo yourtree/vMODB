@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 import dk.ku.di.dms.vms.modb.common.event.IEvent;
 
 import java.lang.reflect.InvocationTargetException;
-import java.util.function.Supplier;
+import java.util.concurrent.Callable;
 import java.util.logging.Logger;
 
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
@@ -15,7 +15,7 @@ import static java.util.logging.Logger.getLogger;
  *
  * TODO in the future, a scheduled thread pool executor may suffice to save CPU cycles
  */
-public final class VmsTransactionExecutor implements Supplier<TransactionalEvent> {
+public final class VmsTransactionExecutor implements Callable<TransactionalEvent> {
 
     //private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
@@ -32,7 +32,7 @@ public final class VmsTransactionExecutor implements Supplier<TransactionalEvent
     // TODO see http://www.h2database.com/html/advanced.html#two_phase_commit
 
     @Override
-    public TransactionalEvent get() {
+    public TransactionalEvent call() {
 
         VmsTransactionSignature vmsTransactionSignature = task.signature();
         IEvent[] inputEvents = task.inputs();

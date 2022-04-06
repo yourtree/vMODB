@@ -12,9 +12,7 @@ public class MicroserviceExample {
     @Outbound("out")
     @Transactional
     public EventExample methodExample(EventExample in) {
-
-        return null;
-
+        return new EventExample(1);
     }
 
 }

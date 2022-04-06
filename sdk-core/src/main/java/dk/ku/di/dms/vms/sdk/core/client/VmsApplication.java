@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.sdk.core.metadata.IVmsMetadataLoader;
 
 public class VmsApplication {
 
+    // TODO ue invocation handler here to hide from application code
     public static void start(){
 
         // check first whether we are in decoupled or embed mode

@@ -37,6 +37,8 @@ import static java.util.logging.Logger.getLogger;
 
 public class VmsMetadataLoader implements IVmsMetadataLoader {
 
+    private VmsMetadataLoader(){}
+
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
     public static VmsMetadata load(String packageName) throws
@@ -108,6 +110,7 @@ public class VmsMetadataLoader implements IVmsMetadataLoader {
     /**
      * Building virtual microservice schemas
      */
+    @SuppressWarnings("unchecked")
     protected static Map<String, VmsSchema> buildSchema(final Reflections reflections,
                                                         final Configuration reflectionsConfig,
                                                         final Map<Class<?>, String> vmsTableNames)
@@ -286,6 +289,7 @@ public class VmsMetadataLoader implements IVmsMetadataLoader {
         return null;
     }
 
+    @SuppressWarnings("unchecked")
     protected static Map<String,Object> loadMicroserviceClasses(final Reflections reflections)
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
@@ -329,6 +333,7 @@ public class VmsMetadataLoader implements IVmsMetadataLoader {
     /**
      * Map transactions to input and output events
      */
+    @SuppressWarnings("unchecked")
     protected static void mapVmsTransactionInputOutput(final Reflections reflections,
                                                        final Map<String, Object> loadedMicroserviceInstances,
                                                        final Map<String, Class<? extends IEvent>> queueToEventMap,

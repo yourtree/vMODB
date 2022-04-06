@@ -42,12 +42,12 @@ public final class InternalPubSub {
     /**
      * It represents events ready for execution
      */
-    final public BlockingQueue<VmsTransactionTask> readyQueue;
+    //final public BlockingQueue<VmsTransactionTask> readyQueue;
 
     public InternalPubSub(){
         this.inputQueue = new LinkedBlockingQueue<>();
         this.outputQueue = new LinkedBlockingQueue<>();
-        this.readyQueue = new LinkedBlockingQueue<>();
+        //this.readyQueue = new LinkedBlockingQueue<>();
     }
 
 }

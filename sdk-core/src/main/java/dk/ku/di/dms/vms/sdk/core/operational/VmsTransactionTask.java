@@ -26,7 +26,7 @@ public class VmsTransactionTask {
 
     @Override
     public int hashCode() {
-        return super.hashCode();
+        return this.tid;
     }
 
     public void putEventInput(int index, IEvent event){

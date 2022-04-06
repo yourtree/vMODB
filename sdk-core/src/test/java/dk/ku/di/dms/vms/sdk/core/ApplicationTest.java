@@ -12,9 +12,12 @@ import dk.ku.di.dms.vms.sdk.core.example.EventExample;
 import dk.ku.di.dms.vms.sdk.core.client.websocket.TransactionalEventAdapter;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
+import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
@@ -26,12 +29,13 @@ public class ApplicationTest
 
     private static Gson gson;
 
+    private static VmsMetadata vmsMetadata;
+
     @BeforeClass
     public static void setup(){
 
-        VmsMetadataLoader loader = new VmsMetadataLoader();
         try {
-            VmsMetadata vmsMetadata = loader.load("dk.ku.di.dms.vms.sdk.core.example");
+            vmsMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example");
 
             GsonBuilder builder = new GsonBuilder();
             builder.registerTypeAdapter(TransactionalEvent.class, new TransactionalEventAdapter(vmsMetadata.queueToEventMap()));
@@ -42,15 +46,10 @@ public class ApplicationTest
             e.printStackTrace();
         }
 
-
-
     }
 
     @Test
     public void testMetadataLoader() throws Exception {
-
-        VmsMetadataLoader loader = new VmsMetadataLoader();
-        VmsMetadata vmsMetadata = loader.load("dk.ku.di.dms.vms.sdk.core.example");
 
         InternalPubSub eventChannel = new InternalPubSub();
 
@@ -72,10 +71,36 @@ public class ApplicationTest
     }
 
     @Test
+    public void testScheduler(){
+
+        InternalPubSub internalPubSub = new InternalPubSub();
+
+        VmsTransactionScheduler scheduler = new VmsTransactionScheduler(Executors.newFixedThreadPool(1), internalPubSub, vmsMetadata.eventToVmsTransactionMap() );
+
+        Thread t0 = new Thread( scheduler );
+        t0.start();
+
+        EventExample event = new EventExample(1);
+
+        TransactionalEvent event1 = new TransactionalEvent( 3, "in", event );
+        TransactionalEvent event2 = new TransactionalEvent( 2, "in", event );
+        TransactionalEvent event3 = new TransactionalEvent( 1, "in", event );
+
+        CompletableFuture<Void> future = CompletableFuture.runAsync( () -> internalPubSub.inputQueue.add( event1 ) )
+                .thenRun( () -> internalPubSub.inputQueue.add( event2 ) )
+                .thenRun( () -> internalPubSub.inputQueue.add( event3 ) );
+
+        while(internalPubSub.outputQueue.size() == 0){}
+
+        assert true;
+
+    }
+
+    @Test
     public void testDataLoader() throws Exception {
 
-        VmsMetadataLoader loader = new VmsMetadataLoader();
-        VmsMetadata metadata = loader.load("dk.ku.di.dms.vms.tpcc");
+
+        VmsMetadata metadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.tpcc");
 
 //        SyntheticDataLoader dataLoader = metadata.loadedVmsInstances().get(SyntheticDataLoader.class);
 //
