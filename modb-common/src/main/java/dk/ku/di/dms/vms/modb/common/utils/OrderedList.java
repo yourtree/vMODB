@@ -10,41 +10,9 @@ public class OrderedList<K,V> extends ArrayList<V> {
     public final Comparator<K> comparator;
 
     public OrderedList(Function<V,K> function, Comparator<K> comparator){
+        super(10);
         this.function = function;
         this.comparator = comparator;
-    }
-
-    /**
-     * In this particular case, the element is very likely
-     * to be inserted at the start of the list, so iterating
-     * makes more sense in most cases
-     * @param element
-     * @return boolean result
-     */
-    public boolean _removeLikelyHeader(V element) {
-
-        int index = 0;
-        while(index < size() && get(index).equals(element)) index++;
-
-        if(index < size()){
-            return remove(index) != null;
-        } else {
-            throw new RuntimeException("Cannot remove a non-existent element.");
-        }
-
-    }
-
-    public boolean _remove(V element) {
-
-        // some fast paths
-        if( size() == 1 && element.equals( get(0) ) ) {
-            return remove(0) != null;
-        } else if( size() == 1 ) {
-            throw new RuntimeException("Cannot remove a non-existent element.");
-        }
-
-        int index = getIndex(element);
-        return remove(index) != null;
     }
 
     public boolean addLikelyHeader(V element){
@@ -64,7 +32,7 @@ public class OrderedList<K,V> extends ArrayList<V> {
 
         try {
             super.add(index, element);
-        } catch( IndexOutOfBoundsException e){
+        } catch(IndexOutOfBoundsException e){
             return false;
         }
         return true;

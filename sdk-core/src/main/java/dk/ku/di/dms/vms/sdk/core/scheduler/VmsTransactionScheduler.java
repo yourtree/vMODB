@@ -3,9 +3,8 @@ package dk.ku.di.dms.vms.sdk.core.scheduler;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.utils.OrderedList;
-import dk.ku.di.dms.vms.sdk.core.event.IVmsInternalPubSubService;
-import dk.ku.di.dms.vms.sdk.core.event.VmsInternalPubSub;
-import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionExecutor;
+import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSubService;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
 
@@ -52,10 +51,13 @@ public class VmsTransactionScheduler implements Runnable {
 
     private final CountDownLatch stopSignalLatch;
 
+    private final IVmsEventHandler vmsEventHandler;
+
     public VmsTransactionScheduler(
             final ExecutorService vmsTransactionTaskPool,
-            final VmsInternalPubSub vmsInternalPubSub,
-            final Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap){
+            final IVmsInternalPubSubService vmsInternalPubSub,
+            final Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap,
+            IVmsEventHandler vmsEventHandler){
 
         this.vmsTransactionTaskPool = vmsTransactionTaskPool;
 
@@ -73,6 +75,8 @@ public class VmsTransactionScheduler implements Runnable {
         this.submittedTasksList = new ArrayList<>();
 
         this.stopSignalLatch = new CountDownLatch(1);
+
+        this.vmsEventHandler = vmsEventHandler;
 
     }
 
@@ -122,7 +126,7 @@ public class VmsTransactionScheduler implements Runnable {
     private void initializeOffset(){
         offset = new Offset(0, 0);
         offset.moveToDoneState();
-        offsetList.addLikelyHeader(offset);
+        offsetList.add(offset);
     }
 
     /**
@@ -149,35 +153,15 @@ public class VmsTransactionScheduler implements Runnable {
             // let's dispatch all the events ready
             dispatchReadyTasksForExecution();
 
-            // let's dispatch all output events
-            dispatchOutputEvents();
-
             // why do we have another move offset here?
             // in case we start (or restart the VM service), we need to move the pointer only when it is safe
             // we cannot position the offset to the actual next, because we may not have received the next event yet
             moveOffsetPointerIfNecessary();
 
-            // get bew event if any has arrived
+            dispatchOutputEvents();
+
+            // get new event if any has arrived
             transactionalEvent = take();
-
-        }
-
-    }
-
-    private void dispatchOutputEvents() {
-
-        Iterator<Future<TransactionalEvent>> iterator = submittedTasksList.iterator();
-        while(iterator.hasNext()){
-            Future<TransactionalEvent> task = iterator.next();
-            if(task.isDone()){
-                try{
-                    TransactionalEvent outputEvent = task.get();
-                    vmsInternalPubSub.outputQueue().add(outputEvent);
-                    iterator.remove();
-                } catch (ExecutionException | InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
 
         }
 
@@ -239,7 +223,7 @@ public class VmsTransactionScheduler implements Runnable {
                 for (IdentifiableNode<VmsTransactionSignature> vmsTransactionSignatureIdentifiableNode : signatures) {
 
                     VmsTransactionSignature signature = vmsTransactionSignatureIdentifiableNode.object();
-                    task = new VmsTransactionTask(transactionalEvent.tid(), vmsTransactionSignatureIdentifiableNode.object(), signature.inputQueues().length);
+                    task = new VmsTransactionTask( transactionalEvent.tid(), vmsTransactionSignatureIdentifiableNode.object(), signature.inputQueues().length );
 
                     task.putEventInput(vmsTransactionSignatureIdentifiableNode.id(), transactionalEvent.event());
 
@@ -267,7 +251,7 @@ public class VmsTransactionScheduler implements Runnable {
             readyList.remove(0);
 
             // submit
-            submittedTasksList.add( vmsTransactionTaskPool.submit( new VmsTransactionExecutor(task) ) );
+            submittedTasksList.add( vmsTransactionTaskPool.submit( task ) );
 
             offset.decrease();
 
@@ -275,6 +259,19 @@ public class VmsTransactionScheduler implements Runnable {
             moveOffsetPointerIfNecessary();
 
         }
+
+    }
+
+    private void dispatchOutputEvents(){
+
+        List<TransactionalEvent> drainedOutput = new ArrayList<>(vmsInternalPubSub.outputQueue().size());
+        vmsInternalPubSub.outputQueue().drainTo( drainedOutput );
+
+        for(TransactionalEvent transactionalEvent : drainedOutput) {
+            vmsEventHandler.expel(transactionalEvent);
+        }
+
+        // TODO clean submittedTasksList. if gap, something went wrong
 
     }
 

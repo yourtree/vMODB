@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.sdk.core.event;
+package dk.ku.di.dms.vms.sdk.core.event.pubsub;
 
 public interface IPubSubService<ID,E> {
 

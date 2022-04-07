@@ -14,6 +14,7 @@ public class VmsRepositoryFacade implements IVmsRepositoryFacade, InvocationHand
 
     private final Class<? extends IEntity<?>> entityClazz;
 
+    @SuppressWarnings("unchecked")
     public VmsRepositoryFacade(final Class<? extends IRepository<?,?>> repositoryClazz){
         Type[] types = ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
         this.pkClazz = (Class<?>) types[0];

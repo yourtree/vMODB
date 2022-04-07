@@ -1,11 +1,8 @@
-package dk.ku.di.dms.vms.sdk.core.event;
+package dk.ku.di.dms.vms.sdk.core.event.pubsub;
 
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
-import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
 
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**

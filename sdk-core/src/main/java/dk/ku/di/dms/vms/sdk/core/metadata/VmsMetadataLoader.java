@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.sdk.core.metadata;
 
 import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
+import dk.ku.di.dms.vms.sdk.core.event.pubsub.VmsInternalPubSub;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.UnsupportedConstraint;
 import dk.ku.di.dms.vms.modb.common.meta.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.meta.ConstraintReference;
@@ -69,7 +70,7 @@ public class VmsMetadataLoader implements IVmsMetadataLoader {
         SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
          */
 
-        return new VmsMetadata( vmsSchema, eventToVmsTransactionMap, queueToEventMap, eventToQueueMap, loadedVmsInstances );
+        return new VmsMetadata( vmsSchema, eventToVmsTransactionMap, queueToEventMap, eventToQueueMap, loadedVmsInstances, new VmsInternalPubSub() );
 
     }
 

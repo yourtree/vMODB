@@ -1,28 +1,25 @@
 package dk.ku.di.dms.vms.sdk.core.manager;
 
-import dk.ku.di.dms.vms.sdk.core.event.VmsInternalPubSub;
+import dk.ku.di.dms.vms.sdk.core.client.websocket.WebSocketHandlerBuilder;
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
-import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionExecutor;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 
+import java.util.Objects;
 import java.util.concurrent.*;
 
 /**
  * Manager is a class that manages the lifecycle of components:
- * {@link VmsTransactionScheduler}, {@link IVmsEventHandler}, and {@link VmsTransactionExecutor}
+ * {@link VmsTransactionScheduler} {@link IVmsEventHandler}
  */
 public final class VmsManager implements Runnable {
 
     private final ManagerMetadata metadata;
 
     public VmsManager(ManagerMetadata metadata) throws Exception {
-        if( metadata == null ) {
-            this.metadata = new ManagerMetadata();
-        } else {
-            this.metadata = metadata;
-        }
+
+        this.metadata = Objects.requireNonNullElseGet(metadata, ManagerMetadata::new);
 
         if ( !this.metadata.initialized ){
             int availableCPUs = Runtime.getRuntime().availableProcessors();
@@ -36,15 +33,15 @@ public final class VmsManager implements Runnable {
 
            // this.metadata.executorService = executorService;
 
-            this.metadata.internalPubSub = new VmsInternalPubSub();
-
             VmsMetadata vmsMetadata = VmsMetadataLoader.load(null);
+
+            IVmsEventHandler eventHandler = WebSocketHandlerBuilder.build(vmsMetadata);
 
             // event handler
             // TPCCEventHandler eventHandler = new TPCCEventHandler(eventRepository);
 
             // scheduler
-            this.metadata.scheduler = new VmsTransactionScheduler(executorService, this.metadata.internalPubSub, vmsMetadata.eventToVmsTransactionMap());
+            this.metadata.scheduler = new VmsTransactionScheduler(executorService, vmsMetadata.internalPubSubService(), vmsMetadata.eventToVmsTransactionMap(), eventHandler);
 
             // executor
             // this.metadata.executor = new VmsTransactionExecutor(this.metadata.internalPubSub);
@@ -85,7 +82,6 @@ public final class VmsManager implements Runnable {
 
             this.metadata.initialized = true;
 
-            return;
         }
 
     }

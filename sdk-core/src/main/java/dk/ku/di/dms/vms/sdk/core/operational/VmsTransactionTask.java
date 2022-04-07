@@ -1,13 +1,17 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
 import dk.ku.di.dms.vms.modb.common.event.IEvent;
+import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
+
+import java.lang.reflect.InvocationTargetException;
+import java.util.concurrent.Callable;
 
 /**
  * A data class that encapsulates the events
  * that form the input of a data operation.
  * In other words, the actual data operation ready for execution.
  */
-public class VmsTransactionTask {
+public class VmsTransactionTask implements Callable<TransactionalEvent> {
 
     private final int tid;
 
@@ -24,11 +28,6 @@ public class VmsTransactionTask {
         this.remainingTasks = inputSize;
     }
 
-    @Override
-    public int hashCode() {
-        return this.tid;
-    }
-
     public void putEventInput(int index, IEvent event){
         this.inputs[index] = event;
         this.remainingTasks--;
@@ -38,16 +37,31 @@ public class VmsTransactionTask {
         return tid;
     }
 
-    public VmsTransactionSignature signature(){
-        return signature;
-    }
-
-    public IEvent[] inputs(){
-        return inputs;
-    }
-
     public boolean isReady(){
         return remainingTasks == 0;
+    }
+
+    private IEvent callMethod(){
+        try {
+            return (IEvent) signature.method().invoke(signature.vmsInstance(), inputs);
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            // logger.info(e.getLocalizedMessage());
+            throw new RuntimeException("ERROR");
+        }
+    }
+
+    @Override
+    public TransactionalEvent call() {
+
+        IEvent output = callMethod();
+
+        // if null, something went wrong, thus look at the logs
+        if(output != null){
+            return new TransactionalEvent( tid, signature.outputQueue(), output );
+        }
+
+        return null;
+
     }
 
 }

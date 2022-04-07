@@ -3,13 +3,10 @@ package dk.ku.di.dms.vms.sdk.core;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
-import dk.ku.di.dms.vms.sdk.core.client.websocket.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.sdk.core.client.websocket.VmsSerdesProxyBuilder;
-import dk.ku.di.dms.vms.sdk.core.client.websocket.WebSocketClient;
-import dk.ku.di.dms.vms.sdk.core.event.VmsInternalPubSub;
-import dk.ku.di.dms.vms.sdk.core.event.handler.VmsEventHandler;
+import dk.ku.di.dms.vms.sdk.core.client.websocket.*;
+import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSubService;
 import dk.ku.di.dms.vms.sdk.core.example.EventExample;
-import dk.ku.di.dms.vms.sdk.core.client.websocket.TransactionalEventAdapter;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
@@ -18,7 +15,6 @@ import org.junit.Test;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
@@ -50,15 +46,11 @@ public class ApplicationTest
     }
 
     @Test
-    public void testMetadataLoader() throws Exception {
+    public void testMetadataLoader() {
 
-        VmsInternalPubSub eventChannel = new VmsInternalPubSub();
+        // VmsEventHandler handler = new VmsEventHandler( eventChannel.inputQueue(), , serdesProxy );
 
-        IVmsSerdesProxy proxy = VmsSerdesProxyBuilder.build(  vmsMetadata.queueToEventMap() );
-
-        VmsEventHandler handler = new VmsEventHandler( eventChannel.inputQueue() );
-
-        WebSocketClient webSocketClient = new WebSocketClient(proxy, handler);
+        // IVmsEventHandler eventHandler = WebSocketHandlerBuilder.build( vmsMetadata ); // new VmsWebSocketClient(serdesProxy, handler);
 
         TransactionalEvent transactionalEvent = new TransactionalEvent( 1, "in", new EventExample(1) );
 
@@ -74,9 +66,19 @@ public class ApplicationTest
     @Test
     public void testScheduler() throws InterruptedException {
 
-        VmsInternalPubSub internalPubSub = new VmsInternalPubSub();
+        IVmsInternalPubSubService internalPubSub = vmsMetadata.internalPubSubService();
 
-        VmsTransactionScheduler scheduler = new VmsTransactionScheduler(Executors.newFixedThreadPool(1), internalPubSub, vmsMetadata.eventToVmsTransactionMap() );
+        VmsTransactionScheduler scheduler = new VmsTransactionScheduler(
+                Executors.newFixedThreadPool(1),
+                internalPubSub,
+                vmsMetadata.eventToVmsTransactionMap(),
+                new IVmsEventHandler() {
+                    @Override
+                    public void handle(TransactionalEvent event) {}
+                    @Override
+                    public void expel(TransactionalEvent event) {}
+                }
+        );
 
         Thread t0 = new Thread( scheduler );
         t0.start();

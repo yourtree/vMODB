@@ -1,6 +1,8 @@
 package dk.ku.di.dms.vms.sdk.core.client;
 
-import dk.ku.di.dms.vms.sdk.core.metadata.IVmsMetadataLoader;
+import dk.ku.di.dms.vms.sdk.core.client.websocket.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.sdk.core.client.websocket.WebSocketHandlerBuilder;
+
 
 public class VmsApplication {
 
@@ -15,6 +17,8 @@ public class VmsApplication {
             Class<?> metadataLoaderEmbedClazz = Class.forName("dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata");
 
             // IVmsMetadataLoader metadataLoader = metadataLoaderEmbedClazz.getClassLoader();
+
+            // WebSocketHandlerBuilder.build( VmsSerdesProxyBuilder.build( null ), new VmsEventHandler(null) );
 
         } catch (ClassNotFoundException e) {
             e.printStackTrace();

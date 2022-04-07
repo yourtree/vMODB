@@ -40,13 +40,13 @@ public class VMSServer implements Runnable {
 
     private final Logger logger = getLogger(VMSServer.class.getName());
 
-    private ExecutorService clientHandlerPool;
+    private final ExecutorService clientHandlerPool;
 
     private ServerSocket serverSocket;
 
-    private CountDownLatch stopSignalLatch;
+    private final CountDownLatch stopSignalLatch;
 
-    private Map<SocketAddress, Socket> connectedClients;
+    private final Map<SocketAddress, Socket> connectedClients;
 
     private Future<Socket> socketClientFuture;
 
