@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.manager;
 
-import dk.ku.di.dms.vms.sdk.core.event.InternalPubSub;
-import dk.ku.di.dms.vms.sdk.core.event.IVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.core.event.VmsInternalPubSub;
+import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionExecutor;
@@ -36,7 +36,7 @@ public final class VmsManager implements Runnable {
 
            // this.metadata.executorService = executorService;
 
-            this.metadata.internalPubSub = new InternalPubSub();
+            this.metadata.internalPubSub = new VmsInternalPubSub();
 
             VmsMetadata vmsMetadata = VmsMetadataLoader.load(null);
 

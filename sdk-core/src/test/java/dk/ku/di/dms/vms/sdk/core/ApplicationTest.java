@@ -6,8 +6,8 @@ import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 import dk.ku.di.dms.vms.sdk.core.client.websocket.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.sdk.core.client.websocket.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.sdk.core.client.websocket.WebSocketClient;
-import dk.ku.di.dms.vms.sdk.core.event.InternalPubSub;
-import dk.ku.di.dms.vms.sdk.core.event.VmsEventHandler;
+import dk.ku.di.dms.vms.sdk.core.event.VmsInternalPubSub;
+import dk.ku.di.dms.vms.sdk.core.event.handler.VmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.example.EventExample;
 import dk.ku.di.dms.vms.sdk.core.client.websocket.TransactionalEventAdapter;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
@@ -18,6 +18,7 @@ import org.junit.Test;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
@@ -51,11 +52,11 @@ public class ApplicationTest
     @Test
     public void testMetadataLoader() throws Exception {
 
-        InternalPubSub eventChannel = new InternalPubSub();
+        VmsInternalPubSub eventChannel = new VmsInternalPubSub();
 
         IVmsSerdesProxy proxy = VmsSerdesProxyBuilder.build(  vmsMetadata.queueToEventMap() );
 
-        VmsEventHandler handler = new VmsEventHandler( eventChannel.inputQueue );
+        VmsEventHandler handler = new VmsEventHandler( eventChannel.inputQueue() );
 
         WebSocketClient webSocketClient = new WebSocketClient(proxy, handler);
 
@@ -71,9 +72,9 @@ public class ApplicationTest
     }
 
     @Test
-    public void testScheduler(){
+    public void testScheduler() throws InterruptedException {
 
-        InternalPubSub internalPubSub = new InternalPubSub();
+        VmsInternalPubSub internalPubSub = new VmsInternalPubSub();
 
         VmsTransactionScheduler scheduler = new VmsTransactionScheduler(Executors.newFixedThreadPool(1), internalPubSub, vmsMetadata.eventToVmsTransactionMap() );
 
@@ -86,13 +87,15 @@ public class ApplicationTest
         TransactionalEvent event2 = new TransactionalEvent( 2, "in", event );
         TransactionalEvent event3 = new TransactionalEvent( 1, "in", event );
 
-        CompletableFuture<Void> future = CompletableFuture.runAsync( () -> internalPubSub.inputQueue.add( event1 ) )
-                .thenRun( () -> internalPubSub.inputQueue.add( event2 ) )
-                .thenRun( () -> internalPubSub.inputQueue.add( event3 ) );
+        CompletableFuture.runAsync( () -> internalPubSub.inputQueue().add( event1 ) )
+                .thenRun( () -> internalPubSub.inputQueue().add( event2 ) )
+                .thenRun( () -> internalPubSub.inputQueue().add( event3 ) );
 
-        while(internalPubSub.outputQueue.size() == 0){}
+        Thread.sleep(100);
 
-        assert true;
+        scheduler.stop();
+
+        assert internalPubSub.outputQueue().size() == 3;
 
     }
 

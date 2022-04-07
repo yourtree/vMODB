@@ -58,6 +58,7 @@ public class OrderedList<K,V> extends ArrayList<V> {
                 return super.add(element);
             }
         }
+        // TODO size == 2?
 
         int index = getIndex(element);
 

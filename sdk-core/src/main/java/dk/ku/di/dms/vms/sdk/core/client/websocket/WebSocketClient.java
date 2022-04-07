@@ -1,10 +1,9 @@
 package dk.ku.di.dms.vms.sdk.core.client.websocket;
 
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
-import dk.ku.di.dms.vms.sdk.core.event.IVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 
 import java.net.http.WebSocket;
-import java.nio.ByteBuffer;
 import java.util.concurrent.CompletionStage;
 import java.util.logging.Logger;
 

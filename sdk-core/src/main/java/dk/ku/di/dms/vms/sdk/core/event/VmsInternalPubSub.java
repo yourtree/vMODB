@@ -26,28 +26,37 @@ import java.util.concurrent.LinkedBlockingQueue;
  *   FIXME the concept of a channel (in the context of coroutines) may help in the future
  *         https://kotlinlang.org/docs/channels.html
  */
-public final class InternalPubSub {
+public final class VmsInternalPubSub implements IVmsInternalPubSubService {
 
     /**
      * It represents events ready for scheduler consumption
      */
-    final public BlockingQueue<TransactionalEvent> inputQueue;
+    private final BlockingQueue<TransactionalEvent> inputQueue;
 
     /**
      *  It represents events ready for delivery
      *  The event handler threads consume from this queue
      */
-    final public BlockingQueue<TransactionalEvent> outputQueue;
+    private final BlockingQueue<TransactionalEvent> outputQueue;
 
     /**
      * It represents events ready for execution
      */
     //final public BlockingQueue<VmsTransactionTask> readyQueue;
 
-    public InternalPubSub(){
+    public VmsInternalPubSub(){
         this.inputQueue = new LinkedBlockingQueue<>();
         this.outputQueue = new LinkedBlockingQueue<>();
         //this.readyQueue = new LinkedBlockingQueue<>();
     }
 
+    @Override
+    public BlockingQueue<TransactionalEvent> inputQueue() {
+        return inputQueue;
+    }
+
+    @Override
+    public BlockingQueue<TransactionalEvent> outputQueue() {
+        return outputQueue;
+    }
 }

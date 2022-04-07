@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.sdk.core.event;
+package dk.ku.di.dms.vms.sdk.core.event.handler;
 
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 
@@ -8,13 +8,8 @@ import java.util.Queue;
  * Simply a facade between the external world (e.g., concrete web client
  * implementations) and the internal abstractions (i.e., inputQueue)
  */
-public class VmsEventHandler implements IVmsEventHandler {
-
-    private final Queue<TransactionalEvent> inputQueue;
-
-    public VmsEventHandler(final Queue<TransactionalEvent> inputQueue) {
-        this.inputQueue = inputQueue;
-    }
+public record VmsEventHandler(
+        Queue<TransactionalEvent> inputQueue) implements IVmsEventHandler {
 
     @Override
     public void accept(final TransactionalEvent transactionalEvent) {

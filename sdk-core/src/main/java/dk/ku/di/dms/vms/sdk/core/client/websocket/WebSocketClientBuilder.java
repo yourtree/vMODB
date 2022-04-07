@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.client.websocket;
 
-import dk.ku.di.dms.vms.sdk.core.event.IVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 
 import java.net.URI;
 import java.net.http.HttpClient;

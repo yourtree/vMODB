@@ -3,15 +3,14 @@ package dk.ku.di.dms.vms.sdk.core.scheduler;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.utils.OrderedList;
-import dk.ku.di.dms.vms.sdk.core.event.InternalPubSub;
+import dk.ku.di.dms.vms.sdk.core.event.IVmsInternalPubSubService;
+import dk.ku.di.dms.vms.sdk.core.event.VmsInternalPubSub;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionExecutor;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
 
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.function.Function;
+import java.util.concurrent.*;
 import java.util.logging.Logger;
 
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
@@ -20,71 +19,73 @@ import static java.util.logging.Logger.getLogger;
 /**
  * The brain of the virtual microservice runtime
  * It consumes events, verifies whether a data operation is ready for execution
- * and dispatches them for execution. If an operation is not ready yet given
+ * and dispatches them for execution. If an operation is not ready yet, given the
  * event dependencies, it is stored in a waiting list until pending events arrive
  */
 public class VmsTransactionScheduler implements Runnable {
 
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
-    private final InternalPubSub internalPubSub;
+    private final IVmsInternalPubSubService vmsInternalPubSub;
 
-    public final Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap;
+    private final Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap;
 
     // event that cannot execute because some dependence need to be fulfilled
     // event A < B < C < D
     // TODO check later (after HTM impl) if I can do it with a Hash...
 
     // Based on the transaction id (tid), I can find the task very fast
-    public final Map<Integer,List<VmsTransactionTask>> waitingList;
+    private final Map<Integer, List<VmsTransactionTask>> waitingTasksPerTidMap;
 
     // A queue because the executor requires executing the operation in order
-    public final List<VmsTransactionTask> readyList;
+    private final OrderedList<Integer, VmsTransactionTask> readyList;
+
+    // offset tracking for execution
+    private Offset offset;
 
     // offset tracking. i.e., cannot issue a task if predecessor transaction is not ready yet
-    public final OrderedList<Integer,Offset> offsetList;
+    private final OrderedList<Integer, Offset> offsetList;
 
-    public final ExecutorService vmsTransactionTaskPool;
+    private final ExecutorService vmsTransactionTaskPool;
 
-    public final List<Future<TransactionalEvent>> submittedTasksList;
+    private final List<Future<TransactionalEvent>> submittedTasksList;
+
+    private final CountDownLatch stopSignalLatch;
 
     public VmsTransactionScheduler(
             final ExecutorService vmsTransactionTaskPool,
-            final InternalPubSub internalPubSub,
+            final VmsInternalPubSub vmsInternalPubSub,
             final Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap){
 
         this.vmsTransactionTaskPool = vmsTransactionTaskPool;
 
-        this.internalPubSub = internalPubSub;
+        this.vmsInternalPubSub = vmsInternalPubSub;
 
         this.eventToTransactionMap = eventToTransactionMap;
 
-        this.waitingList = new HashMap<>();
+        this.waitingTasksPerTidMap = new HashMap<>();
 
-        this.readyList = new ArrayList<>();
+        this.readyList = new OrderedList<>(VmsTransactionTask::tid, Integer::compareTo);
 
-        this.offsetList = new OrderedList<>(new OffsetTidFunction(), Integer::compareTo );
+        this.offsetList = new OrderedList<>(Offset::tid, Integer::compareTo);
 
+        // TODO check whether this is the best implementation for synchronization
         this.submittedTasksList = new ArrayList<>();
 
-    }
+        this.stopSignalLatch = new CountDownLatch(1);
 
-    private static class OffsetTidFunction implements Function<Offset,Integer>{
-        @Override
-        public Integer apply(Offset offset) {
-            return offset.tid;
-        }
-    }
-
-    private enum OffsetStatus {
-        READY,
-        DONE
     }
 
     private static class Offset {
-        public final int tid;
-        public int remainingTasks;
-        public OffsetStatus status;
+
+        private enum OffsetStatus {
+            READY,
+            DONE
+        }
+
+        private final int tid;
+        private int remainingTasks;
+        private OffsetStatus status;
 
         public Offset(int tid, int remainingTasks) {
             this.tid = tid;
@@ -96,26 +97,32 @@ public class VmsTransactionScheduler implements Runnable {
             this.status = OffsetStatus.DONE;
         }
 
-        // constraints in objects would be great! remainingTasks >= 0
+        // constraints in objects would be great! e.g., remainingTasks >= 0 always
         public void decrease(){
             if(this.remainingTasks == 0) throw new RuntimeException("Cannot have below zero remaining tasks.");
             this.remainingTasks--;
             if(remainingTasks == 0) moveToDoneState();
         }
 
-        @Override
-        public int hashCode() {
+        public int tid() {
             return this.tid;
         }
     }
 
     private TransactionalEvent take(){
         try {
-            return internalPubSub.inputQueue.take();
+            if(vmsInternalPubSub.inputQueue().size() > 0)
+                return vmsInternalPubSub.inputQueue().take();
         } catch (InterruptedException e) {
             logger.warning("Taking event from input queue has failed.");
         }
         return null;
+    }
+
+    private void initializeOffset(){
+        offset = new Offset(0, 0);
+        offset.moveToDoneState();
+        offsetList.addLikelyHeader(offset);
     }
 
     /**
@@ -131,21 +138,62 @@ public class VmsTransactionScheduler implements Runnable {
     @Override
     public void run() {
 
-        Offset offset = new Offset(0, 0);
-        offset.moveToDoneState();
-        offsetList.addLikelyHeader(offset);
+        initializeOffset();
 
         TransactionalEvent transactionalEvent = take();
 
-        // FIXME blocking, does not allow for progress in case no new events arrive
-        while(transactionalEvent != null) {
+        while(!isStopped()) {
+
+            processNewEvent(transactionalEvent);
+
+            // let's dispatch all the events ready
+            dispatchReadyTasksForExecution();
+
+            // let's dispatch all output events
+            dispatchOutputEvents();
+
+            // why do we have another move offset here?
+            // in case we start (or restart the VM service), we need to move the pointer only when it is safe
+            // we cannot position the offset to the actual next, because we may not have received the next event yet
+            moveOffsetPointerIfNecessary();
+
+            // get bew event if any has arrived
+            transactionalEvent = take();
+
+        }
+
+    }
+
+    private void dispatchOutputEvents() {
+
+        Iterator<Future<TransactionalEvent>> iterator = submittedTasksList.iterator();
+        while(iterator.hasNext()){
+            Future<TransactionalEvent> task = iterator.next();
+            if(task.isDone()){
+                try{
+                    TransactionalEvent outputEvent = task.get();
+                    vmsInternalPubSub.outputQueue().add(outputEvent);
+                    iterator.remove();
+                } catch (ExecutionException | InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+
+        }
+
+    }
+
+    private void processNewEvent(final TransactionalEvent transactionalEvent){
+
+        // in case there is a new event to process
+        if(transactionalEvent != null){
 
             // have I created the task already?
             // in other words, a previous event for the same tid have been processed?
-            if(waitingList.containsKey(transactionalEvent.tid())){
+            if(waitingTasksPerTidMap.containsKey(transactionalEvent.tid())){
 
                 // add
-                List<VmsTransactionTask> notReadyTasks = waitingList.get( transactionalEvent.tid() );
+                List<VmsTransactionTask> notReadyTasks = waitingTasksPerTidMap.get( transactionalEvent.tid() );
 
                 List<IdentifiableNode<VmsTransactionSignature>> signatures = eventToTransactionMap.get(transactionalEvent.queue());
 
@@ -178,10 +226,8 @@ public class VmsTransactionScheduler implements Runnable {
                 }
 
                 if(notReadyTasks.isEmpty()){
-                    waitingList.remove( transactionalEvent.tid() );
+                    waitingTasksPerTidMap.remove( transactionalEvent.tid() );
                 }
-
-
 
             } else {
 
@@ -199,16 +245,7 @@ public class VmsTransactionScheduler implements Runnable {
 
                     // in case only one event
                     if (task.isReady()) {
-
-                        if(readyList.isEmpty()) {
-                            readyList.add(task);
-                        } else {
-                            int idx = 0;
-                            while (readyList.get(idx).tid() < task.tid()) {
-                                idx++;
-                            }
-                            readyList.add(idx, task);
-                        }
+                        readyList.addLikelyHeader( task );
                     }
 
                 }
@@ -218,63 +255,52 @@ public class VmsTransactionScheduler implements Runnable {
 
             }
 
-            // let's dispatch all the events ready
-            while(!readyList.isEmpty() && readyList.get(0).tid() == offset.tid){
-
-                VmsTransactionTask task = readyList.get(0);
-                readyList.remove(0);
-
-                // submit
-                submittedTasksList.add( vmsTransactionTaskPool.submit( new VmsTransactionExecutor(task) ) );
-
-                offset.decrease();
-
-                // if there is only one task for this tid
-//                if(offset.status == OffsetStatus.DONE){
-//                    offsetList._removeLikelyHeader(offset);
-//                    // offset advances
-//
-//                }
-                moveOffsetPointerIfNecessary(offset);
-
-            }
-
-            // should make sure that all tasks concerning a tid are executed before moving to the next tid
-            // when is safe to move the offset? when all tasks for the given tid are executed
-            // is the next on ready list the actual next task for submission to processing?
-//            if( readyList.get(0).tid() == offset.tid + 1 &&
-//                    offset.status == OffsetStatus.DONE &&
-//                    !offsetList.isEmpty() &&
-//                    offsetList.get(0).tid == offset.tid + 1 ){
-//
-//                // offset receives the next
-//                offset = offsetList.get(0);
-//
-//            } // else, we need to wait for the events
-
-            // is it safe to move the offset pointer?
-            moveOffsetPointerIfNecessary(offset);
-
-
-            transactionalEvent = take();
-
         }
-
 
     }
 
-    private void moveOffsetPointerIfNecessary(Offset offset){
+    private void dispatchReadyTasksForExecution() {
+
+        while(!readyList.isEmpty() && readyList.get(0).tid() == offset.tid){
+
+            VmsTransactionTask task = readyList.get(0);
+            readyList.remove(0);
+
+            // submit
+            submittedTasksList.add( vmsTransactionTaskPool.submit( new VmsTransactionExecutor(task) ) );
+
+            offset.decrease();
+
+            // we drain the readyList as much a possible
+            moveOffsetPointerIfNecessary();
+
+        }
+
+    }
+
+    /**
+     * Assumption: we always have at least one offset in the list. of course, I could do this by design but the code guarantee that
+     * Is it safe to move the offset pointer? this method takes care of that
+     */
+    private void moveOffsetPointerIfNecessary(){
 
         if( offsetList.size() == 1 ) return; // cannot move, the event hasn't arrived yet, so the respective offset has not been created
 
-        // we always have at least one offset in the list. of course, I can do this by design but the code guarantee that
-
         // if next is the right one
-        if( offset.status == OffsetStatus.DONE && offsetList.get(1).tid == offset.tid + 1 ){
+        if( offset.status == Offset.OffsetStatus.DONE && offsetList.get(1).tid == offset.tid + 1 ){
             offsetList.remove(0);
             offset = offsetList.get(0);
         }
 
+    }
+
+    public void stop(){
+        this.stopSignalLatch.countDown();
+        // TODO dereference every internal data structure, perhaps using synchronized
+    }
+
+    private boolean isStopped() {
+        return this.stopSignalLatch.getCount() == 0;
     }
 
 }
