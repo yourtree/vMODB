@@ -35,7 +35,7 @@ public final class VmsManager implements Runnable {
 
             VmsMetadata vmsMetadata = VmsMetadataLoader.load(null);
 
-            IVmsEventHandler eventHandler = WebSocketHandlerBuilder.build(vmsMetadata);
+            IVmsEventHandler eventHandler = WebSocketHandlerBuilder.build( vmsMetadata.internalPubSubService(), s -> vmsMetadata.queueToEventMap().get(s), vmsMetadata.vmsSchema() );
 
             // event handler
             // TPCCEventHandler eventHandler = new TPCCEventHandler(eventRepository);

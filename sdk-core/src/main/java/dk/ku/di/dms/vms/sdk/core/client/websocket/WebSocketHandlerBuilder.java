@@ -1,34 +1,46 @@
 package dk.ku.di.dms.vms.sdk.core.client.websocket;
 
+import dk.ku.di.dms.vms.modb.common.event.IEvent;
+import dk.ku.di.dms.vms.modb.common.meta.VmsSchema;
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
+import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSubService;
 
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Function;
 
 public class WebSocketHandlerBuilder {
 
-    public static IVmsEventHandler build(final ExecutorService executor, final VmsMetadata vmsMetadata){
+    public static IVmsEventHandler build(final ExecutorService executor,
+                                         final IVmsInternalPubSubService internalPubSubService,
+                                         final Function<String,Class<? extends IEvent>> queueToEventTypeResolver,
+                                         final Map<String, VmsSchema> vmsSchema){
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_2)
                 .executor(executor)
                 .build();
-        return buildActualWebSocketClient(httpClient, vmsMetadata);
+        return buildActualWebSocketClient(httpClient, internalPubSubService, queueToEventTypeResolver, vmsSchema);
     }
 
-    public static IVmsEventHandler build(final VmsMetadata vmsMetadata){
+    public static IVmsEventHandler build(final IVmsInternalPubSubService internalPubSubService,
+                                         final Function<String,Class<? extends IEvent>> queueToEventTypeResolver,
+                                         final Map<String, VmsSchema> vmsSchema){
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_2)
                 .build();
-        return buildActualWebSocketClient(httpClient, vmsMetadata);
+        return buildActualWebSocketClient(httpClient, internalPubSubService, queueToEventTypeResolver, vmsSchema);
     }
 
-    private static IVmsEventHandler buildActualWebSocketClient( HttpClient httpClient, final VmsMetadata vmsMetadata ){
+    private static IVmsEventHandler buildActualWebSocketClient( final HttpClient httpClient,
+                                                                final IVmsInternalPubSubService internalPubSubService,
+                                                                final Function<String,Class<? extends IEvent>> queueToEventTypeResolver,
+                                                                final Map<String, VmsSchema> vmsSchema){
 
-        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( vmsMetadata.queueToEventMap() );
+        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( queueToEventTypeResolver );
 
-        VmsWebSocketClient webSocketClient = new VmsWebSocketClient(serdes, vmsMetadata.internalPubSubService());
+        VmsWebSocketClient webSocketClient = new VmsWebSocketClient(serdes, internalPubSubService, vmsSchema);
 
         // Not waiting to see whether this connection has been established
         httpClient.newWebSocketBuilder()//.connectTimeout(Duration.ofSeconds(10))

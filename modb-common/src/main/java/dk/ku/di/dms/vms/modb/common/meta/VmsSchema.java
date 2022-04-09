@@ -1,13 +1,9 @@
-package dk.ku.di.dms.vms.sdk.core.metadata;
-
-import dk.ku.di.dms.vms.sdk.core.annotations.VmsTable;
-import dk.ku.di.dms.vms.modb.common.meta.ConstraintReference;
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
+package dk.ku.di.dms.vms.modb.common.meta;
 
 /**
- * The <code>VmsSchema</code> record describes the schema of {@link VmsTable}.
+ * The <code>VmsSchema</code> record describes the schema of VmsTable.
  */
-public record VmsSchema (
+public record VmsSchema(
 
     // identification of columns that form the primary key. all tables must have a primary key
     int[] primaryKeyColumns,

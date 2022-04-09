@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.metadata;
 
+import dk.ku.di.dms.vms.modb.common.meta.VmsSchema;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSubService;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;

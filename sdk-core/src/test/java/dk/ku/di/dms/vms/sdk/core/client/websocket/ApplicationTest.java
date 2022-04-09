@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.sdk.core;
+package dk.ku.di.dms.vms.sdk.core.client.websocket;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -35,7 +35,7 @@ public class ApplicationTest
             vmsMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example");
 
             GsonBuilder builder = new GsonBuilder();
-            builder.registerTypeAdapter(TransactionalEvent.class, new TransactionalEventAdapter(vmsMetadata.queueToEventMap()));
+            builder.registerTypeAdapter(TransactionalEvent.class, new TransactionalEventAdapter(s -> vmsMetadata.queueToEventMap().get(s)));
             builder.setPrettyPrinting();
             gson = builder.create();
 

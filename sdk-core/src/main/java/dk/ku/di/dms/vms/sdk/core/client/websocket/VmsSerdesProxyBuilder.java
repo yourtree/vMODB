@@ -5,14 +5,14 @@ import com.google.gson.GsonBuilder;
 import dk.ku.di.dms.vms.modb.common.event.IEvent;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 
-import java.util.Map;
+import java.util.function.Function;
 
-public class VmsSerdesProxyBuilder {
+class VmsSerdesProxyBuilder {
 
-    public static IVmsSerdesProxy build(final Map<String, Class<? extends IEvent>> queueToEventMap){
+    public static IVmsSerdesProxy build(final Function<String,Class<? extends IEvent>> clazzResolver){
 
         GsonBuilder builder = new GsonBuilder();
-        builder.registerTypeAdapter(TransactionalEvent.class, new TransactionalEventAdapter( queueToEventMap ));
+        builder.registerTypeAdapter(TransactionalEvent.class, new TransactionalEventAdapter( clazzResolver ));
         builder.setPrettyPrinting();
         Gson gson1 = builder.create();
 
@@ -31,7 +31,6 @@ public class VmsSerdesProxyBuilder {
                 return gson.fromJson(json, TransactionalEvent.class);
             }
         };
-
 
     }
 

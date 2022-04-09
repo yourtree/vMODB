@@ -8,17 +8,17 @@ import dk.ku.di.dms.vms.modb.common.event.IEvent;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 
 import java.io.IOException;
-import java.util.Map;
+import java.util.function.Function;
 
 /**
  * https://www.tutorialspoint.com/gson/gson_custom_adapters.htm
  */
-public class TransactionalEventAdapter extends TypeAdapter<TransactionalEvent> {
+class TransactionalEventAdapter extends TypeAdapter<TransactionalEvent> {
 
-    private final Map<String, Class<? extends IEvent>> queueToEventMap;
+    private final Function<String,Class<? extends IEvent>> clazzResolver;
     
-    public TransactionalEventAdapter(final Map<String, Class<? extends IEvent>> queueToEventMap) {
-        this.queueToEventMap = queueToEventMap;
+    public TransactionalEventAdapter(final Function<String,Class<? extends IEvent>> clazzResolver) {
+        this.clazzResolver = clazzResolver;
     }
 
     @Override
@@ -67,7 +67,7 @@ public class TransactionalEventAdapter extends TypeAdapter<TransactionalEvent> {
 
         if("event".equals(attributeName)) {
             in.peek();
-            event = new Gson().fromJson( in, queueToEventMap.get( queue ) );
+            event = new Gson().fromJson( in, clazzResolver.apply( queue ) );
         }
 
         in.endObject();

@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.client;
 
-import dk.ku.di.dms.vms.sdk.core.client.websocket.VmsSerdesProxyBuilder;
+
 import dk.ku.di.dms.vms.sdk.core.client.websocket.WebSocketHandlerBuilder;
 
 

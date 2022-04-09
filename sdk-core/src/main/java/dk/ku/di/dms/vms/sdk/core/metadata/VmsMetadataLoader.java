@@ -1,12 +1,10 @@
 package dk.ku.di.dms.vms.sdk.core.metadata;
 
 import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
+import dk.ku.di.dms.vms.modb.common.meta.*;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.sdk.core.event.pubsub.VmsInternalPubSub;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.UnsupportedConstraint;
-import dk.ku.di.dms.vms.modb.common.meta.ConstraintEnum;
-import dk.ku.di.dms.vms.modb.common.meta.ConstraintReference;
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
 import dk.ku.di.dms.vms.sdk.core.annotations.*;
 import dk.ku.di.dms.vms.modb.common.event.IEvent;
 import dk.ku.di.dms.vms.sdk.core.client.VmsRepositoryFacade;
@@ -36,7 +34,7 @@ import javax.validation.constraints.PositiveOrZero;
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
 import static java.util.logging.Logger.getLogger;
 
-public class VmsMetadataLoader implements IVmsMetadataLoader {
+public class VmsMetadataLoader {
 
     private VmsMetadataLoader(){}
 

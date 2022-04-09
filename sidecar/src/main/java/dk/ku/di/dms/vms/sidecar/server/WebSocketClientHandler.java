@@ -96,12 +96,20 @@ public class WebSocketClientHandler implements Runnable {
                 connectionClosed = true;
                 vmsServer.deRegisterClient(this.clientSocket);
                 logger.info("Client disconnected.");
-                continue;
+
+                try {
+                    clientSocket.getOutputStream().write(b, 0, len);
+                    clientSocket.getOutputStream().flush();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+                return;
+
             }
 
         }
 
     }
-
 
 }
