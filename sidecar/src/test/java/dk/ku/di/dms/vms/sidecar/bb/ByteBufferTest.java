@@ -15,6 +15,15 @@ import java.nio.ByteBuffer;
 public class ByteBufferTest {
 
     @Test
+    public void testReadWriteEvents(){
+
+
+
+
+    }
+
+
+    @Test
     public void testAllocation(){
 
 //        ByteArrayInputStream bais = new ByteArrayInputStream()
@@ -30,7 +39,6 @@ public class ByteBufferTest {
             MemoryAddress memoryAddress = segment.address();
 
             // long address = memoryAddress.;
-
 
         }
 

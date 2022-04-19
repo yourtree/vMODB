@@ -41,7 +41,7 @@ public final class VmsManager implements Runnable {
             // TPCCEventHandler eventHandler = new TPCCEventHandler(eventRepository);
 
             // scheduler
-            this.metadata.scheduler = new VmsTransactionScheduler(executorService, vmsMetadata.internalPubSubService(), vmsMetadata.eventToVmsTransactionMap(), eventHandler);
+            this.metadata.scheduler = new VmsTransactionScheduler(executorService, vmsMetadata.internalPubSubService(), vmsMetadata.eventToVmsTransactionMap());
 
             // executor
             // this.metadata.executor = new VmsTransactionExecutor(this.metadata.internalPubSub);

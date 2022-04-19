@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.sdk.core.client.websocket;
+package dk.ku.di.dms.vms.web_common.serdes;
 
 import com.google.gson.Gson;
 import com.google.gson.TypeAdapter;
@@ -13,7 +13,7 @@ import java.util.function.Function;
 /**
  * https://www.tutorialspoint.com/gson/gson_custom_adapters.htm
  */
-class TransactionalEventAdapter extends TypeAdapter<TransactionalEvent> {
+public class TransactionalEventAdapter extends TypeAdapter<TransactionalEvent> {
 
     private final Function<String,Class<? extends IEvent>> clazzResolver;
     

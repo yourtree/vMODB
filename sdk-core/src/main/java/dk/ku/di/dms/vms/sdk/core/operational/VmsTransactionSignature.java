@@ -8,9 +8,11 @@ import java.lang.reflect.Method;
  *
  * This method can be reused so the scheduler can keep track
  * of the missing events.
+ *
+ * THis is part of a global cross-microservice transaction
  */
 public record VmsTransactionSignature (
-    Object vmsInstance,
+    Object vmsInstance, // a class annotated with @Microservice
     // https://stackoverflow.com/questions/4685563/how-to-pass-a-function-as-a-parameter-in-java
     Method method,
     String[] inputQueues,

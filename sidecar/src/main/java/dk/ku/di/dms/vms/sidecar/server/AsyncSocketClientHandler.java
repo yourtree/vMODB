@@ -17,9 +17,9 @@ import static java.util.logging.Logger.getLogger;
  *          https://github.com/FirebaseExtended/TubeSock/blob/master/src/main/java/com/firebase/tubesock/WebSocketReceiver.java
  *          https://blog.sessionstack.com/how-javascript-works-deep-dive-into-websockets-and-http-2-with-sse-how-to-pick-the-right-path-584e6b8e3bf7
  */
-public class WebSocketClientHandler implements Runnable {
+public class AsyncSocketClientHandler implements Runnable {
 
-    private final Logger logger = getLogger(WebSocketClientHandler.class.getName());
+    private final Logger logger = getLogger(AsyncSocketClientHandler.class.getName());
 
     private final AsyncVMSServer vmsServer;
 
@@ -27,7 +27,7 @@ public class WebSocketClientHandler implements Runnable {
 
     private boolean connectionClosed;
 
-    public WebSocketClientHandler(AsyncVMSServer vmsServer, AsynchronousSocketChannel clientSocket) {
+    public AsyncSocketClientHandler(AsyncVMSServer vmsServer, AsynchronousSocketChannel clientSocket) {
         this.vmsServer = vmsServer;
         this.clientSocket = clientSocket;
         this.connectionClosed = false;
@@ -43,12 +43,13 @@ public class WebSocketClientHandler implements Runnable {
         int len = 0;
 
         // while not closed connection, continue
-        while(!connectionClosed){
+        while(!connectionClosed && clientSocket.isOpen()){
 
             try {
                 in = clientSocket.read(buffer);
-                // len = in.read(b);
-                String message = new String( buffer.array() );
+                len = in.get();
+
+                String message = new String( buffer.array(), 0, len );
                 in.get();
                 buffer.flip();
 

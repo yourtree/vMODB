@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.sdk.core.client.websocket;
+package dk.ku.di.dms.vms.web_common.serdes;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -7,7 +7,7 @@ import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 
 import java.util.function.Function;
 
-class VmsSerdesProxyBuilder {
+public class VmsSerdesProxyBuilder {
 
     public static IVmsSerdesProxy build(final Function<String,Class<? extends IEvent>> clazzResolver){
 

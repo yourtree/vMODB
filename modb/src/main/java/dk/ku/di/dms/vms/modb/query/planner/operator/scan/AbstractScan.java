@@ -70,7 +70,7 @@ public abstract class AbstractScan implements Supplier<IOperatorResult> {
             currFilter = filters[filterIdx];
 
             // unchecked cast, but we know it is safe since the analyzer makes sure that
-            if(currParam != null && currParam.id == filterIdx) {
+            if(currParam != null && currParam.id() == filterIdx) {
 
 //                FilterTestAnother filterTestAnother = new FilterTestAnother((Comparator<Integer>) Integer::compareTo);
 //                filterTestAnother.eval( row.get(filterColumns[filterIdx]) );

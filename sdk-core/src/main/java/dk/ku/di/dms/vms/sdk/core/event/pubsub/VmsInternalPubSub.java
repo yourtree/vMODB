@@ -1,7 +1,10 @@
 package dk.ku.di.dms.vms.sdk.core.event.pubsub;
 
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
+import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -28,32 +31,37 @@ public final class VmsInternalPubSub implements IVmsInternalPubSubService {
     /**
      * It represents events ready for scheduler consumption
      */
-    private final BlockingQueue<TransactionalEvent> inputQueue;
+    private final Queue<TransactionalEvent> inputQueue;
 
     /**
      *  It represents events ready for delivery
      *  The event handler threads consume from this queue
      */
-    private final BlockingQueue<TransactionalEvent> outputQueue;
+    private final Queue<TransactionalEvent> outputQueue;
 
     /**
-     * It represents events ready for execution
+     * It represents the result of tasks
      */
-    //final public BlockingQueue<VmsTransactionTask> readyQueue;
+    private final Queue<VmsTransactionTaskResult> resultQueue;
 
     public VmsInternalPubSub(){
-        this.inputQueue = new LinkedBlockingQueue<>();
-        this.outputQueue = new LinkedBlockingQueue<>();
-        //this.readyQueue = new LinkedBlockingQueue<>();
+        this.inputQueue = new LinkedList<>();
+        this.outputQueue = new LinkedList<>();
+        this.resultQueue = new LinkedList<>();
     }
 
     @Override
-    public BlockingQueue<TransactionalEvent> inputQueue() {
+    public Queue<TransactionalEvent> inputQueue() {
         return inputQueue;
     }
 
     @Override
-    public BlockingQueue<TransactionalEvent> outputQueue() {
+    public Queue<TransactionalEvent> outputQueue() {
         return outputQueue;
+    }
+
+    @Override
+    public Queue<VmsTransactionTaskResult> resultQueue() {
+        return resultQueue;
     }
 }

@@ -51,7 +51,7 @@ public class VmsMetadataLoader {
 
         Map<Class<?>,String> vmsTableNames = loadVmsTableNames(reflections);
 
-        Map<String,Object> loadedVmsInstances = loadMicroserviceClasses(reflections);
+        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(reflections);
 
         Map<String, VmsSchema> vmsSchema = buildSchema(reflections, reflections.getConfiguration(), vmsTableNames);
 
@@ -219,12 +219,14 @@ public class VmsMetadataLoader {
             // non-foreign key column constraints are inherent to the table, not referring to other tables
             ConstraintReference[] constraints = getConstraintReferences(columnFields, columnNames, columnDataTypes, i);
 
-            VmsSchema schema = new VmsSchema(pkFieldsStr, columnNames, columnDataTypes, foreignKeyReferences, constraints);
+
 
             Optional<Annotation> optionalVmsTableAnnotation = Arrays.stream(tableClass.getAnnotations())
                     .filter(p -> p.annotationType() == VmsTable.class).findFirst();
             if(optionalVmsTableAnnotation.isPresent()){
-                schemaMap.put(((VmsTable)optionalVmsTableAnnotation.get()).name(), schema);
+                String vmsTableName = ((VmsTable)optionalVmsTableAnnotation.get()).name();
+                VmsSchema schema = new VmsSchema(vmsTableName, pkFieldsStr, columnNames, columnDataTypes, foreignKeyReferences, constraints);
+                schemaMap.put(vmsTableName, schema);
             } else {
                 // TODO throw exception should be annotated with vms table
             }

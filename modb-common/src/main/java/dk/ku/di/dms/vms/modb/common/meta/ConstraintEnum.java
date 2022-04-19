@@ -6,6 +6,6 @@ public enum ConstraintEnum {
     NOT_NULL,
     NULL,
     POSITIVE_OR_ZERO,
-    POSITIVE;
+    POSITIVE
 
 }

@@ -104,8 +104,8 @@ public class HashJoin extends AbstractJoin {
             currFilter = filters[filterIdx];
 
             // unchecked cast, but we know it is safe since the analyzer makes sure that
-            if(currParam != null && currParam.id == filterIdx) {
-                conditionHolds = currFilter.eval(row.get(filterColumns[filterIdx]), currParam.object );
+            if(currParam != null && currParam.id() == filterIdx) {
+                conditionHolds = currFilter.eval(row.get(filterColumns[filterIdx]), currParam.object() );
                 if (paramsIterator.hasNext()){
                     currParam = paramsIterator.next();
                 } else {

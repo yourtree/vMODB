@@ -3,17 +3,18 @@ package dk.ku.di.dms.vms.sdk.core.client.websocket;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
-import dk.ku.di.dms.vms.sdk.core.client.websocket.*;
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSubService;
 import dk.ku.di.dms.vms.sdk.core.example.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
+import dk.ku.di.dms.vms.web_common.serdes.TransactionalEventAdapter;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
@@ -48,6 +49,8 @@ public class ApplicationTest
     @Test
     public void testMetadataLoader() {
 
+        // buildCustomWebSocketClient(null);
+
         // VmsEventHandler handler = new VmsEventHandler( eventChannel.inputQueue(), , serdesProxy );
 
         // IVmsEventHandler eventHandler = WebSocketHandlerBuilder.build( vmsMetadata ); // new VmsWebSocketClient(serdesProxy, handler);
@@ -64,20 +67,14 @@ public class ApplicationTest
     }
 
     @Test
-    public void testScheduler() throws InterruptedException {
+    public void testScheduler() throws InterruptedException, ExecutionException {
 
         IVmsInternalPubSubService internalPubSub = vmsMetadata.internalPubSubService();
 
         VmsTransactionScheduler scheduler = new VmsTransactionScheduler(
                 Executors.newFixedThreadPool(1),
                 internalPubSub,
-                vmsMetadata.eventToVmsTransactionMap(),
-                new IVmsEventHandler() {
-                    @Override
-                    public void handle(TransactionalEvent event) {}
-                    @Override
-                    public void expel(TransactionalEvent event) {}
-                }
+                vmsMetadata.eventToVmsTransactionMap()
         );
 
         Thread t0 = new Thread( scheduler );
@@ -89,11 +86,13 @@ public class ApplicationTest
         TransactionalEvent event2 = new TransactionalEvent( 2, "in", event );
         TransactionalEvent event3 = new TransactionalEvent( 1, "in", event );
 
-        CompletableFuture.runAsync( () -> internalPubSub.inputQueue().add( event1 ) )
+        CompletableFuture<Void> wait = CompletableFuture.runAsync( () -> internalPubSub.inputQueue().add( event1 ) )
                 .thenRun( () -> internalPubSub.inputQueue().add( event2 ) )
                 .thenRun( () -> internalPubSub.inputQueue().add( event3 ) );
 
-        Thread.sleep(100);
+        wait.get();
+
+        Thread.sleep(1000);
 
         scheduler.stop();
 
