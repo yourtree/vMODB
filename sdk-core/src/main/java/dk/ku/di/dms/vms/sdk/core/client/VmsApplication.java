@@ -1,9 +1,5 @@
 package dk.ku.di.dms.vms.sdk.core.client;
 
-
-import dk.ku.di.dms.vms.sdk.core.client.websocket.WebSocketHandlerBuilder;
-
-
 public class VmsApplication {
 
     // TODO ue invocation handler here to hide from application code

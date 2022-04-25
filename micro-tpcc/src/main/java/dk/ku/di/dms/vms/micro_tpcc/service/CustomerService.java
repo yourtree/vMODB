@@ -44,7 +44,7 @@ public class CustomerService {
 //                .build();
 
         // TODO make query builder part of the repository
-        CustomerInfoDTO customerInfo = customerRepository.<CustomerInfoDTO>fetch(sql, CustomerInfoDTO.class);
+        CustomerInfoDTO customerInfo = customerRepository.<CustomerInfoDTO>fetchOne(sql, CustomerInfoDTO.class);
 
         CustomerNewOrderOut customerTaxData = new CustomerNewOrderOut(customerInfo.c_discount(),customerInfo.c_last(),customerInfo.c_credit(),in.c_id());
 

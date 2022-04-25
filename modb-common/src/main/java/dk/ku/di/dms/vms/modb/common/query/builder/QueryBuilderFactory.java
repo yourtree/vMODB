@@ -15,4 +15,8 @@ public final class QueryBuilderFactory {
         return new UpdateStatementBuilder();
     }
 
+    public static InsertStatementBuilder insert() {
+        return new InsertStatementBuilder();
+    }
+
 }

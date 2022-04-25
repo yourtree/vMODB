@@ -20,14 +20,14 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
     private final EntryPoint entryPoint;
 
-    public SelectStatementBuilder(){
+    protected SelectStatementBuilder(){
         SelectStatement statement = new SelectStatement();
         this.entryPoint = new EntryPoint(statement);
     }
 
     /**
-     * @param param
-     * @return
+     * @param param The column name
+     * @return Resulting select with column
      */
     public NewProjectionOrFromClause select(String param) {
         return this.entryPoint.select(param);
@@ -160,10 +160,6 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
         protected OrderByClausePredicate(SelectStatement selectStatement){
             this.statement = selectStatement;
         }
-
-//        public OrderByClause asc(){
-//
-//        }
 
         public QuerySeal desc(){
             for( OrderByClauseElement predicate : this.statement.orderByClause ){

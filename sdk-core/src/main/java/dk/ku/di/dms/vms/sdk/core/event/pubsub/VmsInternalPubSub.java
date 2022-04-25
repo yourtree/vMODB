@@ -1,16 +1,18 @@
 package dk.ku.di.dms.vms.sdk.core.event.pubsub;
 
+import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
+import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  *   This class has the objective to decouple completely the
- *   event handler (responsible for receiving external events)
+ *   payload handler (responsible for receiving external events)
  *   and the vms executor (responsible for collecting these events
  *   and reasoning about their schedule).
  *   Particularly, this class contains a repository of events
@@ -35,7 +37,7 @@ public final class VmsInternalPubSub implements IVmsInternalPubSubService {
 
     /**
      *  It represents events ready for delivery
-     *  The event handler threads consume from this queue
+     *  The payload handler threads consume from this queue
      */
     private final Queue<TransactionalEvent> outputQueue;
 
@@ -44,10 +46,24 @@ public final class VmsInternalPubSub implements IVmsInternalPubSubService {
      */
     private final Queue<VmsTransactionTaskResult> resultQueue;
 
-    public VmsInternalPubSub(){
+    /**
+     * The requests for data or DBMS statements that should be delivered
+     * @return
+     */
+    private final Queue<DataRequestEvent> requestQueue;
+
+    private final Map<Long,DataResponseEvent> responseMap;
+
+    public static VmsInternalPubSub newInstance(){
+        return new VmsInternalPubSub();
+    }
+
+    private VmsInternalPubSub(){
         this.inputQueue = new LinkedList<>();
         this.outputQueue = new LinkedList<>();
         this.resultQueue = new LinkedList<>();
+        this.requestQueue = new LinkedList<>();
+        this.responseMap = new HashMap<>();
     }
 
     @Override
@@ -64,4 +80,16 @@ public final class VmsInternalPubSub implements IVmsInternalPubSubService {
     public Queue<VmsTransactionTaskResult> resultQueue() {
         return resultQueue;
     }
+
+    @Override
+    public Queue<DataRequestEvent> requestQueue() {
+        return requestQueue;
+    }
+
+    @Override
+    public Map<Long, DataResponseEvent> responseMap() {
+        return responseMap;
+    }
+
+
 }

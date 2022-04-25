@@ -19,7 +19,7 @@ import static java.util.logging.Logger.getLogger;
  * The brain of the virtual microservice runtime
  * It consumes events, verifies whether a data operation is ready for execution
  * and dispatches them for execution. If an operation is not ready yet, given the
- * event dependencies, it is stored in a waiting list until pending events arrive
+ * payload dependencies, it is stored in a waiting list until pending events arrive
  */
 public class VmsTransactionScheduler implements Runnable {
 
@@ -33,8 +33,8 @@ public class VmsTransactionScheduler implements Runnable {
 
     private final Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap;
 
-    // event that cannot execute because some dependence need to be fulfilled
-    // event A < B < C < D
+    // payload that cannot execute because some dependence need to be fulfilled
+    // payload A < B < C < D
     // TODO check later (after HTM impl) if I can do it with a Hash...
 
     // Based on the transaction id (tid), I can find the task very fast
@@ -88,6 +88,7 @@ public class VmsTransactionScheduler implements Runnable {
         currentOffset.signalReady();
         currentOffset.signalFinished();
         offsetMap.put(0, currentOffset);
+        logger.info("Offset initialized");
     }
 
     /**
@@ -99,6 +100,7 @@ public class VmsTransactionScheduler implements Runnable {
      * server applications precisely because such applications consist
      * of a great number of concurrent tasks that spend much of their time waiting."
      * Which is not this case... we are not doing I/O to wait
+     * But virtual threads can be beneficial to transactional tasks
      */
     @Override
     public void run() {
@@ -116,13 +118,17 @@ public class VmsTransactionScheduler implements Runnable {
 
             // why do we have another move offset here?
             // in case we start (or restart the VM service), we need to move the pointer only when it is safe
-            // we cannot position the offset to the actual next, because we may not have received the next event yet
+            // we cannot position the offset to the actual next, because we may not have received the next payload yet
             moveOffsetPointerIfNecessary();
 
         }
 
     }
 
+    /**
+     * TODO we have to deal with failures
+     *  not only container failures but also constraints being violated
+     */
     private void processTaskResult() {
 
         while(!resultQueue.isEmpty()){
@@ -166,13 +172,13 @@ public class VmsTransactionScheduler implements Runnable {
 
         TransactionalEvent transactionalEvent = take();
 
-        // in case there is a new event to process
+        // in case there is a new payload to process
         if(transactionalEvent == null) {
             return;
         }
 
         // have I created the task already?
-        // in other words, a previous event for the same tid have been processed?
+        // in other words, a previous payload for the same tid have been processed?
         if(waitingTasksPerTidMap.containsKey(transactionalEvent.tid())){
 
             // add
@@ -187,7 +193,7 @@ public class VmsTransactionScheduler implements Runnable {
 
                 task = notReadyTasks.get(i);
                 // if here means the exact parameter position
-                task.putEventInput( signatures.get(i).id(), transactionalEvent.event() );
+                task.putEventInput( signatures.get(i).id(), transactionalEvent.payload() );
 
                 // check if the input is completed
                 if( task.isReady() ){
@@ -208,7 +214,7 @@ public class VmsTransactionScheduler implements Runnable {
 
         } else {
 
-            // create and put in the event list
+            // create and put in the payload list
 
             List<IdentifiableNode<VmsTransactionSignature>> signatures = eventToTransactionMap.get(transactionalEvent.queue());
 
@@ -228,9 +234,9 @@ public class VmsTransactionScheduler implements Runnable {
                         resultQueue
                         );
 
-                task.putEventInput(vmsTransactionSignatureIdentifiableNode.id(), transactionalEvent.event());
+                task.putEventInput(vmsTransactionSignatureIdentifiableNode.id(), transactionalEvent.payload());
 
-                // in case only one event
+                // in case only one payload
                 if (task.isReady()) {
                     handleNewReadyTask( task );
                 }
@@ -279,7 +285,7 @@ public class VmsTransactionScheduler implements Runnable {
      */
     private void moveOffsetPointerIfNecessary(){
 
-        // if( offsetMap.size() == 1 ) return; // cannot move, the event hasn't arrived yet, so the respective offset has not been created
+        // if( offsetMap.size() == 1 ) return; // cannot move, the payload hasn't arrived yet, so the respective offset has not been created
 
         // if next is the right one ---> the concept of "next" may change according to recovery from failures and aborts
         if(currentOffset.status() == Offset.OffsetStatus.FINISHED && offsetMap.get( currentOffset.tid() + 1 ) != null ){

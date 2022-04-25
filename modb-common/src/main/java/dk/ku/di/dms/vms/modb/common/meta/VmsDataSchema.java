@@ -1,11 +1,9 @@
 package dk.ku.di.dms.vms.modb.common.meta;
 
-import dk.ku.di.dms.vms.modb.common.event.IEvent;
-
 /**
  * The <code>VmsSchema</code> record describes the schema of VmsTable.
  */
-public record VmsSchema(
+public record VmsDataSchema(
 
     String tableName,
 
@@ -24,4 +22,4 @@ public record VmsSchema(
     // constraints, referred by column position
     ConstraintReference[] constraintReferences
 
-    ) implements IEvent {}
+){}

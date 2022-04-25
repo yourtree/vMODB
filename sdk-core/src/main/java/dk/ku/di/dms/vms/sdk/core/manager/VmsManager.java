@@ -1,7 +1,8 @@
 package dk.ku.di.dms.vms.sdk.core.manager;
 
-import dk.ku.di.dms.vms.sdk.core.client.websocket.WebSocketHandlerBuilder;
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSubService;
+import dk.ku.di.dms.vms.sdk.core.event.pubsub.VmsInternalPubSub;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
@@ -32,16 +33,17 @@ public final class VmsManager implements Runnable {
             }
 
            // this.metadata.executorService = executorService;
+            IVmsInternalPubSubService vmsInternalPubSubService = VmsInternalPubSub.newInstance();
 
-            VmsMetadata vmsMetadata = VmsMetadataLoader.load(null);
+            VmsMetadata vmsMetadata = VmsMetadataLoader.load(null, vmsInternalPubSubService);
 
-            IVmsEventHandler eventHandler = WebSocketHandlerBuilder.build( vmsMetadata.internalPubSubService(), s -> vmsMetadata.queueToEventMap().get(s), vmsMetadata.vmsSchema() );
+            // IVmsEventHandler eventHandler = WebSocketHandlerBuilder.build( vmsMetadata.internalPubSubService(), s -> vmsMetadata.queueToEventMap().get(s), vmsMetadata.vmsDataSchema() );
 
-            // event handler
+            // payload handler
             // TPCCEventHandler eventHandler = new TPCCEventHandler(eventRepository);
 
             // scheduler
-            this.metadata.scheduler = new VmsTransactionScheduler(executorService, vmsMetadata.internalPubSubService(), vmsMetadata.eventToVmsTransactionMap());
+            this.metadata.scheduler = new VmsTransactionScheduler(executorService, vmsInternalPubSubService, vmsMetadata.eventToVmsTransactionMap());
 
             // executor
             // this.metadata.executor = new VmsTransactionExecutor(this.metadata.internalPubSub);
@@ -74,7 +76,7 @@ public final class VmsManager implements Runnable {
             // 1. start scheduler
 //            this.metadata.schedulerFuture = this.metadata.executorService.submit(this.metadata.scheduler);
 //
-//            // 2. start event handler
+//            // 2. start payload handler
 //            this.metadata.eventHandlerFuture = this.metadata.executorService.submit(this.metadata.eventHandler);
 //
 //            // 3. start data operation executor

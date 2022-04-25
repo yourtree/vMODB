@@ -44,7 +44,7 @@ public class StockService {
                         .build();
 
 
-                int s_quantity = stockRepository.fetch(sql,Integer.class);
+                int s_quantity = stockRepository.fetchOne(sql,Integer.class);
 
                 Integer ol_quantity = in.quantity()[finalI];
                 if(s_quantity > ol_quantity){

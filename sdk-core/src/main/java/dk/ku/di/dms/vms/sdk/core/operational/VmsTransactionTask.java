@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
-import dk.ku.di.dms.vms.modb.common.event.IEvent;
+import dk.ku.di.dms.vms.modb.common.event.IApplicationEvent;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 
 import java.lang.reflect.InvocationTargetException;
@@ -22,7 +22,7 @@ public class VmsTransactionTask implements Runnable {
     // internal identification of this specific task in the scheduler (can later be used to specify ordering criteria between tasks)
     private int identifier;
 
-    private final IEvent[] inputs;
+    private final IApplicationEvent[] inputs;
 
     private int remainingTasks;
 
@@ -34,14 +34,14 @@ public class VmsTransactionTask implements Runnable {
                                Queue<TransactionalEvent> outputQueue, Queue<VmsTransactionTaskResult> resultQueue){
         this.tid = tid;
         this.signature = signature;
-        this.inputs = new IEvent[inputSize];
+        this.inputs = new IApplicationEvent[inputSize];
         this.remainingTasks = inputSize;
 
         this.outputQueue = outputQueue;
         this.resultQueue = resultQueue;
     }
 
-    public void putEventInput(int index, IEvent event){
+    public void putEventInput(int index, IApplicationEvent event){
         this.inputs[index] = event;
         this.remainingTasks--;
     }
@@ -58,9 +58,9 @@ public class VmsTransactionTask implements Runnable {
         return remainingTasks == 0;
     }
 
-    private IEvent callMethod(){
+    private IApplicationEvent callMethod(){
         try {
-            return (IEvent) signature.method().invoke(signature.vmsInstance(), inputs);
+            return (IApplicationEvent) signature.method().invoke(signature.vmsInstance(), inputs);
         } catch (IllegalAccessException | InvocationTargetException e) {
             // logger.info(e.getLocalizedMessage());
             throw new RuntimeException("ERROR"); // perhaps should forward this error to scheduler? what can be used for?
@@ -70,7 +70,7 @@ public class VmsTransactionTask implements Runnable {
     @Override
     public void run() {
 
-        IEvent output = callMethod();
+        IApplicationEvent output = callMethod();
 
         // if null, something went wrong, thus look at the logs
         if(output != null){
@@ -85,7 +85,7 @@ public class VmsTransactionTask implements Runnable {
             return;
         }
 
-        // (i) whether to return to the scheduler or (ii) to push to the event handler for forwarding it to the queue
+        // (i) whether to return to the scheduler or (ii) to push to the payload handler for forwarding it to the queue
         // we can only notify it because the scheduler does not need to know the events. the scheduler just needs to
         // know whether the processing of events has been completed can be directly sent to the microservice outside
         resultQueue.add( new VmsTransactionTaskResult( tid, identifier, true ) );

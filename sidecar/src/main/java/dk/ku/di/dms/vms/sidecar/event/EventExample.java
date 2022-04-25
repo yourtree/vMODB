@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.sidecar.event;
 
-import dk.ku.di.dms.vms.modb.common.event.IEvent;
+import dk.ku.di.dms.vms.modb.common.event.IApplicationEvent;
 
 public record EventExample(
      int c_w_id,
      int c_d_id,
-     int c_id) implements IEvent {}
+     int c_id) implements IApplicationEvent {}

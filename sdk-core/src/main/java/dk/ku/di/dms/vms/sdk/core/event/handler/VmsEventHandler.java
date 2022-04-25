@@ -1,25 +1,28 @@
 package dk.ku.di.dms.vms.sdk.core.event.handler;
 
+import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
+import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
+import dk.ku.di.dms.vms.modb.common.event.SystemEvent;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
+import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSubService;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
 import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
 
 import javax.annotation.concurrent.ThreadSafe;
-import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.FileChannel;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static java.net.StandardSocketOptions.SO_KEEPALIVE;
-import static java.net.StandardSocketOptions.TCP_NODELAY;
+import static java.net.StandardSocketOptions.*;
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
 import static java.util.logging.Logger.getLogger;
 
@@ -37,10 +40,6 @@ public class VmsEventHandler implements IVmsEventHandler, Runnable {
 
     private AsynchronousSocketChannel dataChannel;
 
-    private static final int EVENT_SIZE = 1024;
-
-    private static final int DATA_SIZE = 1024;
-
     // store off-heap to avoid overhead
     private final ByteBuffer eventSocketByteBuffer;
 
@@ -50,31 +49,39 @@ public class VmsEventHandler implements IVmsEventHandler, Runnable {
 
     private Future<Integer> futureData;
 
+    /** TRANSACTIONAL EVENTS **/
     private final Queue<TransactionalEvent> outputQueue;
 
-    // this should be the scheduler
-    private final Consumer<TransactionalEvent> consumer;
+    private final Queue<TransactionalEvent> inputQueue;
 
+    /** DATA **/
+    private final Queue<DataRequestEvent> requestQueue;
+
+    private final Map<Long, DataResponseEvent> responseMap;
+
+    private final Map<Long, DataRequestEvent> pendingRequestsMap;
+
+    private final VmsMetadata vmsMetadata;
+
+    // for complex objects like schema definitions
     private final IVmsSerdesProxy serdes;
 
-    private final static int MEGABYTE  = 1024 * 1024;
-    // 1 mega = 1024 * 1024
-    private final static int DEFAULT_EVENT_STORE_SIZE = MEGABYTE;
+    public VmsEventHandler( IVmsInternalPubSubService vmsInternalPubSubService, VmsMetadata vmsMetadata, IVmsSerdesProxy serdes ) {
 
-    private final static int DEFAULT_DATA_STORE_SIZE = MEGABYTE;
+        this.outputQueue = vmsInternalPubSubService.outputQueue();
+        this.inputQueue = vmsInternalPubSubService.inputQueue();
 
-    private RandomAccessFile rafEvent = null;
+        this.requestQueue = vmsInternalPubSubService.requestQueue();
+        this.responseMap = vmsInternalPubSubService.responseMap();
 
-    private RandomAccessFile rafData = null;
+        this.vmsMetadata = vmsMetadata;
 
-    private ByteBuffer eventStoreByteBuffer;
+        this.eventSocketByteBuffer = ByteBuffer.allocateDirect(1024);
+        this.dataSocketByteBuffer = ByteBuffer.allocateDirect(1024);
 
-    public VmsEventHandler(Queue<TransactionalEvent> outputQueue, Consumer<TransactionalEvent> consumer, IVmsSerdesProxy serdes) {
-        this.outputQueue = outputQueue;
-        this.consumer = consumer;
-        this.eventSocketByteBuffer = ByteBuffer.allocateDirect(EVENT_SIZE);
-        this.dataSocketByteBuffer = ByteBuffer.allocateDirect(EVENT_SIZE);
         this.serdes = serdes;
+
+        this.pendingRequestsMap = new HashMap<>();
     }
 
     @Override
@@ -85,66 +92,33 @@ public class VmsEventHandler implements IVmsEventHandler, Runnable {
         // while not stopped
         while(!isStopped()){
 
-            // do I have an input event to process?
-            receiveNewEvent();
+            // do we have an input payload to process?
+            processNewEvent();
 
-            // do I have an input data (from sidecar) to process?
-//            processRequestedData();
+            // do we have an input data (from sidecar) to process?
+            processNewData();
 
-            // do I have an output event to dispatch?
+            // do we have an output payload to dispatch? can be another thread, the sdk is dominated by IOs
             dispatchOutputEvents();
 
-            // do I have data requests to the sidecar?
-
+            // do we have data requests to the sidecar?
+            // TODO define an interface for data requests
+            dispatchDataRequests();
 
         }
 
     }
 
-    private void dispatchOutputEvents() {
-
-
-
-    }
-
-    private void initialize(){
-
-        // initialize memory-mapped file
-        try {
-
-            File file = new File("/etc/vms-events");
-            rafEvent = new RandomAccessFile(file, "rw");
-            rafEvent.setLength( DEFAULT_EVENT_STORE_SIZE );
-            FileChannel eventChannel = rafEvent.getChannel();
-            eventStoreByteBuffer = eventChannel.map( FileChannel.MapMode.READ_WRITE, 0, DEFAULT_EVENT_STORE_SIZE );
-
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-
-        state = new AtomicBoolean( connectToSidecar("event") && connectToSidecar("data") );
-
-        // to avoid checking for nullability in the event loop
-        eventSocketByteBuffer.clear();
-        futureEvent = eventChannel.read(eventSocketByteBuffer);
-        dataSocketByteBuffer.clear();
-        futureData = dataChannel.read(dataSocketByteBuffer);
-
-    }
-
-    private void receiveNewEvent(){
+    private void processNewEvent(){
 
         if(futureEvent.isDone()){
 
-            // TODO read and dispatch
             try {
                 futureEvent.get();
-                // TODO should this variable be off-heap?
-                String json = new String( eventSocketByteBuffer.array(), 0, EVENT_SIZE );
-                TransactionalEvent event = serdes.fromJson( json );
-                consumer.accept( event );
+
+                TransactionalEvent event = serdes.deserializeToTransactionalEvent( eventSocketByteBuffer.array() );
+                inputQueue.add( event );
+
             } catch (InterruptedException | ExecutionException e) {
                 logger.info("ERROR: "+e.getLocalizedMessage());
             } finally {
@@ -156,23 +130,140 @@ public class VmsEventHandler implements IVmsEventHandler, Runnable {
 
     }
 
+    /**
+     * Everything should be a DTO
+     */
+    private void processNewData() {
+
+        if(futureData.isDone()){
+
+            try {
+                futureData.get();
+
+                DataResponseEvent dataResponse = serdes.deserializeToDataResponseEvent( dataSocketByteBuffer.array() );
+
+                responseMap.put( dataResponse.identifier, dataResponse );
+
+                DataRequestEvent dataRequestEvent = pendingRequestsMap.remove( dataResponse.identifier );
+
+                // notify the thread that is waiting for this data
+                synchronized (dataRequestEvent){
+                    dataRequestEvent.notify();
+                }
+
+
+            } catch (InterruptedException | ExecutionException e) {
+                logger.log(Level.WARNING, "ERR: on reading the new data");
+            }
+
+
+        }
+
+    }
+
+    private void dispatchOutputEvents() {
+
+        while( !outputQueue.isEmpty() ){
+
+           TransactionalEvent outputEvent = outputQueue.poll();
+
+            byte[] bytes = serdes.serializeTransactionalEvent( outputEvent );
+            eventChannel.write(ByteBuffer.wrap(bytes));
+
+        }
+
+    }
+
+    private void dispatchDataRequests() {
+
+        while( !requestQueue.isEmpty() ){
+
+            DataRequestEvent dataRequestEvent = requestQueue.poll();
+
+            pendingRequestsMap.put( dataRequestEvent.identifier, dataRequestEvent );
+
+            byte[] bytes = serdes.serializeDataRequestEvent( dataRequestEvent );
+
+            // TODO build mechanism for send failure
+            eventChannel.write(ByteBuffer.wrap( bytes ) );
+
+        }
+
+    }
+
+    private void initialize() {
+
+        //connect both channels
+        state = new AtomicBoolean( connectToSidecar("event") && connectToSidecar("data") );
+
+        // send schemas, this is compared to a handshake in a WebSocket protocol
+
+        // send event schema
+        byte[] eventSchemaBytes = serdes.serializeEventSchema( vmsMetadata.vmsEventSchema() );
+        eventChannel.write( ByteBuffer.wrap(eventSchemaBytes) );
+
+        // send data schema
+        byte[] dataSchemaBytes = serdes.serializeDataSchema( vmsMetadata.vmsDataSchema() );
+        dataChannel.write( ByteBuffer.wrap(dataSchemaBytes) );
+
+        // now get confirmation whether the schema is fine
+
+        // to avoid checking for nullability in the payload loop
+        // besides, the framework must wait for events either way
+        eventSocketByteBuffer.clear();
+        futureEvent = eventChannel.read(eventSocketByteBuffer);
+
+        dataSocketByteBuffer.clear();
+        futureData = dataChannel.read(dataSocketByteBuffer);
+
+        try {
+            futureEvent.get();
+            futureData.get();
+        } catch( ExecutionException | InterruptedException e ){
+            throw new RuntimeException("ERROR on retrieving handshake from sidecar.");
+        }
+
+        SystemEvent eventSchemaResponse = serdes.deserializeSystemEvent( eventSocketByteBuffer.array() );
+
+        if(eventSchemaResponse.op == 0){
+            throw new RuntimeException(eventSchemaResponse.message);
+        }
+
+        SystemEvent dataSchemaResponse = serdes.deserializeSystemEvent( dataSocketByteBuffer.array() );
+
+        if( dataSchemaResponse.op == 0 ){
+            throw new RuntimeException(dataSchemaResponse.message);
+        }
+
+    }
+
+    private void setDefaultSocketOptions( AsynchronousSocketChannel socketChannel ) throws IOException {
+
+        socketChannel.setOption( TCP_NODELAY, Boolean.FALSE ); // false is the default value
+        socketChannel.setOption( SO_KEEPALIVE, Boolean.TRUE );
+
+        socketChannel.setOption( SO_SNDBUF, 1024 );
+        socketChannel.setOption( SO_RCVBUF, 1024 );
+
+        // TODO revisit these options
+        socketChannel.setOption( SO_REUSEADDR, true );
+        socketChannel.setOption( SO_REUSEPORT, true );
+    }
 
     private boolean connectToSidecar(String channelName){
 
         try {
 
-            InetSocketAddress addr = new InetSocketAddress("localhost", 80);
+            InetSocketAddress address = new InetSocketAddress("localhost", 80);
 
             if (channelName.equalsIgnoreCase("data")) {
                 eventChannel = AsynchronousSocketChannel.open();
-                eventChannel.setOption( TCP_NODELAY, Boolean.FALSE );
-                eventChannel.setOption( SO_KEEPALIVE, Boolean.TRUE );
-                eventChannel.connect(addr).get();
+                setDefaultSocketOptions( eventChannel );
+                eventChannel.connect(address).get();
             } else{
                 dataChannel = AsynchronousSocketChannel.open();
-                dataChannel.setOption( TCP_NODELAY, Boolean.FALSE );
-                dataChannel.setOption( SO_KEEPALIVE, Boolean.TRUE );
-                dataChannel.connect( addr ).get();
+                setDefaultSocketOptions( dataChannel );
+                dataChannel.connect( address ).get();
             }
             return true;
 

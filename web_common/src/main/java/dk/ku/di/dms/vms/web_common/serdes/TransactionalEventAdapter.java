@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.TypeAdapter;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
-import dk.ku.di.dms.vms.modb.common.event.IEvent;
+import dk.ku.di.dms.vms.modb.common.event.IApplicationEvent;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 
 import java.io.IOException;
@@ -15,10 +15,13 @@ import java.util.function.Function;
  */
 public class TransactionalEventAdapter extends TypeAdapter<TransactionalEvent> {
 
-    private final Function<String,Class<? extends IEvent>> clazzResolver;
+    private final Function<String,Class<? extends IApplicationEvent>> clazzResolver;
+
+    private final Gson gson;
     
-    public TransactionalEventAdapter(final Function<String,Class<? extends IEvent>> clazzResolver) {
+    public TransactionalEventAdapter(final Function<String,Class<? extends IApplicationEvent>> clazzResolver) {
         this.clazzResolver = clazzResolver;
+        this.gson = new Gson();
     }
 
     @Override
@@ -31,8 +34,8 @@ public class TransactionalEventAdapter extends TypeAdapter<TransactionalEvent> {
         out.value(value.tid());
         out.name("queue");
         out.value(value.queue());
-        out.name("event");
-        out.jsonValue( new Gson().toJson( value.event() ) );
+        out.name("payload");
+        out.jsonValue( new Gson().toJson( value.payload() ) );
         out.endObject();
     }
 
@@ -41,7 +44,7 @@ public class TransactionalEventAdapter extends TypeAdapter<TransactionalEvent> {
 
         int tid = 0;
         String queue = null;
-        IEvent event = null;
+        IApplicationEvent event = null;
 
         in.beginObject();
         in.peek();
@@ -65,9 +68,9 @@ public class TransactionalEventAdapter extends TypeAdapter<TransactionalEvent> {
         in.peek();
         attributeName = in.nextName();
 
-        if("event".equals(attributeName)) {
+        if("payload".equals(attributeName)) {
             in.peek();
-            event = new Gson().fromJson( in, clazzResolver.apply( queue ) );
+            event = gson.fromJson( in, clazzResolver.apply( queue ) );
         }
 
         in.endObject();

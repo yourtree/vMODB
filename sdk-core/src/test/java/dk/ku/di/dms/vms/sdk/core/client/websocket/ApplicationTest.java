@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSubService;
+import dk.ku.di.dms.vms.sdk.core.event.pubsub.VmsInternalPubSub;
 import dk.ku.di.dms.vms.sdk.core.example.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
@@ -55,13 +56,13 @@ public class ApplicationTest
 
         // IVmsEventHandler eventHandler = WebSocketHandlerBuilder.build( vmsMetadata ); // new VmsWebSocketClient(serdesProxy, handler);
 
-        TransactionalEvent transactionalEvent = new TransactionalEvent( 1, "in", new EventExample(1) );
+        //TransactionalEvent transactionalEvent = new TransactionalEvent( 1, "in", new EventExample(1) );
 
-        // String json = new Gson().toJson( transactionalEvent );
+        String json = new Gson().toJson( vmsMetadata.vmsEventSchema() );
 
-        String json = gson.toJson( transactionalEvent );
+        //String json = gson.toJson( transactionalEvent );
 
-        TransactionalEvent converted = gson.fromJson( json, TransactionalEvent.class );
+        //TransactionalEvent converted = gson.fromJson( json, TransactionalEvent.class );
 
         assert json != null;
     }
@@ -69,7 +70,7 @@ public class ApplicationTest
     @Test
     public void testScheduler() throws InterruptedException, ExecutionException {
 
-        IVmsInternalPubSubService internalPubSub = vmsMetadata.internalPubSubService();
+        IVmsInternalPubSubService internalPubSub = VmsInternalPubSub.newInstance();
 
         VmsTransactionScheduler scheduler = new VmsTransactionScheduler(
                 Executors.newFixedThreadPool(1),
@@ -159,16 +160,16 @@ public class ApplicationTest
     @Test
     public void testDataOperationExecution() throws Exception {
 
-//        // 3. create an input event and dispatch for execution
+//        // 3. create an input payload and dispatch for execution
 //        EventRepository eventRepository = EventRepository.get();
 //        VmsTransactionExecutor executor = new VmsTransactionExecutor(eventRepository);
 //
 //        // executor.Init();
 //
-//        // CheckoutRequest event = new CheckoutRequest();
-//        CustomerNewOrderIn event = new CustomerNewOrderIn(1,1,1);
+//        // CheckoutRequest payload = new CheckoutRequest();
+//        CustomerNewOrderIn payload = new CustomerNewOrderIn(1,1,1);
 //
-//        eventRepository.inputQueue.add(event);
+//        eventRepository.inputQueue.add(payload);
 //
 //        Thread.sleep(100000);
     }

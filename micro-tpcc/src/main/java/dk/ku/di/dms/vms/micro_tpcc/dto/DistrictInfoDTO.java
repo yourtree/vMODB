@@ -1,3 +1,16 @@
 package dk.ku.di.dms.vms.micro_tpcc.dto;
 
-public record DistrictInfoDTO(int d_next_o_id, float d_tax){}
+public class DistrictInfoDTO {
+
+    public int d_next_o_id;
+    public float d_tax;
+
+
+    public float d_tax() {
+        return d_tax;
+    }
+
+    public int d_next_o_id() {
+        return d_next_o_id;
+    }
+}

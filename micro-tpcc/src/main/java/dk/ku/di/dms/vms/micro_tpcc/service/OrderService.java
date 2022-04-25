@@ -78,7 +78,7 @@ public class OrderService {
             futures[i] = CompletableFuture.runAsync(() -> {
 
                 float ol_amount = stockNewOrderIn.quantity()[finalI] *
-                        itemsNewOrderOut.itemsPrice().get(itemId) *
+                        itemsNewOrderOut.itemsIds()[finalI] *
                         (1 + wareDistNewOrderOut.w_tax() + wareDistNewOrderOut.d_tax()) *
                         (1 - customerNewOrderOut.c_discount());
 

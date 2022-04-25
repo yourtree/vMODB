@@ -29,7 +29,7 @@ public class WareDistService {
     }
 
     /**
-     * TODO: which event should be processed first in the transaction?
+     * TODO: which payload should be processed first in the transaction?
      *       the query or district update?
      *       the case for constrains over events:
      *       (i) A < B (ii) B < A
@@ -56,15 +56,13 @@ public class WareDistService {
 
         exec.shutdown();
 
-        WareDistNewOrderOut out = new WareDistNewOrderOut(
+        return new WareDistNewOrderOut(
                 tax,
                 getNextOidAndTax.d_tax(),
                 getNextOidAndTax.d_next_o_id(),
                 in.d_w_id(),
                 in.d_id()
         );
-
-        return out;
     }
 
     @Inbound(values = "waredist-new-order-in")
