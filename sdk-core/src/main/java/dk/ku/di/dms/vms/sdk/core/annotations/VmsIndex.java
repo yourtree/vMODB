@@ -1,12 +1,13 @@
 package dk.ku.di.dms.vms.sdk.core.annotations;
 
 import javax.persistence.Index;
+import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
-@Target({})
+@Target({ElementType.TYPE})
 @Retention(RUNTIME)
 public @interface VmsIndex {
 

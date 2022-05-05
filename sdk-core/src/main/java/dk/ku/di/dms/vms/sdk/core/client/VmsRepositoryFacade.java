@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.interfaces.IDTO;
 import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.interfaces.IRepository;
+import dk.ku.di.dms.vms.web_common.runnable.VMSFutureTask;
 import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 
 import java.lang.reflect.InvocationHandler;
@@ -77,9 +78,22 @@ public class VmsRepositoryFacade implements IVmsRepositoryFacade, InvocationHand
 
                 requestQueue.add( dataRequestEvent );
 
+                // https://docs.oracle.com/en/java/javase/16/docs/api/java.base/java/util/concurrent/SynchronousQueue.html
+                // is the cost of instantiating a sync queue for every data request an overhead?
+                //   instantiate an object compared to synchronize objects is irrelevant in terms of overhead,
+                //   cost less than waiting a semaphore
+                // semantics of wait/notify vary across JDKs
+
+//                SynchronousQueue<DataResponseEvent> queue = new SynchronousQueue<>();
+//                queue.take(); // how the thread is handled by the jvm, if they put back in the pool or not
+
                 // now wait until event handler wakes me up
                 synchronized (dataRequestEvent){
-                    dataRequestEvent.wait();
+
+                    // future.get() // i don't know whether this thread will be available for other tasks..
+                    // i believe with wait this thread goes back to the pool.. but i have to check
+                    // TODO investigate this further
+                    dataRequestEvent.wait(); // this is asynchronous nature
                 }
 
                 // woke up
@@ -88,7 +102,9 @@ public class VmsRepositoryFacade implements IVmsRepositoryFacade, InvocationHand
                 return response.result;
 
             }
-
+            case "fetchOnePromise" : {
+                VMSFutureTask<IDTO> futureTask = new VMSFutureTask<IDTO>(currentThread);
+            }
             case "issue": {
 
             }

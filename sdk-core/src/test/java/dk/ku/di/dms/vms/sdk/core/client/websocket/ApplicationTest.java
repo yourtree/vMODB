@@ -3,8 +3,7 @@ package dk.ku.di.dms.vms.sdk.core.client.websocket;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
-import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
-import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSubService;
+import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSub;
 import dk.ku.di.dms.vms.sdk.core.event.pubsub.VmsInternalPubSub;
 import dk.ku.di.dms.vms.sdk.core.example.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
@@ -20,11 +19,10 @@ import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
-import static java.util.logging.Logger.getLogger;
 
 public class ApplicationTest
 {
-    private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
+    private static final Logger logger = Logger.getLogger(GLOBAL_LOGGER_NAME);
 
     private static Gson gson;
 
@@ -34,10 +32,12 @@ public class ApplicationTest
     public static void setup(){
 
         try {
-            vmsMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example");
+
+            IVmsInternalPubSub internalPubSub = VmsInternalPubSub.newInstance();
+            vmsMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example", internalPubSub);
 
             GsonBuilder builder = new GsonBuilder();
-            builder.registerTypeAdapter(TransactionalEvent.class, new TransactionalEventAdapter(s -> vmsMetadata.queueToEventMap().get(s)));
+            builder.registerTypeAdapter( TransactionalEvent.class, new TransactionalEventAdapter( vmsMetadata.queueToEventMap() ) );
             builder.setPrettyPrinting();
             gson = builder.create();
 
@@ -70,7 +70,7 @@ public class ApplicationTest
     @Test
     public void testScheduler() throws InterruptedException, ExecutionException {
 
-        IVmsInternalPubSubService internalPubSub = VmsInternalPubSub.newInstance();
+        IVmsInternalPubSub internalPubSub = VmsInternalPubSub.newInstance();
 
         VmsTransactionScheduler scheduler = new VmsTransactionScheduler(
                 Executors.newFixedThreadPool(1),
@@ -104,8 +104,9 @@ public class ApplicationTest
     @Test
     public void testDataLoader() throws Exception {
 
+        IVmsInternalPubSub internalPubSub = VmsInternalPubSub.newInstance();
 
-        VmsMetadata metadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.tpcc");
+        VmsMetadata metadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.tpcc", internalPubSub);
 
 //        SyntheticDataLoader dataLoader = metadata.loadedVmsInstances().get(SyntheticDataLoader.class);
 //

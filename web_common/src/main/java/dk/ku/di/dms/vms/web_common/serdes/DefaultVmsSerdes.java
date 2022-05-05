@@ -2,14 +2,16 @@ package dk.ku.di.dms.vms.web_common.serdes;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.event.SystemEvent;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
-import dk.ku.di.dms.vms.modb.common.meta.VmsDataSchema;
-import dk.ku.di.dms.vms.modb.common.meta.VmsEventSchema;
+import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
+import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
 import java.util.Map;
 
 class DefaultVmsSerdes implements IVmsSerdesProxy {
@@ -30,8 +32,18 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
     }
 
     @Override
+    public byte[] serializeEventSchema(Collection<VmsEventSchema> vmsEventSchema) {
+        return gson.toJson( vmsEventSchema ).getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Override
     public Map<String, VmsEventSchema> deserializeEventSchema(byte[] bytes) {
         String json = new String(bytes);
+        return gson.fromJson(json, new TypeToken<Map<String, VmsEventSchema>>(){}.getType());
+    }
+
+    @Override
+    public Map<String, VmsEventSchema> deserializeEventSchema(String json) {
         return gson.fromJson(json, new TypeToken<Map<String, VmsEventSchema>>(){}.getType());
     }
 

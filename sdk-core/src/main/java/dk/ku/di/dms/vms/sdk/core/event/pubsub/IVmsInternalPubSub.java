@@ -25,7 +25,7 @@ import java.util.Queue;
  * and each component makes use of the queue of interest of its own work.
  *
  */
-public interface IVmsInternalPubSubService {
+public interface IVmsInternalPubSub {
 
     /**
      * It represents events ready for scheduler consumption
@@ -51,7 +51,7 @@ public interface IVmsInternalPubSubService {
     Queue<DataRequestEvent> requestQueue();
 
     /**
-     * A queue of responses of data requests
+     * A map of data request responses (keyed by thread identifier)
      * @return
      */
     Map<Long, DataResponseEvent> responseMap();

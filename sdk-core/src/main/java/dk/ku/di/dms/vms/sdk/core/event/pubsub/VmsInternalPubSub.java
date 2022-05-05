@@ -28,7 +28,7 @@ import java.util.Queue;
  *   FIXME the concept of a channel (in the context of coroutines) may help in the future
  *         https://kotlinlang.org/docs/channels.html
  */
-public final class VmsInternalPubSub implements IVmsInternalPubSubService {
+public final class VmsInternalPubSub implements IVmsInternalPubSub {
 
     /**
      * It represents events ready for scheduler consumption

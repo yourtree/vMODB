@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.micro_tpcc.service;
 import dk.ku.di.dms.vms.micro_tpcc.events.*;
 import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
 import dk.ku.di.dms.vms.sdk.core.annotations.Microservice;
+import dk.ku.di.dms.vms.sdk.core.annotations.Terminal;
 import dk.ku.di.dms.vms.sdk.core.annotations.Transactional;
 import dk.ku.di.dms.vms.micro_tpcc.entity.NewOrder;
 import dk.ku.di.dms.vms.micro_tpcc.entity.Order;
@@ -13,8 +14,6 @@ import dk.ku.di.dms.vms.micro_tpcc.repository.order.IOrderRepository;
 
 import java.util.Date;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 @Microservice("order")
 public class OrderService {
@@ -32,16 +31,17 @@ public class OrderService {
     }
 
     // need all values from waredist out
-    @Inbound(values = {"customer-new-order-out","stock-new-order-out",
+    @Inbound(values = {"customer-new-order-out","stock-new-order-out","stock-new-order-in",
             "items-new-order-out","waredist-new-order-out"})
     @Transactional
-    public void processNewOrderItems(CustomerNewOrderOut customerNewOrderOut,
-                                     StockNewOrderOut stockNewOrderOut,
-                                     StockNewOrderIn stockNewOrderIn,
-                                     ItemNewOrderOut itemsNewOrderOut,
-                                     WareDistNewOrderOut wareDistNewOrderOut){
+    @Terminal
+    public void processNewOrderItemsAsync(CustomerNewOrderOut customerNewOrderOut,
+                                          StockNewOrderOut stockNewOrderOut,
+                                          StockNewOrderIn stockNewOrderIn,
+                                          ItemNewOrderOut itemsNewOrderOut,
+                                          WareDistNewOrderOut wareDistNewOrderOut){
         int n = stockNewOrderIn.ol_cnt();
-        ExecutorService exec = Executors.newFixedThreadPool(n);
+
         CompletableFuture<?>[] futures = new CompletableFuture[n+1];
 
         // the developer should be sure about the semantics
@@ -100,7 +100,6 @@ public class OrderService {
         }
 
         CompletableFuture.allOf(futures).join();
-        exec.shutdown();
 
     }
 

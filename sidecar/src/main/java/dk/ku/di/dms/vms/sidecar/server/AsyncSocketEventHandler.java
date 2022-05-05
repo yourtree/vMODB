@@ -1,9 +1,13 @@
 package dk.ku.di.dms.vms.sidecar.server;
 
-import dk.ku.di.dms.vms.web_common.utils.ByteUtils;
+import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
+import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
+import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
+import java.util.Queue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
@@ -19,27 +23,43 @@ import static java.util.logging.Logger.getLogger;
  *          https://github.com/FirebaseExtended/TubeSock/blob/master/src/main/java/com/firebase/tubesock/WebSocketReceiver.java
  *          https://blog.sessionstack.com/how-javascript-works-deep-dive-into-websockets-and-http-2-with-sse-how-to-pick-the-right-path-584e6b8e3bf7
  */
-public class AsyncSocketEventHandler implements Runnable {
+public class AsyncSocketEventHandler extends StoppableRunnable {
 
     private final Logger logger = getLogger(AsyncSocketEventHandler.class.getName());
 
-    private final AsyncVMSServer vmsServer;
+    /** EVENT QUEUES **/
+    private final Queue<TransactionalEvent> inputQueue;
 
-    private final AsynchronousSocketChannel clientSocket;
+    private final Queue<TransactionalEvent> outputQueue;
 
-    private boolean connectionClosed;
+    /** SOCKET CHANNEL */
+    private final AsynchronousSocketChannel socketChannel;
 
-    private ByteBuffer buffer;
+    private final ByteBuffer readBuffer;
 
-    public AsyncSocketEventHandler(AsyncVMSServer vmsServer, AsynchronousSocketChannel clientSocket) {
-        this.vmsServer = vmsServer;
-        this.clientSocket = clientSocket;
-        this.connectionClosed = false;
+    private final ByteBuffer writeBuffer;
+
+    private Future<Integer> futureInput;
+
+    private Future<Integer> futureOutput;
+
+    /** SERIALIZATION **/
+    private final IVmsSerdesProxy serdes;
+
+    public AsyncSocketEventHandler(AsynchronousSocketChannel clientSocket, Queue<TransactionalEvent> inputQueue, Queue<TransactionalEvent> outputQueue, IVmsSerdesProxy serdes) {
+
+        this.inputQueue = inputQueue;
+        this.outputQueue = outputQueue;
+
+        this.socketChannel = clientSocket;
+
+        this.serdes = serdes;
 
         // TODO revisit this size later
         // The idea is to have an initial large enough buffer to accommodate
         // the majority of incoming request payload sizes
-        this.buffer = ByteBuffer.allocateDirect( 1024 );
+        this.readBuffer = ByteBuffer.allocateDirect( 1024 );
+        this.writeBuffer = ByteBuffer.allocateDirect( 1024 );
     }
 
     @Override
@@ -47,69 +67,78 @@ public class AsyncSocketEventHandler implements Runnable {
 
         logger.info("Running new client handler...");
 
-        Future<Integer> in;
-        int len = 0;
+
+        initialize();
 
         // while not closed connection, continue
-        while(!connectionClosed && clientSocket.isOpen()){
+        while(!isStopped() && socketChannel.isOpen()){
+
+            read();
+
+
+            // TODO communicate message to coordinator
+
+        }
+
+        shutdown();
+
+    }
+
+    /**
+     * Initialize buffer and channels
+     */
+    private void initialize(){
+        //  read buffer
+        readBuffer.clear();
+        futureInput = socketChannel.read(readBuffer);
+
+        // write buffer
+
+    }
+
+    private void read(){
+
+        if( futureInput.isDone() ){
 
             try {
-                in = clientSocket.read(buffer);
-                len = in.get();
+                int length = futureInput.get();
 
-                if(len == -1){
-                    // not possible to read the buffer...
+                if (length == -1) {
                     logger.log(Level.WARNING, "ERR: something went wrong on reading the buffer");
-                    buffer.flip();
-                    continue;
+                    readBuffer.flip();
+                    return;
                 }
 
-
-
-                /*
-
-                // compare the number of bytes read with the actual size of the object
-                ByteBuffer slice = buffer.slice(0,4);
-                int size = ByteUtils.fromByteArrayToInteger( slice.array() );
-
-                // completed!!
-                if(size == len){
-
-                    String message = new String( buffer.array(), 0, len );
-                    in.get();
-                    buffer.flip();
-
-                    // String message = new Scanner(buffer,"UTF-8").useDelimiter("\\r\\n\\r\\n").next();
-                    logger.info(message);
-
-
-                } else {
-
-                    int totalRead = len;
-                    boolean error = false;
-
-                    // read until the buffer in completed
-                    do {
-
-
-
-                    } while ( totalRead < size && !error );
-
-
-                }
-
-                */
-
-
-
-                // TODO communicate message to coordinator
+                // FIXME i dont need to deserialize .... simply forward to coordinator???
+                //  i may need to deserialize to store what have been processed so far...
+                //  but i can store the byte directly and deserialize on occasion...
+                //  but for now I can just forward...
+                TransactionalEvent event = serdes.deserializeToTransactionalEvent(readBuffer.array());
 
             } catch (ExecutionException | InterruptedException e) {
                 logger.log(Level.WARNING, e.getMessage());
+            } finally {
+                readBuffer.clear();
+                futureInput = socketChannel.read(readBuffer);
             }
 
         }
 
     }
+
+    private void shutdown() {
+
+        // first make sure buffer is cleaned
+        readBuffer.clear();
+        readBuffer.limit(0);
+        // buffer = ByteBuffer.allocateDirect(0);
+
+        try{
+            if(socketChannel.isOpen()) socketChannel.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
 
 }

@@ -1,14 +1,19 @@
 package dk.ku.di.dms.vms.sidecar.server;
 
+import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
+import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
+import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
+import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
+
 import java.io.IOException;
 import java.net.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
-import java.nio.channels.AsynchronousSocketChannel;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.logging.Logger;
-
-import static java.util.logging.Logger.getLogger;
 
 /**
  * Sources of inspiration:
@@ -24,45 +29,70 @@ import static java.util.logging.Logger.getLogger;
  *       if we just have one client (the runtime), as long as it connected, this thread can be put to sleep
  *       and awake only when a new websocket client connection is made (e.g., the runtime fails)
  *  This may be the answer: https://liakh-aliaksandr.medium.com/java-sockets-i-o-blocking-non-blocking-and-asynchronous-fb7f066e4ede
+ *  ===> This thread cannot be put to sleep since it acts as a server, serving requests from both the coordinator and the sdk
+ *  To fix what is explained above we need a proper thread pool and completion handlers...
  *
  * TODO: standardize log messages
  *
  */
-public class AsyncVMSServer implements Runnable {
+public class AsyncVMSServer extends StoppableRunnable {
 
-    private final Logger logger = getLogger(AsyncVMSServer.class.getName());
+    private final Logger logger = Logger.getLogger("AsyncVMSServer");
 
-    private final ExecutorService clientHandlerPool;
+    private final ExecutorService executorService;
 
-    // private ServerSocket serverSocket;
+    private AsynchronousChannelGroup group;
+
     private AsynchronousServerSocketChannel serverSocket;
 
-    private final CountDownLatch stopSignalLatch;
+    private final Queue<TransactionalEvent> inputQueue;
 
-    private final Map<SocketAddress, AsynchronousSocketChannel> connectedClients;
+    private final Queue<TransactionalEvent> outputQueue;
 
-    private Future<AsynchronousSocketChannel> socketClientFuture;
+    private final IVmsSerdesProxy serdes;
 
-    public AsyncVMSServer() {
-        this.clientHandlerPool = Executors.newFixedThreadPool(3);
-        this.stopSignalLatch = new CountDownLatch(1);
-        this.connectedClients = new ConcurrentHashMap<SocketAddress, AsynchronousSocketChannel>();
-    }
+    /********************* VMS *******************/
+    Map<String, VmsEventSchema> eventSchemaMap;
 
-    public AsyncVMSServer(int numberOfWorkers) {
-        this.clientHandlerPool = Executors.newFixedThreadPool(numberOfWorkers);
-        this.stopSignalLatch = new CountDownLatch(1);
-        this.connectedClients = new ConcurrentHashMap<SocketAddress, AsynchronousSocketChannel>();
+
+    /********************* EVENT *******************/
+    private final ByteBuffer eventReadBuffer;
+
+    private final ByteBuffer eventWriteBuffer;
+
+    public AsyncVMSServer(Queue<TransactionalEvent> inputQueue, Queue<TransactionalEvent> outputQueue, IVmsSerdesProxy serdes) {
+        super();
+
+        this.inputQueue = inputQueue;
+        this.outputQueue = outputQueue;
+        this.serdes = serdes;
+
+        // thread pool
+        // if less than 3, in the occurrence of two concurrent accept, there will be no progress
+        // after connect, one will be mostly lying... in any case, the advice is to always use N + 1
+        this.executorService = Executors.newFixedThreadPool(3); // one thread per channel
+
+
+        this.eventReadBuffer = ByteBuffer.allocateDirect( 1024 );
+        this.eventWriteBuffer = ByteBuffer.allocateDirect( 1024 );
+
+        // a forkjoinpool for retrieving data and allowing multiple workers to parallelize the scans...
     }
 
     private void createServerSocket() {
         try {
-            // this.serverSocket = new ServerSocket(80);
+            // socket channel group, both connect, read, and write share the same group
+            this.group = AsynchronousChannelGroup.withThreadPool( executorService  );
+        } catch (IOException e) {
+            throw new RuntimeException("Cannot create channel group.", e);
+        }
 
-            this.serverSocket = AsynchronousServerSocketChannel.open();
+        try {
+            this.serverSocket = AsynchronousServerSocketChannel.open( group );
             this.serverSocket.bind(new InetSocketAddress(80));
 
-
+//            EventChannelConnectionHandler handler = new EventChannelConnectionHandler();
+//            this.serverSocket.accept(null, handler);
 
             // TODO make log async?
             // TODO integrate memory handler into modb? https://docs.oracle.com/javase/10/core/java-logging-overview.htm
@@ -72,14 +102,6 @@ public class AsyncVMSServer implements Runnable {
         }
     }
 
-    private boolean isStopped() {
-        return this.stopSignalLatch.getCount() == 0;
-    }
-
-    public void deRegisterClient(Socket clientSocket){
-        this.connectedClients.remove( clientSocket.getRemoteSocketAddress() );
-    }
-
     public void run() {
 
         // run does not allow for throwing exceptions, so we encapsulate the exception in a method
@@ -87,78 +109,66 @@ public class AsyncVMSServer implements Runnable {
 
         // independent channels
 
-        // TODO how do I know which one is for event and data?
-        //  maybe after the schema is sent?
-        //  this way I have to defer the creation of the handler to a later time?
+        // how do I know which one is for event and data?
+        //  the event socket channel is opened first followed by the data channel
+
 
         // handler for events  ---  this requires a data frame not so big
-        handleSocketClient();
+        handleEventChannelConnection();
 
-        // TODO handler for data  --- this requires a data frame bigger
+        // handler for data  --- this requires a data frame bigger
+        // handleDataChannelConnection();
 
+        // TODO connect to coordinator
+        // connectToCoordinator(); // the coordinator should be modeled as a pub/sub service... a pubsub of data queries, data, not only events...
+
+        // no exception were thrown, we are ready to start
         while( !isStopped() ){
 
 
 
 
-            // TODO handle coordinator events
-            //  // sidecar could do some local scheduling according to the global schedule received from the global scheduler
+            // TODO handle coordinator events, pull data from coordinator
+            //  sidecar could do some local scheduling according to the global schedule received from the global scheduler
+            //  will read from coordinator in batches: https://sites.google.com/site/gson/streaming
 
             // TODO push data to the sdk-runtime ????
             //  it is up to the client handler to do it, here we deal with the coordinator only
 
         }
 
-        this.clientHandlerPool.shutdown();
+        this.executorService.shutdown();
         logger.info("VMSServer Server stopped.");
 
     }
 
-    private void handleSocketClient() {
 
-        // not blocking the vms server
-        // TODO do we need a particular executor for this?
-        //      yes if we want to have more control over the number of available workers for clients
-        if(socketClientFuture == null){
+
+    private void handleEventChannelConnection() {
+
+        EventChannelConnectionHandler eventChannelConnectionHandler = new EventChannelConnectionHandler(serdes, eventWriteBuffer);
+
+        serverSocket.accept("", eventChannelConnectionHandler );
+
+        eventSchemaMap = eventChannelConnectionHandler.get();
+
+        //try {
             // I don't need to explicitly program an async accept, since the Java API gives me that by design
-            socketClientFuture = serverSocket.accept();
-        } else if( socketClientFuture.isDone() ){
-            try {
-                AsynchronousSocketChannel clientSocket = socketClientFuture.get();
+            // AsynchronousSocketChannel socketChannel = serverSocket.accept().get();
 
-                if(clientSocket == null) {
-                    socketClientFuture = null;
-                    return;
-                }
 
-                // store socket
-                connectedClients.put(clientSocket.getRemoteAddress(), clientSocket);
+            // socketChannel.read();
 
-                logger.info("Creating new client handler.");
+            // executorService.submit(new AsyncSocketEventHandler(socketChannel, inputQueue, outputQueue, serdes));
 
-                clientHandlerPool.submit(new AsyncSocketEventHandler(this, clientSocket));
-                socketClientFuture = null;
+//        } catch (ExecutionException | InterruptedException e) {
+//            logger.info("Error obtaining future: "+e.getLocalizedMessage());
+//            throw new RuntimeException("Cannot connect to event channel.");
+//        }
 
-            } catch (ExecutionException | InterruptedException | IOException e) {
-                socketClientFuture = null;
-                logger.info("Error obtaining future: "+e.getLocalizedMessage());
-            }
-
-        }
     }
 
-    public void stop(){
-        this.stopSignalLatch.countDown();
-        try {
-            synchronized(this) {
-                if(serverSocket.isOpen()) {
-                    this.serverSocket.close();
-                }
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Error closing server", e);
-        }
-    }
+
 
 
 

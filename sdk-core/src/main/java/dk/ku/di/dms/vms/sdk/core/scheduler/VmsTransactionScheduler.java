@@ -2,17 +2,16 @@ package dk.ku.di.dms.vms.sdk.core.scheduler;
 
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
-import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSubService;
+import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSub;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
+import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 
-import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
 import static java.util.logging.Logger.getLogger;
 
 /**
@@ -21,9 +20,9 @@ import static java.util.logging.Logger.getLogger;
  * and dispatches them for execution. If an operation is not ready yet, given the
  * payload dependencies, it is stored in a waiting list until pending events arrive
  */
-public class VmsTransactionScheduler implements Runnable {
+public class VmsTransactionScheduler extends StoppableRunnable {
 
-    private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
+    private static final Logger logger = getLogger("VmsTransactionScheduler");
 
     private final Queue<TransactionalEvent> inputQueue;
 
@@ -51,14 +50,13 @@ public class VmsTransactionScheduler implements Runnable {
 
     private final ExecutorService vmsTransactionTaskPool;
 
-    // TODO maybe change to atomic integer?
-    private final AtomicBoolean stopSignal;
-
-    public VmsTransactionScheduler(ExecutorService vmsTransactionTaskPool,
-                                   IVmsInternalPubSubService vmsInternalPubSubService,
+    public VmsTransactionScheduler(ExecutorService vmsAppLogicTaskPool,
+                                   IVmsInternalPubSub vmsInternalPubSubService,
                                    Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap){
 
-        this.vmsTransactionTaskPool = vmsTransactionTaskPool;
+        super();
+
+        this.vmsTransactionTaskPool = vmsAppLogicTaskPool;
 
         this.eventToTransactionMap = eventToTransactionMap;
 
@@ -67,8 +65,6 @@ public class VmsTransactionScheduler implements Runnable {
         this.readyTasksPerTidMap = new TreeMap<>();
 
         this.offsetMap = new TreeMap<>();
-
-        this.stopSignal = new AtomicBoolean(false);
 
         this.inputQueue = vmsInternalPubSubService.inputQueue();
 
@@ -296,15 +292,6 @@ public class VmsTransactionScheduler implements Runnable {
             currentOffset = offsetMap.get( currentOffset.tid() + 1 );
         }
 
-    }
-
-    public void stop(){
-        this.stopSignal.set(true);
-        // TODO dereference every internal data structure, perhaps using synchronized
-    }
-
-    private boolean isStopped() {
-        return this.stopSignal.get();
     }
 
 }

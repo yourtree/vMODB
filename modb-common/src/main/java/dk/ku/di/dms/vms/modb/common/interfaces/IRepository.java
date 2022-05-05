@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.concurrent.Future;
 
 /**
  * User-facing database operations
@@ -39,6 +40,8 @@ public interface IRepository<PK extends Serializable,T extends IEntity<PK>> {
      *  Can't be tied to {@link Record} because the return can be a primitive type.
      */
     <DTO> DTO fetchOne(IStatement statement, Class<DTO> clazz);
+
+    <DTO> IVmsFuture<DTO> fetchOnePromise(IStatement statement, Class<DTO> clazz);
 
     /**
      * Used for retrieving multiple rows.

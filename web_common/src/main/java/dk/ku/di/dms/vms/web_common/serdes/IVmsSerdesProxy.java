@@ -4,18 +4,22 @@ import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.event.SystemEvent;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
-import dk.ku.di.dms.vms.modb.common.meta.VmsDataSchema;
-import dk.ku.di.dms.vms.modb.common.meta.VmsEventSchema;
+import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
+import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
 
+import java.util.Collection;
 import java.util.Map;
 
 /**
  * A proxy for all types of events exchanged between the sdk and the sidecar
+ * Used for complex objects like schema definitions
  */
 public interface IVmsSerdesProxy {
 
     byte[] serializeEventSchema(Map<String, VmsEventSchema> vmsEventSchema);
+    byte[] serializeEventSchema( Collection<VmsEventSchema> vmsEventSchema);
     Map<String, VmsEventSchema> deserializeEventSchema(byte[] bytes);
+    Map<String, VmsEventSchema> deserializeEventSchema(String json);
 
     byte[] serializeDataSchema(Map<String, VmsDataSchema> vmsEventSchema);
     Map<String, VmsDataSchema> deserializeDataSchema(byte[] bytes);

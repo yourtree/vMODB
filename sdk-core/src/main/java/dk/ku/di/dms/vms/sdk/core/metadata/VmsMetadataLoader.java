@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.sdk.core.metadata;
 import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.meta.*;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
-import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSubService;
+import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSub;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.UnsupportedConstraint;
 import dk.ku.di.dms.vms.sdk.core.annotations.*;
 import dk.ku.di.dms.vms.modb.common.event.IApplicationEvent;
@@ -12,6 +12,8 @@ import dk.ku.di.dms.vms.sdk.core.metadata.exception.QueueMappingException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NotAcceptableTypeException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NoPrimaryKeyFoundException;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
+import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
+import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
 import org.reflections.Configuration;
 import org.reflections.Reflections;
 
@@ -40,15 +42,19 @@ public class VmsMetadataLoader {
 
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
-    public static VmsMetadata load(String packageName, IVmsInternalPubSubService vmsInternalPubSubService) throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    public static VmsMetadata load(String packageName, IVmsInternalPubSub vmsInternalPubSubService) throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
-        final Reflections reflections = configureReflections(packageName);
+        Reflections reflections = configureReflections(packageName);
 
         Map<Class<?>,String> vmsTableNames = loadVmsTableNames(reflections);
 
-        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(reflections, vmsInternalPubSubService);
+        Set<Class<?>> vmsClasses = reflections.getTypesAnnotatedWith(Microservice.class);
 
-        Map<String, VmsDataSchema> vmsDataSchema = buildDataSchema(reflections, reflections.getConfiguration(), vmsTableNames);
+        Map<Class<? extends IEntity<?>>,String> entityToVirtualMicroservice = mapEntitiesToVirtualMicroservice(vmsClasses);
+
+        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, vmsInternalPubSubService);
+
+        Map<String, VmsDataSchema> vmsDataSchema = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, vmsTableNames);
 
         // necessary remaining data structures to store a vms metadata
         Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToVmsTransactionMap = new HashMap<>();
@@ -106,7 +112,7 @@ public class VmsMetadataLoader {
     /**
      * Building virtual microservice event schemas
      */
-    protected static Map<String, VmsEventSchema> buildEventSchema(final Reflections reflections, Map<Class<? extends IApplicationEvent>, String> eventToQueueMap) {
+    protected static Map<String, VmsEventSchema> buildEventSchema(Reflections reflections, Map<Class<? extends IApplicationEvent>, String> eventToQueueMap) {
 
         Map<String, VmsEventSchema> schemaMap = new HashMap<>();
 
@@ -144,9 +150,10 @@ public class VmsMetadataLoader {
      * Building virtual microservice table schemas
      */
     @SuppressWarnings("unchecked")
-    protected static Map<String, VmsDataSchema> buildDataSchema(final Reflections reflections,
-                                                                final Configuration reflectionsConfig,
-                                                                final Map<Class<?>, String> vmsTableNames) {
+    protected static Map<String, VmsDataSchema> buildDataSchema(Reflections reflections,
+                                                                Configuration reflectionsConfig,
+                                                                Map<Class<? extends IEntity<?>>,String> entityToVirtualMicroservice,
+                                                                Map<Class<?>, String> vmsTableNames) {
 
         Map<String, VmsDataSchema> schemaMap = new HashMap<>();
 
@@ -185,7 +192,7 @@ public class VmsMetadataLoader {
 
         // build schema of each table
         // we build the schema in order to look up the fields and define the pk hash index
-        for(final Map.Entry<Class<?>, List<Field>> entry : pkMap.entrySet()){
+        for(Map.Entry<Class<?>, List<Field>> entry : pkMap.entrySet()){
 
             Class<? extends IEntity<?>> tableClass = (Class<? extends IEntity<?>>) entry.getKey();
             List<Field> pkFields = entry.getValue();
@@ -206,14 +213,14 @@ public class VmsMetadataLoader {
                 totalNumberOfFields += columnFields.size();
             }
 
-            final String[] columnNames = new String[totalNumberOfFields];
-            final DataType[] columnDataTypes = new DataType[totalNumberOfFields];
+            String[] columnNames = new String[totalNumberOfFields];
+            DataType[] columnDataTypes = new DataType[totalNumberOfFields];
 
             int[] pkFieldsStr = new int[pkFields.size()];
 
             // iterating over pk columns
             int i = 0;
-            for(final Field field : pkFields){
+            for(Field field : pkFields){
                 Class<?> attributeType = field.getType();
                 columnDataTypes[i] = getColumnDataTypeFromAttributeType(attributeType);
                 pkFieldsStr[i] = i;
@@ -226,7 +233,7 @@ public class VmsMetadataLoader {
                 foreignKeyReferences = new ForeignKeyReference[foreignKeyFields.size()];
                 int j = 0;
                 // iterating over association columns
-                for (final Field field : foreignKeyFields) {
+                for (Field field : foreignKeyFields) {
 
                     Class<?> attributeType = field.getType();
                     columnDataTypes[i] = getColumnDataTypeFromAttributeType(attributeType);
@@ -241,7 +248,7 @@ public class VmsMetadataLoader {
                         // later we parse into a Vms Table and check whether the types match
                         foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column());
                     } else {
-                        // FIXME throw new exception
+                        throw new RuntimeException("Some error...");
                     }
 
                     j++;
@@ -256,10 +263,11 @@ public class VmsMetadataLoader {
                     .filter(p -> p.annotationType() == VmsTable.class).findFirst();
             if(optionalVmsTableAnnotation.isPresent()){
                 String vmsTableName = ((VmsTable)optionalVmsTableAnnotation.get()).name();
-                VmsDataSchema schema = new VmsDataSchema(vmsTableName, pkFieldsStr, columnNames, columnDataTypes, foreignKeyReferences, constraints);
+                String virtualMicroservice = entityToVirtualMicroservice.get( tableClass );
+                VmsDataSchema schema = new VmsDataSchema(virtualMicroservice, vmsTableName, pkFieldsStr, columnNames, columnDataTypes, foreignKeyReferences, constraints);
                 schemaMap.put(vmsTableName, schema);
             } else {
-                // TODO throw exception should be annotated with vms table
+                throw new RuntimeException("should be annotated with vms table");
             }
 
         }
@@ -275,7 +283,7 @@ public class VmsMetadataLoader {
             ConstraintReference[] constraints = null;
 
             // iterating over non-pk and non-fk columns;
-            for (final Field field : columnFields) {
+            for (Field field : columnFields) {
 
                 Class<?> attributeType = field.getType();
                 columnDataTypes[columnPosition] = getColumnDataTypeFromAttributeType(attributeType);
@@ -322,10 +330,39 @@ public class VmsMetadataLoader {
     }
 
     @SuppressWarnings("unchecked")
-    protected static Map<String,Object> loadMicroserviceClasses(Reflections reflections, IVmsInternalPubSubService vmsInternalPubSubService)
-            throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    protected static Map<Class<? extends IEntity<?>>,String> mapEntitiesToVirtualMicroservice(Set<Class<?>> vmsClasses) throws ClassNotFoundException {
 
-        Set<Class<?>> vmsClasses = reflections.getTypesAnnotatedWith(Microservice.class);
+        Map<Class<? extends IEntity<?>>,String> entityToVirtualMicroservice = new HashMap<>();
+
+        for(Class<?> clazz : vmsClasses) {
+
+            String clazzName = clazz.getCanonicalName();
+            Class<?> cls = Class.forName(clazzName);
+            Constructor<?>[] constructors = cls.getDeclaredConstructors();
+            Constructor<?> constructor = constructors[0];
+
+            for (Class parameterType : constructor.getParameterTypes()) {
+
+                Type[] types = ((ParameterizedType) parameterType.getGenericInterfaces()[0]).getActualTypeArguments();
+                Class<? extends IEntity<?>> entityClazz = (Class<? extends IEntity<?>>) types[1];
+
+                if(entityToVirtualMicroservice.get(entityClazz) == null) {
+                    entityToVirtualMicroservice.put(entityClazz, clazzName);
+                } else {
+                    throw new RuntimeException("Cannot have an entity linked to more than one virtual microservice.");
+                    // TODO later, when supporting replicated data objects, this will change
+                }
+            }
+
+        }
+
+        return entityToVirtualMicroservice;
+
+    }
+
+    @SuppressWarnings("unchecked")
+    protected static Map<String,Object> loadMicroserviceClasses(Set<Class<?>> vmsClasses, IVmsInternalPubSub vmsInternalPubSubService)
+            throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
         Map<String,Object> loadedMicroserviceInstances = new HashMap<>();
 
@@ -366,17 +403,17 @@ public class VmsMetadataLoader {
      * Map transactions to input and output events
      */
     @SuppressWarnings("unchecked")
-    protected static void mapVmsTransactionInputOutput(final Reflections reflections,
-                                                       final Map<String, Object> loadedMicroserviceInstances,
-                                                       final Map<String, Class<? extends IApplicationEvent>> queueToEventMap,
-                                                       final Map<Class<? extends IApplicationEvent>, String> eventToQueueMap,
-                                                       final Map<String,
+    protected static void mapVmsTransactionInputOutput(Reflections reflections,
+                                                       Map<String, Object> loadedMicroserviceInstances,
+                                                       Map<String, Class<? extends IApplicationEvent>> queueToEventMap,
+                                                       Map<Class<? extends IApplicationEvent>, String> eventToQueueMap,
+                                                       Map<String,
                                                                List<IdentifiableNode<VmsTransactionSignature>>>
                                                                eventToVmsTransactionMap) {
 
         Set<Method> transactionalMethods = reflections.getMethodsAnnotatedWith(Transactional.class);
 
-        for (final Method method : transactionalMethods) {
+        for (Method method : transactionalMethods) {
             logger.info("Mapped = " + method.getName());
 
             String className = method.getDeclaringClass().getCanonicalName();
@@ -402,7 +439,7 @@ public class VmsMetadataLoader {
 
             Annotation[] annotations = method.getAnnotations();
 
-            final VmsTransactionSignature vmsTransactionSignature;
+            VmsTransactionSignature vmsTransactionSignature;
 
             Optional<Annotation> optionalInbound = Arrays.stream(annotations).filter(p -> p.annotationType() == Inbound.class ).findFirst();
 

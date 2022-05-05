@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.micro_tpcc.service;
 
+import dk.ku.di.dms.vms.modb.common.interfaces.IVmsFuture;
 import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
 import dk.ku.di.dms.vms.sdk.core.annotations.Microservice;
 import dk.ku.di.dms.vms.sdk.core.annotations.Outbound;
@@ -11,6 +12,8 @@ import dk.ku.di.dms.vms.micro_tpcc.events.CustomerNewOrderOut;
 import dk.ku.di.dms.vms.micro_tpcc.events.CustomerNewOrderIn;
 import dk.ku.di.dms.vms.micro_tpcc.repository.ICustomerRepository;
 import dk.ku.di.dms.vms.micro_tpcc.dto.CustomerInfoDTO;
+
+import java.util.concurrent.Future;
 
 import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.EQUALS;
 
@@ -44,11 +47,20 @@ public class CustomerService {
 //                .build();
 
         // TODO make query builder part of the repository
+
+        // do we hide or expose the async primitives to the user?
+
+        // somebody needs to fulfill this promise. a vms future guarantees the get has no problems
+        IVmsFuture<CustomerInfoDTO> futureCustomerInfo = customerRepository.<CustomerInfoDTO>fetchOnePromise(sql, CustomerInfoDTO.class);
+        // get is blocking, but also isDone()
+        CustomerInfoDTO customerInfoFromFuture = futureCustomerInfo.get();
+
         CustomerInfoDTO customerInfo = customerRepository.<CustomerInfoDTO>fetchOne(sql, CustomerInfoDTO.class);
+        // the user issues get, the task will block
+        // the thread goes back to the pool e will be allocated to other tasks that are available to run
 
-        CustomerNewOrderOut customerTaxData = new CustomerNewOrderOut(customerInfo.c_discount(),customerInfo.c_last(),customerInfo.c_credit(),in.c_id());
-
-        return customerTaxData;
+        return new CustomerNewOrderOut(customerInfo.c_discount(),
+                customerInfo.c_last(),customerInfo.c_credit(),in.c_id());
     }
 
 }

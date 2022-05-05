@@ -1,8 +1,18 @@
 package dk.ku.di.dms.vms.micro_tpcc.repository;
 
+import dk.ku.di.dms.vms.micro_tpcc.events.StockNewOrderIn;
+import dk.ku.di.dms.vms.micro_tpcc.events.StockNewOrderOut;
+import dk.ku.di.dms.vms.modb.common.interfaces.IDTO;
 import dk.ku.di.dms.vms.modb.common.interfaces.IRepository;
+import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
+import dk.ku.di.dms.vms.modb.common.query.builder.SelectStatementBuilder;
+import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
+import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
+import dk.ku.di.dms.vms.sdk.core.annotations.Outbound;
 import dk.ku.di.dms.vms.sdk.core.annotations.Repository;
 import dk.ku.di.dms.vms.micro_tpcc.entity.Stock;
+
+import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.EQUALS;
 
 @Repository
 public interface IStockRepository extends IRepository<Stock.StockId, Stock> {
@@ -25,8 +35,5 @@ public interface IStockRepository extends IRepository<Stock.StockId, Stock> {
     // T2 - order 2
 
     // they are all fulfilled data dependencies
-
-
-
 
 }

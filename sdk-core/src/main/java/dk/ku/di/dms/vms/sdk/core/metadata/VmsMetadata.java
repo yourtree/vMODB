@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.metadata;
 
-import dk.ku.di.dms.vms.modb.common.meta.VmsDataSchema;
-import dk.ku.di.dms.vms.modb.common.meta.VmsEventSchema;
+import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
+import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 import dk.ku.di.dms.vms.modb.common.event.IApplicationEvent;

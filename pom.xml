@@ -18,7 +18,8 @@
     <module>sidecar</module>
     <module>micro-tpcc</module>
     <module>eShopOnVms</module>
-      <module>web_common</module>
+    <module>web_common</module>
+    <module>coordinator</module>
   </modules>
 
   <name>vms-runtime-java</name>
@@ -34,7 +35,6 @@
     <junit.version>4.11</junit.version>
     <slf4j.version>1.7.32</slf4j.version>
 
-
   </properties>
 
   <dependencies>
@@ -46,12 +46,13 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- Logging -->
+    <!-- Logging. Required by junit. TODO change by custom-built one -->
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
       <version>${slf4j.version}</version>
       <!--      <scope>compile</scope>-->
+      <scope>test</scope>
     </dependency>
 
 <!--    <dependency>-->

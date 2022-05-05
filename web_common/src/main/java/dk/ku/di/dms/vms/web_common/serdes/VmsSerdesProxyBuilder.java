@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import dk.ku.di.dms.vms.modb.common.event.IApplicationEvent;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 
+import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -18,18 +19,23 @@ import java.util.function.Function;
  */
 public final class VmsSerdesProxyBuilder {
 
-    public static IVmsSerdesProxy build(final Function<String,Class<? extends IApplicationEvent>> clazzResolver){
+    public static IVmsSerdesProxy build(Map<String, Class<? extends IApplicationEvent>> queueToEventMap){
 
         GsonBuilder builder = new GsonBuilder();
 
         // register new type adapter here
-        builder.registerTypeAdapter(TransactionalEvent.class, new TransactionalEventAdapter( clazzResolver ));
+        builder.registerTypeAdapter(TransactionalEvent.class, new TransactionalEventAdapter( queueToEventMap ));
 
-        builder.setPrettyPrinting();
         Gson gson1 = builder.create();
 
         return new DefaultVmsSerdes( gson1 );
 
+    }
+
+    public static IVmsSerdesProxy build(){
+        GsonBuilder builder = new GsonBuilder();
+        Gson gson1 = builder.create();
+        return new DefaultVmsSerdes( gson1 );
     }
 
 }

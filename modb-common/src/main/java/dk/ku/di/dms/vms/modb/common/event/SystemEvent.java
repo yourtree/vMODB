@@ -25,4 +25,10 @@ public class SystemEvent implements IVmsEvent {
         this.op = op;
         this.message = message;
     }
+
+    public SystemEvent(int op) {
+        this.op = op;
+        this.message = null;
+    }
+
 }
