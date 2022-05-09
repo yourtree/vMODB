@@ -1,7 +1,9 @@
 package dk.ku.di.dms.vms.web_common.runnable;
 
-import dk.ku.di.dms.vms.modb.common.interfaces.IVmsFuture;
-
+import java.util.Date;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
@@ -12,12 +14,13 @@ import java.util.concurrent.locks.LockSupport;
  * Failure is not exposed to the developer since the framework is controlling the system
  * @param <V>
  */
-public class VMSFutureTask<V> implements IVmsFuture<V> {
+public class VMSFutureTask<V> implements IVMsFutureCancellable<V> {
 
     private AtomicInteger state;
     private static final int NEW          = 0;
     private static final int COMPLETING   = 1;
     private static final int NORMAL       = 2;
+    private static final int CANCELLED    = 4;
 
     private Thread caller;
 
@@ -36,8 +39,46 @@ public class VMSFutureTask<V> implements IVmsFuture<V> {
         }
     }
 
+    public boolean cancel() {
+//        if (!(state.get() == NEW && state.compareAndSet
+//                ( NEW, CANCELLED )))
+//            return false;
+
+        // it does not matter
+        state.compareAndSet(state.get(), CANCELLED);
+        outcome = null; // make sure return is null
+        finishCompletion();
+
+        return true;
+    }
+
     private void finishCompletion() {
         LockSupport.unpark(caller);
+    }
+
+    private int awaitDone(long timeout){
+        long startTime = System.nanoTime();
+        if (startTime == 0L)
+            startTime = 1L;
+        for (;;) {
+            int s = state.get();
+            if (s > COMPLETING) {
+                return s;
+            } else if (s == COMPLETING) {
+                do{
+                    try { Thread.sleep(100); } catch (InterruptedException ignored) {}
+                    s = state.get();
+                } while (s == COMPLETING);
+            } else {
+                long now = System.currentTimeMillis();
+                long elapsed = now - startTime;
+                if (elapsed >= timeout) {
+                    return s;
+                }
+            }
+
+        }
+
     }
 
     private int awaitDone(){
@@ -48,7 +89,7 @@ public class VMSFutureTask<V> implements IVmsFuture<V> {
                 return s;
             } else if (s == COMPLETING) {
                 do{
-                    try { Thread.sleep(100); } catch (InterruptedException e) {}
+                    try { Thread.sleep(100); } catch (InterruptedException ignored) {}
                     s = state.get();
                 } while (s == COMPLETING);
             }
@@ -64,7 +105,8 @@ public class VMSFutureTask<V> implements IVmsFuture<V> {
         Object x = outcome;
         if (s == NORMAL)
             return (V)x;
-        return  null;
+        // case cancelled enters here
+        return null;
     }
 
     @Override
@@ -76,8 +118,16 @@ public class VMSFutureTask<V> implements IVmsFuture<V> {
     }
 
     @Override
+    public V get(long timeout){
+        int s = awaitDone(timeout);
+        if(s < COMPLETING)
+            cancel();
+        return report(s);
+    }
+
+    @Override
     public boolean isDone() {
-        return false;
+        return state.get() == NEW;
     }
 
     static{
@@ -85,4 +135,8 @@ public class VMSFutureTask<V> implements IVmsFuture<V> {
         Class<?> ensureLoaded = LockSupport.class;
     }
 
+    @Override
+    public boolean isCancelled() {
+        return state.get() == CANCELLED;
+    }
 }
