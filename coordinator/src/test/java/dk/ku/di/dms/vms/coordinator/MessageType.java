@@ -6,6 +6,10 @@ public enum MessageType {
     EVENT_ACK,
     EVENT_NACK,
 
+    REPLICATE_EVENT_REQ,
+    REPLICATE_EVENT_ACK,
+    REPLICATE_EVENT_NACK,
+
     CHECKPOINT,
     CHECKPOINT_COMPLETING, // tells the server to wait a bit
     CHECKPOINT_ACK,

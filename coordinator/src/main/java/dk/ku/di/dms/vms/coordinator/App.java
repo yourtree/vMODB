@@ -1,7 +1,8 @@
 package dk.ku.di.dms.vms.coordinator;
 
-import java.io.InputStream;
-import java.nio.ByteBuffer;
+import dk.ku.di.dms.vms.coordinator.election.ElectionManager;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 
 /**
  * Hello world!
@@ -12,20 +13,8 @@ public class App
     public static void main( String[] args )
     {
 
-//        NioEventLoopGroup group = new NioEventLoopGroup();
-//        ServerBootstrap bootstrap = new ServerBootstrap();
-//        bootstrap.group(group)
-//                .channel(NioServerSocketChannel.class)
-//                .childHandler(new SimpleChannelInboundHandler<ByteBuf>() {
-//                    @Override
-//                    protected void channelRead0(ChannelHandlerContext ctx,
-//                                                ByteBuf byteBuf) throws Exception {
-//                        System.out.println("Received data");
-//                    }
-//                } );
-
         // the input a new-order transaction
-//        a payload containin these 4 events {
+//        a payload containing these 4 events {
 //
 //
 //        "a", "customer", "customer-new-order-in" )
@@ -37,7 +26,7 @@ public class App
 
         // new order transaction
         TransactionBootstrap txBootstrap = new TransactionBootstrap();
-        txBootstrap.init("new-order")
+        TransactionDAG dag =  txBootstrap.init("new-order")
                 .input( "a", "customer", "customer-new-order-in" )
                 .input("b", "item","item-new-order-in" )
                 .input( "c", "stock","stock-new-order-in" )
@@ -46,16 +35,16 @@ public class App
                 .internal( "f", "item","item-new-order-out", "b" )
                 .internal( "g", "stock", "stock-new-order-out", "c" )
                 .internal( "h", "warehouse","waredist-new-order-out", "d" )
-                .terminal("i", "order", "e", "f", "g", "h" );
+                .terminal("i", "order", "e", "f", "g", "h" )
+                .build();
 
-
-        // the coordinator receives many events ... it maintains these received events in main memory and then it forwards to the respective dbms proxies
+        // the coordinator receives many events ... it maintains these received events in main memory, and then it forwards to the respective dbms proxies
 
         // at some point we do a checkpoint
 
         // a checkpoint is a batch of received events (transactions), the dbms proxies advances in time at every checkpoint
 
-        // between checkpoints there is not guarantee, if failure, the dbms proxies they have to restore the old snpashot (checkpoint)
+        // between checkpoints there is no guarantee, if failure, the dbms proxies they have to restore the old snpashot (checkpoint)
 
         // when fail, after coming back, the coordinator asks the dbms proxies about the current global state
 
@@ -92,7 +81,7 @@ public class App
 
         // TODO 4 - receive transactions and verify whether they can be processed given the global application view (3)
 
-
+        ElectionManager electionManager;
 
     }
 }

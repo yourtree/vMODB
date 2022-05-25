@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.store.index;
 
 import dk.ku.di.dms.vms.modb.store.table.Table;
 import dk.ku.di.dms.vms.modb.store.common.IKey;
-import dk.ku.di.dms.vms.modb.store.row.Row;
+import dk.ku.di.dms.vms.modb.common.meta.Row;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -25,7 +25,7 @@ public class HashIndex extends AbstractIndex<IKey> {
     }
 
     @Override
-    public boolean upsert(IKey key, Row row) {
+    public boolean upsertImpl(IKey key, Row row) {
         // TODO finish
         return true;
     }

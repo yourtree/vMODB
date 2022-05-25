@@ -8,24 +8,22 @@ import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.executor.SequentialQueryExecutor;
 import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 import dk.ku.di.dms.vms.sdk.embed.VmsMetadataEmbed;
-import dk.ku.di.dms.vms.sdk.core.proxy.DynamicInvocationHandler;
 import dk.ku.di.dms.vms.modb.query.planner.Planner;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.DataTransferObjectOperatorResult;
 import dk.ku.di.dms.vms.modb.query.planner.tree.PlanNode;
-import dk.ku.di.dms.vms.modb.store.row.Row;
+import dk.ku.di.dms.vms.modb.common.meta.Row;
 import dk.ku.di.dms.vms.modb.store.table.Table;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.List;
+import java.util.logging.Logger;
 
 public final class RepositoryFacade implements InvocationHandler {
 
-    private static Logger LOGGER = LoggerFactory.getLogger(DynamicInvocationHandler.class);
+    private static Logger LOGGER = Logger.getLogger(RepositoryFacade.class.getName());
 
     private final Class<?> pkClazz;
 
@@ -67,7 +65,6 @@ public final class RepositoryFacade implements InvocationHandler {
      */
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws AnalyzerException {
-        LOGGER.info("Invoked method: {}", method.getName());
 
         String methodName = method.getName();
 
@@ -75,6 +72,10 @@ public final class RepositoryFacade implements InvocationHandler {
 
             case "insert": {
                 // TODO receive a plan tree from the planner
+
+
+
+
                 break;
             }
             case "insertAll": {

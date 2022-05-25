@@ -6,7 +6,7 @@ import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.store.common.IKey;
 import dk.ku.di.dms.vms.modb.store.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.store.index.UnsupportedIndexOperationException;
-import dk.ku.di.dms.vms.modb.store.row.Row;
+import dk.ku.di.dms.vms.modb.common.meta.Row;
 
 import java.util.Collection;
 import java.util.Iterator;

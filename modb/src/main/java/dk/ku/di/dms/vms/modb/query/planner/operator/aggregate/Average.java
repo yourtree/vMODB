@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.query.planner.operator.aggregate;
 
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.modb.store.meta.ColumnReference;
-import dk.ku.di.dms.vms.modb.store.row.Row;
+import dk.ku.di.dms.vms.modb.common.meta.Row;
 import dk.ku.di.dms.vms.modb.store.table.Table;
 
 import java.util.*;
@@ -42,7 +42,7 @@ public class Average implements IAggregate {
         // a better, more general solution to track the dependencies of sets fo values is required
 
         for( final Row row : input.getRows() ){
-            GroupIdentifier group = getGroupWhereRowLiesIn(row);
+            GroupIdentifier group = getGroupWhereRowBelongsTo(row);
             if(valuesForAggregation.get( group.hash() ) == null) {
                 Builder stream = DoubleStream.builder();
                 valuesForAggregation.put( group.hash(), stream );
@@ -82,7 +82,7 @@ public class Average implements IAggregate {
         Object[] valuesForHashing)
         {};
 
-    private GroupIdentifier getGroupWhereRowLiesIn(Row row){
+    private GroupIdentifier getGroupWhereRowBelongsTo(Row row){
 
         if(groupByColumns != null) {
 

@@ -24,4 +24,9 @@ public class SimpleKey implements IKey, IIndexKey {
         return this.hashCode() == key.hashCode();
     }
 
+    @Override
+    public boolean isSimple(){
+        return true;
+    }
+
 }

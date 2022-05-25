@@ -7,16 +7,18 @@ import java.util.List;
 
 /**
  * The identification of a connecting DBMS daemon
+ * ideally one vms per dbms proxy, but in the future may be many..
+ * but who knows... the sdk are already sending a map...
  */
-public class DbmsDaemon {
+public class VmsMetadata {
 
-    public String virtualMicroservice;
+    public String name; // vms name
 
     // the node
     public String host;
     public int port;
 
-    // ideally one vms per dbms proxy, but in the future may be many.. who knows... the sdk are already sending a map...
+    public long lastOffset;
 
     // data model
     public List<VmsDataSchema> dataSchema;

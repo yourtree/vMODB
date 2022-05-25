@@ -5,9 +5,12 @@ import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
 
 import java.util.concurrent.*;
 
+/**
+ * TODO Implement leader election here?
+ */
 public abstract class MailBox extends StoppableRunnable {
 
-    private final ExecutorService executorService;
+    protected final ExecutorService executorService;
 
     protected final ConcurrentLinkedDeque<Message> queue;
 
@@ -16,7 +19,7 @@ public abstract class MailBox extends StoppableRunnable {
         queue = new ConcurrentLinkedDeque<>();
     }
 
-    public Future<Boolean> queue(Message msg){
+    public Future<Boolean> enqueue(Message msg){
          return executorService.submit( new PublisherThread( msg ) );
     }
 

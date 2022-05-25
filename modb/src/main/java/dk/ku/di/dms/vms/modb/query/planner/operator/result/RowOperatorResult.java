@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.query.planner.operator.result;
 
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.interfaces.IReturnableOperatorResult;
-import dk.ku.di.dms.vms.modb.store.row.Row;
+import dk.ku.di.dms.vms.modb.common.meta.Row;
 
 import java.util.ArrayList;
 import java.util.Collection;

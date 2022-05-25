@@ -1,13 +1,15 @@
 package dk.ku.di.dms.vms.modb.store.index;
 
-import dk.ku.di.dms.vms.modb.store.row.Row;
+import dk.ku.di.dms.vms.modb.store.common.IKey;
+import dk.ku.di.dms.vms.modb.common.meta.Row;
 import dk.ku.di.dms.vms.modb.store.table.Table;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
+/**
+ * Base implementation of an index
+ * @param <K> extends {@link IKey}
+ */
 public abstract class AbstractIndex<K> {
 
     private final IndexKeyTypeEnum keyType;
@@ -37,7 +39,11 @@ public abstract class AbstractIndex<K> {
         return this.hashCode;
     }
 
-    public abstract boolean upsert(K key, Row row);
+    public boolean upsert(K key, Row row){
+        return upsertImpl(key, row);
+    }
+
+    public abstract boolean upsertImpl(K key, Row row);
 
     public abstract boolean delete(K key);
 

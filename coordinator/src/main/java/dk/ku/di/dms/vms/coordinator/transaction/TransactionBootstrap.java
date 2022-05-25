@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator;
+package dk.ku.di.dms.vms.coordinator.transaction;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -10,16 +10,16 @@ import java.util.Map;
  */
 public class TransactionBootstrap {
 
-    protected List<EventIdentifier> topology; // the input events
-    protected List<Terminal> terminals;
+    private List<EventIdentifier> topology; // the input events
+    //protected List<EventIdentifier> terminals;
     // for fast seek
-    protected Map<String, EventIdentifier> map;
+    private Map<String, EventIdentifier> map;
 
-    protected String name; // transaction name
+    private String name; // transaction name
 
     public TransactionBootstrap(){
         this.topology = new ArrayList<>();
-        this.terminals = new ArrayList<>();
+        //this.terminals = new ArrayList<>();
         this.map = new HashMap<>();
     }
 
@@ -67,14 +67,19 @@ public class TransactionBootstrap {
         public TransactionBootstrapPlus terminal(String alias, String vms, String... deps){
             if(deps == null) throw new RuntimeException("Cannot have a terminal event without a parent event");
 
-
-            Terminal terminal = new Terminal(vms);
+            EventIdentifier terminal = new EventIdentifier(alias, vms);
             for(String dep : deps){
                 EventIdentifier id = transactionBootstrap.map.get(dep);
-                terminal.addDependence( id );
+                // terminal.addDependence( id );
+                id.addChildren( terminal );
             }
 
             return this;
+        }
+
+        // finally, build the transaction representation
+        public TransactionDAG build(){
+            return new TransactionDAG(transactionBootstrap.name, transactionBootstrap.topology);
         }
 
     }

@@ -1,20 +1,25 @@
 package dk.ku.di.dms.vms.coordinator;
 
 
-import dk.ku.di.dms.vms.modb.common.interfaces.IVmsFuture;
 import dk.ku.di.dms.vms.web_common.runnable.IVMsFutureCancellable;
 import dk.ku.di.dms.vms.web_common.runnable.VMSFutureTask;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.random.RandomGenerator;
 
-import static dk.ku.di.dms.vms.coordinator.MessageType.CHECKPOINT_COMPLETING;
+import static dk.ku.di.dms.vms.coordinator.MessageType.*;
 
 /**
  * Simulation with method calls instead of sockets
+ *
+ * https://www.confluent.io/blog/configure-kafka-to-minimize-latency/
  */
 public class DbmsDaemonThread extends MailBox {
+
+    private final ReplicationStrategyEnum replicationStrategy;
 
     // other dbms daemons
     private List<DbmsDaemonThread> dbmsList;
@@ -22,62 +27,127 @@ public class DbmsDaemonThread extends MailBox {
     // thread identifier for debugging purposes
     private final int id;
 
-    private long lastCommittedOffset;
+    // starts with zero
+    private long lastCommittedOffset = 0;
 
     private VMSFutureTask<Boolean> checkpointRequest;
 
     // these have been replicated in at least another dbms
-    private final List<Message> eventsReadyForCommit;
-
-    private final List<Message> eventsPendingReplication;
-
-    private final ConcurrentLinkedDeque<VMSFutureTask<Boolean>> replicateRequests;
-
-    private long threshold = 10000;
+    private List<Message> log;
 
     public DbmsDaemonThread(int id, List<DbmsDaemonThread> dbmsList){
         this.id = id;
         this.dbmsList = dbmsList;
-        this.replicateRequests = new ConcurrentLinkedDeque<>();
-
-        this.eventsReadyForCommit = new ArrayList<>();
-        this.eventsPendingReplication = new ArrayList<>();
+        this.log = new ArrayList<>();
+        this.replicationStrategy = ReplicationStrategyEnum.SYNC; // as default
     }
 
+    /**
+     * We need to be sure whether all events from this batch have arrived
+     * @param message
+     * @return
+     */
     public IVMsFutureCancellable<Boolean> checkpoint(Message message){
         Thread currentThread = Thread.currentThread();
-        checkpointRequest = new VMSFutureTask<Boolean>(currentThread);
+        checkpointRequest = new VMSFutureTask<>(currentThread);
 
-        if(eventsPendingReplication.size() > 0){
-            Message msg = new Message( CHECKPOINT_COMPLETING, message.payload );
-            message.serverThread.queue( msg );
-        }
+//        if(eventsPendingReplication.size() > eventReplicationThresholdForCheckpointingCompleting
+//                || remainingEvents() ){
+//            Message msg = new Message( CHECKPOINT_COMPLETING, message.payload );
+//            message.serverThread.enqueue( msg );
+//        } else {
+//
+//            lastCommittedOffset++;
+//            log = new ArrayList<>(); // just believe we are storing it durably
+//        }
 
         return checkpointRequest;
 
     }
 
+//    private boolean receive(Message message) {
+//
+//
+//        if(replicationStrategy == ReplicationStrategyEnum.SYNC){
+//
+//            boolean res = replicateSync( message );
+//
+//
+//        }
+//    }
+
     /**
-     * For this example we can simply discard the msg...
-     * The idea is that these events are in memory prior to checkpoint
      * @param message the message received
      * @return a future
      */
-    public IVMsFutureCancellable<Boolean> replicate(Message message){
-        Thread currentThread = Thread.currentThread();
-        VMSFutureTask<Boolean> futureTask = new VMSFutureTask<Boolean>(currentThread);
-        replicateRequests.add(futureTask);
-        return futureTask;
+    public Message replicate(Message message){
+
+        int op = 0; // getRandomResponseForReplicationRequest(random);
+        if(op > 0) {
+            message.type = REPLICATE_EVENT_ACK;
+        } else {
+            message.type = REPLICATE_EVENT_NACK;
+        }
+        return message;
+
     }
 
-    private boolean tryToReplicate(RandomGenerator random, Message msg){
-        // replicate... for ease of understanding, pick one
-        int dbmsId = random.nextInt(dbmsList.size());
-        IVMsFutureCancellable<Boolean> future = dbmsList.get(dbmsId).replicate(msg);
-        Boolean res = future.get(1000);
-        if(res != null) {
-            eventsReadyForCommit.add(msg);
-            return true;
+    /**
+     * We must implement a strategy for replication.
+     * What is the replication factor? Should we replicate the inputs to all DBMS?
+     * Let's do strongly consistent
+     * What if we cannot replicate to all DBMS?
+     * There is another strategy. We make it durable here and asynchronously replicate. We are optimistic
+     * What if this dbms crash?
+     * @param
+     * @param msg
+     * @return
+     */
+
+    // FIXME tis should be all in the coordinator......
+    // the server must safeguard all events are safely replicated
+
+    // i think the design must change... the server must build the batch first?
+
+//    private void replicateAsync(Message msg){
+//
+//        for(DbmsDaemonThread dbmsThread : dbmsList){
+//
+//            IVMsFutureCancellable<Boolean> future = dbmsThread.replicate(msg);
+//            Boolean res = future.get();
+//            if(res != null) {
+//                log.add(msg);
+//            }
+//
+//        }
+//
+//    }
+
+    private boolean replicateSync(Message msg){
+
+        log.add(msg); // now replicate to all
+
+        List<DbmsDaemonThread> dbmsError = new ArrayList<>();
+
+        List<Future<Message>> futures = new ArrayList<>();
+        for(DbmsDaemonThread dbmsThread : dbmsList){
+            futures.add( executorService.submit( () -> dbmsThread.replicate(msg) ) );
+        }
+
+        for(int i = 0; i < futures.size(); i++){
+            Future<Message> ft = futures.get(i);
+            try {
+                ft.get();
+            } catch (InterruptedException | ExecutionException ignored) {
+                dbmsError.add( dbmsList.get(i) ); // our protocol must wait for this dbms to come back online eventually
+            }
+        }
+
+        if(dbmsError.size() > 0){
+
+            // enqueue this message for later reattempt
+
+            return false;
         }
         return false;
     }
@@ -87,86 +157,43 @@ public class DbmsDaemonThread extends MailBox {
 
         RandomGenerator random = RandomGenerator.of("DbmsThread");
 
-        while(!isStopped()){
+        while(!isStopped()) {
 
-            if(!queue.isEmpty()) {
+            if (!queue.isEmpty()) {
                 Message msg = queue.peekFirst();
 
-                switch(msg.type){
+                switch (msg.type) {
 
-                    // events, does not matter the order of processing, as long as all in the batch are processed
-                    case EVENT -> {
-
-                        if(!tryToReplicate(random, msg)){
-                            msg.timestamp = System.currentTimeMillis();
-                            eventsPendingReplication.add(msg);
-                        }
-
-
-                        // what should be done? can either try other dbms or respond the server accordingly
-
-                        // let's try one more time
-//                        dbmsId = random.nextInt(dbmsList.size());
-//                        future = dbmsList.get(dbmsId).replicate(msg);
-//                        res = future.get();
-
-                        // another strategy is not sending acks... on the checkpoint we can deal with it, the server coord will increase the batch size...
-//                        if(res != null) {
-//                            msg.serverThread.queue( new Message(MessageType.EVENT_ACK, msg) );
-//                        } else {
-//                            // lets try to tell the server to hold a bit until enough dbmss come back from failure
-//                            msg.serverThread.queue( new Message(MessageType.EVENT_NACK, msg) );
+                    // async replication request
+//                    case REPLICATE_EVENT_REQ -> {
+//                        int op = getRandomResponseForReplicationRequest(random);
+//                        if(op > 0) {
+//                            msg.type = REPLICATE_EVENT_RESP;
+//                            msg.dbmsDaemonThread.enqueue(msg);
 //                        }
-
-                    }
+//                    }
 
                 }
-
             }
-
-            // deal with event replication requests -- synchronous
-            if(!replicateRequests.isEmpty()){
-
-                final VMSFutureTask<Boolean> request = replicateRequests.peekFirst();
-
-                int op = random.nextInt(6);
-                if(op == 0){
-                    // discard event to force requester to look for other dbms
-                    request.cancel();
-                } if(op == 1) {
-
-//                    Timer timer = new Timer(true);
-//                    TimerTask task = new TimerTask() {
-//                        @Override
-//                        public void run() {
-//                            request.set(true);
-//                        }
-//                    };
-//                    timer.schedule(task, 2*60*1000);
-
-                    // timeout to send later
-                    try {
-                        Thread.sleep(random.nextInt(2000,5000));
-                    } catch (InterruptedException e) {
-                        // e.printStackTrace();
-                    } finally {
-                        request.set(true);
-                    }
-                } else { // 2,3,4,5 75% of change of replicating it
-                    request.set(true); // responding true
-                }
-
-            }
-
-            long now = System.currentTimeMillis();
-            if(!eventsPendingReplication.isEmpty() && now - eventsPendingReplication.get(0).timestamp >= threshold ) {
-                // let's try to replicate again
-                if( tryToReplicate(random, eventsPendingReplication.get(0)) ){
-                    eventsPendingReplication.remove(0);
-                }
-            }
-
         }
+
+    }
+
+    private int getRandomResponseForReplicationRequest(RandomGenerator random){
+
+        int op = random.nextInt(10);
+
+        if (op == 1) {
+
+            // timeout to send later
+            try {
+                Thread.sleep(random.nextInt(2000, 5000));
+            } catch (InterruptedException ignored) {
+
+            }
+        }
+
+        return op;
 
     }
 

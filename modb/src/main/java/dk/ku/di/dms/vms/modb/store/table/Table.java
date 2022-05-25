@@ -56,16 +56,16 @@ public abstract sealed class Table permits HashIndexedTable {
     }
 
     // A key is formed by a column set ordered by the order specified in the schema definition
-    public AbstractIndex<IKey> getIndexByKey(final IIndexKey key){
-        if(indexes.containsKey( key )) {
-            return indexes.get( key ).get( key );
-        }
-        return null;
-    }
+//    public AbstractIndex<IKey> getIndexByKey(final IIndexKey key){
+//        if(indexes.containsKey( key )) {
+//            return indexes.get( key ).get( key );
+//        }
+//        return null;
+//    }
 
-    public Collection<AbstractIndex<IKey>> getIndexesByIndexKey(final IIndexKey key) {
-        return indexes.get( key ).values();
-    }
+//    public Collection<AbstractIndex<IKey>> getIndexesByIndexKey(final IIndexKey key) {
+//        return indexes.get( key ).values();
+//    }
 
     public List<AbstractIndex<IKey>> getIndexes() {
         // return indexes.values().stream().flatMap(List::stream).collect(Collectors.toList());

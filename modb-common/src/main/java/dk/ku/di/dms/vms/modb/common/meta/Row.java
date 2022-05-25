@@ -1,15 +1,17 @@
-package dk.ku.di.dms.vms.modb.store.row;
+package dk.ku.di.dms.vms.modb.common.meta;
+
+import java.io.Serializable;
 
 /**
  * Defines an abstract row.
  * Later a row will be specialized for each concurrency control protocol.
  */
-public class Row {
+public class Row implements Serializable {
 
-    protected final Object[] values;
+    public final Object[] values;
 
     /**
-     * Constructor to facilitate row creation. numParams should be ignored
+     * Constructor to facilitate row creation.
      * @param values
      */
     public Row(final Object... values) {

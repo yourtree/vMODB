@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.store.index;
 
 import dk.ku.di.dms.vms.modb.store.table.Table;
 import dk.ku.di.dms.vms.modb.common.meta.DataType;
-import dk.ku.di.dms.vms.modb.store.row.Row;
+import dk.ku.di.dms.vms.modb.common.meta.Row;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -47,7 +47,7 @@ public class RangeIndex<T extends Comparable> extends AbstractIndex<T> {
 
 
     @Override
-    public boolean upsert(T key, Row row) {
+    public boolean upsertImpl(T key, Row row) {
         // TODO finish
         return true;
     }

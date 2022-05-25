@@ -19,7 +19,7 @@ import dk.ku.di.dms.vms.modb.store.common.SimpleKey;
 import dk.ku.di.dms.vms.modb.store.meta.ColumnReference;
 import dk.ku.di.dms.vms.modb.common.meta.DataType;
 import dk.ku.di.dms.vms.modb.store.meta.Schema;
-import dk.ku.di.dms.vms.modb.store.row.Row;
+import dk.ku.di.dms.vms.modb.common.meta.Row;
 import dk.ku.di.dms.vms.modb.store.table.HashIndexedTable;
 import dk.ku.di.dms.vms.modb.store.table.Table;
 import org.junit.BeforeClass;

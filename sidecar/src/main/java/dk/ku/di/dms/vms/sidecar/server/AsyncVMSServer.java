@@ -13,7 +13,6 @@ import java.nio.channels.AsynchronousServerSocketChannel;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.*;
-import java.util.logging.Logger;
 
 /**
  * Sources of inspiration:
@@ -36,8 +35,6 @@ import java.util.logging.Logger;
  *
  */
 public class AsyncVMSServer extends StoppableRunnable {
-
-    private final Logger logger = Logger.getLogger("AsyncVMSServer");
 
     private final ExecutorService executorService;
 
@@ -71,7 +68,6 @@ public class AsyncVMSServer extends StoppableRunnable {
         // if less than 3, in the occurrence of two concurrent accept, there will be no progress
         // after connect, one will be mostly lying... in any case, the advice is to always use N + 1
         this.executorService = Executors.newFixedThreadPool(3); // one thread per channel
-
 
         this.eventReadBuffer = ByteBuffer.allocateDirect( 1024 );
         this.eventWriteBuffer = ByteBuffer.allocateDirect( 1024 );

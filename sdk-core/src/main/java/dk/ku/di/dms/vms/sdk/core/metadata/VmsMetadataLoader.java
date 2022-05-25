@@ -52,9 +52,9 @@ public class VmsMetadataLoader {
 
         Map<Class<? extends IEntity<?>>,String> entityToVirtualMicroservice = mapEntitiesToVirtualMicroservice(vmsClasses);
 
-        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, vmsInternalPubSubService);
+        Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, vmsTableNames);
 
-        Map<String, VmsDataSchema> vmsDataSchema = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, vmsTableNames);
+        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, vmsDataSchemas, vmsInternalPubSubService);
 
         // necessary remaining data structures to store a vms metadata
         Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToVmsTransactionMap = new HashMap<>();
@@ -71,7 +71,7 @@ public class VmsMetadataLoader {
             SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
          */
 
-        return new VmsMetadata( vmsDataSchema, vmsEventSchema, eventToVmsTransactionMap, queueToEventMap, eventToQueueMap, loadedVmsInstances );
+        return new VmsMetadata( vmsDataSchemas, vmsEventSchema, eventToVmsTransactionMap, queueToEventMap, eventToQueueMap, loadedVmsInstances );
 
     }
 
@@ -361,7 +361,7 @@ public class VmsMetadataLoader {
     }
 
     @SuppressWarnings("unchecked")
-    protected static Map<String,Object> loadMicroserviceClasses(Set<Class<?>> vmsClasses, IVmsInternalPubSub vmsInternalPubSubService)
+    protected static Map<String,Object> loadMicroserviceClasses(Set<Class<?>> vmsClasses, Map<String, VmsDataSchema> vmsDataSchemas, IVmsInternalPubSub vmsInternalPubSubService)
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
         Map<String,Object> loadedMicroserviceInstances = new HashMap<>();
@@ -369,6 +369,9 @@ public class VmsMetadataLoader {
         for(Class<?> clazz : vmsClasses) {
 
             String clazzName = clazz.getCanonicalName();
+
+            VmsDataSchema dataSchema = vmsDataSchemas.get(clazzName);
+
             Class<?> cls = Class.forName(clazzName);
             Constructor<?>[] constructors = cls.getDeclaredConstructors();
             Constructor<?> constructor = constructors[0];
@@ -377,7 +380,7 @@ public class VmsMetadataLoader {
 
             for (Class parameterType : constructor.getParameterTypes()) {
 
-                VmsRepositoryFacade facade = new VmsRepositoryFacade(parameterType, vmsInternalPubSubService.requestQueue(), vmsInternalPubSubService.responseMap());
+                VmsRepositoryFacade facade = new VmsRepositoryFacade(parameterType, vmsInternalPubSubService.requestQueue(), vmsInternalPubSubService.responseMap(), dataSchema);
 
                 Object proxyInstance = Proxy.newProxyInstance(
                         VmsMetadataLoader.class.getClassLoader(),

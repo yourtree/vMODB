@@ -5,6 +5,8 @@ import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.interfaces.IDTO;
 import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.interfaces.IRepository;
+import dk.ku.di.dms.vms.modb.common.meta.Row;
+import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
 import dk.ku.di.dms.vms.web_common.runnable.VMSFutureTask;
 import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 
@@ -28,13 +30,20 @@ public class VmsRepositoryFacade implements IVmsRepositoryFacade, InvocationHand
 
     private final Map<Long,DataResponseEvent> responseMap;
 
+    private final VmsDataSchema schema;
+
     @SuppressWarnings("unchecked")
-    public VmsRepositoryFacade(Class<? extends IRepository<?,?>> repositoryClazz, Queue<DataRequestEvent> requestQueue, Map<Long,DataResponseEvent> responseMap){
+    public VmsRepositoryFacade(Class<? extends IRepository<?,?>> repositoryClazz,
+                               Queue<DataRequestEvent> requestQueue,
+                               // FIXME i am not sure the passing by reference will work... perhaps queue
+                               Map<Long,DataResponseEvent> responseMap,
+                               VmsDataSchema schema){
         Type[] types = ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
         this.pkClazz = (Class<?>) types[0];
         this.entityClazz = (Class<? extends IEntity<?>>) types[1];
         this.requestQueue = requestQueue;
         this.responseMap = responseMap;
+        this.schema = schema;
     }
 
     @Override
@@ -51,6 +60,21 @@ public class VmsRepositoryFacade implements IVmsRepositoryFacade, InvocationHand
             case "insert": {
                 // TODO receive a plan tree from the planner
                 //  use entityClazz to retrieve the schema and retrieve the values via method handles
+
+                // Row row
+                Object[] values = new Object[schema.columnNames.length];
+
+                // TODO handle nested object foreign key...
+
+                for(String columnName : schema.columnNames){
+
+                }
+
+
+                // build the row to send to dbms
+
+
+
                 break;
             }
             case "insertAll": {

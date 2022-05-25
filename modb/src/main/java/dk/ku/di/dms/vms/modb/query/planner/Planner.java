@@ -42,7 +42,7 @@ public final class Planner {
 
     public Planner(){}
 
-    public PlanNode planBulkInsert(final Table table, List<? extends IEntity<?>> entities){
+    public PlanNode planBulkInsert(Table table, List<? extends IEntity<?>> entities){
 
         // get the indexes to check for foreign key first
         Map<Table, int[]> foreignKeysGroupedByTable = table.getSchema().getForeignKeysGroupedByTable();
@@ -70,7 +70,7 @@ public final class Planner {
     }
 
     // TODO we can also have the option: AUTO, meaning the planner will look for the possibility of building a bushy tree
-    public PlanNode plan(final QueryTree queryTree) {
+    public PlanNode plan(QueryTree queryTree) {
         return this.plan( queryTree, QueryTreeTypeEnum.LEFT_DEEP );
     }
 
@@ -94,7 +94,7 @@ public final class Planner {
     }
 
     private Map<Table,List<WherePredicate>> getWherePredicatesGroupedByTableNotInAnyJoinOrAggregate(
-            final QueryTree queryTree, final Map<String,Integer> tablesInvolvedInJoinOrAggregate ){
+            QueryTree queryTree, Map<String,Integer> tablesInvolvedInJoinOrAggregate ){
 
         // TODO optimization. avoid stream by reusing the table list in query tree. simply maintain a bool (in_join?)
         //  other approach is delivering these maps to the planner from the analyzer...
@@ -110,7 +110,7 @@ public final class Planner {
     }
 
     private Map<Table, List<WherePredicate>> getFiltersForTablesInvolvedInJoin(
-            final QueryTree queryTree, Map<String,Integer> tablesInvolvedInJoin) {
+            QueryTree queryTree, Map<String,Integer> tablesInvolvedInJoin) {
         return queryTree
                         .wherePredicates.stream()
                         .filter(clause -> tablesInvolvedInJoin
@@ -121,7 +121,7 @@ public final class Planner {
                         );
     }
 
-    private Map<Table,List<AbstractJoin>> buildJoinOperators(final QueryTree queryTree){
+    private Map<Table,List<AbstractJoin>> buildJoinOperators(QueryTree queryTree){
 
         final Map<Table,List<AbstractJoin>> joinsPerTable = new HashMap<>();
 
@@ -211,7 +211,7 @@ public final class Planner {
      * @param join Associated join
      * @param joinsPerTable Joins per table mapped so far
      */
-    private void addJoinToRespectiveTableInOrderOfJoinOperation(final Table table, final AbstractJoin join, final Map<Table,List<AbstractJoin>> joinsPerTable ){
+    private void addJoinToRespectiveTableInOrderOfJoinOperation(Table table, AbstractJoin join, Map<Table,List<AbstractJoin>> joinsPerTable ){
 
         List<AbstractJoin> joins = joinsPerTable.getOrDefault( table, new ArrayList<>() );
 
@@ -252,7 +252,7 @@ public final class Planner {
      * @param joinsPerTable Joins per table mapped so far
      * @param filtersForJoinGroupedByTable Filters ought to be applied to join operations grouped by table
      */
-    private void applyFiltersToJoins(final Map<Table,List<AbstractJoin>> joinsPerTable, final Map<Table, List<WherePredicate>> filtersForJoinGroupedByTable) {
+    private void applyFiltersToJoins(Map<Table,List<AbstractJoin>> joinsPerTable, Map<Table, List<WherePredicate>> filtersForJoinGroupedByTable) {
 
         Table currTable;
         // TODO Merging the filters with the join
@@ -410,7 +410,7 @@ public final class Planner {
         return null;
     }
 
-    private PlanNode planAggregates(List<IAggregate> aggregates, final boolean embedScan ){
+    private PlanNode planAggregates(List<IAggregate> aggregates, boolean embedScan ){
         // TODO finish TODO consider filters in case embedded scan
         if(embedScan){
 
@@ -464,7 +464,7 @@ public final class Planner {
         return null;
     }
 
-    public PlanNode plan(final QueryTree queryTree, final QueryTreeTypeEnum treeType) {
+    public PlanNode plan(QueryTree queryTree, QueryTreeTypeEnum treeType) {
 
         /*
          * Processing joins
@@ -553,7 +553,7 @@ public final class Planner {
         return projection;
     }
 
-    private PlanNode buildProjectionOperator(final QueryTree queryTree){
+    private PlanNode buildProjectionOperator(QueryTree queryTree){
 
         PlanNode projectionPlanNode = null;
 
@@ -571,7 +571,7 @@ public final class Planner {
         return projectionPlanNode;
     }
 
-    private FilterInfo buildFilterInfo( final List<WherePredicate> wherePredicates ) {
+    private FilterInfo buildFilterInfo( List<WherePredicate> wherePredicates ) {
 
         final int size = wherePredicates.size();
         IFilter<?>[] filters = new IFilter<?>[size];
@@ -597,13 +597,11 @@ public final class Planner {
 
     }
 
-
-
     /**
      *  Here we are relying on the fact that the developer has declared the columns
      *  in the where clause matching the actual index column order definition
      */
-    private Optional<AbstractIndex<IKey>> findOptimalIndex(final Table table, final int[] filterColumns){
+    private Optional<AbstractIndex<IKey>> findOptimalIndex(Table table, int[] filterColumns){
 
         // all combinations... TODO this can be built in the analyzer
         final List<int[]> combinations = getAllPossibleColumnCombinations(filterColumns);
@@ -670,14 +668,14 @@ public final class Planner {
 
     }
 
-    private List<int[]> getCombinationsFor2SizeColumnList( final int[] filterColumns ){
+    private List<int[]> getCombinationsFor2SizeColumnList( int[] filterColumns ){
         int[] arr0 = { filterColumns[0] };
         int[] arr1 = { filterColumns[1] };
         int[] arr2 = { filterColumns[0], filterColumns[1] };
         return Arrays.asList( arr0, arr1, arr2 );
     }
 
-    private List<int[]> getCombinationsFor3SizeColumnList( final int[] filterColumns ){
+    private List<int[]> getCombinationsFor3SizeColumnList( int[] filterColumns ){
         int[] arr0 = { filterColumns[0] };
         int[] arr1 = { filterColumns[1] };
         int[] arr2 = { filterColumns[2] };
@@ -690,7 +688,7 @@ public final class Planner {
 
     // TODO later get metadata to know whether such a column has an index, so it can be pruned from this search
     // TODO a column can appear more than once. make it sure it appears only once
-    public List<int[]> getAllPossibleColumnCombinations( final int[] filterColumns ){
+    public List<int[]> getAllPossibleColumnCombinations( int[] filterColumns ){
 
         // in case only one condition for join and single filter
         if(filterColumns.length == 1) return Collections.singletonList(filterColumns);
