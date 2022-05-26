@@ -1,13 +1,32 @@
 package dk.ku.di.dms.vms.coordinator.server;
 
+import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
+
 import java.io.IOException;
 import java.nio.channels.AsynchronousChannelGroup;
+import java.nio.channels.AsynchronousServerSocketChannel;
+import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class Server {
+
+    private AsynchronousServerSocketChannel serverSocket;
+
+    private AsynchronousChannelGroup group;
+
+    // general tasks, like sending info to vmss and other servers
+    private ExecutorService taskExecutor;
+
+    // even though we can start with a known number of servers, their payload may have changed after a crash
+    private Map<Integer, ServerIdentifier> servers;
+
+    // the identification of this server
+    private ServerIdentifier me;
+
+    // can be == me
+    private AtomicReference<ServerIdentifier> leader;
 
     // to encapsulate operations in the memory-mapped file
     // private MetadataAPI metadataAPI;
@@ -23,8 +42,10 @@ public class Server {
     // private ScheduledExecutorService scheduledLeaderElectionExecutor = Executors.newSingleThreadScheduledExecutor();
 
     public Server() {
-        this.queue = new LinkedBlockingDeque<>(1);
+        this.queue = new ArrayBlockingQueue<>(1);
     }
+
+
 
     private static class BatchHandler implements Runnable {
 

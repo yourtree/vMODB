@@ -25,8 +25,8 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * necessary to complete a leader election. Only after this thread finishes,
  * a server can act as a leader or follower.
  *
- * define leader based on highest offset and timestamp
- * while has not received all votes and election timeout has not timed out, continue
+ * Define leader based on highest offset and timestamp
+ * while election is not defined and election timeout has not timed out, continue
  *
  * We assume the nodes are fixed. Later we revisit this choice.
  * TODO Cluster membership management (e.g., adding nodes, removing nodes, replacing nodes)
@@ -161,95 +161,74 @@ public class ElectionManager extends StoppableRunnable {
 
                     logger.info("Message read. I am "+me.host+":"+me.port+" identifier is "+messageIdentifier);
 
-                    switch(messageIdentifier){
+                    switch (messageIdentifier) {
+                        case VOTE_RESPONSE -> {
 
-                        case VOTE_RESPONSE : {
-
-                            logger.info("Vote response received. I am "+me.host+":"+me.port);
+                            logger.info("Vote response received. I am " + me.host + ":" + me.port);
 
                             VoteResponse.VoteResponsePayload payload = VoteResponse.read(readBuffer);
-                            int serverId = Objects.hash( payload.host, payload.port );
+                            int serverId = Objects.hash(payload.host, payload.port);
 
                             // it is a yes? add to responses
-                            if( payload.response && !responses.containsKey( serverId ) ) { // avoid duplicate vote
-                                responses.put( serverId, payload );
+                            if (payload.response && !responses.containsKey(serverId)) { // avoid duplicate vote
+                                responses.put(serverId, payload);
 
                                 // do I have the majority of votes?
                                 // !voted prevent two servers from winning the election... but does not prevent
-                                if (!voted && responses.size() + 1 > (N /2)){
+                                if (!voted && responses.size() + 1 > (N / 2)) {
                                     state.set(LEADER);
-                                    leader.set( me );
-                                    logger.info("I am leader. I am "+me.host+":"+me.port);
+                                    leader.set(me);
+                                    logger.info("I am leader. I am " + me.host + ":" + me.port);
                                 }
 
                             }
-
-                            break;
                         }
+                        case VOTE_REQUEST -> {
 
-                        case VOTE_REQUEST : {
-
-                            logger.info("Vote request received. I am "+me.host+":"+me.port);
-
-                            //ByteBuffer writeBuffer = ByteBuffer.allocate(128);
+                            logger.info("Vote request received. I am " + me.host + ":" + me.port);
 
                             ServerIdentifier requestVote = VoteRequest.read(readBuffer);
 
-                            if(voted){
-                                //VoteResponse.write(writeBuffer, me, false);
-                                executorService.submit( new WriteTask( VOTE_RESPONSE, me, requestVote, null, false ) );
-                                logger.info("Vote not granted, already voted. I am "+me.host+":"+me.port);
+                            if (voted) {
+                                executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, null, false));
+                                logger.info("Vote not granted, already voted. I am " + me.host + ":" + me.port);
                             } else {
 
                                 if (requestVote.lastOffset > me.lastOffset) {
                                     // grant vote
-                                    //VoteResponse.write(writeBuffer, me, true);
-                                    executorService.submit( new WriteTask( VOTE_RESPONSE, me, requestVote, null, true ) ).get();
+                                    executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, null, true)).get();
                                     voted = true;
-                                    logger.info("Vote granted. I am "+me.host+":"+me.port);
-
+                                    logger.info("Vote granted. I am " + me.host + ":" + me.port);
                                 } else if (requestVote.lastOffset < me.lastOffset) {
-                                    //VoteResponse.write(writeBuffer, me, false);
-                                    executorService.submit( new WriteTask( VOTE_RESPONSE, me, requestVote, null, false ) );
-                                    logger.info("Vote not granted. I am "+me.host+":"+me.port);
+                                    executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, null, false));
+                                    logger.info("Vote not granted. I am " + me.host + ":" + me.port);
                                 } else { // equal
 
                                     if (requestVote.timestamp > me.timestamp) {
                                         // grant vote
-                                        // VoteResponse.write(writeBuffer, me, true);
-                                        executorService.submit( new WriteTask( VOTE_RESPONSE, me, requestVote, null, true ) ).get();
+                                        executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, null, true)).get();
                                         voted = true;
-                                        logger.info("Vote granted. I am "+me.host+":"+me.port);
+                                        logger.info("Vote granted. I am " + me.host + ":" + me.port);
                                     } else {
-                                        // VoteResponse.write(writeBuffer, me, false);
-                                        executorService.submit( new WriteTask( VOTE_RESPONSE, me, requestVote, null, false ) ).get();
-                                        logger.info("Vote not granted. I am "+me.host+":"+me.port);
+                                        executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, null, false)).get();
+                                        logger.info("Vote not granted. I am " + me.host + ":" + me.port);
                                     }
 
                                 }
 
                             }
-                            break;
                         }
+                        case LEADER_REQUEST -> {
 
-                        case LEADER_REQUEST : {
-
-                            logger.info("Leader request received. I am "+me.host+":"+me.port);
+                            logger.info("Leader request received. I am " + me.host + ":" + me.port);
 
                             LeaderRequest.LeaderRequestPayload leaderRequest = LeaderRequest.read(readBuffer);
 
-                            leader.set( servers.get(leaderRequest.hashCode()) );
+                            leader.set(servers.get(leaderRequest.hashCode()));
 
-                            this.state.set( FOLLOWER );
-
-                            //this.stop();
-                            break;
+                            this.state.set(FOLLOWER);
                         }
-
                     }
-
-                    // have we received all responses? if yes, check if we have majority, if so we are leader and then send message to all stating we are leader
-                    // this step some servers may also have failed... so they need to enter as followers and so on...
 
                     channel.close();
 
@@ -313,12 +292,6 @@ public class ElectionManager extends StoppableRunnable {
                     VoteResponse.write( buffer, me, (Boolean) args[0]);
                 }
 
-//                else if ( messageType == LEADER_INFO ){
-//                    LeaderInfo.write(buffer, server);
-//                } else if (messageType == LEADER_RESPONSE ){
-//                    LeaderResponse.write(buffer, server);
-//                }
-
                 /*
                  * https://www.baeldung.com/java-bytebuffer
                  *    Capacity: the maximum number of data elements the buffer can hold
@@ -328,11 +301,9 @@ public class ElectionManager extends StoppableRunnable {
                  */
                 Integer write = channel.write(ByteBuffer.wrap( buffer.array() )).get();
 
-                // buffer.clear();
-
                 // number of bytes written
                 if (write == -1) {
-                    logger.info("Error on write (-1) . I am "+ me.host+":"+me.port+" message type is "+messageType);
+                    logger.info("Error on write (-1). I am "+ me.host+":"+me.port+" message type is "+messageType);
                     return false;
                 }
 
@@ -345,7 +316,7 @@ public class ElectionManager extends StoppableRunnable {
                 return true;
 
             } catch(Exception ignored){
-                logger.info("Error on write . I am "+ me.host+":"+me.port+" message type is "+messageType);
+                logger.info("Error on write. I am "+ me.host+":"+me.port+" message type is "+messageType);
                 return false;
             }
 
@@ -384,7 +355,7 @@ public class ElectionManager extends StoppableRunnable {
             state_ = state.get();
         }
 
-        logger.info("Event loop has finished. I am "+me.host+":"+me.port);
+        logger.info("Event loop has finished. I am "+me.host+":"+me.port+" and my state is "+state_);
 
         // now check whether I have enough votes or whether I should send a response vote to some server
         if(state_ == LEADER){
@@ -400,25 +371,17 @@ public class ElectionManager extends StoppableRunnable {
 
         messageHandler.stop();
 
-        logger.info("Event loop has finished. I am "+me.host+":"+me.port+" and my state is "+state_);
-
     }
 
-//    private Map<ServerIdentifier, Future<Boolean>> sendVoteRequests(AsynchronousChannelGroup group) {
-//        Map<ServerIdentifier, Future<Boolean>> mapOfFutureResponses = new HashMap<>();
-//        for(ServerIdentifier server : servers){
-//            mapOfFutureResponses.put(server, taskExecutor.submit( new WriteTask( VOTE_REQUEST, me, server, group ) ) );
-//        }
-//        return mapOfFutureResponses;
-//    }
-
     private void sendVoteRequests(AsynchronousChannelGroup group) {
+        logger.info("Sending vote requests. I am "+ me.host+":"+me.port);
         for(ServerIdentifier server : servers.values()){
              taskExecutor.submit( new WriteTask( VOTE_REQUEST, me, server, group ) );
         }
     }
 
     private void sendLeaderRequests(AsynchronousChannelGroup group){
+        logger.info("Sending leader requests. I am "+ me.host+":"+me.port);
         for(ServerIdentifier server : servers.values()){
             taskExecutor.submit( new WriteTask( LEADER_REQUEST, me, server, group ) );
         }
