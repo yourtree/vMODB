@@ -26,9 +26,6 @@ public class LeaderRequest {
 
     public static LeaderRequestPayload read(ByteBuffer buffer){
 
-        // type
-        buffer.get(); // to increment
-
         int port = buffer.getInt();
 
         int size = buffer.getInt();

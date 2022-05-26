@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.coordinator.socket;
 
+import static dk.ku.di.dms.vms.coordinator.election.Constants.LEADER_REQUEST;
 import static org.junit.Assert.assertTrue;
 
 import dk.ku.di.dms.vms.coordinator.election.ElectionManager;
@@ -8,6 +9,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.util.HashMap;
 import java.util.Map;
@@ -28,7 +30,23 @@ public class AppTest
     protected final Logger logger = Logger.getLogger(this.getClass().getName());
 
     @Test
-    public void shouldAnswerWithTrue() throws IOException, InterruptedException {
+    public void testBufferRead(){
+
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+
+        byte[] hostBytes = "localhost".getBytes();
+
+        buffer.put(LEADER_REQUEST);
+        buffer.putInt( 80 );
+        buffer.putInt( hostBytes.length );
+        buffer.put( hostBytes );
+
+        assert 1 == 1;
+
+    }
+
+    @Test
+    public void leaderElectionTest() throws IOException, InterruptedException {
 
         AsynchronousServerSocketChannel serverSocket1 = AsynchronousServerSocketChannel.open();
         serverSocket1.bind( new InetSocketAddress(80) );
@@ -43,26 +61,28 @@ public class AppTest
         AtomicReference<ServerIdentifier> leader = new AtomicReference<>();
         // leader.set(null);
 
-        Map<Integer,ServerIdentifier> servers = new HashMap<>();
-        servers.put( serverEm1.hashCode(), serverEm1 );
-        servers.put( serverEm2.hashCode(), serverEm2 );
-        servers.put( serverEm3.hashCode(), serverEm3 );
+        Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
+        servers1.put( serverEm2.hashCode(), serverEm2 );
+        servers1.put( serverEm3.hashCode(), serverEm3 );
+
+        Map<Integer,ServerIdentifier> servers2 = new HashMap<>();
+        servers2.put( serverEm1.hashCode(), serverEm1 );
+        servers2.put( serverEm3.hashCode(), serverEm3 );
 
         BlockingQueue<Byte> roundResult1 = new ArrayBlockingQueue<>(1);
-        BlockingQueue<Byte> roundResult2 = new ArrayBlockingQueue<>(2);
+        BlockingQueue<Byte> roundResult2 = new ArrayBlockingQueue<>(1);
 
-        ElectionManager em1 = new ElectionManager(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, leader, servers, roundResult1 );
-        ElectionManager em2 = new ElectionManager(serverSocket2, null, Executors.newFixedThreadPool(2), serverEm1, leader, servers, roundResult2 );
+        ElectionManager em1 = new ElectionManager(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, leader, servers1, roundResult1 );
+        ElectionManager em2 = new ElectionManager(serverSocket2, null, Executors.newFixedThreadPool(2), serverEm2, leader, servers2, roundResult2 );
 
         new Thread( em1 ).start();
         new Thread( em2 ).start();
 
-        roundResult1.take();
-        roundResult2.take();
+        logger.info( "result 1: " + roundResult1.take() );
+        logger.info( "result 2: " + roundResult2.take() );
 
         assert(true);
 
     }
-
 
 }

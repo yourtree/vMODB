@@ -41,7 +41,7 @@ public class Constants {
 //    public static final byte LEADER = 10;
 //    public static final byte FOLLOWER = 11;
 
-    public static final byte FINISHED = 12;
-    public static final byte NO_RESULT = 12;
+    public static final byte NO_RESULT = 10;
+    public static final byte FINISHED = 11;
 
 }

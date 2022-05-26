@@ -58,7 +58,7 @@ public class ElectionManager extends StoppableRunnable {
     // a bounded time in which a leader election must occur, otherwise it should restart. in milliseconds
     // leaderElectionTimeWindow
     // safety, liveness????
-    private final long timeout = 10000; // 10 seconds
+    private final long timeout = 100000; // ? seconds
 
     // queue serves as a channel to respond the calling thread
     private final Queue<Byte> signal;
@@ -85,8 +85,12 @@ public class ElectionManager extends StoppableRunnable {
      * I cannot set up the timeout here because I may spawn more than a thread to
      * handle messages. The timeout must be external to this thread, it is, the
      * thread that "owns" this one.
+     *
+     * Single thread, so no need to deal with data races
      */
-    private static class ElectionMessageHandler extends StoppableRunnable {
+    private static class MessageHandler extends StoppableRunnable {
+
+        private final ExecutorService executorService;
 
         private final AsynchronousServerSocketChannel serverSocket;
 
@@ -96,9 +100,9 @@ public class ElectionManager extends StoppableRunnable {
 
         private final AtomicReference<ServerIdentifier> leader;
 
-        private final ByteBuffer readBuffer;
+        //private final ByteBuffer readBuffer;
 
-        private final ByteBuffer writeBuffer;
+        //private final ByteBuffer writeBuffer;
 
         private final Map<Integer, VoteResponse.VoteResponsePayload> responses;
 
@@ -109,12 +113,14 @@ public class ElectionManager extends StoppableRunnable {
         // number of servers
         private final int N;
 
-        public ElectionMessageHandler(AsynchronousServerSocketChannel serverSocket,
-                                      ServerIdentifier me,
-                                      AtomicReference<ServerIdentifier> leader,
-                                      Map<Integer, ServerIdentifier> servers,
-                                      AtomicInteger state,
-                                      int N) {
+        public MessageHandler(ExecutorService executorService,
+                                AsynchronousServerSocketChannel serverSocket,
+                              ServerIdentifier me,
+                              AtomicReference<ServerIdentifier> leader,
+                              Map<Integer, ServerIdentifier> servers,
+                              AtomicInteger state,
+                              int N) {
+            this.executorService = executorService;
             this.serverSocket = serverSocket;
             this.me = me;
             this.servers = servers;
@@ -125,8 +131,8 @@ public class ElectionManager extends StoppableRunnable {
             this.N = N;
 
             // FIXME -- maximum size of a leader election message....
-            this.readBuffer = ByteBuffer.allocateDirect(128);
-            this.writeBuffer = ByteBuffer.allocateDirect(128);
+            //this.readBuffer = ByteBuffer.allocateDirect(128);
+            //this.writeBuffer = ByteBuffer.allocateDirect(128);
         }
 
         @Override
@@ -134,23 +140,26 @@ public class ElectionManager extends StoppableRunnable {
 
             AsynchronousSocketChannel channel;
 
-            while(!isStopped()){
+            logger.info("Initializing message handler. I am "+me.host+":"+me.port);
 
-                logger.info("Initializing message handler. I am "+me.host+":"+me.port);
+            while(!isStopped()){
 
                 try {
 
                     channel = serverSocket.accept().get();
-
                     channel.setOption( TCP_NODELAY, true ); // true disable the nagle's algorithm. not useful to have coalescence of messages in election'
                     channel.setOption( SO_KEEPALIVE, false ); // no need to keep alive now
 
+                    ByteBuffer readBuffer = ByteBuffer.allocate(128);
+
                     channel.read(readBuffer).get();
 
-                    byte messageIdentifier = readBuffer.get();
+                    byte messageIdentifier = readBuffer.get(0);
 
                     // message identifier
-                    readBuffer.position(0);
+                    readBuffer.position(1);
+
+                    logger.info("Message read. I am "+me.host+":"+me.port+" identifier is "+messageIdentifier);
 
                     switch(messageIdentifier){
 
@@ -162,17 +171,18 @@ public class ElectionManager extends StoppableRunnable {
                             int serverId = Objects.hash( payload.host, payload.port );
 
                             // it is a yes? add to responses
-                            if( !responses.containsKey( serverId ) && payload.response ) {
+                            if( payload.response && !responses.containsKey( serverId ) ) { // avoid duplicate vote
                                 responses.put( serverId, payload );
-                            }
 
-                            // do I have the majority of votes?
-                            if (responses.size() + 1 > (N /2)){
-                                state.set(LEADER);
-                                leader.set( me );
-                            }
+                                // do I have the majority of votes?
+                                // !voted prevent two servers from winning the election... but does not prevent
+                                if (!voted && responses.size() + 1 > (N /2)){
+                                    state.set(LEADER);
+                                    leader.set( me );
+                                    logger.info("I am leader. I am "+me.host+":"+me.port);
+                                }
 
-                            readBuffer.flip();
+                            }
 
                             break;
                         }
@@ -181,40 +191,46 @@ public class ElectionManager extends StoppableRunnable {
 
                             logger.info("Vote request received. I am "+me.host+":"+me.port);
 
+                            //ByteBuffer writeBuffer = ByteBuffer.allocate(128);
+
+                            ServerIdentifier requestVote = VoteRequest.read(readBuffer);
+
                             if(voted){
-                                VoteResponse.write(writeBuffer, me, false);
+                                //VoteResponse.write(writeBuffer, me, false);
+                                executorService.submit( new WriteTask( VOTE_RESPONSE, me, requestVote, null, false ) );
+                                logger.info("Vote not granted, already voted. I am "+me.host+":"+me.port);
                             } else {
 
-                                ServerIdentifier requestVote = VoteRequest.read(readBuffer);
-
                                 if (requestVote.lastOffset > me.lastOffset) {
-                                    VoteResponse.write(writeBuffer, me, true);
+                                    // grant vote
+                                    //VoteResponse.write(writeBuffer, me, true);
+                                    executorService.submit( new WriteTask( VOTE_RESPONSE, me, requestVote, null, true ) ).get();
                                     voted = true;
+                                    logger.info("Vote granted. I am "+me.host+":"+me.port);
+
                                 } else if (requestVote.lastOffset < me.lastOffset) {
-                                    VoteResponse.write(writeBuffer, me, false);
+                                    //VoteResponse.write(writeBuffer, me, false);
+                                    executorService.submit( new WriteTask( VOTE_RESPONSE, me, requestVote, null, false ) );
+                                    logger.info("Vote not granted. I am "+me.host+":"+me.port);
                                 } else { // equal
 
                                     if (requestVote.timestamp > me.timestamp) {
-                                        VoteResponse.write(writeBuffer, me, true);
+                                        // grant vote
+                                        // VoteResponse.write(writeBuffer, me, true);
+                                        executorService.submit( new WriteTask( VOTE_RESPONSE, me, requestVote, null, true ) ).get();
                                         voted = true;
+                                        logger.info("Vote granted. I am "+me.host+":"+me.port);
                                     } else {
-                                        VoteResponse.write(writeBuffer, me, false);
+                                        // VoteResponse.write(writeBuffer, me, false);
+                                        executorService.submit( new WriteTask( VOTE_RESPONSE, me, requestVote, null, false ) ).get();
+                                        logger.info("Vote not granted. I am "+me.host+":"+me.port);
                                     }
 
                                 }
 
-                                // even though I voted, cannot go to follower yet
-
-                                readBuffer.flip();
-
                             }
-
-                            channel.write(writeBuffer).get();
-                            writeBuffer.flip();
-
                             break;
                         }
-
 
                         case LEADER_REQUEST : {
 
@@ -237,9 +253,13 @@ public class ElectionManager extends StoppableRunnable {
 
                     channel.close();
 
-                } catch (InterruptedException | ExecutionException | IOException ignored) {}
+                } catch (InterruptedException | ExecutionException | IOException ignored) {
+                    logger.info("Error on reading message....");
+                }
 
             }
+
+            logger.info("Message handler is finished. I am "+me.host+":"+me.port);
 
         }
 
@@ -250,41 +270,47 @@ public class ElectionManager extends StoppableRunnable {
         private final Logger logger = Logger.getLogger(this.getClass().getName());
 
         private final byte messageType;
-        private final ServerIdentifier server; // me or the leader, depending on the call
-        private final ServerIdentifier other;
+        private final ServerIdentifier me;
+        private final ServerIdentifier connectTo;
         private final AsynchronousChannelGroup group;
 
-        public WriteTask(byte messageType, ServerIdentifier server, ServerIdentifier other, AsynchronousChannelGroup group){
+        private final Object[] args;
+
+        public WriteTask(byte messageType, ServerIdentifier me, ServerIdentifier connectTo, AsynchronousChannelGroup group, Object... args){
             this.messageType = messageType;
-            this.server = server;
-            this.other = other;
+            this.me = me;
+            this.connectTo = connectTo;
             this.group = group;
+            this.args = args;
         }
 
         @Override
         public Boolean call() {
 
-            ByteBuffer buffer = ByteBuffer.allocateDirect(128);
+            ByteBuffer buffer = ByteBuffer.allocate(128);
 
             try {
 
-                InetSocketAddress address = new InetSocketAddress(other.host, other.port);
+                InetSocketAddress address = new InetSocketAddress(connectTo.host, connectTo.port);
                 AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
-                channel.setOption( TCP_NODELAY, true ); // true disable the nagle's algorithm. not useful to have coalescence of messages in election'
+                channel.setOption( TCP_NODELAY, true ); // true disable the nagle's algorithm. not useful to have coalescence of messages in election
                 channel.setOption( SO_KEEPALIVE, false ); // no need to keep alive now
 
                 try {
                     channel.connect(address).get();
                 } catch (InterruptedException | ExecutionException e) {
                     // cannot connect to host
+                    logger.info("Error connecting to host. I am "+ me.host+":"+me.port+" and the target is "+ connectTo.host+":"+ connectTo.port);
                     return false;
                 }
 
                 // now send the request
                 if(messageType == VOTE_REQUEST) {
-                    VoteRequest.write(buffer, server);
+                    VoteRequest.write(buffer, me);
                 } else if( messageType == LEADER_REQUEST ){
-                    LeaderRequest.write(buffer, server);
+                    LeaderRequest.write(buffer, me);
+                } else if (messageType == VOTE_RESPONSE){
+                    VoteResponse.write( buffer, me, (Boolean) args[0]);
                 }
 
 //                else if ( messageType == LEADER_INFO ){
@@ -293,16 +319,35 @@ public class ElectionManager extends StoppableRunnable {
 //                    LeaderResponse.write(buffer, server);
 //                }
 
-                Integer write = channel.write(buffer).get();
+                /*
+                 * https://www.baeldung.com/java-bytebuffer
+                 *    Capacity: the maximum number of data elements the buffer can hold
+                 *    Limit: an index to stop read or write
+                 *    Position: the current index to read or write
+                 *    Mark: a remembered position
+                 */
+                Integer write = channel.write(ByteBuffer.wrap( buffer.array() )).get();
+
+                // buffer.clear();
 
                 // number of bytes written
                 if (write == -1) {
+                    logger.info("Error on write (-1) . I am "+ me.host+":"+me.port+" message type is "+messageType);
                     return false;
                 }
 
-            } catch(Exception ignored){ return false; }
+                logger.info("Write performed. I am "+ me.host+":"+me.port+" message type is "+messageType+" and return was "+write);
 
-            return true;
+                if (channel.isOpen()) {
+                    channel.close();
+                }
+
+                return true;
+
+            } catch(Exception ignored){
+                logger.info("Error on write . I am "+ me.host+":"+me.port+" message type is "+messageType);
+                return false;
+            }
 
         }
 
@@ -315,17 +360,18 @@ public class ElectionManager extends StoppableRunnable {
 
         this.state.set(CANDIDATE);
 
-        // works as a term. updated on each round. yes, some servers may always be higher than others
-        me.timestamp = System.currentTimeMillis();
+        // works as a tiebreaker. updated on each round. yes, some servers may always be higher than others
+        // me.timestamp = System.currentTimeMillis() + new Random().nextInt(10);
+        me.timestamp = new Random().nextLong(300);
 
         // TODO define how many. One is enough? Another design is making this a completion handler is initiating the reads on the loop below...
-        taskExecutor.submit( new ElectionMessageHandler(
-                this.serverSocket, this.me, this.leader, servers, this.state, servers.size() ) );
+        MessageHandler messageHandler = new MessageHandler( this.taskExecutor, this.serverSocket, this.me, this.leader, servers, this.state, servers.size() );
+        taskExecutor.submit( messageHandler );
 
         logger.info("Event listener set. I am "+me.host+":"+me.port);
 
         //Map<ServerIdentifier, Future<Boolean>> mapOfFutureResponses =
-                sendVoteRequests(group);
+        sendVoteRequests(group);
 
         int state_ = state.get();
 
@@ -342,7 +388,6 @@ public class ElectionManager extends StoppableRunnable {
 
         // now check whether I have enough votes or whether I should send a response vote to some server
         if(state_ == LEADER){
-            // leader = me;
             sendLeaderRequests(group);
             signal.add(Constants.FINISHED);
         } else if (state_ == FOLLOWER){
@@ -352,6 +397,8 @@ public class ElectionManager extends StoppableRunnable {
             // nothing has been defined... we should try another round
             signal.add(Constants.NO_RESULT);
         }
+
+        messageHandler.stop();
 
         logger.info("Event loop has finished. I am "+me.host+":"+me.port+" and my state is "+state_);
 
