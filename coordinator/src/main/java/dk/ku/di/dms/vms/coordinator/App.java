@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.coordinator;
 
-import dk.ku.di.dms.vms.coordinator.election.ElectionManager;
+import dk.ku.di.dms.vms.coordinator.election.ElectionWorker;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 
@@ -81,7 +81,7 @@ public class App
 
         // TODO 4 - receive transactions and verify whether they can be processed given the global application view (3)
 
-        ElectionManager electionManager;
+        ElectionWorker electionManager;
 
     }
 }

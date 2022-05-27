@@ -1,6 +1,8 @@
 package dk.ku.di.dms.vms.coordinator.election;
 
-import dk.ku.di.dms.vms.coordinator.election.schema.*;
+import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
+import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
+import dk.ku.di.dms.vms.coordinator.election.schema.VoteResponse;
 import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
@@ -10,9 +12,13 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.CompletionHandler;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 
@@ -31,7 +37,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * We assume the nodes are fixed. Later we revisit this choice.
  * TODO Cluster membership management (e.g., adding nodes, removing nodes, replacing nodes)
  */
-public class ElectionManager extends StoppableRunnable {
+public class ElectionWorkerB extends StoppableRunnable {
 
     private final AtomicInteger state;
     private static final int NEW          = 0;
@@ -43,7 +49,7 @@ public class ElectionManager extends StoppableRunnable {
 
     private final AsynchronousChannelGroup group;
 
-    // general tasks, like sending info to vmss and other servers
+    // general tasks, like sending info to VMSs and other servers
     private final ExecutorService taskExecutor;
 
     // even though we can start with a known number of servers, their payload may have changed after a crash
@@ -58,12 +64,12 @@ public class ElectionManager extends StoppableRunnable {
     // a bounded time in which a leader election must occur, otherwise it should restart. in milliseconds
     // leaderElectionTimeWindow
     // safety, liveness????
-    private final long timeout = 100000; // ? seconds
+    private final AtomicLong timeout;
 
     // queue serves as a channel to respond the calling thread
     private final Queue<Byte> signal;
 
-    public ElectionManager(AsynchronousServerSocketChannel serverSocket,
+    public ElectionWorkerB(AsynchronousServerSocketChannel serverSocket,
                            AsynchronousChannelGroup group,
                            ExecutorService taskExecutor,
                            ServerIdentifier me,
@@ -78,6 +84,51 @@ public class ElectionManager extends StoppableRunnable {
         this.leader = leader;
         this.servers = servers;
         this.signal = signal;
+        this.timeout = new AtomicLong(60000); // 1 minute
+    }
+
+    public ElectionWorkerB(AsynchronousServerSocketChannel serverSocket,
+                           AsynchronousChannelGroup group,
+                           ExecutorService taskExecutor,
+                           ServerIdentifier me,
+                           AtomicReference<ServerIdentifier> leader,
+                           Map<Integer, ServerIdentifier> servers,
+                           Queue<Byte> signal,
+                           long timeout){
+        this.state = new AtomicInteger(NEW);
+        this.serverSocket = serverSocket;
+        this.group = group;
+        this.taskExecutor = taskExecutor;
+        this.me = me;
+        this.leader = leader;
+        this.servers = servers;
+        this.signal = signal;
+        this.timeout = new AtomicLong(timeout);
+    }
+
+    private static class MessageCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, Void> {
+
+
+        @Override
+        public void completed(AsynchronousSocketChannel channel, Void attachment) {
+
+            try {
+                channel.setOption(TCP_NODELAY, true); // true disable the nagle's algorithm. not useful to have coalescence of messages in election'
+                channel.setOption(SO_KEEPALIVE, false); // no need to keep alive now
+
+                ByteBuffer readBuffer = ByteBuffer.allocate(128);
+
+                channel.read(readBuffer).get();
+            } catch(Exception e){
+
+            }
+
+        }
+
+        @Override
+        public void failed(Throwable exc, Void attachment) {
+
+        }
     }
 
     /**
@@ -86,7 +137,7 @@ public class ElectionManager extends StoppableRunnable {
      * handle messages. The timeout must be external to this thread, it is, the
      * thread that "owns" this one.
      *
-     * Single thread, so no need to deal with data races
+     * Single thread, so no need to deal with data races.
      */
     private static class MessageHandler extends StoppableRunnable {
 
@@ -94,15 +145,13 @@ public class ElectionManager extends StoppableRunnable {
 
         private final AsynchronousServerSocketChannel serverSocket;
 
+        private final AsynchronousChannelGroup group;
+
         private final Map<Integer, ServerIdentifier> servers;
 
         private final ServerIdentifier me;
 
         private final AtomicReference<ServerIdentifier> leader;
-
-        //private final ByteBuffer readBuffer;
-
-        //private final ByteBuffer writeBuffer;
 
         private final Map<Integer, VoteResponse.VoteResponsePayload> responses;
 
@@ -113,15 +162,20 @@ public class ElectionManager extends StoppableRunnable {
         // number of servers
         private final int N;
 
+        private final AtomicLong timeout;
+
         public MessageHandler(ExecutorService executorService,
-                                AsynchronousServerSocketChannel serverSocket,
+                              AsynchronousServerSocketChannel serverSocket,
+                              AsynchronousChannelGroup group,
                               ServerIdentifier me,
                               AtomicReference<ServerIdentifier> leader,
                               Map<Integer, ServerIdentifier> servers,
                               AtomicInteger state,
-                              int N) {
+                              int N,
+                              AtomicLong timeout) {
             this.executorService = executorService;
             this.serverSocket = serverSocket;
+            this.group = group;
             this.me = me;
             this.servers = servers;
             this.leader = leader;
@@ -129,10 +183,7 @@ public class ElectionManager extends StoppableRunnable {
             this.state = state;
             this.voted = false;
             this.N = N;
-
-            // FIXME -- maximum size of a leader election message....
-            //this.readBuffer = ByteBuffer.allocateDirect(128);
-            //this.writeBuffer = ByteBuffer.allocateDirect(128);
+            this.timeout = timeout;
         }
 
         @Override
@@ -164,21 +215,26 @@ public class ElectionManager extends StoppableRunnable {
                     switch (messageIdentifier) {
                         case VOTE_RESPONSE -> {
 
-                            logger.info("Vote response received. I am " + me.host + ":" + me.port);
-
                             VoteResponse.VoteResponsePayload payload = VoteResponse.read(readBuffer);
+
+                            logger.info("Vote response received: "+ payload.response +". I am " + me.host + ":" + me.port);
+
                             int serverId = Objects.hash(payload.host, payload.port);
 
                             // it is a yes? add to responses
                             if (payload.response && !responses.containsKey(serverId)) { // avoid duplicate vote
+
+                                //timeout.addAndGet(10000); // add 10 seconds
+
                                 responses.put(serverId, payload);
 
                                 // do I have the majority of votes?
                                 // !voted prevent two servers from winning the election... but does not prevent
                                 if (!voted && responses.size() + 1 > (N / 2)) {
-                                    state.set(LEADER);
-                                    leader.set(me);
                                     logger.info("I am leader. I am " + me.host + ":" + me.port);
+                                    leader.set(me);
+                                    sendLeaderRequests(group);
+                                    state.set(LEADER);
                                 }
 
                             }
@@ -190,29 +246,31 @@ public class ElectionManager extends StoppableRunnable {
                             ServerIdentifier requestVote = VoteRequest.read(readBuffer);
 
                             if (voted) {
-                                executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, null, false));
+                                executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, group, false));
                                 logger.info("Vote not granted, already voted. I am " + me.host + ":" + me.port);
                             } else {
 
                                 if (requestVote.lastOffset > me.lastOffset) {
+                                    //timeout.addAndGet(10000); // add 10 seconds
                                     // grant vote
-                                    executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, null, true)).get();
+                                    executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, group, true)).get();
                                     voted = true;
                                     logger.info("Vote granted. I am " + me.host + ":" + me.port);
                                 } else if (requestVote.lastOffset < me.lastOffset) {
-                                    executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, null, false));
+                                    executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, group, false));
                                     logger.info("Vote not granted. I am " + me.host + ":" + me.port);
                                 } else { // equal
 
                                     if (requestVote.timestamp > me.timestamp) {
+                                        //timeout.addAndGet(10000); // add 10 seconds
                                         // grant vote
-                                        executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, null, true)).get();
+                                        executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, group, true)).get();
                                         voted = true;
                                         logger.info("Vote granted. I am " + me.host + ":" + me.port);
                                     } else {
-                                        executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, null, false)).get();
+                                        executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, group, false)).get();
                                         logger.info("Vote not granted. I am " + me.host + ":" + me.port);
-                                    }
+                                    } // chance being equal is minimal
 
                                 }
 
@@ -240,6 +298,13 @@ public class ElectionManager extends StoppableRunnable {
 
             logger.info("Message handler is finished. I am "+me.host+":"+me.port);
 
+        }
+
+        private void sendLeaderRequests(AsynchronousChannelGroup group){
+            logger.info("Sending leader requests. I am "+ me.host+":"+me.port);
+            for(ServerIdentifier server : servers.values()){
+                executorService.submit( new WriteTask( LEADER_REQUEST, me, server, group ) );
+            }
         }
 
     }
@@ -324,6 +389,15 @@ public class ElectionManager extends StoppableRunnable {
 
     }
 
+    private void runRound(){
+
+
+
+    }
+
+    /**
+     * Should include while !isStopped....
+     */
     @Override
     public void run() {
 
@@ -335,34 +409,30 @@ public class ElectionManager extends StoppableRunnable {
         // me.timestamp = System.currentTimeMillis() + new Random().nextInt(10);
         me.timestamp = new Random().nextLong(300);
 
-        // TODO define how many. One is enough? Another design is making this a completion handler is initiating the reads on the loop below...
-        MessageHandler messageHandler = new MessageHandler( this.taskExecutor, this.serverSocket, this.me, this.leader, servers, this.state, servers.size() );
+        // being single thread makes it easier to avoid data races
+        MessageHandler messageHandler = new MessageHandler( this.taskExecutor, this.serverSocket, this.group, this.me, this.leader, servers, this.state, servers.size(), timeout );
         taskExecutor.submit( messageHandler );
-
-        logger.info("Event listener set. I am "+me.host+":"+me.port);
 
         //Map<ServerIdentifier, Future<Boolean>> mapOfFutureResponses =
         sendVoteRequests(group);
 
         int state_ = state.get();
+        long timeout_ = timeout.get();
 
         /* while majority cannot be established, we cannot proceed safely */
         long elapsed = 0L;
         long startTime = System.currentTimeMillis();
-        while(elapsed < timeout && state_ == CANDIDATE){
-            try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+        while(elapsed < timeout_ && state_ == CANDIDATE){
+            try { Thread.sleep(1000); } catch (InterruptedException ignored) {} // this can make messages not being handled. it is the timeout making this happen
             elapsed = System.currentTimeMillis() - startTime;
             state_ = state.get();
+            timeout_ = timeout.get();
         }
 
         logger.info("Event loop has finished. I am "+me.host+":"+me.port+" and my state is "+state_);
 
         // now check whether I have enough votes or whether I should send a response vote to some server
-        if(state_ == LEADER){
-            sendLeaderRequests(group);
-            signal.add(Constants.FINISHED);
-        } else if (state_ == FOLLOWER){
-            // sit idle
+        if(state_ == LEADER || state_ == FOLLOWER){
             signal.add(Constants.FINISHED);
         } else {
             // nothing has been defined... we should try another round
@@ -377,13 +447,6 @@ public class ElectionManager extends StoppableRunnable {
         logger.info("Sending vote requests. I am "+ me.host+":"+me.port);
         for(ServerIdentifier server : servers.values()){
              taskExecutor.submit( new WriteTask( VOTE_REQUEST, me, server, group ) );
-        }
-    }
-
-    private void sendLeaderRequests(AsynchronousChannelGroup group){
-        logger.info("Sending leader requests. I am "+ me.host+":"+me.port);
-        for(ServerIdentifier server : servers.values()){
-            taskExecutor.submit( new WriteTask( LEADER_REQUEST, me, server, group ) );
         }
     }
 
