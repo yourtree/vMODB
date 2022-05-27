@@ -13,6 +13,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -128,12 +129,12 @@ public class ElectionWorker extends StoppableRunnable {
 
         private final AtomicInteger state;
 
-        private boolean voted;
+        private AtomicBoolean voted;
 
         // number of servers
         private final int N;
 
-        private final AtomicLong timeout;
+        private Object _lock = new Object();
 
         public MessageHandler(ExecutorService executorService,
                               AsynchronousServerSocketChannel serverSocket,
@@ -143,18 +144,23 @@ public class ElectionWorker extends StoppableRunnable {
                               Map<Integer, ServerIdentifier> servers,
                               AtomicInteger state,
                               int N,
-                              AtomicLong timeout) {
+                              AtomicBoolean voted) {
             this.executorService = executorService;
             this.serverSocket = serverSocket;
             this.group = group;
             this.me = me;
             this.servers = servers;
             this.leader = leader;
-            this.responses = new HashMap<>(N);
+            this.responses = new ConcurrentHashMap<>(N);
             this.state = state;
-            this.voted = false;
+            this.voted = voted;
             this.N = N;
-            this.timeout = timeout;
+        }
+
+        public void resetVoteCounter(){
+            synchronized (_lock) {
+                this.responses.clear();
+            }
         }
 
         @Override
@@ -193,21 +199,25 @@ public class ElectionWorker extends StoppableRunnable {
                             int serverId = Objects.hash(payload.host, payload.port);
 
                             // it is a yes? add to responses
-                            if (payload.response && !responses.containsKey(serverId)) { // avoid duplicate vote
+                            if (payload.response) { // avoid duplicate vote
 
                                 //timeout.addAndGet(10000); // add 10 seconds
+                                synchronized (_lock) {
+                                    if (!responses.containsKey(serverId)) {
 
-                                responses.put(serverId, payload);
+                                        responses.put(serverId, payload);
 
-                                // do I have the majority of votes?
-                                // !voted prevent two servers from winning the election... but does not prevent
-                                if (!voted && responses.size() + 1 > (N / 2)) {
-                                    logger.info("I am leader. I am " + me.host + ":" + me.port);
-                                    leader.set(me);
-                                    sendLeaderRequests(group);
-                                    state.set(LEADER);
+                                        // do I have the majority of votes?
+                                        // !voted prevent two servers from winning the election... but does not prevent
+                                        if (!voted.get() && responses.size() + 1 > (N / 2)) {
+                                            logger.info("I am leader. I am " + me.host + ":" + me.port);
+                                            leader.set(me);
+                                            sendLeaderRequests(group);
+                                            state.set(LEADER);
+                                        }
+
+                                    }
                                 }
-
                             }
                         }
                         case VOTE_REQUEST -> {
@@ -216,16 +226,15 @@ public class ElectionWorker extends StoppableRunnable {
 
                             ServerIdentifier requestVote = VoteRequest.read(readBuffer);
 
-                            if (voted) {
+                            if (voted.get()) {
                                 executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, group, false));
                                 logger.info("Vote not granted, already voted. I am " + me.host + ":" + me.port);
                             } else {
 
                                 if (requestVote.lastOffset > me.lastOffset) {
-                                    //timeout.addAndGet(10000); // add 10 seconds
                                     // grant vote
                                     executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, group, true)).get();
-                                    voted = true;
+                                    voted.set(true);
                                     logger.info("Vote granted. I am " + me.host + ":" + me.port);
                                 } else if (requestVote.lastOffset < me.lastOffset) {
                                     executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, group, false));
@@ -233,10 +242,9 @@ public class ElectionWorker extends StoppableRunnable {
                                 } else { // equal
 
                                     if (requestVote.timestamp > me.timestamp) {
-                                        //timeout.addAndGet(10000); // add 10 seconds
                                         // grant vote
                                         executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, group, true)).get();
-                                        voted = true;
+                                        voted.set(true);
                                         logger.info("Vote granted. I am " + me.host + ":" + me.port);
                                     } else {
                                         executorService.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, group, false)).get();
@@ -248,13 +256,9 @@ public class ElectionWorker extends StoppableRunnable {
                             }
                         }
                         case LEADER_REQUEST -> {
-
                             logger.info("Leader request received. I am " + me.host + ":" + me.port);
-
                             LeaderRequest.LeaderRequestPayload leaderRequest = LeaderRequest.read(readBuffer);
-
                             leader.set(servers.get(leaderRequest.hashCode()));
-
                             this.state.set(FOLLOWER);
                         }
                     }
@@ -362,29 +366,6 @@ public class ElectionWorker extends StoppableRunnable {
 
     private void runRound(){
 
-
-
-    }
-
-    /**
-     * Should include while !isStopped....
-     */
-    @Override
-    public void run() {
-
-        logger.info("Initializing election round. I am "+me.host+":"+me.port);
-
-        this.state.set(CANDIDATE);
-
-        // works as a tiebreaker. updated on each round. yes, some servers may always be higher than others
-        // me.timestamp = System.currentTimeMillis() + new Random().nextInt(10);
-        me.timestamp = new Random().nextLong(300);
-
-        // being single thread makes it easier to avoid data races
-        MessageHandler messageHandler = new MessageHandler( this.taskExecutor, this.serverSocket, this.group, this.me, this.leader, servers, this.state, servers.size(), timeout );
-        taskExecutor.submit( messageHandler );
-
-        //Map<ServerIdentifier, Future<Boolean>> mapOfFutureResponses =
         sendVoteRequests(group);
 
         int state_ = state.get();
@@ -402,15 +383,57 @@ public class ElectionWorker extends StoppableRunnable {
 
         logger.info("Event loop has finished. I am "+me.host+":"+me.port+" and my state is "+state_);
 
-        // now check whether I have enough votes or whether I should send a response vote to some server
-        if(state_ == LEADER || state_ == FOLLOWER){
-            signal.add(Constants.FINISHED);
-        } else {
-            // nothing has been defined... we should try another round
-            signal.add(Constants.NO_RESULT);
+    }
+
+    /**
+     *
+     */
+    @Override
+    public void run() {
+
+        logger.info("Initializing election round. I am "+me.host+":"+me.port);
+
+        this.state.set(CANDIDATE);
+
+        // works as a tiebreaker. updated on each round. yes, some servers may always be higher than others
+        // me.timestamp = System.currentTimeMillis() + new Random().nextInt(10);
+        me.timestamp = new Random().nextLong(300);
+
+        // nobody has voted so far. but a vote has an expiration. max two rounds?
+        AtomicBoolean voted = new AtomicBoolean(false);
+        int maxRoundsVoteHolds = 2;
+
+        // being single thread makes it easier to avoid data races
+        MessageHandler messageHandler = new MessageHandler( this.taskExecutor, this.serverSocket, this.group, this.me, this.leader, servers, this.state, servers.size(), voted );
+        taskExecutor.submit( messageHandler );
+
+        while(!isStopped() && state.get() == CANDIDATE){
+
+            //
+            runRound();
+
+            if(voted.get()){
+                maxRoundsVoteHolds--;
+
+                // reinitialize vote
+                if(maxRoundsVoteHolds == 0) {
+                    voted.set(false);
+                    maxRoundsVoteHolds = 2;
+                }
+            }
+
+            messageHandler.resetVoteCounter();// data races may still allow old votes to be computed
+
+            // define a delta
+            timeout.addAndGet(10000); // inc since nothing has been defined
+
+            logger.info("A round has terminated. A new one is initializing. I am "+me.host+":"+me.port);
         }
 
         messageHandler.stop();
+
+        // signal the server
+        signal.add(Constants.FINISHED);
 
     }
 
@@ -419,6 +442,10 @@ public class ElectionWorker extends StoppableRunnable {
         for(ServerIdentifier server : servers.values()){
              taskExecutor.submit( new WriteTask( VOTE_REQUEST, me, server, group ) );
         }
+    }
+
+    public int getState(){
+        return state.get();
     }
 
 }

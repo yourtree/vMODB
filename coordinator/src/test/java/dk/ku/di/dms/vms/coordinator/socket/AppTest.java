@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.coordinator.socket;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
+import static java.lang.Thread.sleep;
 
 import dk.ku.di.dms.vms.coordinator.election.ElectionWorker;
 import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
@@ -155,9 +156,9 @@ public class AppTest
 
         new Thread( em1 ).start();
 
-        byte take1 = roundResult1.take();
+        sleep(10000);
 
-        logger.info( "result 1 should be no result, see: " + take1 );
+        logger.info( "result 1 should be still a candidate, see: " + em1.getState() );
 
         AsynchronousServerSocketChannel serverSocket2 = AsynchronousServerSocketChannel.open();
         serverSocket2.bind( new InetSocketAddress(81) );
@@ -165,26 +166,22 @@ public class AppTest
         ElectionWorker em2 = new ElectionWorker(serverSocket2, group2, Executors.newFixedThreadPool(2), serverEm2, leader2, servers2, roundResult2, 10000 );
         new Thread( em2 ).start();
 
-        // FIXME probably not a good idea to reuse the same object for new thread
-        new Thread( em1 ).start();
-
         byte take2 = roundResult2.take();
-        take1 = roundResult1.take();
+        byte take1 = roundResult1.take();
 
+        logger.info( "result 1: " + take1 );
         logger.info( "result 2: " + take2 );
 
-        if(take2 == NO_RESULT){
-            new Thread( em2 ).start();
-            take2 = roundResult2.take();
-        }
-        if(take1 == NO_RESULT){
-            new Thread( em1 ).start();
-            take1 = roundResult1.take();
-        }
+        boolean bothHasSameLeader = leader1.get().hashCode() == leader2.get().hashCode();
 
-        boolean bothLeader = leader1.get().hashCode() == leader2.get().hashCode();
+        assert ( take1 != NO_RESULT && take2 != NO_RESULT && bothHasSameLeader );
 
-        assert (  take1 != NO_RESULT && take2 != NO_RESULT && !bothLeader );
+    }
+
+    @Test
+    public void leaderElectedFailAndNewLeaderMustBeSetupTest() throws IOException, InterruptedException {
+
+
 
     }
 
