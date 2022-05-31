@@ -4,14 +4,15 @@ import dk.ku.di.dms.vms.coordinator.election.ElectionWorker;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 
+import static dk.ku.di.dms.vms.coordinator.election.ElectionWorker.LEADER;
+
 /**
- * Hello world!
+ *
  *
  */
-public class App 
+public class Main
 {
-    public static void main( String[] args )
-    {
+    public static void main( String[] args ) throws InterruptedException {
 
         // the input a new-order transaction
 //        a payload containing these 4 events {
@@ -71,6 +72,30 @@ public class App
         // but you can have multiple proxies doing the work, one dbms proxy
         // separate functionality among the proxies
 
+        ElectionWorker electionManager = null;
+
+        while(true) {
+
+            // TODO initiate election
+            // depending on the result, setup the correct thread
+
+            // will block until the election protocol has finished
+
+            electionManager.getResult();
+
+            if (electionManager.getState() == LEADER) {
+                // setup leader
+            } else {
+                // setup follower
+            }
+
+
+            // this block of code returns because the heartbeat from the leader did not come in time
+            // so time for a new election
+            // we set up a new election worker and repeat the process
+
+
+        }
 
         // TODO 1 - setup server
         // socket connection. protocol do ad a new service, has to send the contextual info
@@ -81,7 +106,7 @@ public class App
 
         // TODO 4 - receive transactions and verify whether they can be processed given the global application view (3)
 
-        ElectionWorker electionManager;
+
 
     }
 }

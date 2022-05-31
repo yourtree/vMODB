@@ -10,7 +10,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.CompletionHandler;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -20,6 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
+import static dk.ku.di.dms.vms.web_common.runnable.Constants.FINISHED;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -37,10 +37,10 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
 public class ElectionWorker extends StoppableRunnable {
 
     private final AtomicInteger state;
-    private static final int NEW          = 0;
-    private static final int CANDIDATE    = 1; // running the protocol
-    private static final int LEADER       = 2; // has received the ACKs from a majority
-    private static final int FOLLOWER     = 3;
+    public static final int NEW          = 0;
+    public static final int CANDIDATE    = 1; // running the protocol
+    public static final int LEADER       = 2; // has received the ACKs from a majority
+    public static final int FOLLOWER     = 3;
 
     private final AsynchronousServerSocketChannel serverSocket;
 
@@ -56,6 +56,7 @@ public class ElectionWorker extends StoppableRunnable {
     private final ServerIdentifier me;
 
     // can be == me
+    // why using atomic reference? parameter passing does not allow for overwriting in Java...
      private final AtomicReference<ServerIdentifier> leader;
 
     // a bounded time in which a leader election must occur, otherwise it should restart. in milliseconds
@@ -63,16 +64,13 @@ public class ElectionWorker extends StoppableRunnable {
     // safety, liveness????
     private final AtomicLong timeout;
 
-    // queue serves as a channel to respond the calling thread
-    private final Queue<Byte> signal;
-
     public ElectionWorker(AsynchronousServerSocketChannel serverSocket,
                           AsynchronousChannelGroup group,
                           ExecutorService taskExecutor,
                           ServerIdentifier me,
                           AtomicReference<ServerIdentifier> leader,
-                          Map<Integer, ServerIdentifier> servers,
-                          Queue<Byte> signal){
+                          Map<Integer, ServerIdentifier> servers){
+        super();
         this.state = new AtomicInteger(NEW);
         this.serverSocket = serverSocket;
         this.group = group;
@@ -80,7 +78,6 @@ public class ElectionWorker extends StoppableRunnable {
         this.me = me;
         this.leader = leader;
         this.servers = servers;
-        this.signal = signal;
         this.timeout = new AtomicLong(60000); // 1 minute
     }
 
@@ -90,8 +87,8 @@ public class ElectionWorker extends StoppableRunnable {
                           ServerIdentifier me,
                           AtomicReference<ServerIdentifier> leader,
                           Map<Integer, ServerIdentifier> servers,
-                          Queue<Byte> signal,
                           long timeout){
+        super();
         this.state = new AtomicInteger(NEW);
         this.serverSocket = serverSocket;
         this.group = group;
@@ -99,7 +96,6 @@ public class ElectionWorker extends StoppableRunnable {
         this.me = me;
         this.leader = leader;
         this.servers = servers;
-        this.signal = signal;
         this.timeout = new AtomicLong(timeout);
     }
 
@@ -129,12 +125,12 @@ public class ElectionWorker extends StoppableRunnable {
 
         private final AtomicInteger state;
 
-        private AtomicBoolean voted;
+        private final AtomicBoolean voted;
 
         // number of servers
         private final int N;
 
-        private Object _lock = new Object();
+        private final Object _lock = new Object();
 
         public MessageHandler(ExecutorService executorService,
                               AsynchronousServerSocketChannel serverSocket,
@@ -175,8 +171,8 @@ public class ElectionWorker extends StoppableRunnable {
                 try {
 
                     channel = serverSocket.accept().get();
-                    channel.setOption( TCP_NODELAY, true ); // true disable the nagle's algorithm. not useful to have coalescence of messages in election'
-                    channel.setOption( SO_KEEPALIVE, false ); // no need to keep alive now
+                    channel.setOption( TCP_NODELAY, true ); // true disables the nagle's algorithm. not useful to have coalescence of messages in election
+                    channel.setOption( SO_KEEPALIVE, false ); // no need to keep alive here
 
                     ByteBuffer readBuffer = ByteBuffer.allocate(128);
 
@@ -201,8 +197,7 @@ public class ElectionWorker extends StoppableRunnable {
                             // it is a yes? add to responses
                             if (payload.response) { // avoid duplicate vote
 
-                                //timeout.addAndGet(10000); // add 10 seconds
-                                synchronized (_lock) {
+                                synchronized (_lock) { // the responses are perhaps being reset
                                     if (!responses.containsKey(serverId)) {
 
                                         responses.put(serverId, payload);
@@ -312,8 +307,8 @@ public class ElectionWorker extends StoppableRunnable {
 
                 InetSocketAddress address = new InetSocketAddress(connectTo.host, connectTo.port);
                 AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
-                channel.setOption( TCP_NODELAY, true ); // true disable the nagle's algorithm. not useful to have coalescence of messages in election
-                channel.setOption( SO_KEEPALIVE, false ); // no need to keep alive now
+                channel.setOption( TCP_NODELAY, true );
+                channel.setOption( SO_KEEPALIVE, false );
 
                 try {
                     channel.connect(address).get();
@@ -433,7 +428,7 @@ public class ElectionWorker extends StoppableRunnable {
         messageHandler.stop();
 
         // signal the server
-        signal.add(Constants.FINISHED);
+        signal.add(FINISHED);
 
     }
 

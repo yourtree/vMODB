@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.coordinator.store;
 
-import dk.ku.di.dms.vms.coordinator.Constants;
 import dk.ku.di.dms.vms.coordinator.metadata.Metadata;
 import dk.ku.di.dms.vms.coordinator.metadata.MetadataAPI;
 

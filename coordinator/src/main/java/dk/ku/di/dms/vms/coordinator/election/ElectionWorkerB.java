@@ -23,6 +23,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
+import static dk.ku.di.dms.vms.web_common.runnable.Constants.FINISHED;
+import static dk.ku.di.dms.vms.web_common.runnable.Constants.NO_RESULT;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -433,10 +435,10 @@ public class ElectionWorkerB extends StoppableRunnable {
 
         // now check whether I have enough votes or whether I should send a response vote to some server
         if(state_ == LEADER || state_ == FOLLOWER){
-            signal.add(Constants.FINISHED);
+            signal.add(FINISHED);
         } else {
             // nothing has been defined... we should try another round
-            signal.add(Constants.NO_RESULT);
+            signal.add(NO_RESULT);
         }
 
         messageHandler.stop();

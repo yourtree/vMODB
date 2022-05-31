@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator;
+package dk.ku.di.dms.vms.coordinator.store;
 
 public final class Constants {
 

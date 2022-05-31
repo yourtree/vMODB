@@ -12,8 +12,8 @@ import static dk.ku.di.dms.vms.coordinator.election.Constants.VOTE_REQUEST;
  */
 public class VoteRequest {
 
-                                    // type |     offset |       port |      timestamp |      size | <host address is variable>
-    private static int fixedSize = Byte.BYTES + Long.BYTES + Integer.BYTES + Long.BYTES + Integer.BYTES;
+                                        // type |     offset |       port |      timestamp |      size | <host address is variable>
+    private static final int fixedSize = Byte.BYTES + Long.BYTES + Integer.BYTES + Long.BYTES + Integer.BYTES;
 
     public static void write(ByteBuffer buffer, ServerIdentifier serverIdentifier){
 

@@ -1,6 +1,8 @@
 package dk.ku.di.dms.vms.coordinator.socket;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
+import static dk.ku.di.dms.vms.web_common.runnable.Constants.FINISHED;
+import static dk.ku.di.dms.vms.web_common.runnable.Constants.NO_RESULT;
 import static java.lang.Thread.sleep;
 
 import dk.ku.di.dms.vms.coordinator.election.ElectionWorker;
@@ -24,7 +26,7 @@ import java.util.logging.Logger;
 /**
  * Unit test for simple App.
  */
-public class AppTest 
+public class LeaderElectionTest
 {
 
     protected final Logger logger = Logger.getLogger(this.getClass().getName());
@@ -70,17 +72,14 @@ public class AppTest
         servers2.put( serverEm1.hashCode(), serverEm1 );
         servers2.put( serverEm3.hashCode(), serverEm3 );
 
-        BlockingQueue<Byte> roundResult1 = new ArrayBlockingQueue<>(1);
-        BlockingQueue<Byte> roundResult2 = new ArrayBlockingQueue<>(1);
-
-        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, leader1, servers1, roundResult1 );
-        ElectionWorker em2 = new ElectionWorker(serverSocket2, null, Executors.newFixedThreadPool(2), serverEm2, leader2, servers2, roundResult2 );
+        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, leader1, servers1 );
+        ElectionWorker em2 = new ElectionWorker(serverSocket2, null, Executors.newFixedThreadPool(2), serverEm2, leader2, servers2 );
 
         new Thread( em1 ).start();
         new Thread( em2 ).start();
 
-        byte take1 = roundResult1.take();
-        byte take2 = roundResult2.take();
+        byte take1 = em1.getResult();
+        byte take2 = em2.getResult();
 
         logger.info( "result 1: " + take1 );
         logger.info( "result 2: " + take2 );
@@ -107,7 +106,7 @@ public class AppTest
 
         BlockingQueue<Byte> roundResult1 = new ArrayBlockingQueue<>(1);
 
-        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, leader, servers1, roundResult1 );
+        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, leader, servers1 );
 
         new Thread( em1 ).start();
 
@@ -121,8 +120,6 @@ public class AppTest
 
     /**
      * In this test, a server may need to retry the leader election
-     * @throws IOException
-     * @throws InterruptedException
      */
     @Test
     public void leaderElectionWithRetryTest() throws IOException, InterruptedException {
@@ -146,13 +143,13 @@ public class AppTest
         servers2.put( serverEm1.hashCode(), serverEm1 );
         servers2.put( serverEm3.hashCode(), serverEm3 );
 
-        BlockingQueue<Byte> roundResult1 = new ArrayBlockingQueue<>(1);
-        BlockingQueue<Byte> roundResult2 = new ArrayBlockingQueue<>(1);
-
         var group1 = AsynchronousChannelGroup.withFixedThreadPool(1, new VmsDaemonThreadFactory());
         var group2 = AsynchronousChannelGroup.withFixedThreadPool(1, new VmsDaemonThreadFactory());
 
-        ElectionWorker em1 = new ElectionWorker(serverSocket1, group1, Executors.newFixedThreadPool(2), serverEm1, leader1, servers1, roundResult1, 10000 );
+        ElectionWorker em1 = new ElectionWorker(serverSocket1, group1, Executors.newFixedThreadPool(2), serverEm1, leader1, servers1, 10000 );
+
+        // TODO that should be integrated into the class instantiation
+        new Thread( em1 ).setUncaughtExceptionHandler( em1.exceptionHandler );
 
         new Thread( em1 ).start();
 
@@ -163,11 +160,11 @@ public class AppTest
         AsynchronousServerSocketChannel serverSocket2 = AsynchronousServerSocketChannel.open();
         serverSocket2.bind( new InetSocketAddress(81) );
 
-        ElectionWorker em2 = new ElectionWorker(serverSocket2, group2, Executors.newFixedThreadPool(2), serverEm2, leader2, servers2, roundResult2, 10000 );
+        ElectionWorker em2 = new ElectionWorker(serverSocket2, group2, Executors.newFixedThreadPool(2), serverEm2, leader2, servers2, 10000 );
         new Thread( em2 ).start();
 
-        byte take2 = roundResult2.take();
-        byte take1 = roundResult1.take();
+        byte take2 = em2.getResult();
+        byte take1 = em1.getResult();
 
         logger.info( "result 1: " + take1 );
         logger.info( "result 2: " + take2 );
@@ -178,10 +175,14 @@ public class AppTest
 
     }
 
+    /**
+     * In this test, a leader than has received the majority of votes, but not sent the leader request yet,
+     * fails. That forces the nodes to initiate a
+     */
     @Test
-    public void leaderElectedFailAndNewLeaderMustBeSetupTest() throws IOException, InterruptedException {
+    public void leaderElectedFailAndNewLeaderMustBeSetupTest() {
 
-
+        // TODO create a message handler that makes the node fail after receiving the majority of votes
 
     }
 
@@ -189,13 +190,11 @@ public class AppTest
      * In this test, a server running for leader must be informed that a leader already exists
      * We can assume the leader itself sends to this node a leader request message
      * so no different messages need to be created
-     * @throws IOException
-     * @throws InterruptedException
      */
     @Test
     public void leaderElectionWithLeaderElectedTest() throws IOException, InterruptedException {
 
-        // TODO finish
+        // TODO finish a server must run for leader and then received the current leader info
 
         AsynchronousServerSocketChannel serverSocket1 = AsynchronousServerSocketChannel.open();
         serverSocket1.bind( new InetSocketAddress(80) );
@@ -210,13 +209,11 @@ public class AppTest
         servers1.put( serverEm2.hashCode(), serverEm2 );
         servers1.put( serverEm3.hashCode(), serverEm3 );
 
-        BlockingQueue<Byte> roundResult1 = new ArrayBlockingQueue<>(1);
-
-        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, leader, servers1, roundResult1 );
+        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, leader, servers1 );
 
         new Thread( em1 ).start();
 
-        byte take1 = roundResult1.take();
+        byte take1 = em1.getResult();
 
         logger.info( "result 1: " + take1 );
 

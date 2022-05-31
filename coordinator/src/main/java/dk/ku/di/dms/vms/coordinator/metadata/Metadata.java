@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.coordinator.metadata;
 
-import dk.ku.di.dms.vms.coordinator.VmsMetadata;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 
 import java.util.Map;
@@ -16,6 +15,6 @@ public class Metadata {
     public Map<String, TransactionDAG> transactionMap;
 
     // keyed by vms name
-    public Map<String, VmsMetadata> vmsMap;
+    public Map<String, VmsIdentifier> vmsMap;
 
 }

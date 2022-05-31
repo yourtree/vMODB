@@ -130,7 +130,7 @@ public class VMSFutureTask<V> implements IVMsFutureCancellable<V> {
         return state.get() == NEW;
     }
 
-    static{
+    static {
         // https://bugs.openjdk.java.net/browse/JDK-8074773
         Class<?> ensureLoaded = LockSupport.class;
     }

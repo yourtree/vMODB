@@ -13,7 +13,7 @@ import static dk.ku.di.dms.vms.coordinator.election.Constants.VOTE_RESPONSE;
 public class VoteResponse {
 
     // type | response | port | size | <host address is variable>
-    private static int headerSize = Byte.BYTES + Byte.BYTES + Integer.BYTES + Integer.BYTES;
+    private static final int headerSize = Byte.BYTES + Byte.BYTES + Integer.BYTES + Integer.BYTES;
 
     public static void write(ByteBuffer buffer, ServerIdentifier serverIdentifier, boolean response){
 
