@@ -85,6 +85,8 @@ public class Main
 
             if (electionManager.getState() == LEADER) {
                 // setup leader
+
+                // setup http server for incoming transactions. followers must redirect the request to the leader for now
             } else {
                 // setup follower
             }
