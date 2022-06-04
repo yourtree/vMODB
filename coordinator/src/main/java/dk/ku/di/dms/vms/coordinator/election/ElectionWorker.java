@@ -189,33 +189,50 @@ public class ElectionWorker extends StoppableRunnable {
 
                             logger.info("Vote request received. I am " + me.host + ":" + me.port);
 
-                            ServerIdentifier requestVote = VoteRequest.read(readBuffer);
+                            ServerIdentifier serverRequestingVote = VoteRequest.read(readBuffer);
 
                             if (voted.get()) {
-                                taskExecutor.submit(new WriteTask(VOTE_RESPONSE, requestVote, false));
+                                taskExecutor.submit(new WriteTask(VOTE_RESPONSE, serverRequestingVote, false));
                                 logger.info("Vote not granted, already voted. I am " + me.host + ":" + me.port);
                             } else {
 
-                                if (requestVote.lastOffset > me.lastOffset) {
+                                // TO AVOID TWO (OR MORE) LEADERS!!!
+                                // if a server is requesting a vote, it means this server is in another round, so I need to remove his vote from my (true) responses
+                                // because this server may give a vote to another server
+                                // in this case I will send a vote request again
+                                boolean previousVoteReceived = false;
+                                synchronized (_lock) { // the responses are perhaps being reset, i cannot count on this vote anymore
+                                    if (responses.get(serverRequestingVote.hashCode()) != null) {
+                                        responses.remove( serverRequestingVote.hashCode() );
+                                        previousVoteReceived = true;
+                                    }
+                                }
+
+                                if (serverRequestingVote.lastOffset > me.lastOffset) {
                                     // grant vote
-                                    taskExecutor.submit(new WriteTask(VOTE_RESPONSE, requestVote, true));
+                                    taskExecutor.submit(new WriteTask(VOTE_RESPONSE, serverRequestingVote, true));
                                     voted.set(true);
                                     logger.info("Vote granted. I am " + me.host + ":" + me.port);
-                                } else if (requestVote.lastOffset < me.lastOffset) {
-                                    taskExecutor.submit(new WriteTask(VOTE_RESPONSE, me, requestVote, group, false));
+                                } else if (serverRequestingVote.lastOffset < me.lastOffset) {
+                                    taskExecutor.submit(new WriteTask(VOTE_RESPONSE, me, serverRequestingVote, group, false));
                                     logger.info("Vote not granted. I am " + me.host + ":" + me.port);
                                 } else { // equal
 
-                                    if (requestVote.hashCode() > me.hashCode()) {
+                                    if (serverRequestingVote.hashCode() > me.hashCode()) {
                                         // grant vote
-                                        taskExecutor.submit(new WriteTask(VOTE_RESPONSE, requestVote, true));
+                                        taskExecutor.submit(new WriteTask(VOTE_RESPONSE, serverRequestingVote, true));
                                         voted.set(true);
                                         logger.info("Vote granted. I am " + me.host + ":" + me.port);
                                     } else {
-                                        taskExecutor.submit(new WriteTask(VOTE_RESPONSE, requestVote, false));
+                                        taskExecutor.submit(new WriteTask(VOTE_RESPONSE, serverRequestingVote, false));
                                         logger.info("Vote not granted. I am " + me.host + ":" + me.port);
                                     }
 
+                                }
+
+                                // this is basically attempt to refresh the vote in case of intersecting distinct rounds in different servers
+                                if(!voted.get() && previousVoteReceived){
+                                    taskExecutor.submit( new WriteTask( VOTE_REQUEST, serverRequestingVote ) );
                                 }
 
                             }
@@ -364,6 +381,7 @@ public class ElectionWorker extends StoppableRunnable {
 
         while(!isStopped() && state == CANDIDATE){
 
+            // the round is an abstraction to avoid a vote given from holding forever (e.g., the requesting node may have crashed)
             runRound();
 
             // define a new delta since defining a leader is taking too long
