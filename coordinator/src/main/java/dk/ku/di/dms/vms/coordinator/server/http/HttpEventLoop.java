@@ -86,6 +86,11 @@ public class HttpEventLoop implements Runnable {
 
     }
 
+    /**
+     * https://www.oreilly.com/library/view/java-nio/0596002882/ch04.html
+     * TODO should have a mechanism to restart this task upon failure... an exception handler would do the work
+     * @throws IOException from select operation
+     */
     public void doStart() throws IOException {
 
         while (!stop) {

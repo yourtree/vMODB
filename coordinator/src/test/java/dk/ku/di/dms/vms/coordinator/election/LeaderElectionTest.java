@@ -1,11 +1,10 @@
-package dk.ku.di.dms.vms.coordinator.socket;
+package dk.ku.di.dms.vms.coordinator.election;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
 import static dk.ku.di.dms.vms.web_common.runnable.Constants.FINISHED;
 import static dk.ku.di.dms.vms.web_common.runnable.Constants.NO_RESULT;
 import static java.lang.Thread.sleep;
 
-import dk.ku.di.dms.vms.coordinator.election.ElectionWorker;
 import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
 import org.junit.Test;
@@ -20,7 +19,6 @@ import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 
 /**
@@ -60,10 +58,6 @@ public class LeaderElectionTest
         ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 81 );
         ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 82 );
 
-        AtomicReference<ServerIdentifier> leader1 = new AtomicReference<>();
-        AtomicReference<ServerIdentifier> leader2 = new AtomicReference<>();
-        // leader.set(null);
-
         Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
         servers1.put( serverEm2.hashCode(), serverEm2 );
         servers1.put( serverEm3.hashCode(), serverEm3 );
@@ -72,8 +66,8 @@ public class LeaderElectionTest
         servers2.put( serverEm1.hashCode(), serverEm1 );
         servers2.put( serverEm3.hashCode(), serverEm3 );
 
-        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, leader1, servers1 );
-        ElectionWorker em2 = new ElectionWorker(serverSocket2, null, Executors.newFixedThreadPool(2), serverEm2, leader2, servers2 );
+        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, servers1 );
+        ElectionWorker em2 = new ElectionWorker(serverSocket2, null, Executors.newFixedThreadPool(2), serverEm2, servers2 );
 
         new Thread( em1 ).start();
         new Thread( em2 ).start();
@@ -88,35 +82,34 @@ public class LeaderElectionTest
 
     }
 
-    @Test
-    public void leaderElectionFailTest() throws IOException, InterruptedException {
-
-        AsynchronousServerSocketChannel serverSocket1 = AsynchronousServerSocketChannel.open();
-        serverSocket1.bind( new InetSocketAddress(80) );
-
-        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 80 );
-        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 81 );
-        ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 82 );
-
-        AtomicReference<ServerIdentifier> leader = new AtomicReference<>();
-
-        Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
-        servers1.put( serverEm2.hashCode(), serverEm2 );
-        servers1.put( serverEm3.hashCode(), serverEm3 );
-
-        BlockingQueue<Byte> roundResult1 = new ArrayBlockingQueue<>(1);
-
-        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, leader, servers1 );
-
-        new Thread( em1 ).start();
-
-        byte take1 = roundResult1.take();
-
-        logger.info( "result 1: " + take1 );
-
-        assert(take1 == NO_RESULT);
-
-    }
+    // this test does not make sense anymore. the election worker will work forever until a leader is decided
+//    @Test
+//    public void leaderElectionFailTest() throws IOException, InterruptedException {
+//
+//        AsynchronousServerSocketChannel serverSocket1 = AsynchronousServerSocketChannel.open();
+//        serverSocket1.bind( new InetSocketAddress(80) );
+//
+//        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 80 );
+//        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 81 );
+//        ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 82 );
+//
+//        Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
+//        servers1.put( serverEm2.hashCode(), serverEm2 );
+//        servers1.put( serverEm3.hashCode(), serverEm3 );
+//
+//        BlockingQueue<Byte> roundResult1 = new ArrayBlockingQueue<>(1);
+//
+//        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, servers1 );
+//
+//        new Thread( em1 ).start();
+//
+//        byte take1 = roundResult1.take();
+//
+//        logger.info( "result 1: " + take1 );
+//
+//        assert(take1 == NO_RESULT);
+//
+//    }
 
     /**
      * In this test, a server may need to retry the leader election
@@ -131,10 +124,6 @@ public class LeaderElectionTest
         ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 81 );
         ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 82 );
 
-        AtomicReference<ServerIdentifier> leader1 = new AtomicReference<>();
-        AtomicReference<ServerIdentifier> leader2 = new AtomicReference<>();
-        // leader.set(null);
-
         Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
         servers1.put( serverEm2.hashCode(), serverEm2 );
         servers1.put( serverEm3.hashCode(), serverEm3 );
@@ -146,7 +135,7 @@ public class LeaderElectionTest
         var group1 = AsynchronousChannelGroup.withFixedThreadPool(1, new VmsDaemonThreadFactory());
         var group2 = AsynchronousChannelGroup.withFixedThreadPool(1, new VmsDaemonThreadFactory());
 
-        ElectionWorker em1 = new ElectionWorker(serverSocket1, group1, Executors.newFixedThreadPool(2), serverEm1, leader1, servers1, 10000 );
+        ElectionWorker em1 = new ElectionWorker(serverSocket1, group1, Executors.newFixedThreadPool(2), serverEm1, servers1, 10000 );
 
         // TODO that should be integrated into the class instantiation
         new Thread( em1 ).setUncaughtExceptionHandler( em1.exceptionHandler );
@@ -160,7 +149,7 @@ public class LeaderElectionTest
         AsynchronousServerSocketChannel serverSocket2 = AsynchronousServerSocketChannel.open();
         serverSocket2.bind( new InetSocketAddress(81) );
 
-        ElectionWorker em2 = new ElectionWorker(serverSocket2, group2, Executors.newFixedThreadPool(2), serverEm2, leader2, servers2, 10000 );
+        ElectionWorker em2 = new ElectionWorker(serverSocket2, group2, Executors.newFixedThreadPool(2), serverEm2, servers2, 10000 );
         new Thread( em2 ).start();
 
         byte take2 = em2.getResult();
@@ -169,7 +158,7 @@ public class LeaderElectionTest
         logger.info( "result 1: " + take1 );
         logger.info( "result 2: " + take2 );
 
-        boolean bothHasSameLeader = leader1.get().hashCode() == leader2.get().hashCode();
+        boolean bothHasSameLeader = em1.getLeader().hashCode() == em2.getLeader().hashCode();
 
         assert ( take1 != NO_RESULT && take2 != NO_RESULT && bothHasSameLeader );
 
@@ -203,13 +192,11 @@ public class LeaderElectionTest
         ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 81 );
         ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 82 );
 
-        AtomicReference<ServerIdentifier> leader = new AtomicReference<>();
-
         Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
         servers1.put( serverEm2.hashCode(), serverEm2 );
         servers1.put( serverEm3.hashCode(), serverEm3 );
 
-        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, leader, servers1 );
+        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, servers1 );
 
         new Thread( em1 ).start();
 

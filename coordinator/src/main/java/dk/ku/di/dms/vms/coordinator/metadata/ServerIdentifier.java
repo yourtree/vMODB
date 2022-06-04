@@ -12,24 +12,19 @@ public class ServerIdentifier {
 
     public long lastOffset;
 
-    // faster than dealing with string operation. yes, skew of the machine, but it does not matter
-    public long timestamp;
-
     private final int hashCode;
 
     public ServerIdentifier(String host, int port) {
         this.host = host;
         this.port = port;
         this.lastOffset = 0L;
-        this.timestamp = 0L;
         this.hashCode = Objects.hash(host, port);
     }
 
-    public ServerIdentifier(String host, int port, long lastOffset, long timestamp) {
+    public ServerIdentifier(String host, int port, long lastOffset) {
         this.host = host;
         this.port = port;
         this.lastOffset = lastOffset;
-        this.timestamp = timestamp;
         this.hashCode = Objects.hash(host, port);
     }
 

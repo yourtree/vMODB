@@ -13,7 +13,7 @@ import static dk.ku.di.dms.vms.coordinator.election.Constants.VOTE_REQUEST;
 public class VoteRequest {
 
                                         // type |     offset |       port |      timestamp |      size | <host address is variable>
-    private static final int fixedSize = Byte.BYTES + Long.BYTES + Integer.BYTES + Long.BYTES + Integer.BYTES;
+    private static final int fixedSize = Byte.BYTES + Long.BYTES + Integer.BYTES + Integer.BYTES;
 
     public static void write(ByteBuffer buffer, ServerIdentifier serverIdentifier){
 
@@ -22,7 +22,6 @@ public class VoteRequest {
         buffer.put(VOTE_REQUEST);
         buffer.putLong( serverIdentifier.lastOffset );
         buffer.putInt(serverIdentifier.port );
-        buffer.putLong(serverIdentifier.timestamp );
         buffer.putInt( hostBytes.length );
         buffer.put( hostBytes );
 
@@ -34,14 +33,12 @@ public class VoteRequest {
 
         int port = buffer.getInt();
 
-        long timestamp = buffer.getLong();
-
         int size = buffer.getInt();
 
         // 1 + 8 + 4 = 8 + 4 =
         String host = new String( buffer.array(), fixedSize, size, StandardCharsets.UTF_8 );
 
-        return new ServerIdentifier(  host, port, offset, timestamp );
+        return new ServerIdentifier(  host, port, offset );
 
     }
 

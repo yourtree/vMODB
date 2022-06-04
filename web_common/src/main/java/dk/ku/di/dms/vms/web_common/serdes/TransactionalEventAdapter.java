@@ -8,6 +8,7 @@ import dk.ku.di.dms.vms.modb.common.event.IApplicationEvent;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.util.Map;
 
 /**
@@ -70,7 +71,10 @@ public class TransactionalEventAdapter extends TypeAdapter<TransactionalEvent> {
 
         if("payload".equals(attributeName)) {
             in.peek();
-            event = gson.fromJson( in, queueToEventMap.get( queue ) );
+            Type typeOfT = queueToEventMap.get( queue );
+            if(typeOfT != null) {
+                event = gson.fromJson(in, typeOfT);
+            }
         }
 
         in.endObject();

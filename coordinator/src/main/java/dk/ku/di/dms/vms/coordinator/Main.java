@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.coordinator;
 
 import dk.ku.di.dms.vms.coordinator.election.ElectionWorker;
+import dk.ku.di.dms.vms.coordinator.server.leader.Leader;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 
@@ -85,7 +86,7 @@ public class Main
 
             if (electionManager.getState() == LEADER) {
                 // setup leader
-
+                Leader leader = new Leader();
                 // setup http server for incoming transactions. followers must redirect the request to the leader for now
             } else {
                 // setup follower

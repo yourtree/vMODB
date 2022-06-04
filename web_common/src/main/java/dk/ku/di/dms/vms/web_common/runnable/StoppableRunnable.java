@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.web_common.runnable;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.web_common.runnable.Constants.NO_RESULT;
@@ -19,10 +18,10 @@ public abstract class StoppableRunnable implements Runnable {
     // queue serves as a channel to respond the calling thread
     protected final BlockingQueue<Byte> signal;
 
-    private final AtomicBoolean state;
+    private volatile boolean running;
 
     public StoppableRunnable() {
-        this.state = new AtomicBoolean( true );
+        this.running = true;
         this.signal = new ArrayBlockingQueue<>(1);
         this.exceptionHandler = new CustomUncaughtExceptionHandler( signal );
     }
@@ -36,11 +35,11 @@ public abstract class StoppableRunnable implements Runnable {
     }
 
     public boolean isStopped() {
-        return !state.get();
+        return !running;
     }
 
     public void stop() {
-        state.set(false);
+        running = false;
     }
 
     private class CustomUncaughtExceptionHandler implements Thread.UncaughtExceptionHandler {
