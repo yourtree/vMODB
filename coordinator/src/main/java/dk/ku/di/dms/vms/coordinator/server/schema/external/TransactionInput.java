@@ -14,7 +14,7 @@ public class TransactionInput {
 
     public static class Event {
         public String event; // event name
-        public Object payload; // event payload... I can avoid deserializing the payload for higher performance. but at the end
+        public String payload; // event payload... I can avoid deserializing the payload for higher performance. but at the end
     }
 
 }

@@ -260,7 +260,7 @@ public class HttpEventLoop implements Runnable {
             } catch (IOException e) {
                 // suppress error
             } finally {
-                // independently, remove it
+                // independently of error, remove it
                 connectionMap.remove(selectionKey);
             }
         }

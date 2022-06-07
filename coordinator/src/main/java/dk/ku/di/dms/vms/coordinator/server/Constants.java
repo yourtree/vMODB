@@ -9,6 +9,8 @@ public class Constants {
     // from and to server nodes
     public static final byte HEARTBEAT = 0;
 
+    public static final byte PRESENTATION = 8;
+
     /**
      * Transactional Events
      */

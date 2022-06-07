@@ -1,21 +1,29 @@
 package dk.ku.di.dms.vms.coordinator.server.leader;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
+import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
 import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
 import dk.ku.di.dms.vms.coordinator.metadata.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.server.schema.Heartbeat;
+import dk.ku.di.dms.vms.coordinator.server.schema.Presentation;
 import dk.ku.di.dms.vms.coordinator.server.schema.external.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.server.schema.internal.Issue;
+import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static dk.ku.di.dms.vms.coordinator.election.Constants.VOTE_REQUEST;
 import static dk.ku.di.dms.vms.coordinator.server.Constants.*;
 import static dk.ku.di.dms.vms.coordinator.server.schema.internal.Issue.Category.CHANNEL_NOT_REGISTERED;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
@@ -23,11 +31,13 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
 
 public class Leader extends StoppableRunnable {
 
-    private final AtomicInteger state;
-    private static final int NEW                = 0;
-    private static final int COMMITTING         = 1; //
-    private static final int ABORTING           = 2; //
-    private static final int STOPPED            = 3; //
+//    private final AtomicInteger state;
+//    private static final int NEW                = 0;
+//    private static final int COMMITTING         = 1; //
+//    private static final int ABORTING           = 2; //
+//    private static final int STOPPED            = 3; //
+
+    private static final int DEFAULT_BUFFER_SIZE = 1024;
 
     // a slack must be considered due to network overhead
     // e.g., by the time the timeout is reached, the time
@@ -58,14 +68,17 @@ public class Leader extends StoppableRunnable {
 
     private Map<Integer, VmsIdentifier> VMSs;
 
-    private Map<Integer, RemoteConnectionMetadata> channelMetadataMap;
+    private Map<Integer, ConnectionMetadata> connectionMetadataMap;
 
     // list of connected nodes that require identification
     // the identification comes after the first message received
-    private Map<Integer, AsynchronousSocketChannel> unknownNodeMap;
+    // private Map<Integer, AsynchronousSocketChannel> unknownNodeMap;
 
     // the identification of this server
     private ServerIdentifier me;
+
+    // must update the "me" on snapshotting (i.e., committing)
+    private AtomicLong offset;
 
     // can be == me
     private AtomicReference<ServerIdentifier> leader;
@@ -86,7 +99,7 @@ public class Leader extends StoppableRunnable {
     private BlockingQueue<ByteBuffer> byteBufferQueue;
 
     // then another thread must take these entries and build the events
-    private Queue<TransactionInput> parsedTransactionRequests;
+    // private Queue<TransactionInput> parsedTransactionRequests;
 
     // https://stackoverflow.com/questions/409932/java-timer-vs-executorservice
     // private ScheduledExecutorService scheduledBatchExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -94,9 +107,10 @@ public class Leader extends StoppableRunnable {
     // the heartbeat sending from the coordinator
     // private ScheduledExecutorService scheduledLeaderElectionExecutor = Executors.newSingleThreadScheduledExecutor();
 
+    private Map<String, TransactionDAG> transactionMap;
+
     public Leader() {
         super();
-        this.state = new AtomicInteger(NEW);
         this.gson = new Gson();
     }
 
@@ -106,42 +120,59 @@ public class Leader extends StoppableRunnable {
      * This thread should not block.
      * The idea is to decode the message and deliver back to main loop as soon as possible
      */
-    private class ReadCompletionHandler implements CompletionHandler<Integer, RemoteConnectionMetadata> {
+    private class ReadCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
 
-        // TODO is it an (input) event, a heartbeat, an abort, a commit response?
+        // is it an (input) event, a heartbeat, an abort, a commit response?
 
         @Override
-        public void completed(Integer result, RemoteConnectionMetadata attachment) {
+        public void completed(Integer result, ConnectionMetadata attachment) {
 
-            // TODO decode message
+            // decode message
 
 
-            attachment.buffer.clear();
+            attachment.readBuffer.clear();
 
             // need to read here again... how to get my channel? maybe the attachment should be the inet address so can retrieve safely from map?
 
             // attachment must include the channel and bytebuffer
 
-            attachment.channel.read( attachment.buffer, attachment, this );
+            attachment.channel.read( attachment.readBuffer, attachment, this );
         }
 
         @Override
-        public void failed(Throwable exc, RemoteConnectionMetadata attachment) {
-            attachment.buffer.clear();
+        public void failed(Throwable exc, ConnectionMetadata attachment) {
+            attachment.readBuffer.clear();
         }
 
     }
 
-    private record RemoteConnectionMetadata(
-         ByteBuffer buffer,
-         AsynchronousSocketChannel channel,
-         ReentrantLock writeLock) // reads are performed via single-thread anyway by design (completionhandler), but writes must be serialized to avoid concurrency errors
-    {}
+    /**
+     * Reads are performed via single-thread anyway by design (completion handler),
+     * but writes (and update to the channel after crashes) must be serialized to avoid concurrency errors
+     *
+     * Some attributes are non-final
+     */
+    private static class ConnectionMetadata {
+        public final ByteBuffer readBuffer;
+        public final ByteBuffer writeBuffer;
+        public AsynchronousSocketChannel channel;
+        public final ReentrantLock writeLock;
+
+        public EventIdentifier lastEventWritten;
+
+        public ConnectionMetadata(ByteBuffer readBuffer, ByteBuffer writeBuffer, AsynchronousSocketChannel channel, ReentrantLock writeLock) {
+            this.readBuffer = readBuffer;
+            this.writeBuffer = writeBuffer;
+            this.channel = channel;
+            this.writeLock = writeLock;
+        }
+    }
 
     /**
      * This is where I define whether the connection must be kept alive
      * Depending on the nature of the request
      * https://www.baeldung.com/java-nio2-async-socket-channel
+     * The first read must be a presentation message, informing what is this server (follower or VMS)
      */
     private class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, Void> {
 
@@ -154,31 +185,22 @@ public class Leader extends StoppableRunnable {
 
                 // do I need this check?
 //                if ((channel != null) && (channel.isOpen())) {
-//
 //                }
 
                 channel.setOption(TCP_NODELAY, true); // true disable the nagle's algorithm. not useful to have coalescence of messages in election'
                 channel.setOption(SO_KEEPALIVE, true); // better to keep alive now, independently if that is a VMS or follower
 
                 // right now I cannot discern whether it is a VMS or follower. perhaps I can keep alive channels from leader election?
-                //
 
-                // do we have enough bytebuffers?
-                if(byteBufferQueue.isEmpty()){
-                    buffer = ByteBuffer.allocateDirect(1024);
-                } else {
-                    buffer = byteBufferQueue.remove();
+                buffer = getByteBuffer();
+
+                // read presentation message. if vms, receive metadata, if follower, nothing necessary
+                Future<Integer> readFuture = channel.read( buffer );
+                readFuture.get();
+
+                if( !acceptConnection(channel, buffer) ) {
+                    byteBufferQueue.add(buffer);
                 }
-
-                // unknownNodeMap.put( channel.getRemoteAddress().hashCode(), channel );
-
-                RemoteConnectionMetadata attachment = new RemoteConnectionMetadata( buffer, channel, new ReentrantLock() );
-
-                channelMetadataMap.put( channel.getRemoteAddress().hashCode(), attachment );
-
-                // create a read handler for this connection
-                // attach buffer, so it can be read upon completion
-                channel.read( buffer, attachment, new ReadCompletionHandler() );
 
             } catch(Exception e){
                 // return buffer to queue
@@ -201,6 +223,165 @@ public class Leader extends StoppableRunnable {
             }
         }
 
+    }
+
+    /**
+     *
+     * @return A usable byte buffer
+     */
+    private ByteBuffer getByteBuffer() {
+        ByteBuffer buffer;
+        // do we have enough bytebuffers?
+        if(byteBufferQueue.isEmpty()){
+            buffer = ByteBuffer.allocateDirect(DEFAULT_BUFFER_SIZE);
+        } else {
+            buffer = byteBufferQueue.poll();
+            if(buffer == null){ // check if a concurrent thread has taken the available buffer
+                buffer = ByteBuffer.allocateDirect(DEFAULT_BUFFER_SIZE);
+            }
+        }
+        return buffer;
+    }
+
+    /**
+     * Task for informing the server running for leader that a leader is already established
+     * We would no longer need to establish connection in case the {@link dk.ku.di.dms.vms.coordinator.election.ElectionWorker}
+     * maintains the connections.
+     */
+    private class InformLeadershipTask implements Runnable {
+
+        private final ServerIdentifier connectTo;
+
+        public InformLeadershipTask(ServerIdentifier connectTo){
+            this.connectTo = connectTo;
+        }
+
+        @Override
+        public void run() {
+
+            try {
+
+                InetSocketAddress address = new InetSocketAddress(connectTo.host, connectTo.port);
+                AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
+                channel.setOption(TCP_NODELAY, true);
+                channel.setOption(SO_KEEPALIVE, false);
+
+                channel.connect(address).get();
+
+                ByteBuffer buffer = ByteBuffer.allocate(128);
+
+                LeaderRequest.write(buffer, me);
+
+                channel.write(ByteBuffer.wrap(buffer.array())).get();
+
+                if(channel.isOpen()) {
+                    channel.close();
+                }
+
+            } catch(Exception ignored){}
+
+        }
+
+    }
+
+    private boolean acceptConnection(AsynchronousSocketChannel channel, ByteBuffer buffer){
+
+        // message identifier
+        byte messageIdentifier = buffer.get(0);
+
+        if(messageIdentifier == VOTE_REQUEST){
+            // so I am leader, and I respond with a leader request to this new node
+            // taskExecutor.submit( new ElectionWorker.WriteTask( LEADER_REQUEST, server ) );
+            // would be better to maintain the connection open.....
+            buffer.clear();
+            ServerIdentifier serverRequestingVote = VoteRequest.read(buffer);
+            taskExecutor.submit (  new InformLeadershipTask(serverRequestingVote) );
+            return false;
+        }
+
+        // if it is not a presentation, drop connection
+        if(messageIdentifier != PRESENTATION){
+            return false;
+        }
+
+        // now let's do the work
+
+        buffer.position(1);
+
+        byte type = buffer.get();
+        if(type == 0){
+            // server
+            // ....
+            ServerIdentifier newServer = Presentation.readServer(buffer);
+
+            // check whether this server is known... maybe it has crashed... then we only need to update the respective channel
+            if(servers.get(newServer.hashCode()) != null){
+
+                ConnectionMetadata connectionMetadata = connectionMetadataMap.get( newServer.hashCode() );
+
+                // lock to refrain other threads from using old metadata
+                connectionMetadata.writeLock.lock();
+
+                // update metadata of this node
+                servers.put( newServer.hashCode(), newServer );
+
+                connectionMetadata.channel = channel;
+
+                connectionMetadata.writeLock.unlock();
+
+            } else { // no need for locking here
+
+                servers.put( newServer.hashCode(), newServer );
+
+                ConnectionMetadata connectionMetadata = new ConnectionMetadata( buffer, getByteBuffer(), channel, new ReentrantLock() );
+                connectionMetadataMap.put( newServer.hashCode(), connectionMetadata );
+                // create a read handler for this connection
+                // attach buffer, so it can be read upon completion
+                channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
+
+            }
+        } else if(type == 1){ // vms
+
+            VmsIdentifier newVms = Presentation.readVms(buffer, gson);
+
+            if(VMSs.get( newVms.hashCode() ) != null){
+                // vms reconnecting
+
+                ConnectionMetadata connectionMetadata = connectionMetadataMap.get( newVms.hashCode() );
+
+                // lock to refrain other threads from using old metadata
+                connectionMetadata.writeLock.lock();
+
+                // update metadata of this node
+                VMSs.put( newVms.hashCode(), newVms );
+
+                connectionMetadata.channel = channel;
+
+                connectionMetadata.writeLock.unlock();
+
+            } else {
+
+                VMSs.put( newVms.hashCode(), newVms );
+
+                ConnectionMetadata connectionMetadata = new ConnectionMetadata( buffer, getByteBuffer(), channel, new ReentrantLock() );
+                connectionMetadataMap.put( newVms.hashCode(), connectionMetadata );
+
+                channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
+
+            }
+
+        } else {
+            // simply unknown... probably a bug
+            try{
+                if(channel.isOpen()) {
+                    channel.close();
+                }
+            } catch(Exception ignored){}
+            return false;
+
+        }
+
+        return true;
     }
 
     private class BatchHandler implements Runnable {
@@ -233,24 +414,24 @@ public class Leader extends StoppableRunnable {
      * This method contains the main loop that contains the main functions of a leader
      * (a) Heartbeat sending to avoid followers to initiate a leader election. That can still happen due to network latency.
      *  What happens if two nodes declare themselves as leaders? We need some way to let it know
-     * (b) Commit/Abort management
-     * (c) Processing of transaction requests
+     * (b) Batch management
+     * ------ NO ----- (c) Processing of transaction requests
      * designing leader mode first
-     * TODO maybe design follower mode in another class to avoid convoluted code
+     * design follower mode in another class to avoid convoluted code
      */
     @Override
     public void run() {
 
         // ServerSocketChannel.open().register()
 
-        // the batch handler must synchronize with the heartbeat??? heartbeat is only for followers? heartbeat also from vmss
+        // the batch handler must synchronize with the heartbeat??? heartbeat is only for followers? heartbeat also from VMSs
 
         long lastBatchTimestamp = System.currentTimeMillis();
         long lastHeartbeat = lastBatchTimestamp;
 
         long elapsed;
 
-        // TODO do I need this variable?
+        // do I need this variable? not if it is leader
         // int state_ = state.get();
 
         // send heartbeat to all VMSs too.... ?
@@ -262,19 +443,11 @@ public class Leader extends StoppableRunnable {
         // setup asynchronous listener for new connections
         serverSocket.accept( null, new AcceptCompletionHandler());
 
-        Future<?> readTaskFuture = CompletableFuture.completedFuture(null);
-        TransactionRequestParsingTask parsingTask = new TransactionRequestParsingTask();
+        taskExecutor.submit( new TransactionManager() );
 
         while(!isStopped()){
 
-            // should read in a proportion that matches the batch and heartbeat window, otherwise
-            // how long does it take to process a batch of input transactions?
-            // instead of trying to match the rate of processing, perhaps we can create read tasks
-            if (readTaskFuture.isDone() && transactionRequestsToParseQueue.size() > 0) {
-                readTaskFuture = taskExecutor.submit( parsingTask );
-            }
-
-            // what about the read?
+            // what about the read? is set up on accept completion handler
             // reads and writes to the same asynchronous socket require coordination
             // concurrent support, but maximum one read and one write at time
 
@@ -283,21 +456,28 @@ public class Leader extends StoppableRunnable {
             elapsed = now - lastHeartbeat;
 
             if ( elapsed >= heartbeatTimeout - heartbeatSlack ){
+                lastHeartbeat = now + heartbeatSlack;
                 // send heartbeat to all followers
                 sendHeartbeats();
-                lastHeartbeat = now + heartbeatSlack;
             }
 
             // is batch time?
             if( now - lastBatchTimestamp >= batchWindow ){
-
-                // should keep track which events must be included in the batch, remember there must be concurrent threads reading new transactions
-
                 lastBatchTimestamp = now;
+                // should keep track which events must be included in the batch, remember there must be concurrent threads reading new transactions
+                Future<?> batchTaskFuture = taskExecutor.submit( new BatchHandler() );
+
+                try {
+                    batchTaskFuture.get();
+                } catch (InterruptedException | ExecutionException ignored) {}
+
             }
 
             logger.info("I am "+me.host+":"+me.port);
         }
+
+        // must find a way to stop the accept
+
 
     }
 
@@ -312,12 +492,12 @@ public class Leader extends StoppableRunnable {
     private void sendHeartbeats() {
         logger.info("Sending vote requests. I am "+ me.host+":"+me.port);
         for(ServerIdentifier server : servers.values()){
-            RemoteConnectionMetadata connectionMetadata = channelMetadataMap.get( server.hashCode() );
+            ConnectionMetadata connectionMetadata = connectionMetadataMap.get( server.hashCode() );
             AsynchronousSocketChannel channel = connectionMetadata.channel;
             if(channel != null) {
 
 
-                taskExecutor.submit( new WriterManager(HEARTBEAT, me) );
+                //taskExecutor.submit( new TransactionManager(HEARTBEAT, me) );
 
             } else {
 
@@ -328,106 +508,125 @@ public class Leader extends StoppableRunnable {
     }
 
     /**
-     * This task is not checking the correctness of the payload!
+     *
      */
-    private class TransactionRequestParsingTask implements Runnable {
+    private class WriteCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
 
         @Override
-        public void run() {
+        public void completed(Integer result, ConnectionMetadata connectionMetadata) {
 
-            // the payload received in bytes is json format
+            connectionMetadata.writeBuffer.clear();
+            connectionMetadata.writeLock.unlock();
 
-            // must also check whether the event has correct format. leave it for later, just assume it is correct
-            Collection<byte[]> drainedElements = new ArrayList<>( transactionRequestsToParseQueue.size() + 10 ); // + delta (10)
-            if( transactionRequestsToParseQueue.drainTo(drainedElements) > 0 ) {
-                // do not send another until the last has been completed, so we can better adjust the rate of parsing
-                for (byte[] drainedElement : drainedElements) {
-                    String json = new String(drainedElement);
-                    TransactionInput transactionInput = gson.fromJson(json, TransactionInput.class);
-                    parsedTransactionRequests.add(transactionInput);
-                }
+        }
 
-            }
+        @Override
+        public void failed(Throwable exc, ConnectionMetadata connectionMetadata) {
+
+            connectionMetadata.writeBuffer.clear();
+            connectionMetadata.writeLock.unlock();
 
         }
 
     }
-
-    private record WriteRequest (
-            byte type,
-            AsynchronousSocketChannel channel
-    )
-    {}
-
-    // write request attachment
-    private record WriteRequestAttachment(
-        AsynchronousSocketChannel channel, // the channel where the write operation was performed
-        ByteBuffer buffer // this buffer must be cleared and put back to the buffer
-    ) {}
-
-    /**
-     * The attached object represents the
-     */
-    private class WriteCompletionHandler implements CompletionHandler<Integer, WriteRequestAttachment> {
-
-        // TODO is it an (input) event, a heartbeat, an abort, a commit response?
-
-        @Override
-        public void completed(Integer result, WriteRequestAttachment attachment) {
-
-            // TODO decode message
-
-
-            attachment.buffer.clear();
-
-            // need to read here again... how to get my channel? maybe the attachment should be the inet address so can retrieve safely from map?
-
-            // attachment must include the channel and bytebuffer
-
-            attachment.channel.read( attachment.buffer, attachment, this );
-        }
-
-        @Override
-        public void failed(Throwable exc, WriteRequestAttachment attachment) {
-            attachment.buffer.clear();
-            byteBufferQueue.add( attachment.buffer );
-        }
-
-    }
-
-    List<WriteRequest> writeRequests;
 
     /**
      * This task assumes the channels are already established
      * Cannot have two threads writing to the same channel at the same time
+     * A transaction manager is responsible for assigning TIDs to incoming transaction requests
+     * This task also involves making sure the writes are performed successfully
      * A writer manager is responsible for defining strategies, policies, safety guarantees on
      * writing concurrently to channels.
      */
-    private class WriterManager implements Runnable {
-
-        private final byte messageType;
-        private final ServerIdentifier me;
-
-        private AsynchronousSocketChannel channel;
-
-        public WriterManager(byte messageType, ServerIdentifier me){
-            this.messageType = messageType;
-            this.me = me;
-        }
+    private class TransactionManager extends StoppableRunnable {
 
         @Override
         public void run() {
 
+            Collection<byte[]> drainedElements = new ArrayList<>(100000);
+
+            while(!isStopped()){
+
+                // should read in a proportion that matches the batch and heartbeat window, otherwise
+                // how long does it take to process a batch of input transactions?
+                // instead of trying to match the rate of processing, perhaps we can create read tasks
+                if (transactionRequestsToParseQueue.size() > 0) {
+                    // the payload received in bytes is json format
+
+                    transactionRequestsToParseQueue.drainTo(drainedElements);
+
+                    List<TransactionInput> parsedTransactionRequests = new ArrayList<>( drainedElements.size() );
+
+                    // do not send another until the last has been completed, so we can better adjust the rate of parsing
+                    for (byte[] drainedElement : drainedElements) {
+                        String json = new String(drainedElement);
+
+                        // must also check whether the event is correct, that is, contains all events
+                        try {
+                            TransactionInput transactionInput = gson.fromJson(json, TransactionInput.class);
+                            parsedTransactionRequests.add(transactionInput);
+                        } catch(JsonSyntaxException ignored) {} // simply ignore
+                    }
+
+                    drainedElements.clear();
+
+                    for(TransactionInput tx : parsedTransactionRequests){
+
+                        long offset_ = offset.addAndGet(1);
+
+                        TransactionDAG transaction = transactionMap.get( tx.name );
+
+                        // for each input event, send the event to the proper vms
+                        // assuming the input is correct, i.e., all events are present
+                        for(TransactionInput.Event inputEvent : tx.events){
+
+                            // look for the event in the topology
+                            EventIdentifier event = transaction.topology.get(inputEvent.event);
+
+                            // get the vms
+                            VmsIdentifier vms = VMSs.get( event.vms.hashCode() );
+
+                            // get the connection metadata
+                            ConnectionMetadata connectionMetadata = connectionMetadataMap.get( Objects.hash( vms.host, vms.port ) );
+
+
+                            // we could employ deterministic writes to the channel, that is, an order that would not require locking for writes
+                            connectionMetadata.writeLock.lock();
+
+                            // assign this event, so... what? try to send later?
+                            connectionMetadata.lastEventWritten = event;
+
+                            // write data
+                            // simply write. think about failures/atomicity later
+                            // connectionMetadata.writeBuffer;
+
+
+                            connectionMetadata.channel.write( connectionMetadata.writeBuffer, connectionMetadata, new WriteCompletionHandler() );
+
+                        }
+
+
+                    }
+
+
+
+                }
+
+
+
+            }
+
+/*
             ByteBuffer buffer;
             try {
                 buffer = byteBufferQueue.poll(1000, TimeUnit.MILLISECONDS);
             } catch (InterruptedException ignored) {
-                buffer = ByteBuffer.allocateDirect(1024);
+                buffer = ByteBuffer.allocateDirect(DEFAULT_BUFFER_SIZE);
             }
 
             try {
 
-                // FIXME queue the errors
+                // queue the errors
 
 //                try {
 //                    //channel.w
@@ -445,7 +644,7 @@ public class Leader extends StoppableRunnable {
 
                 }
 
-                Integer write = channel.write(ByteBuffer.wrap( buffer.array() )).get();
+                Integer write = 1; // channel.write(ByteBuffer.wrap( buffer.array() )).get();
 
                 // number of bytes written
                 if (write == -1) {
@@ -455,9 +654,9 @@ public class Leader extends StoppableRunnable {
 
                 logger.info("Write performed. I am "+ me.host+":"+me.port+" message type is "+messageType+" and return was "+write);
 
-                if (channel.isOpen()) {
-                    channel.close();
-                }
+//                if (channel.isOpen()) {
+//                    channel.close();
+//                }
 
 
 
@@ -465,6 +664,7 @@ public class Leader extends StoppableRunnable {
                 logger.info("Error on write. I am "+ me.host+":"+me.port+" message type is "+messageType);
 
             }
+            */
 
         }
 

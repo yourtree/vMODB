@@ -5,7 +5,7 @@ import java.util.Objects;
 /**
  * Basic data of a server running for leader
  */
-public class ServerIdentifier {
+public final class ServerIdentifier {
 
     public final String host;
     public final int port;
