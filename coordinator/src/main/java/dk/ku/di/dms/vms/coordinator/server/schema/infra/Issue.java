@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.schema.internal;
+package dk.ku.di.dms.vms.coordinator.server.schema.infra;
 
 import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
 

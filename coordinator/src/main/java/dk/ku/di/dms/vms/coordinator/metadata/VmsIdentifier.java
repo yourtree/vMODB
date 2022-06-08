@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
 import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * The identification of a connecting DBMS daemon
@@ -18,7 +19,12 @@ public class VmsIdentifier {
     public String host;
     public int port;
 
-    public long lastOffset;
+    public volatile long lastTid;
+
+    // batch offset, also monotonically increasing.
+    // to avoid vms to process transactions from the
+    // next batch while the current has not finished yet
+    public volatile long lastBatch;
 
     // data model
     public List<VmsDataSchema> dataSchema;
@@ -26,11 +32,12 @@ public class VmsIdentifier {
     // event data model
     public List<VmsEventSchema> eventSchema;
 
-    public VmsIdentifier(String name, String host, int port, long lastOffset, List<VmsDataSchema> dataSchema, List<VmsEventSchema> eventSchema) {
-        this.name = name;
+    public VmsIdentifier(String name, String host, int port, long lastTid, long lastBatch, List<VmsDataSchema> dataSchema, List<VmsEventSchema> eventSchema) {
+        this.name = Objects.requireNonNull(name);
         this.host = host;
         this.port = port;
-        this.lastOffset = lastOffset;
+        this.lastTid = lastTid;
+        this.lastBatch = lastBatch;
         this.dataSchema = dataSchema;
         this.eventSchema = eventSchema;
     }

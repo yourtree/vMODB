@@ -6,10 +6,11 @@ import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
 import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
 import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
 import dk.ku.di.dms.vms.coordinator.metadata.VmsIdentifier;
-import dk.ku.di.dms.vms.coordinator.server.schema.Heartbeat;
-import dk.ku.di.dms.vms.coordinator.server.schema.Presentation;
+import dk.ku.di.dms.vms.coordinator.server.schema.internal.Heartbeat;
+import dk.ku.di.dms.vms.coordinator.server.schema.internal.Presentation;
+import dk.ku.di.dms.vms.coordinator.server.schema.internal.TransactionEvent;
 import dk.ku.di.dms.vms.coordinator.server.schema.external.TransactionInput;
-import dk.ku.di.dms.vms.coordinator.server.schema.internal.Issue;
+import dk.ku.di.dms.vms.coordinator.server.schema.infra.Issue;
 import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
@@ -20,16 +21,15 @@ import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.VOTE_REQUEST;
 import static dk.ku.di.dms.vms.coordinator.server.Constants.*;
-import static dk.ku.di.dms.vms.coordinator.server.schema.internal.Issue.Category.CHANNEL_NOT_REGISTERED;
+import static dk.ku.di.dms.vms.coordinator.server.schema.infra.Issue.Category.CHANNEL_NOT_REGISTERED;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
-public class Leader extends StoppableRunnable {
+public final class Leader extends StoppableRunnable {
 
 //    private final AtomicInteger state;
 //    private static final int NEW                = 0;
@@ -78,10 +78,12 @@ public class Leader extends StoppableRunnable {
     private ServerIdentifier me;
 
     // must update the "me" on snapshotting (i.e., committing)
-    private AtomicLong offset;
+    private AtomicLong tid;
+
+    private AtomicLong batch;
 
     // can be == me
-    private AtomicReference<ServerIdentifier> leader;
+    // private AtomicReference<ServerIdentifier> leader;
 
     // to encapsulate operations in the memory-mapped file
     // private MetadataAPI metadataAPI;
@@ -94,7 +96,7 @@ public class Leader extends StoppableRunnable {
     // transaction requests coming from the http event loop
     private LinkedBlockingQueue<byte[]> transactionRequestsToParseQueue;
 
-    private Gson gson;
+    private final Gson gson;
 
     private BlockingQueue<ByteBuffer> byteBufferQueue;
 
@@ -384,7 +386,11 @@ public class Leader extends StoppableRunnable {
         return true;
     }
 
-    private class BatchHandler implements Runnable {
+    /**
+     * Given a set of VMSs involved in the last batch (for easiness can send to all of them for now)
+     * send a batch request.
+     */
+    private final class CommitHandler implements Runnable {
 
         // constructor: all metadata
 
@@ -402,7 +408,7 @@ public class Leader extends StoppableRunnable {
 
             // send commit info
 
-            // wait for all acks given a timestamp
+            // wait for all ACKs given a timestamp
 
 //            ScheduledFuture<?> schedulerHandler = scheduledBatchExecutor.schedule(new BatchHandler(), 30, TimeUnit.SECONDS );
 
@@ -447,10 +453,6 @@ public class Leader extends StoppableRunnable {
 
         while(!isStopped()){
 
-            // what about the read? is set up on accept completion handler
-            // reads and writes to the same asynchronous socket require coordination
-            // concurrent support, but maximum one read and one write at time
-
             long now = System.currentTimeMillis();
 
             elapsed = now - lastHeartbeat;
@@ -465,7 +467,7 @@ public class Leader extends StoppableRunnable {
             if( now - lastBatchTimestamp >= batchWindow ){
                 lastBatchTimestamp = now;
                 // should keep track which events must be included in the batch, remember there must be concurrent threads reading new transactions
-                Future<?> batchTaskFuture = taskExecutor.submit( new BatchHandler() );
+                Future<?> batchTaskFuture = taskExecutor.submit( new CommitHandler() );
 
                 try {
                     batchTaskFuture.get();
@@ -476,8 +478,7 @@ public class Leader extends StoppableRunnable {
             logger.info("I am "+me.host+":"+me.port);
         }
 
-        // must find a way to stop the accept
-
+        // must find a way to stop the accepting
 
     }
 
@@ -495,22 +496,19 @@ public class Leader extends StoppableRunnable {
             ConnectionMetadata connectionMetadata = connectionMetadataMap.get( server.hashCode() );
             AsynchronousSocketChannel channel = connectionMetadata.channel;
             if(channel != null) {
-
-
-                //taskExecutor.submit( new TransactionManager(HEARTBEAT, me) );
-
+                Heartbeat.write(connectionMetadata.writeBuffer, me);
+                connectionMetadata.channel.write( connectionMetadata.writeBuffer, connectionMetadata, new WriteCompletionHandler() );
             } else {
-
                 issueQueue.add( new Issue( CHANNEL_NOT_REGISTERED, server ) );
-
             }
         }
     }
 
     /**
-     *
+     * Allows to reuse the thread pool assigned to socket to complete the writing
+     * That refrains the main thread and the TransactionManager to block, thus allowing its progress
      */
-    private class WriteCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
+    private static class WriteCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
 
         @Override
         public void completed(Integer result, ConnectionMetadata connectionMetadata) {
@@ -543,7 +541,7 @@ public class Leader extends StoppableRunnable {
         @Override
         public void run() {
 
-            Collection<byte[]> drainedElements = new ArrayList<>(100000);
+            Collection<byte[]> drainedElements = new ArrayList<>(100000); // 100000 requests per second can be handled
 
             while(!isStopped()){
 
@@ -570,15 +568,19 @@ public class Leader extends StoppableRunnable {
 
                     drainedElements.clear();
 
-                    for(TransactionInput tx : parsedTransactionRequests){
+                    // should find a way to continue emitting new transactions without stopping this thread
+                    // non-blocking design
+                    long batch_ = batch.get();
 
-                        long offset_ = offset.addAndGet(1);
+                    for(TransactionInput transactionInput : parsedTransactionRequests){
 
-                        TransactionDAG transaction = transactionMap.get( tx.name );
+                        long tid_ = tid.addAndGet(1);
+
+                        TransactionDAG transaction = transactionMap.get( transactionInput.name );
 
                         // for each input event, send the event to the proper vms
                         // assuming the input is correct, i.e., all events are present
-                        for(TransactionInput.Event inputEvent : tx.events){
+                        for(TransactionInput.Event inputEvent : transactionInput.events){
 
                             // look for the event in the topology
                             EventIdentifier event = transaction.topology.get(inputEvent.event);
@@ -589,82 +591,30 @@ public class Leader extends StoppableRunnable {
                             // get the connection metadata
                             ConnectionMetadata connectionMetadata = connectionMetadataMap.get( Objects.hash( vms.host, vms.port ) );
 
-
                             // we could employ deterministic writes to the channel, that is, an order that would not require locking for writes
                             connectionMetadata.writeLock.lock();
 
                             // assign this event, so... what? try to send later?
                             connectionMetadata.lastEventWritten = event;
 
-                            // write data
-                            // simply write. think about failures/atomicity later
-                            // connectionMetadata.writeBuffer;
+                            // write. think about failures/atomicity later
+                            TransactionEvent.write(connectionMetadata.writeBuffer, tid_, vms.lastTid, batch_, inputEvent.event, inputEvent.payload);
 
+                            // a vms, although receiving an event from a "next" batch, cannot yet commit, since
+                            // there may have additional events to arrive from the current batch
+                            // so the batch request must contain the last tid of the given vms
+
+                            vms.lastTid = tid_;
 
                             connectionMetadata.channel.write( connectionMetadata.writeBuffer, connectionMetadata, new WriteCompletionHandler() );
 
                         }
 
-
                     }
 
-
-
                 }
 
-
-
             }
-
-/*
-            ByteBuffer buffer;
-            try {
-                buffer = byteBufferQueue.poll(1000, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException ignored) {
-                buffer = ByteBuffer.allocateDirect(DEFAULT_BUFFER_SIZE);
-            }
-
-            try {
-
-                // queue the errors
-
-//                try {
-//                    //channel.w
-//                } catch (InterruptedException | ExecutionException e) {
-//                    // cannot connect to host
-//                    //logger.info("Error connecting to host. I am "+ me.host+":"+me.port+" and the target is "+ connectTo.host+":"+ connectTo.port);
-//                }
-
-                // now send the request
-                if ( messageType == HEARTBEAT ) {
-                    Heartbeat.write(buffer, me);
-                } else if ( messageType == EVENT ){
-                    //
-                } else if( messageType == COMMIT_REQUEST ){
-
-                }
-
-                Integer write = 1; // channel.write(ByteBuffer.wrap( buffer.array() )).get();
-
-                // number of bytes written
-                if (write == -1) {
-                    logger.info("Error on write (-1). I am "+ me.host+":"+me.port+" message type is "+messageType);
-
-                }
-
-                logger.info("Write performed. I am "+ me.host+":"+me.port+" message type is "+messageType+" and return was "+write);
-
-//                if (channel.isOpen()) {
-//                    channel.close();
-//                }
-
-
-
-            } catch(Exception ignored){
-                logger.info("Error on write. I am "+ me.host+":"+me.port+" message type is "+messageType);
-
-            }
-            */
 
         }
 

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.schema;
+package dk.ku.di.dms.vms.coordinator.server.schema.internal;
 
 import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
 
@@ -10,7 +10,7 @@ import static dk.ku.di.dms.vms.coordinator.server.Constants.HEARTBEAT;
 /**
  * The payload of a heartbeat
  */
-public class Heartbeat {
+public final class Heartbeat {
 
     // type | port | size | <host address is variable>
     private static final int headerSize = Byte.BYTES + Integer.BYTES + Integer.BYTES;
