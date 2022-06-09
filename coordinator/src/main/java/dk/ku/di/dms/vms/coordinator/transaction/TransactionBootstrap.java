@@ -1,9 +1,6 @@
 package dk.ku.di.dms.vms.coordinator.transaction;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Responsible for assembling the topology of a transaction crossing virtual microservices
@@ -79,6 +76,7 @@ public class TransactionBootstrap {
 
         // finally, build the transaction representation
         public TransactionDAG build(){
+            transactionBootstrap.topology.sort(Comparator.comparing(o -> o.name));
             return new TransactionDAG(transactionBootstrap.name, transactionBootstrap.topology);
         }
 

@@ -13,8 +13,13 @@ public class TransactionInput {
     public ArrayList<Event> events;
 
     public static class Event {
-        public String event; // event name
+        public String name; // event name
         public String payload; // event payload... I can avoid deserializing the payload for higher performance. but at the end
+    }
+
+    // for stream operation
+    public String getName() {
+        return name;
     }
 
 }

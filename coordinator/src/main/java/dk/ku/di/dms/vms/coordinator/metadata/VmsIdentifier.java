@@ -27,10 +27,10 @@ public class VmsIdentifier {
     public volatile long lastBatch;
 
     // data model
-    public List<VmsDataSchema> dataSchema;
+    public final List<VmsDataSchema> dataSchema;
 
     // event data model
-    public List<VmsEventSchema> eventSchema;
+    public final List<VmsEventSchema> eventSchema;
 
     public VmsIdentifier(String name, String host, int port, long lastTid, long lastBatch, List<VmsDataSchema> dataSchema, List<VmsEventSchema> eventSchema) {
         this.name = Objects.requireNonNull(name);
@@ -53,6 +53,19 @@ public class VmsIdentifier {
     @Override
     public int hashCode() {
         return name.hashCode();
+    }
+
+    // mutable since the VMS can crash
+    public int connectionMetadataHashCode() {
+        return Objects.hash(this.host, this.port);
+    }
+
+    public String getName(){
+        return name;
+    }
+
+    public long getLastTid(){
+        return lastTid;
     }
 
 }
