@@ -8,28 +8,26 @@ import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
 import dk.ku.di.dms.vms.coordinator.metadata.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.server.schema.infra.ConnectionMetadata;
 import dk.ku.di.dms.vms.coordinator.server.schema.infra.VmsConnectionMetadata;
-import dk.ku.di.dms.vms.coordinator.server.schema.internal.CommitRequest;
-import dk.ku.di.dms.vms.coordinator.server.schema.internal.Heartbeat;
-import dk.ku.di.dms.vms.coordinator.server.schema.internal.Presentation;
-import dk.ku.di.dms.vms.coordinator.server.schema.internal.TransactionEvent;
+import dk.ku.di.dms.vms.coordinator.server.schema.internal.*;
 import dk.ku.di.dms.vms.coordinator.server.schema.external.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.server.schema.infra.Issue;
 import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.VOTE_REQUEST;
 import static dk.ku.di.dms.vms.coordinator.server.Constants.*;
 import static dk.ku.di.dms.vms.coordinator.server.schema.infra.Issue.Category.CHANNEL_NOT_REGISTERED;
+import static dk.ku.di.dms.vms.coordinator.server.schema.infra.Issue.Category.COMMIT_FAILED;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -72,6 +70,9 @@ public final class Leader extends StoppableRunnable {
     private volatile long tid;
 
     private volatile long batchOffset;
+
+    // data about the current batch commit attempt
+    private final BatchContext batchContext;
 
     // can be == me
     // private AtomicReference<ServerIdentifier> leader;
@@ -130,7 +131,7 @@ public final class Leader extends StoppableRunnable {
         this.vmsConnectionMetadataMap = new HashMap<>();
         this.me = me;
         this.tid = startingTid;
-        this.batchOffset = batchOffset;
+
         this.issueQueue = new LinkedBlockingQueue<>();
         this.transactionRequestsToParse = transactionRequestsToParse;
         this.gson = gson == null ? new Gson() : gson;
@@ -141,6 +142,40 @@ public final class Leader extends StoppableRunnable {
         this.heartbeatSlack = options.getHeartbeatSlack();
         this.batchWindow = options.getBatchWindow();
         this.heartbeatTimeout = options.getHeartbeatTimeout();
+
+        // batch
+        this.batchOffset = batchOffset;
+        this.batchContext = new BatchContext(batchOffset);
+    }
+
+    /**
+     * Different logic compared to {@link WriteCompletionHandler}
+     * In case of any ABORT received for the batch, must write an ABORT
+     * event to all involved VMSs.
+     *
+     * Also must have a code for replicating the batch offset across servers....
+     */
+    private static class CommitCompletionHandler implements CompletionHandler<Integer, VmsConnectionMetadata> {
+
+        // data structure to keep track of which VMSs have committed
+
+        // if write fails, it is because
+        // close offset
+        // send commit info
+        // wait for all ACKs given a timestamp
+
+        @Override
+        public void completed(Integer result, VmsConnectionMetadata connectionMetadata) {
+            connectionMetadata.writeBuffer.clear();
+            connectionMetadata.writeLock.unlock();
+        }
+
+        @Override
+        public void failed(Throwable exc, VmsConnectionMetadata connectionMetadata) {
+            connectionMetadata.writeBuffer.clear();
+            connectionMetadata.writeLock.unlock();
+        }
+
     }
 
     /**
@@ -154,18 +189,27 @@ public final class Leader extends StoppableRunnable {
         // is it an (input) event, a heartbeat, an abort, a commit response?
 
         @Override
-        public void completed(Integer result, ConnectionMetadata attachment) {
+        public void completed(Integer result, ConnectionMetadata connectionMetadata) {
 
-            // decode message
+            // decode message by getting the first byte
+            byte type = connectionMetadata.readBuffer.get();
+
+            // can only be from vms since servers have already agreed upon batch
+            if(type == COMMIT_RESPONSE){
+
+                // don't actually need the host and port in the payload since i have the attachment to this read operation...
+                CommitResponse.CommitResponsePayload response = CommitResponse.read( connectionMetadata.readBuffer );
 
 
-            attachment.readBuffer.clear();
 
-            // need to read here again... how to get my channel? maybe the attachment should be the inet address so can retrieve safely from map?
+                // batchContext.responseMap.
+            }
 
-            // attachment must include the channel and bytebuffer
 
-            attachment.channel.read( attachment.readBuffer, attachment, this );
+
+            connectionMetadata.readBuffer.clear();
+
+            connectionMetadata.channel.read( connectionMetadata.readBuffer, connectionMetadata, this );
         }
 
         @Override
@@ -352,7 +396,7 @@ public final class Leader extends StoppableRunnable {
             if(VMSs.get( newVms.hashCode() ) != null){
                 // vms reconnecting
 
-                ConnectionMetadata connectionMetadata = serverConnectionMetadataMap.get( newVms.hashCode() );
+                VmsConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( newVms.hashCode() );
 
                 // lock to refrain other threads from using old metadata
                 connectionMetadata.writeLock.lock();
@@ -365,18 +409,14 @@ public final class Leader extends StoppableRunnable {
                 connectionMetadata.writeLock.unlock();
 
             } else {
-
                 VMSs.put( newVms.hashCode(), newVms );
-
-                ConnectionMetadata connectionMetadata = new ConnectionMetadata( buffer, getByteBuffer(), channel, new ReentrantLock() );
-                serverConnectionMetadataMap.put( newVms.hashCode(), connectionMetadata );
-
+                VmsConnectionMetadata connectionMetadata = new VmsConnectionMetadata( newVms, buffer, getByteBuffer(), channel, new ReentrantLock() );
+                vmsConnectionMetadataMap.put( newVms.hashCode(), connectionMetadata );
                 channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
-
             }
 
         } else {
-            // simply unknown... probably a bug
+            // simply unknown... probably a bug?
             try{
                 if(channel.isOpen()) {
                     channel.close();
@@ -434,77 +474,102 @@ public final class Leader extends StoppableRunnable {
             }
             // new TIDs will be emitted with the new batch in the transaction manager
 
-            CompletableFuture<?>[] promises = new CompletableFuture[servers.size()];
+            int nServers = servers.size();
+
+            CompletableFuture<?>[] promises = new CompletableFuture[nServers];
+
+            Map<Integer,Boolean> serverVotes = new ConcurrentHashMap<>(nServers);
 
             int i = 0;
             for(ServerIdentifier server : servers.values()){
                 promises[i] = CompletableFuture.supplyAsync( () ->
                 {
-                    // finish code
-                    return null;
+                    // could potentially use another channel for writing commit-related messages...
+                    // could also just open and close a new connection
+                    // actually I need this since I must read from this thread instead of relying on the
+                    // read completion handler
+                    try {
+
+                        InetSocketAddress address = new InetSocketAddress(server.host, server.port);
+                        AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
+                        channel.setOption( TCP_NODELAY, true );
+                        channel.setOption( SO_KEEPALIVE, true );
+                        channel.connect(address).get();
+
+                        ByteBuffer buffer = getByteBuffer();
+                        CommitReplication.write( buffer, currBatch, gson.toJson( vmsTidMap ) );
+                        Integer writeRes = channel.write( buffer ).get();
+
+                        buffer.clear();
+
+                        // immediate read in the same channel
+                        Future<Integer> readRes = channel.read( buffer );
+
+                        CommitResponse.CommitResponsePayload response = CommitResponse.read( buffer );
+
+                        if(response.response()){
+                            serverVotes.put(server.hashCode(),true);
+                        }
+
+                        if(channel.isOpen())
+                            channel.close();
+
+                        return null;
+
+                    } catch (InterruptedException | ExecutionException | IOException e) {
+                        // cannot connect to host
+                        // logger.info("Error connecting to host. I am "+ me.host+":"+me.port+" and the target is "+ connectTo.host+":"+ connectTo.port);
+                        return null;
+                    }
+
+                    // these threads need to block to wait for server response
+
+
                 }, taskExecutor);
                 i++;
             }
 
-            // I need a majority....
-            // CompletableFuture.allOf( promises ).get();
-
             // what about the BatchContext?
 
-            for (VmsIdentifier vms : VMSs.values()) {
+            // I need only a majority....
+            try {
 
-                VmsConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.connectionMetadataHashCode() );
+                CompletableFuture.allOf( promises ).get();
 
-                connectionMetadata.writeLock.lock();
+                if (serverVotes.size() < ((nServers + 1) / 2)){
+                    issueQueue.add(new Issue( COMMIT_FAILED, me ));
+                    return;
+                }
 
-                CommitRequest.write(connectionMetadata.writeBuffer, vmsTidMap.get(vms.name), currBatch);
+                for (VmsIdentifier vms : VMSs.values()) {
 
-                connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata, new CommitCompletionHandler());
+                    VmsConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.connectionMetadataHashCode() );
 
+                    connectionMetadata.writeLock.lock();
+
+                    CommitRequest.write(connectionMetadata.writeBuffer, vmsTidMap.get(vms.name), currBatch);
+
+                    connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata, new WriteCompletionHandler());
+
+                }
+
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
             }
 
         }
 
     }
 
-    /**
-     * Data structure to store the context information of the last batch emitted
-     */
-    private record BatchContext (
-        long batchOffset, // immutable by design
-        Map<Integer,Boolean> participatingVMSs, // the VMSs participating in this batch commit, since new VMSs can be dropped or added in the next batch-commit
-        AtomicInteger remainingAcks, // remaining commit acks
-        Boolean aborted // whether it is aborted... a single abort response is enough
-    ) {}
+    // data structure to keep the vms that has voted so far
+    private class BatchContext {
+        public long batchOffset;
+        public Map<Integer, Boolean> responseMap; // yes or no to the commit request
 
-    /**
-     * Different logic compared to {@link WriteCompletionHandler}
-     * In case of any ABORT received for the batch, must write an ABORT
-     * event to all involved VMSs.
-     *
-     * Also must have a code for replicating the batch offset across servers....
-     */
-    private static class CommitCompletionHandler implements CompletionHandler<Integer, VmsConnectionMetadata> {
-
-        // data structure to keep track of which VMSs have committed
-
-        // if write fails, it is because
-        // close offset
-        // send commit info
-        // wait for all ACKs given a timestamp
-
-        @Override
-        public void completed(Integer result, VmsConnectionMetadata connectionMetadata) {
-            connectionMetadata.writeBuffer.clear();
-            connectionMetadata.writeLock.unlock();
+        public BatchContext(long batchOffset) {
+            this.batchOffset = batchOffset;
+            this.responseMap = new ConcurrentHashMap<>();
         }
-
-        @Override
-        public void failed(Throwable exc, VmsConnectionMetadata connectionMetadata) {
-            connectionMetadata.writeBuffer.clear();
-            connectionMetadata.writeLock.unlock();
-        }
-
     }
 
     /**

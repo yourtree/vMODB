@@ -97,7 +97,7 @@ public class ElectionWorker extends StoppableRunnable {
         this.taskExecutor = taskExecutor;
         this.me = me;
         this.servers = servers;
-        this.timeout = new AtomicLong(timeout );
+        this.timeout = new AtomicLong(timeout);
         this.state = CANDIDATE;
         this.voted = new AtomicBoolean(false);
         this.messageHandler = new MessageHandler();

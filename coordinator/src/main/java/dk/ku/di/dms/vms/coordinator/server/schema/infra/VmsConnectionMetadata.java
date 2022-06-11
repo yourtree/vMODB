@@ -11,6 +11,7 @@ public class VmsConnectionMetadata extends ConnectionMetadata {
 
     public final VmsIdentifier vms;
     public EventIdentifier lastEventWritten;
+    public volatile long ongoingBatch;
 
     public VmsConnectionMetadata(VmsIdentifier vms, ByteBuffer readBuffer, ByteBuffer writeBuffer, AsynchronousSocketChannel channel, ReentrantLock writeLock) {
         super(readBuffer, writeBuffer, channel, writeLock);

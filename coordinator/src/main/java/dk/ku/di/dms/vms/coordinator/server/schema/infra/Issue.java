@@ -11,7 +11,8 @@ public class Issue {
     public enum Category {
         UNREACHABLE_NODE,
         CHANNEL_CLOSED,
-        CHANNEL_NOT_REGISTERED
+        CHANNEL_NOT_REGISTERED,
+        COMMIT_FAILED
     }
 
     // category of the issue
@@ -24,4 +25,5 @@ public class Issue {
         this.category = category;
         this.server = server;
     }
+
 }
