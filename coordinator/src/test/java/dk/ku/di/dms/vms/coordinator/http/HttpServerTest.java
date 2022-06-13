@@ -11,8 +11,10 @@ import org.junit.Test;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.LinkedList;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class HttpServerTest {
 
@@ -21,7 +23,7 @@ public class HttpServerTest {
     static HttpEventLoop eventLoop;
     static Thread eventLoopThread;
 
-    static LinkedList<byte[]> queue;
+    static LinkedBlockingQueue<byte[]> queue;
 
     // Should we accept keep alive? maybe yes, the same client may send other transactions....
     static final String HTTP10_KEEP_ALIVE_REQUEST = """
@@ -48,7 +50,7 @@ public class HttpServerTest {
                 .withReadBufferSize(1_024)
                 .withMaxRequestSize(2_048);
 
-        queue = new LinkedList<>();
+        queue = new LinkedBlockingQueue<>();
 
         eventLoop = new HttpEventLoop(options, queue);
 

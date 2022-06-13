@@ -11,13 +11,9 @@ import java.util.Objects;
  * ideally one vms per dbms proxy, but in the future may be many.
  * but who knows... the sdk are already sending a map...
  */
-public class VmsIdentifier {
+public class VmsIdentifier extends MutableIdentifierObject {
 
     public final String name; // vms name
-
-    // the node
-    public String host;
-    public int port;
 
     public volatile long lastTid;
 
@@ -33,9 +29,8 @@ public class VmsIdentifier {
     public final List<VmsEventSchema> eventSchema;
 
     public VmsIdentifier(String name, String host, int port, long lastTid, long lastBatch, List<VmsDataSchema> dataSchema, List<VmsEventSchema> eventSchema) {
+        super(host,port);
         this.name = Objects.requireNonNull(name);
-        this.host = host;
-        this.port = port;
         this.lastTid = lastTid;
         this.lastBatch = lastBatch;
         this.dataSchema = dataSchema;
@@ -48,16 +43,6 @@ public class VmsIdentifier {
         if (o == null || getClass() != o.getClass()) return false;
         VmsIdentifier that = (VmsIdentifier) o;
         return name.equals(that.name);
-    }
-
-    @Override
-    public int hashCode() {
-        return name.hashCode();
-    }
-
-    // mutable since the VMS can crash
-    public int connectionMetadataHashCode() {
-        return Objects.hash(this.host, this.port);
     }
 
     public String getName(){

@@ -9,13 +9,11 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class VmsConnectionMetadata extends ConnectionMetadata {
 
-    public final VmsIdentifier vms;
     public EventIdentifier lastEventWritten;
     public volatile long ongoingBatch;
 
-    public VmsConnectionMetadata(VmsIdentifier vms, ByteBuffer readBuffer, ByteBuffer writeBuffer, AsynchronousSocketChannel channel, ReentrantLock writeLock) {
-        super(readBuffer, writeBuffer, channel, writeLock);
-        this.vms = vms;
+    public VmsConnectionMetadata(int key, ByteBuffer readBuffer, ByteBuffer writeBuffer, AsynchronousSocketChannel channel, ReentrantLock writeLock) {
+        super(key, readBuffer, writeBuffer, channel, writeLock);
     }
 
 }

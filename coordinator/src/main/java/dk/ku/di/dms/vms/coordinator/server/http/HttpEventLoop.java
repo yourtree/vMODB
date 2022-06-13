@@ -10,6 +10,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.BlockingQueue;
 
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
@@ -34,9 +35,9 @@ public class HttpEventLoop implements Runnable {
     private final Map<SelectionKey, Connection> connectionMap;
 
     // this is the producer, single-thread. the consumer is also a single-thread (the leader)
-    private final LinkedList<byte[]> queue;
+    private final BlockingQueue<byte[]> queue;
 
-    public HttpEventLoop(Options options, LinkedList<byte[]> queue) throws IOException {
+    public HttpEventLoop(Options options, BlockingQueue<byte[]> queue) throws IOException {
 
         // set maximum number of connections this socket can handle per second
         this.connectionMap = new HashMap<>();

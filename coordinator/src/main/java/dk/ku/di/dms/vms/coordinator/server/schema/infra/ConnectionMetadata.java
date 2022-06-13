@@ -12,12 +12,18 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class ConnectionMetadata {
 
+    // generic, serves for both servers and VMSs
+    public int key;
+
     public final ByteBuffer readBuffer;
     public final ByteBuffer writeBuffer;
     public AsynchronousSocketChannel channel;
+
+    // unique read thread by design
     public final ReentrantLock writeLock;
 
-    public ConnectionMetadata(ByteBuffer readBuffer, ByteBuffer writeBuffer, AsynchronousSocketChannel channel, ReentrantLock writeLock) {
+    public ConnectionMetadata(int key, ByteBuffer readBuffer, ByteBuffer writeBuffer, AsynchronousSocketChannel channel, ReentrantLock writeLock) {
+        this.key = key;
         this.readBuffer = readBuffer;
         this.writeBuffer = writeBuffer;
         this.channel = channel;
