@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.schema.infra;
+package dk.ku.di.dms.vms.coordinator.server.infra;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -14,16 +14,23 @@ public class ConnectionMetadata {
 
     // generic, serves for both servers and VMSs
     public int key;
+    public final NodeType nodeType;
+
+    public enum NodeType {
+        SERVER,
+        VMS
+    }
 
     public final ByteBuffer readBuffer;
     public final ByteBuffer writeBuffer;
     public AsynchronousSocketChannel channel;
 
-    // unique read thread by design
+    // unique read thread by design (completion handler)
     public final ReentrantLock writeLock;
 
-    public ConnectionMetadata(int key, ByteBuffer readBuffer, ByteBuffer writeBuffer, AsynchronousSocketChannel channel, ReentrantLock writeLock) {
+    public ConnectionMetadata(int key, NodeType nodeType, ByteBuffer readBuffer, ByteBuffer writeBuffer, AsynchronousSocketChannel channel, ReentrantLock writeLock) {
         this.key = key;
+        this.nodeType = nodeType;
         this.readBuffer = readBuffer;
         this.writeBuffer = writeBuffer;
         this.channel = channel;

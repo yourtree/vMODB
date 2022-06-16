@@ -11,7 +11,7 @@ import java.util.Objects;
  * ideally one vms per dbms proxy, but in the future may be many.
  * but who knows... the sdk are already sending a map...
  */
-public class VmsIdentifier extends MutableIdentifierObject {
+public class VmsIdentifier extends MutableNetworkObject {
 
     public final String name; // vms name
 

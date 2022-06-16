@@ -1,9 +1,9 @@
-package dk.ku.di.dms.vms.coordinator.server.schema.internal;
+package dk.ku.di.dms.vms.coordinator.server.schema.transaction;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
-import static dk.ku.di.dms.vms.coordinator.server.Constants.EVENT;
+import static dk.ku.di.dms.vms.coordinator.server.infra.Constants.EVENT;
 
 /**
  *  The actual payload of what is sent to the VMSs

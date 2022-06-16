@@ -5,12 +5,15 @@ import java.util.Objects;
 /**
  * In distributed systems, nodes can fail. When they come back, their network address may change, but not their logical representation.
  */
-public class MutableIdentifierObject {
+public class MutableNetworkObject {
 
     public String host;
     public int port;
 
     private int hashCode;
+
+    // whether this node is active
+    public volatile boolean active;
 
     // mutable since the VMS can crash
     @Override
@@ -18,10 +21,11 @@ public class MutableIdentifierObject {
         return hashCode;
     }
 
-    public MutableIdentifierObject(String host, int port) {
+    public MutableNetworkObject(String host, int port) {
         this.host = host;
         this.port = port;
         this.hashCode = Objects.hash(this.host, this.port);
+        this.active = true;
     }
 
     // must be data race free

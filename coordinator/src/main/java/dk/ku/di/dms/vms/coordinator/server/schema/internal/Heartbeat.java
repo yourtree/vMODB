@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
-import static dk.ku.di.dms.vms.coordinator.server.Constants.HEARTBEAT;
+import static dk.ku.di.dms.vms.coordinator.server.infra.Constants.HEARTBEAT;
 
 /**
  * The payload of a heartbeat

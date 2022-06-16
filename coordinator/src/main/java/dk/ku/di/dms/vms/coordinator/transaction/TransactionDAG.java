@@ -7,8 +7,8 @@ import java.util.stream.Collectors;
 
 public class TransactionDAG {
 
-    public String name; // transaction name
-    public Map<String,EventIdentifier> topology;
+    public String name; // transaction name, e.g., new-order
+    public Map<String, EventIdentifier> topology;
 
     public TransactionDAG(String name, List<EventIdentifier> topology) {
         this.name = name;

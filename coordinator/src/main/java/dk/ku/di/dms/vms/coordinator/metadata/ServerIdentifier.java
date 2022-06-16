@@ -5,7 +5,7 @@ import java.util.Objects;
 /**
  * Basic data of a server running for leader
  */
-public final class ServerIdentifier extends MutableIdentifierObject {
+public final class ServerIdentifier extends MutableNetworkObject {
 
     // maybe volatile?
     public long lastOffset;

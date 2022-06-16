@@ -17,7 +17,7 @@ public class TransactionInput {
         public String payload; // event payload... I can avoid deserializing the payload for higher performance. but at the end
     }
 
-    // for stream operation
+    // for stream operations
     public String getName() {
         return name;
     }

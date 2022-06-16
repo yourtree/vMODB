@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.coordinator;
 
 import dk.ku.di.dms.vms.coordinator.election.ElectionWorker;
-import dk.ku.di.dms.vms.coordinator.server.leader.Leader;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 

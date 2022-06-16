@@ -11,7 +11,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-import static dk.ku.di.dms.vms.coordinator.server.Constants.PRESENTATION;
+import static dk.ku.di.dms.vms.coordinator.server.infra.Constants.PRESENTATION;
 
 /**
  * A presentation is a message that carries out the necessary info of a node
