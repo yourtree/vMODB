@@ -29,9 +29,9 @@ public final class Constants {
 
     /**
      * all terminal VMSs that have participated in a batch must send this event to coordinator in order to complete a batch
-     * {@link dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchAbortRequest}
+     * {@link dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchComplete}
     */
-    public static final byte BATCH_COMPLETED = 7;
+    public static final byte BATCH_COMPLETE = 7;
 
     /**
      * all terminal VMSs that have participated in a batch must send this event to coordinator in order to complete a batch
@@ -43,17 +43,17 @@ public final class Constants {
     // VMSs after receiving this message snapshot (log) their states
     public static final byte BATCH_COMMIT_REQUEST = 9;
 
-    /**
-     *  This message is sent by a new elected leader to roll back all changes previously made by the previous ongoing batch
-     *  {@link dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchAbortRequest}
-    */
-    public static final byte BATCH_ABORT_REQUEST = 10;
-
     // a commit response can indicate whether a leadership no longer holds
     // after network problems(e.g., partitions or increased latency) and subsequent normalization
 
     // VMSs respond the batch commit with this message... but can be avoided for decreased overhead
     // We assume a  service will eventually respond, even though there is a failure
-    // public static final byte COMMIT_RESPONSE = 8;
+     public static final byte BATCH_COMMIT_RESPONSE = 10;
+
+    /**
+     *  This message is sent by a new elected leader to roll back all changes previously made by the previous ongoing batch
+     *  {@link dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchAbortRequest}
+     */
+    public static final byte BATCH_ABORT_REQUEST = 11;
 
 }

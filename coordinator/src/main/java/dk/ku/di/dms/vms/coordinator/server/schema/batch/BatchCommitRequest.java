@@ -7,7 +7,7 @@ import static dk.ku.di.dms.vms.coordinator.server.infra.Constants.BATCH_COMMIT_R
 /**
  * A batch-commit request payload
  */
-public final class CommitRequest {
+public final class BatchCommitRequest {
 
     // commit                 respective vms last tid
     // type  | offset       | tid

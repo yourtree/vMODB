@@ -6,10 +6,9 @@ import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
 import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
 import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
 import dk.ku.di.dms.vms.coordinator.metadata.VmsIdentifier;
+import dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchComplete;
 import dk.ku.di.dms.vms.coordinator.server.schema.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchReplication;
-import dk.ku.di.dms.vms.coordinator.server.schema.batch.CommitResponse;
-import dk.ku.di.dms.vms.coordinator.server.infra.ActionEnum;
 import dk.ku.di.dms.vms.coordinator.server.infra.ConnectionMetadata;
 import dk.ku.di.dms.vms.coordinator.server.infra.VmsConnectionMetadata;
 import dk.ku.di.dms.vms.coordinator.server.schema.internal.*;
@@ -18,6 +17,7 @@ import dk.ku.di.dms.vms.coordinator.server.infra.Issue;
 import dk.ku.di.dms.vms.coordinator.server.schema.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
@@ -43,7 +43,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * Class that encapsulates all logic related to issuing of
  * batch commits, transaction aborts, ...
  */
-public final class Coordinator extends StoppableRunnable {
+public final class Coordinator extends SignalingStoppableRunnable {
 
     private static final int DEFAULT_BUFFER_SIZE = 1024;
 
@@ -85,11 +85,9 @@ public final class Coordinator extends StoppableRunnable {
     private volatile long batchOffset;
 
     // metadata about all non-committed batches. when a batch commit finishes, it is removed from this map
-    private Map<Long, BatchContext> batchContextMap;
+    private final Map<Long, BatchContext> batchContextMap;
 
-    private ReentrantLock allPreparedReceivedLock = new ReentrantLock();
-
-    private BatchReplicationStrategy batchReplicationStrategy;
+    private final BatchReplicationStrategy batchReplicationStrategy;
 
     // can be == me
     // private AtomicReference<ServerIdentifier> leader;
@@ -106,11 +104,18 @@ public final class Coordinator extends StoppableRunnable {
     private final BlockingQueue<byte[]> transactionRequestsToParse;
 
     // to reuse the same collection to avoid creating collection every run
+    // maybe this can be off-heap???
     private final Collection<byte[]> drainedTransactionRequests; // 100000 requests per second can be handled
 
-    // transaction manager actions
-    // this provides a natural separation of tasks in the transaction manager thread. commit handling, transaction parsing, leaving the main thread free (only sending heartbeats)
-    private final BlockingQueue<ActionEnum> transactionManagerActionQueue;
+    private final TransactionManagerContext txManagerCtx;
+
+    private record TransactionManagerContext (
+            // transaction manager actions
+            // this provides a natural separation of tasks in the transaction manager thread. commit handling, transaction parsing, leaving the main thread free (only sending heartbeats)
+            BlockingQueue<Byte> transactionManagerActionQueue,
+            Queue<BatchComplete.BatchCompletePayload> batchCompleteEvents,
+            Queue<TransactionAbort.TransactionAbortPayload> transactionAbortEvents
+    ){}
 
     private final Gson gson;
 
@@ -170,11 +175,15 @@ public final class Coordinator extends StoppableRunnable {
         this.tid = startingTid;
         this.transactionRequestsToParse = transactionRequestsToParse; // shared data structure
         this.drainedTransactionRequests = new ArrayList<>(100000); // collec
-        this.transactionManagerActionQueue = new LinkedBlockingQueue<>();
         this.transactionMap = Objects.requireNonNull(transactionMap); // in production, it requires receiving new transaction definitions
+        this.txManagerCtx = new TransactionManagerContext(
+                new LinkedBlockingQueue<>(),
+                new ConcurrentLinkedQueue<>(),
+                new ConcurrentLinkedQueue<>() );
 
         // batch
         this.batchOffset = batchOffset;
+        this.batchOffsetPendingCommit = batchOffset;
         this.batchContextMap = new ConcurrentHashMap<>();
         this.batchReplicationStrategy = batchReplicationStrategy;
     }
@@ -199,46 +208,26 @@ public final class Coordinator extends StoppableRunnable {
             byte type = connectionMetadata.readBuffer.get();
 
             // from all terminal VMSs involved in the last batch
-            if(type == BATCH_COMPLETED){
-
-                // i am making this implement order-independent, so not assuming batch commit are received in order, although they are necessarily applied in order both here and in the VMSs
+            if(type == BATCH_COMPLETE){
 
                 // don't actually need the host and port in the payload since we have the attachment to this read operation...
-                CommitResponse.CommitResponsePayload response = CommitResponse.read( connectionMetadata.readBuffer );
-
-                BatchContext batchContext = batchContextMap.get( response.offset() );
-
-                // only if it is not a duplicate vote
-                if( batchContext.missingVotes.remove( connectionMetadata.key ) ){
-
-                    // can have duplicate... require mutual exclusion
-                    if( batchContext.batchOffset == batchOffsetPendingCommit && batchContext.missingVotes.size() == 0 ){
-                        // queue an action to transaction manager
-
-                        // try lock, if it fails it is fine...
-                        boolean locked = allPreparedReceivedLock.tryLock();
-                        if (locked) transactionManagerActionQueue.add( ActionEnum.BATCH_COMMIT ); // must have a context, i.e., what batch, the last?
-                    }
-
-                }
+                BatchComplete.BatchCompletePayload response = BatchComplete.read( connectionMetadata.readBuffer );
+                txManagerCtx.batchCompleteEvents().add( response );
+                txManagerCtx.transactionManagerActionQueue.add(BATCH_COMPLETE); // must have a context, i.e., what batch, the last?
 
                 // if one abort, no need to keep receiving
                 // actually it is unclear in which circumstances a vms would respond no... probably in case it has not received an ack from an aborted commit response?
                 // because only the aborted transaction will be rolled back
 
-
             } else if (type == TX_ABORT){
-
-
 
                 // get information of what
                 TransactionAbort.TransactionAbortPayload response = TransactionAbort.read(connectionMetadata.readBuffer);
-
-
-
+                txManagerCtx.transactionAbortEvents().add( response );
+                txManagerCtx.transactionManagerActionQueue.add(TX_ABORT);
 
             } else {
-
+                logger.warning("Unknown message received.");
             }
 
             connectionMetadata.readBuffer.clear();
@@ -261,11 +250,6 @@ public final class Coordinator extends StoppableRunnable {
                 }
 
             }
-        }
-
-        private void closeSafely(ConnectionMetadata connectionMetadata){
-            connectionMetadata.readBuffer.clear();
-            connectionMetadata.channel.read( connectionMetadata.readBuffer, connectionMetadata, this );
         }
 
     }
@@ -517,9 +501,13 @@ public final class Coordinator extends StoppableRunnable {
 
                 currBatch = batchOffset;
 
+                BatchContext currBatchContext = batchContextMap.get( currBatch );
+                currBatchContext.seal();
+
                 // define new batch context
-                BatchContext batchContext = new BatchContext(batchOffset);
-                batchContextMap.put( batchOffset, batchContext );
+                // need to get
+                BatchContext newBatchContext = new BatchContext(batchOffset);
+                batchContextMap.put( batchOffset, newBatchContext );
 
                 long newBatch = ++batchOffset; // first increase the value and then execute the statement
 
@@ -536,7 +524,6 @@ public final class Coordinator extends StoppableRunnable {
             // synchronizing the operation, I can simply obtain the collection first
             // but what happens if one of the servers in the list fails?
             Collection<ServerIdentifier> activeServers = servers.values();
-
             int nServers = activeServers.size();
 
             CompletableFuture<?>[] promises = new CompletableFuture[nServers];
@@ -605,7 +592,6 @@ public final class Coordinator extends StoppableRunnable {
 
             if ( batchReplicationStrategy == ONE ){
                 // asynchronous
-                CompletableFuture.anyOf( promises ).join();
                 // at least one is always necessary
                 int j = 0;
                 while (j < nServers && serverVotes.size() < 1){
@@ -620,7 +606,7 @@ public final class Coordinator extends StoppableRunnable {
                 int simpleMajority = ((nServers + 1) / 2);
                 // idea is to iterate through servers, "joining" them until we have enough
                 int j = 0;
-                while (j < nServers && serverVotes.size() >= simpleMajority){
+                while (j < nServers && serverVotes.size() <= simpleMajority){
                     promises[i].join();
                     j++;
                 }
@@ -648,22 +634,25 @@ public final class Coordinator extends StoppableRunnable {
     /**
      * Data structure to keep data about the current batch commit
      */
-    private class BatchContext {
+    private static class BatchContext {
 
-        public volatile long batchOffset;
+        // no need non volatile. immutable
+        public final long batchOffset;
 
         // set of terminal VMSs that has not voted yet
-        public Set<Integer> missingVotes;
+        public Set<String> missingVotes;
 
-        public final Object lock; // plenty of read handlers concurrently. can only signal batch commit once
-
-        public final Set<Integer> terminalVMSs;
+        // may change across batches
+        public Set<String> terminalVMSs;
 
         public BatchContext(long batchOffset) {
             this.batchOffset = batchOffset;
-            this.missingVotes = new HashSet<>(servers.size());
-            this.lock = new Object();
-            this.terminalVMSs = Collections.unmodifiableSet(new HashSet<>()); // immutable, no need for synchronized, single-threaded access
+            this.terminalVMSs = Collections.synchronizedSet(new HashSet<>());
+        }
+
+        // called when the batch is over
+        public void seal(){
+            this.missingVotes = Collections.unmodifiableSet(terminalVMSs);
         }
 
     }
@@ -690,7 +679,10 @@ public final class Coordinator extends StoppableRunnable {
         serverSocket.accept( null, new AcceptCompletionHandler());
 
         // only submit when there are events to react to
-        Future<?> transactionManagerTask = taskExecutor.submit( new TransactionManager() );
+        // perhaps not a good idea to have this thread in a pool, since this thread will get blocked
+        // BUT, it issimply about increasing the pool size with +1...
+        TransactionManager txManager = new TransactionManager();
+        taskExecutor.submit( txManager );
 
         ScheduledExecutorService parseExecutorService = Executors.newSingleThreadScheduledExecutor();
         ScheduledFuture<?> parseTask = parseExecutorService.schedule(this::parseAndSendTransactionInputEvents, options.getParseTimeout(), TimeUnit.MILLISECONDS);
@@ -726,6 +718,7 @@ public final class Coordinator extends StoppableRunnable {
         // safe close
         heartbeatTask.cancel(false); // do not interrupt given the lock management
         parseTask.cancel(false);
+        txManager.stop();
         try { serverSocket.close(); } catch (IOException ignored) {}
 
     }
@@ -780,57 +773,76 @@ public final class Coordinator extends StoppableRunnable {
      * A writer manager is responsible for defining strategies, policies, safety guarantees on
      * writing concurrently to channels.
      */
-    private class TransactionManager implements Runnable {
+    private class TransactionManager extends StoppableRunnable {
 
-        private volatile int state;
-        public static final int WAITING_FOR_BATCH_INIT          = 0;
-        public static final int REPLICATING_BATCH_METADATA      = 1;
-        public static final int SENDING_PREPARE_TO_VMS          = 2; // running the protocol
-        public static final int CLOSING_CURRENT_BATCH           = 3; // has received the ACKs from a majority
-
-        private final Collection<ActionEnum> actions;
-
-        public TransactionManager() {
-            this.actions = new ArrayList<>(10);
-        }
+//        private volatile int state;
+//        public static final int WAITING_FOR_BATCH_INIT          = 0;
+//        public static final int REPLICATING_BATCH_METADATA      = 1;
+//        public static final int SENDING_PREPARE_TO_VMS          = 2; // running the protocol
+//        public static final int CLOSING_CURRENT_BATCH           = 3; // has received the ACKs from a majority
 
         @Override
         public void run() {
 
-            while(!transactionManagerActionQueue.isEmpty()){
+            while(!isStopped()){
 
-                // if write fails, it is because
-                // close offset
-                // send commit info
-                // wait for all ACKs given a timestamp
+                try {
+                    // https://web.mit.edu/6.005/www/fa14/classes/20-queues-locks/message-passing/
+                    byte action = txManagerCtx.transactionManagerActionQueue().take();
 
-                // do we have any transaction-related event?
-                react();
+                    // do we have any transaction-related event?
+                    switch(action){
+                        case BATCH_COMPLETE -> {
+
+                            // what if ACKs from VMSs take too long? or never arrive?
+                            // need to deal with intersecting batches? actually juts continue emitting for higher throughput
+
+                            BatchComplete.BatchCompletePayload msg = txManagerCtx.batchCompleteEvents().remove();
+
+                            BatchContext batchContext = batchContextMap.get( msg.batch() );
+
+                            // only if it is not a duplicate vote
+                            if( batchContext.missingVotes.remove( msg.vms() ) ){
+
+                                // making this implement order-independent, so not assuming batch commit are received in order, although they are necessarily applied in order both here and in the VMSs
+                                // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes, it must check the batch context match to see whether it is completed
+                                if( batchContext.batchOffset == batchOffsetPendingCommit && batchContext.missingVotes.size() == 0 ){
+
+                                    sendCommitRequestToVMSs(batchContext);
+
+                                    batchOffsetPendingCommit++;
+
+                                    // is the next batch completed already?
+                                    batchContext = batchContextMap.get( batchOffsetPendingCommit );
+                                    while(batchContext.missingVotes.size() == 0){
+
+                                    }
+
+                                }
+
+                            }
+
+
+                        }
+                        case TX_ABORT -> {
+
+                            // send abort to all VMSs...
+                            // later we can optimize the number of messages since some VMSs may not need to receive this abort
+
+
+
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
 
             }
 
         }
 
-        private void react(){
-
-            // todoTransactionActions drain to
-            transactionManagerActionQueue.drainTo( actions );
-
-            for(ActionEnum action : actions){
-
-                switch(action){
-                    case BATCH_COMMIT -> {
-
-                        // probably need mutual exclusion.... what if ACKs from VMSs take too long? or never arrive?
-                        // need to deal with intersecting batches? actually juts continue emitting
-
-                        // batchContext.
-
-
-                    }
-                }
-
-            }
+        // this could be asynchronously
+        private void sendCommitRequestToVMSs(BatchContext batchContext){
 
         }
 
@@ -874,7 +886,7 @@ public final class Coordinator extends StoppableRunnable {
             // this is the only thread updating this value, so it is by design an atomic operation
             long tid_ = ++tid;
 
-            TransactionDAG transaction = transactionMap.get( transactionInput.name );
+            TransactionDAG transactionDAG = transactionMap.get( transactionInput.name );
 
             // should find a way to continue emitting new transactions without stopping this thread
             // non-blocking design
@@ -893,7 +905,7 @@ public final class Coordinator extends StoppableRunnable {
             for (TransactionInput.Event inputEvent : transactionInput.events) {
 
                 // look for the event in the topology
-                EventIdentifier event = transaction.topology.get(inputEvent.name);
+                EventIdentifier event = transactionDAG.topology.get(inputEvent.name);
 
                 // get the vms
                 VmsIdentifier vms = VMSs.get(event.vms.hashCode());
@@ -921,6 +933,9 @@ public final class Coordinator extends StoppableRunnable {
                 connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata, new WriteCompletionHandler());
 
             }
+
+            // add terminal to the set... so cannot be immutable when the batch context is created...
+            batchContextMap.get(batch_).terminalVMSs.addAll( transactionDAG.terminals );
 
         }
 

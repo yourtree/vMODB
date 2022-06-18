@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.coordinator.server.schema.batch;
 
 import java.nio.ByteBuffer;
 
-import static dk.ku.di.dms.vms.coordinator.server.infra.Constants.BATCH_COMMIT_REQUEST;
+import static dk.ku.di.dms.vms.coordinator.server.infra.Constants.BATCH_ABORT_REQUEST;
 
 /**
  * A batch-abort request payload
@@ -20,7 +20,7 @@ public final class BatchAbortRequest {
     // send the last tid (corresponding to the vms) and batch id
     public static void write(ByteBuffer buffer, long batch){
 
-        buffer.put(BATCH_COMMIT_REQUEST);
+        buffer.put(BATCH_ABORT_REQUEST);
         buffer.putLong( batch );
 
     }

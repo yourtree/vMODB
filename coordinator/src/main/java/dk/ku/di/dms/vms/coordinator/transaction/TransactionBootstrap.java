@@ -7,12 +7,13 @@ import java.util.*;
  */
 public class TransactionBootstrap {
 
-    private List<EventIdentifier> topology; // the input events
+    private final List<EventIdentifier> topology; // the input events
     //protected List<EventIdentifier> terminals;
     // for fast seek
-    private Map<String, EventIdentifier> map;
+    private final Map<String, EventIdentifier> map;
 
     private String name; // transaction name
+    private List<String> terminals;
 
     public TransactionBootstrap(){
         this.topology = new ArrayList<>();
@@ -28,12 +29,9 @@ public class TransactionBootstrap {
     public static class TransactionBootstrapPlus {
 
         private TransactionBootstrap transactionBootstrap;
-        private static TransactionBootstrapPlus INSTANCE;
-
-        private TransactionBootstrapPlus(){}
+        private static final TransactionBootstrapPlus INSTANCE = new TransactionBootstrapPlus();
 
         protected static TransactionBootstrapPlus build(TransactionBootstrap transactionBootstrap){
-            INSTANCE = new TransactionBootstrapPlus();
             INSTANCE.transactionBootstrap = transactionBootstrap;
             return INSTANCE;
         }
@@ -65,6 +63,7 @@ public class TransactionBootstrap {
             if(deps == null) throw new RuntimeException("Cannot have a terminal event without a parent event");
 
             EventIdentifier terminal = new EventIdentifier(alias, vms);
+            transactionBootstrap.terminals.add(terminal.vms);
             for(String dep : deps){
                 EventIdentifier id = transactionBootstrap.map.get(dep);
                 // terminal.addDependence( id );
@@ -77,7 +76,7 @@ public class TransactionBootstrap {
         // finally, build the transaction representation
         public TransactionDAG build(){
             transactionBootstrap.topology.sort(Comparator.comparing(o -> o.name));
-            return new TransactionDAG(transactionBootstrap.name, transactionBootstrap.topology);
+            return new TransactionDAG(transactionBootstrap.name, transactionBootstrap.topology, transactionBootstrap.terminals);
         }
 
     }

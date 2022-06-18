@@ -12,14 +12,14 @@ import static dk.ku.di.dms.vms.coordinator.server.infra.Constants.*;
  *
  * The concept of aborting a batch-commit does not exist
  */
-public final class CommitResponse {
+public final class BatchCommitResponse {
 
     // type | offset | port | size | <host address is variable>
     private static final int headerSize = Byte.BYTES + Byte.BYTES + Integer.BYTES + Integer.BYTES;
 
     public static void write(ByteBuffer buffer, long offset, VmsIdentifier vmsIdentifier){
         byte[] hostBytes = vmsIdentifier.host.getBytes();
-        buffer.put( COMMIT_RESPONSE );
+        buffer.put( BATCH_COMMIT_RESPONSE );
         buffer.putLong( offset );
         buffer.putInt(vmsIdentifier.port );
         buffer.putInt( hostBytes.length );
