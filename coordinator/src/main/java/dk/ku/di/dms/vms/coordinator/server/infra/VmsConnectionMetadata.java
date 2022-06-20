@@ -11,7 +11,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import static dk.ku.di.dms.vms.coordinator.server.infra.ConnectionMetadata.NodeType.VMS;
 
-public class VmsConnectionMetadata extends ConnectionMetadata {
+public final class VmsConnectionMetadata extends ConnectionMetadata {
 
     public Map<Long, List<TransactionEvent.TransactionEventPayload>> transactionEventsPerBatch;
 

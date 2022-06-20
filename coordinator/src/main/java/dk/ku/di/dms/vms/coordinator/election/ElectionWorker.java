@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.coordinator.election;
 
 import dk.ku.di.dms.vms.coordinator.election.schema.*;
 import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
+import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
@@ -32,7 +33,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * TODO Cluster membership management (e.g., adding nodes, removing nodes, replacing nodes)
  * TODO make connections fixed, so can be subsequently reused by the leader/follower class
  */
-public class ElectionWorker extends StoppableRunnable {
+public final class ElectionWorker extends SignalingStoppableRunnable {
 
     private volatile int state;
     public static final int NEW          = 0;
@@ -78,7 +79,7 @@ public class ElectionWorker extends StoppableRunnable {
         this.taskExecutor = taskExecutor;
         this.me = me;
         this.servers = servers;
-        this.timeout = new AtomicLong(60000 ); // 1 minute
+        this.timeout = new AtomicLong(60000 ); // 1 minute default
         this.state = CANDIDATE;
         this.voted = new AtomicBoolean(false);
         this.messageHandler = new MessageHandler();
@@ -97,7 +98,7 @@ public class ElectionWorker extends StoppableRunnable {
         this.taskExecutor = taskExecutor;
         this.me = me;
         this.servers = servers;
-        this.timeout = new AtomicLong(timeout);
+        this.timeout = new AtomicLong( timeout );
         this.state = CANDIDATE;
         this.voted = new AtomicBoolean(false);
         this.messageHandler = new MessageHandler();
@@ -201,7 +202,7 @@ public class ElectionWorker extends StoppableRunnable {
                                 // because this server may give a vote to another server
                                 // in this case I will send a vote request again
                                 boolean previousVoteReceived = false;
-                                synchronized (_lock) { // the responses are perhaps being reset, i cannot count on this vote anymore
+                                synchronized (_lock) { // the responses are perhaps being reset, cannot count on this vote anymore
                                     if (responses.get(serverRequestingVote.hashCode()) != null) {
                                         responses.remove( serverRequestingVote.hashCode() );
                                         previousVoteReceived = true;
@@ -373,6 +374,8 @@ public class ElectionWorker extends StoppableRunnable {
     @Override
     public void run() {
 
+        double roundDeltaIncrease = 0.25;
+
         logger.info("Initializing election round. I am "+me.host+":"+me.port);
 
         // being single thread makes it easier to avoid data races
@@ -385,9 +388,10 @@ public class ElectionWorker extends StoppableRunnable {
             runRound();
 
             // define a new delta since defining a leader is taking too long
-            timeout.addAndGet(10000); // increment since nothing has been defined
+            long timeout_ = timeout.get();
+            timeout_ = (long) (timeout_ + (timeout_ * roundDeltaIncrease));
+            timeout.set(timeout_); // increment since nothing has been defined
 
-            // logger.info("A round has terminated. A new one is initializing. I am "+me.host+":"+me.port);
         }
 
         // stop server

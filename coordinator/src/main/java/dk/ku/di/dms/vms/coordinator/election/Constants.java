@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.coordinator.election;
 
-public class Constants {
+public final class Constants {
 
     /**
      * Message identifiers

@@ -17,8 +17,13 @@ import static dk.ku.di.dms.vms.coordinator.server.infra.Constants.PRESENTATION;
  * A presentation is a message that carries out the necessary info of a node
  */
 public final class Presentation {
-    //                                                                  tid           port
-    private static final int serverHeader = Byte.BYTES + Byte.BYTES + Long.BYTES + Integer.BYTES;
+
+    private static final byte SERVER_TYPE = 0;
+    private static final byte VMS_TYPE = 1;
+
+    //                                                      0 server 1 vms
+    //                                     message type | node type [0,1] | lastOffset | port | size host
+    private static final int serverHeader = Byte.BYTES + Byte.BYTES + Long.BYTES + Integer.BYTES + Integer.BYTES;
 
     //                0 server 1 vms
     // message type | node type [0,1] | last tid | last batch | port | size | <host address is variable> |
@@ -27,11 +32,23 @@ public final class Presentation {
     // + size of data schema and event schema lists
     private static final int fixedVmsSize = vmsHeader + Integer.BYTES + Integer.BYTES;
 
-    public static void writeVms(ByteBuffer buffer, VmsIdentifier vmsIdentifier){
-
-        byte type = 1;
+    public static void write(ByteBuffer buffer, ServerIdentifier serverIdentifier){
         buffer.put( PRESENTATION );
-        buffer.put( type );
+        buffer.put( SERVER_TYPE );
+
+        buffer.putLong( serverIdentifier.lastOffset );
+
+        buffer.putInt( serverIdentifier.port );
+
+        byte[] host = serverIdentifier.host.getBytes(StandardCharsets.UTF_8);
+        buffer.putInt( host.length );
+        buffer.put( host );
+    }
+
+    public static void write(ByteBuffer buffer, VmsIdentifier vmsIdentifier){
+
+        buffer.put( PRESENTATION );
+        buffer.put( VMS_TYPE );
 
         buffer.putLong( vmsIdentifier.lastTid );
         buffer.putLong( vmsIdentifier.lastBatch );
@@ -39,7 +56,6 @@ public final class Presentation {
         byte[] host = vmsIdentifier.host.getBytes(StandardCharsets.UTF_8);
         buffer.putInt( host.length );
         buffer.put( host );
-
 
     }
 

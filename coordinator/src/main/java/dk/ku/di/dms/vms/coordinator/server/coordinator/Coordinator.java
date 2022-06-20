@@ -6,15 +6,13 @@ import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
 import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
 import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
 import dk.ku.di.dms.vms.coordinator.metadata.VmsIdentifier;
+import dk.ku.di.dms.vms.coordinator.server.infra.*;
 import dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchCommitRequest;
 import dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchComplete;
 import dk.ku.di.dms.vms.coordinator.server.schema.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchReplication;
-import dk.ku.di.dms.vms.coordinator.server.infra.ConnectionMetadata;
-import dk.ku.di.dms.vms.coordinator.server.infra.VmsConnectionMetadata;
 import dk.ku.di.dms.vms.coordinator.server.schema.internal.*;
 import dk.ku.di.dms.vms.coordinator.server.schema.external.TransactionInput;
-import dk.ku.di.dms.vms.coordinator.server.infra.Issue;
 import dk.ku.di.dms.vms.coordinator.server.schema.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
@@ -45,8 +43,6 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * batch commits, transaction aborts, ...
  */
 public final class Coordinator extends SignalingStoppableRunnable {
-
-    private static final int DEFAULT_BUFFER_SIZE = 1024;
 
     private final CoordinatorOptions options;
 
@@ -90,9 +86,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     private final BatchReplicationStrategy batchReplicationStrategy;
 
-    // can be == me
-    // private AtomicReference<ServerIdentifier> leader;
-
     // to encapsulate operations in the memory-mapped file
     // private MetadataAPI metadataAPI;
 
@@ -120,16 +113,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     private final Gson gson;
 
-    private final BlockingQueue<ByteBuffer> byteBufferQueue;
 
-    // then another thread must take these entries and build the events
-    // private Queue<TransactionInput> parsedTransactionRequests;
-
-    // https://stackoverflow.com/questions/409932/java-timer-vs-executorservice
-    // private ScheduledExecutorService scheduledBatchExecutor = Executors.newSingleThreadScheduledExecutor();
-
-    // the heartbeat sending from the coordinator
-    // private ScheduledExecutorService scheduledLeaderElectionExecutor = Executors.newSingleThreadScheduledExecutor();
 
     private final Map<String, TransactionDAG> transactionMap;
 
@@ -167,7 +151,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // infra
         this.issueQueue = new LinkedBlockingQueue<>();
         this.gson = gson == null ? new Gson() : gson;
-        this.byteBufferQueue = new LinkedBlockingQueue<>();
+
 
         // coordinator options
         this.options = options;
@@ -175,7 +159,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // transactions
         this.tid = startingTid;
         this.transactionRequestsToParse = transactionRequestsToParse; // shared data structure
-        this.drainedTransactionRequests = new ArrayList<>(100000); // collec
+        this.drainedTransactionRequests = new ArrayList<>(100000);
         this.transactionMap = Objects.requireNonNull(transactionMap); // in production, it requires receiving new transaction definitions
         this.txManagerCtx = new TransactionManagerContext(
                 new LinkedBlockingQueue<>(),
@@ -200,7 +184,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
     private class ReadCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
 
         // is it an abort, a commit response?
-        // it cannot be replication because i have opened another channel for that
+        // it cannot be replication because have opened another channel for that
 
         @Override
         public void completed(Integer result, ConnectionMetadata connectionMetadata) {
@@ -278,20 +262,20 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 // right now I cannot discern whether it is a VMS or follower. perhaps I can keep alive channels from leader election?
 
-                buffer = getByteBuffer();
+                buffer = BufferManager.loanByteBuffer();
 
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 Future<Integer> readFuture = channel.read( buffer );
                 readFuture.get();
 
                 if( !acceptConnection(channel, buffer) ) {
-                    byteBufferQueue.add(buffer);
+                    BufferManager.returnByteBuffer(buffer);
                 }
 
             } catch(Exception e){
                 // return buffer to queue
                 if(channel != null && !channel.isOpen() && buffer != null){
-                    byteBufferQueue.add(buffer);
+                    BufferManager.returnByteBuffer(buffer);
                 }
             } finally {
                 // continue listening
@@ -309,26 +293,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
             }
         }
 
-    }
-
-    /**
-     *
-     * @return A usable byte buffer
-     */
-    private ByteBuffer getByteBuffer() {
-
-        ByteBuffer buffer = byteBufferQueue.poll();
-
-        // do we have enough bytebuffers?
-         if(buffer == null){ // check if a concurrent thread has taken the available buffer
-            buffer = ByteBuffer.allocateDirect(DEFAULT_BUFFER_SIZE);
-        }
-
-        return buffer;
-    }
-
-    private void returnByteBuffer(ByteBuffer buffer){
-        byteBufferQueue.add(buffer);
     }
 
     /**
@@ -421,7 +385,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 servers.put( newServer.hashCode(), newServer );
 
-                ConnectionMetadata connectionMetadata = new ConnectionMetadata( newServer.hashCode(), SERVER, buffer, getByteBuffer(), channel, new ReentrantLock() );
+                ConnectionMetadata connectionMetadata = new ConnectionMetadata( newServer.hashCode(), SERVER, buffer, BufferManager.loanByteBuffer(), channel, new ReentrantLock() );
                 serverConnectionMetadataMap.put( newServer.hashCode(), connectionMetadata );
                 // create a read handler for this connection
                 // attach buffer, so it can be read upon completion
@@ -453,13 +417,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 // we need to send batch info or simply the vms assume...
                 // if a vms crashed, it has lost all the events since the last batch commit, so need to resend it now
                 if(connectionMetadata.transactionEventsPerBatch.get( newVms.lastBatch + 1 ) != null) // avoiding creating a thread for nothing
-                    taskExecutor.submit( () -> this.resendTransactionalEvents(connectionMetadata, newVms) );
+                    taskExecutor.submit( () -> this.resendTransactionalInputEvents(connectionMetadata, newVms) );
 
                 channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
 
             } else {
                 VMSs.put( newVms.name.hashCode(), newVms );
-                VmsConnectionMetadata connectionMetadata = new VmsConnectionMetadata( newVms.hashCode(), buffer, getByteBuffer(), channel, new ReentrantLock() );
+                VmsConnectionMetadata connectionMetadata = new VmsConnectionMetadata( newVms.hashCode(), buffer, BufferManager.loanByteBuffer(), channel, new ReentrantLock() );
                 vmsConnectionMetadataMap.put( newVms.hashCode(), connectionMetadata );
                 channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
             }
@@ -478,8 +442,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
         return true;
     }
 
-    // a thread will execute this piece of code to liberate the "Accept" thread handler
-    private void resendTransactionalEvents(VmsConnectionMetadata connectionMetadata, VmsIdentifier vmsIdentifier){
+    /**
+     * A thread will execute this piece of code to liberate the "Accept" thread handler
+     * This only works for input events. In case of internal events, the VMS needs to get that from the precedence VMS.
+     */
+    private void resendTransactionalInputEvents(VmsConnectionMetadata connectionMetadata, VmsIdentifier vmsIdentifier){
 
         // is this usually the last batch...?
         List<TransactionEvent.TransactionEventPayload> list = connectionMetadata.transactionEventsPerBatch.get( vmsIdentifier.lastBatch + 1 );
@@ -521,7 +488,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
             // so we need synchronization to disallow the second
 
-            // obtain a consistent snapshot of last tids for all VMSs
+            // obtain a consistent snapshot of last TIDs for all VMSs
             // the transaction manager must obtain the next batch inside the synchronized block
 
             // why do I need to replicate vmsTidMap? to restart from this point if the leader fails
@@ -581,7 +548,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         channel.setOption( SO_KEEPALIVE, false );
                         channel.connect(address).get();
 
-                        ByteBuffer buffer = getByteBuffer();
+                        ByteBuffer buffer = BufferManager.loanByteBuffer();
                         BatchReplication.write( buffer, currBatch, lastTidOfBatchPerVmsJson );
                         channel.write( buffer ).get();
 
@@ -594,7 +561,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                         buffer.clear();
 
-                        returnByteBuffer(buffer);
+                        BufferManager.returnByteBuffer(buffer);
 
                         // assuming the follower always accept, even though it came back from failure and has old metadata
                         serverVotes.add( server.hashCode() );
@@ -664,40 +631,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
     }
 
     /**
-     * Data structure to keep data about a batch commit
-     */
-    private static class BatchContext {
-
-        // no need non volatile. immutable
-        public final long batchOffset;
-
-        // set of terminal VMSs that has not voted yet
-        public Set<String> missingVotes;
-
-        // may change across batches
-        public Set<String> terminalVMSs;
-
-        public final Map<String,Long> lastTidOfBatchPerVms;
-
-        public BatchContext(long batchOffset, Map<String,Long> lastTidOfBatchPerVms) {
-            this.batchOffset = batchOffset;
-            this.lastTidOfBatchPerVms = Collections.unmodifiableMap(lastTidOfBatchPerVms);
-            this.terminalVMSs = new HashSet<>();
-        }
-
-        // called when the batch is over
-        public void seal(){
-            this.missingVotes = Collections.synchronizedSet(terminalVMSs);
-        }
-
-    }
-
-    /**
      * This method contains the main loop that contains the main functions of a leader
-     *  NOT ANYMORE (a) Heartbeat sending to avoid followers to initiate a leader election. That can still happen due to network latency.
      *  What happens if two nodes declare themselves as leaders? We need some way to let it know
      *  OK (b) Batch management
-     * ------ NO ----- (c) Processing of transaction requests
      * designing leader mode first
      * design follower mode in another class to avoid convoluted code
      */
@@ -715,7 +651,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         // only submit when there are events to react to
         // perhaps not a good idea to have this thread in a pool, since this thread will get blocked
-        // BUT, it issimply about increasing the pool size with +1...
+        // BUT, it is simply about increasing the pool size with +1...
         TransactionManager txManager = new TransactionManager();
         taskExecutor.submit( txManager );
 
@@ -759,6 +695,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
     }
 
     /**
+     * (a) Heartbeat sending to avoid followers to initiate a leader election. That can still happen due to network latency.
+     *
      * Given a list of known followers, send to each a heartbeat
      * Heartbeats must have precedence over other writes, since they
      * avoid the overhead of starting a new election process in remote nodes
@@ -857,7 +795,36 @@ public final class Coordinator extends SignalingStoppableRunnable {
                             // send abort to all VMSs...
                             // later we can optimize the number of messages since some VMSs may not need to receive this abort
 
-// todo. finish this code + finish when a new leader is elected needs to send a batch abort request + follower class
+                            // cannot commit the batch unless the VMS is sure there will be no aborts...
+                            // this is guaranteed by design, since the batch complete won't arrive unless all events of the batch arrive at the terminal VMSs
+
+                            TransactionAbort.TransactionAbortPayload msg = txManagerCtx.transactionAbortEvents.remove();
+
+                            // can reuse the same buffer since the message does not change across VMSs like the commit request
+                            for(VmsIdentifier vms : VMSs.values()){
+
+                                // don't need to send to the vms that aborted
+                                if(vms.name.equalsIgnoreCase( msg.vms() )) continue;
+
+                                VmsConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.hashCode() );
+
+                                ByteBuffer buffer = BufferManager.loanByteBuffer();
+
+                                TransactionAbort.write(buffer, msg);
+
+                                // must lock first before writing to write buffer
+                                connectionMetadata.writeLock.lock();
+
+                                try { connectionMetadata.channel.write(buffer).get(); } catch (ExecutionException ignored) {}
+
+                                connectionMetadata.writeLock.unlock();
+
+                                buffer.clear();
+
+                                BufferManager.returnByteBuffer(buffer);
+
+                            }
+
 
                         }
                     }

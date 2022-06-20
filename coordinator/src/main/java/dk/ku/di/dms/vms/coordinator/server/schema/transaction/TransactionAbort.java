@@ -15,30 +15,34 @@ import static dk.ku.di.dms.vms.coordinator.server.infra.Constants.TX_ABORT;
  */
 public class TransactionAbort {
 
-    // type | tid | port | size | <host address is variable>
-    private static final int headerSize = Byte.BYTES + Byte.BYTES + Integer.BYTES + Integer.BYTES;
+    // type | tid  | size vms name | vms name
+    private static final int headerSize = Byte.BYTES + Long.BYTES + Integer.BYTES;
+
+    public static void write(ByteBuffer buffer, TransactionAbortPayload payload) {
+        buffer.put(TX_ABORT);
+        buffer.putLong(payload.tid);
+        buffer.putInt( payload.vms().length() );
+        buffer.put( payload.vms().getBytes(StandardCharsets.UTF_8) );
+    }
 
     public static void write(ByteBuffer buffer, VmsIdentifier vmsIdentifier, long tid){
-        byte[] hostBytes = vmsIdentifier.host.getBytes();
         buffer.put(TX_ABORT);
         buffer.putLong(tid);
-        buffer.putInt(vmsIdentifier.port );
-        buffer.putInt( hostBytes.length );
-        buffer.put( hostBytes );
+        buffer.putInt( vmsIdentifier.name.length() );
+        buffer.put( vmsIdentifier.name.getBytes(StandardCharsets.UTF_8) );
     }
 
     public static TransactionAbortPayload read(ByteBuffer buffer){
         long tid = buffer.getLong();
-        int port = buffer.getInt();
         int size = buffer.getInt();
-        String host = new String(buffer.array(), headerSize, size, StandardCharsets.UTF_8 );
-        return new TransactionAbortPayload(port, host, tid);
+        String vms = new String(buffer.array(), headerSize, size, StandardCharsets.UTF_8 );
+        return new TransactionAbortPayload(tid, vms);
     }
 
     // a leader cannot issue new events (and batches of course) without receiving batch ACKs from all vms involved
     // so no need for further information in the payload
     public record TransactionAbortPayload (
-            int port, String host, long tid
+            long tid, String vms
     ) {}
 
 }
