@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
 import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
 import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
 import dk.ku.di.dms.vms.coordinator.metadata.VmsIdentifier;
+import dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchCommitRequest;
 import dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchComplete;
 import dk.ku.di.dms.vms.coordinator.server.schema.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchReplication;
@@ -382,7 +383,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
             // would be better to maintain the connection open.....
             buffer.clear();
             ServerIdentifier serverRequestingVote = VoteRequest.read(buffer);
-            taskExecutor.submit (  new InformLeadershipTask(serverRequestingVote) );
+            taskExecutor.submit( new InformLeadershipTask(serverRequestingVote) );
             return false;
         }
 
@@ -431,7 +432,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
             VmsIdentifier newVms = Presentation.readVms(buffer, gson);
 
-            if(VMSs.get( newVms.hashCode() ) != null){
+            if(VMSs.get( newVms.name.hashCode() ) != null){
                 // vms reconnecting
 
                 VmsConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( newVms.hashCode() );
@@ -440,14 +441,24 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 connectionMetadata.writeLock.lock();
 
                 // update metadata of this node
-                VMSs.put( newVms.hashCode(), newVms );
+                VMSs.put( newVms.name.hashCode(), newVms );
 
+                // update channel and possibly the address
                 connectionMetadata.channel = channel;
+                connectionMetadata.key = newVms.hashCode();
 
                 connectionMetadata.writeLock.unlock();
 
+                // let's vms is back online from crash or is simply a new vms.
+                // we need to send batch info or simply the vms assume...
+                // if a vms crashed, it has lost all the events since the last batch commit, so need to resend it now
+                if(connectionMetadata.transactionEventsPerBatch.get( newVms.lastBatch + 1 ) != null) // avoiding creating a thread for nothing
+                    taskExecutor.submit( () -> this.resendTransactionalEvents(connectionMetadata, newVms) );
+
+                channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
+
             } else {
-                VMSs.put( newVms.hashCode(), newVms );
+                VMSs.put( newVms.name.hashCode(), newVms );
                 VmsConnectionMetadata connectionMetadata = new VmsConnectionMetadata( newVms.hashCode(), buffer, getByteBuffer(), channel, new ReentrantLock() );
                 vmsConnectionMetadataMap.put( newVms.hashCode(), connectionMetadata );
                 channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
@@ -465,6 +476,25 @@ public final class Coordinator extends SignalingStoppableRunnable {
         }
 
         return true;
+    }
+
+    // a thread will execute this piece of code to liberate the "Accept" thread handler
+    private void resendTransactionalEvents(VmsConnectionMetadata connectionMetadata, VmsIdentifier vmsIdentifier){
+
+        // is this usually the last batch...?
+        List<TransactionEvent.TransactionEventPayload> list = connectionMetadata.transactionEventsPerBatch.get( vmsIdentifier.lastBatch + 1 );
+
+        // assuming everything is lost, we have to resend...
+        if( list != null ){
+            connectionMetadata.writeLock.lock();
+            for( TransactionEvent.TransactionEventPayload txEvent : list ){
+                TransactionEvent.write( connectionMetadata.writeBuffer, txEvent);
+                Future<?> task = connectionMetadata.channel.write( connectionMetadata.writeBuffer );
+                try { task.get(); } catch (InterruptedException | ExecutionException ignored) {}
+                connectionMetadata.writeBuffer.clear();
+            }
+        }
+
     }
 
     /**
@@ -495,7 +525,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
             // the transaction manager must obtain the next batch inside the synchronized block
 
             // why do I need to replicate vmsTidMap? to restart from this point if the leader fails
-            Map<String,Long> vmsTidMap;
+            Map<String,Long> lastTidOfBatchPerVms;
             long currBatch;
             synchronized (batchCommitLock) {
 
@@ -504,16 +534,16 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 BatchContext currBatchContext = batchContextMap.get( currBatch );
                 currBatchContext.seal();
 
+                // a map of the last tid for each vms
+                lastTidOfBatchPerVms = VMSs.values().stream().collect(
+                        Collectors.toMap( VmsIdentifier::getName, VmsIdentifier::getLastTid ) );
+
                 // define new batch context
                 // need to get
-                BatchContext newBatchContext = new BatchContext(batchOffset);
+                BatchContext newBatchContext = new BatchContext(batchOffset, lastTidOfBatchPerVms);
                 batchContextMap.put( batchOffset, newBatchContext );
 
                 long newBatch = ++batchOffset; // first increase the value and then execute the statement
-
-                // a map of the last tid for each vms
-                vmsTidMap = VMSs.values().stream().collect(
-                        Collectors.toMap( VmsIdentifier::getName, VmsIdentifier::getLastTid ) );
 
                 logger.info("Current batch offset is "+currBatch+" and new batch offset is "+newBatch);
 
@@ -529,6 +559,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
             CompletableFuture<?>[] promises = new CompletableFuture[nServers];
 
             Set<Integer> serverVotes = Collections.synchronizedSet( new HashSet<>(nServers) );
+
+            String lastTidOfBatchPerVmsJson = gson.toJson( lastTidOfBatchPerVms );
 
             int i = 0;
             for(ServerIdentifier server : activeServers){
@@ -550,7 +582,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         channel.connect(address).get();
 
                         ByteBuffer buffer = getByteBuffer();
-                        BatchReplication.write( buffer, currBatch, gson.toJson( vmsTidMap ) );
+                        BatchReplication.write( buffer, currBatch, lastTidOfBatchPerVmsJson );
                         channel.write( buffer ).get();
 
                         buffer.clear();
@@ -632,7 +664,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
     }
 
     /**
-     * Data structure to keep data about the current batch commit
+     * Data structure to keep data about a batch commit
      */
     private static class BatchContext {
 
@@ -645,14 +677,17 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // may change across batches
         public Set<String> terminalVMSs;
 
-        public BatchContext(long batchOffset) {
+        public final Map<String,Long> lastTidOfBatchPerVms;
+
+        public BatchContext(long batchOffset, Map<String,Long> lastTidOfBatchPerVms) {
             this.batchOffset = batchOffset;
-            this.terminalVMSs = Collections.synchronizedSet(new HashSet<>());
+            this.lastTidOfBatchPerVms = Collections.unmodifiableMap(lastTidOfBatchPerVms);
+            this.terminalVMSs = new HashSet<>();
         }
 
         // called when the batch is over
         public void seal(){
-            this.missingVotes = Collections.unmodifiableSet(terminalVMSs);
+            this.missingVotes = Collections.synchronizedSet(terminalVMSs);
         }
 
     }
@@ -775,12 +810,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
      */
     private class TransactionManager extends StoppableRunnable {
 
-//        private volatile int state;
-//        public static final int WAITING_FOR_BATCH_INIT          = 0;
-//        public static final int REPLICATING_BATCH_METADATA      = 1;
-//        public static final int SENDING_PREPARE_TO_VMS          = 2; // running the protocol
-//        public static final int CLOSING_CURRENT_BATCH           = 3; // has received the ACKs from a majority
-
         @Override
         public void run() {
 
@@ -795,7 +824,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         case BATCH_COMPLETE -> {
 
                             // what if ACKs from VMSs take too long? or never arrive?
-                            // need to deal with intersecting batches? actually juts continue emitting for higher throughput
+                            // need to deal with intersecting batches? actually just continue emitting for higher throughput
 
                             BatchComplete.BatchCompletePayload msg = txManagerCtx.batchCompleteEvents().remove();
 
@@ -810,12 +839,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                                     sendCommitRequestToVMSs(batchContext);
 
-                                    batchOffsetPendingCommit++;
-
                                     // is the next batch completed already?
-                                    batchContext = batchContextMap.get( batchOffsetPendingCommit );
+                                    batchContext = batchContextMap.get( ++batchOffsetPendingCommit );
                                     while(batchContext.missingVotes.size() == 0){
-
+                                        sendCommitRequestToVMSs(batchContext);
+                                        batchContext = batchContextMap.get( ++batchOffsetPendingCommit );
                                     }
 
                                 }
@@ -829,7 +857,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                             // send abort to all VMSs...
                             // later we can optimize the number of messages since some VMSs may not need to receive this abort
 
-
+// todo. finish this code + finish when a new leader is elected needs to send a batch abort request + follower class
 
                         }
                     }
@@ -843,6 +871,21 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         // this could be asynchronously
         private void sendCommitRequestToVMSs(BatchContext batchContext){
+
+            for(VmsIdentifier vms : VMSs.values()){
+
+                VmsConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.hashCode() );
+
+                // must lock first before writing to write buffer
+                connectionMetadata.writeLock.lock();
+
+                // having more than one write buffer does not help us, since the connection is the limitation (one writer at a time)
+                BatchCommitRequest.write( connectionMetadata.writeBuffer,
+                        batchContext.batchOffset, batchContext.lastTidOfBatchPerVms.get( vms.getName() ) );
+
+                connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata, new WriteCompletionHandler());
+
+            }
 
         }
 
@@ -917,11 +960,16 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 // we could possibly open a channel per write operation, but... what are the consequences of too much opened connections?
                 connectionMetadata.writeLock.lock();
 
-                // assign this event, so... what? try to send later?
-                connectionMetadata.lastEventWritten = event;
-
                 // write. think about failures/atomicity later
-                TransactionEvent.write(connectionMetadata.writeBuffer, tid_, vms.lastTid, batch_, inputEvent.name, inputEvent.payload);
+                TransactionEvent.TransactionEventPayload txEvent = TransactionEvent.write(connectionMetadata.writeBuffer, tid_, vms.lastTid, batch_, inputEvent.name, inputEvent.payload);
+
+                // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
+                List<TransactionEvent.TransactionEventPayload> list = connectionMetadata.transactionEventsPerBatch.get(batch_);
+                if (list == null ){
+                    connectionMetadata.transactionEventsPerBatch.put(batch_, new ArrayList<>());
+                } else {
+                    list.add(txEvent);
+                }
 
                 // a vms, although receiving an event from a "next" batch, cannot yet commit, since
                 // there may have additional events to arrive from the current batch

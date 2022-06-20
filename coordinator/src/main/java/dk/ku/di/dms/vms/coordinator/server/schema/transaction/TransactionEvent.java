@@ -15,7 +15,25 @@ public final class TransactionEvent {
     // message type | tid | last tid | size | event name | size | payload
     private static final int header = Byte.BYTES + Long.BYTES + Long.BYTES + Integer.BYTES;
 
-    public static void write(ByteBuffer buffer, long tid, long lastTid, long batch, String eventName, String payload){
+    public static void write(ByteBuffer buffer, TransactionEventPayload payload){
+
+        buffer.put( EVENT );
+        buffer.putLong( payload.tid );
+        buffer.putLong( payload.lastTid );
+        buffer.putLong( payload.batch );
+
+        byte[] eventBytes = payload.eventName.getBytes();
+        // size event name
+        buffer.putInt( eventBytes.length );
+        buffer.put( eventBytes );
+
+        byte[] payloadBytes = payload.payload.getBytes();
+        buffer.putInt( payloadBytes.length );
+        buffer.put( payloadBytes );
+
+    }
+
+    public static TransactionEventPayload write(ByteBuffer buffer, long tid, long lastTid, long batch, String eventName, String payload){
 
         buffer.put( EVENT );
         buffer.putLong( tid );
@@ -31,9 +49,11 @@ public final class TransactionEvent {
         buffer.putInt( payloadBytes.length );
         buffer.put( payloadBytes );
 
+        return new TransactionEventPayload( tid, lastTid, batch, eventName, payload );
+
     }
 
-    public static Payload read(ByteBuffer buffer){
+    public static TransactionEventPayload read(ByteBuffer buffer){
         long tid = buffer.getLong();
         long lastTid = buffer.getLong();
         long batch = buffer.getLong();
@@ -46,10 +66,10 @@ public final class TransactionEvent {
 
         String payload = new String( buffer.array(), header + Integer.BYTES + eventSize, payloadSize, StandardCharsets.UTF_8 );
 
-        return new Payload( tid, lastTid, batch, eventName, payload );
+        return new TransactionEventPayload( tid, lastTid, batch, eventName, payload );
     }
 
-    public static record Payload (
+    public static record TransactionEventPayload (
         long tid, long lastTid, long batch, String eventName, String payload
     ){}
 
