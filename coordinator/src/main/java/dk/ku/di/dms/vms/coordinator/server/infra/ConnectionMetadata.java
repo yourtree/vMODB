@@ -36,4 +36,14 @@ public class ConnectionMetadata {
         this.channel = channel;
         this.writeLock = writeLock;
     }
+
+    public ConnectionMetadata(int key, NodeType nodeType, ByteBuffer readBuffer, ByteBuffer writeBuffer, AsynchronousSocketChannel channel) {
+        this.key = key;
+        this.nodeType = nodeType;
+        this.readBuffer = readBuffer;
+        this.writeBuffer = writeBuffer;
+        this.channel = channel;
+        this.writeLock = null;
+    }
+
 }

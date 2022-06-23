@@ -557,14 +557,14 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         // immediate read in the same channel
                         channel.read( buffer ).get();
 
-                        // CommitResponse.CommitResponsePayload response = CommitResponse.read( buffer );
+                        BatchReplication.BatchReplicationPayload response = BatchReplication.read( buffer );
 
                         buffer.clear();
 
                         BufferManager.returnByteBuffer(buffer);
 
-                        // assuming the follower always accept, even though it came back from failure and has old metadata
-                        serverVotes.add( server.hashCode() );
+                        // assuming the follower always accept
+                        if(currBatch == response.batch()) serverVotes.add( server.hashCode() );
 
                         return null;
 

@@ -23,14 +23,14 @@ public final class BatchReplication {
         buffer.put( vmsTidMap.getBytes(StandardCharsets.UTF_8) );
     }
 
-    public static CommitReplicationPayload read(ByteBuffer buffer){
+    public static BatchReplicationPayload read(ByteBuffer buffer){
         long batch = buffer.getLong();
         int size = buffer.getInt();
         String map = new String(buffer.array(), headerSize, size, StandardCharsets.UTF_8 );
-        return new CommitReplicationPayload(batch,map);
+        return new BatchReplicationPayload(batch,map);
     }
 
-    public record CommitReplicationPayload (
+    public record BatchReplicationPayload(
         long batch, String vmsTidMap
     ){}
 

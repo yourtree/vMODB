@@ -39,6 +39,8 @@ public final class Constants {
      */
     public static final byte BATCH_REPLICATION = 8;
 
+    public static final byte BATCH_REPLICATION_ACK = 12;
+
     // then the coordinator sends this message
     // VMSs after receiving this message snapshot (log) their states
     public static final byte BATCH_COMMIT_REQUEST = 9;
