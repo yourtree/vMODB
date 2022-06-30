@@ -1,11 +1,11 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
-import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
-import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSub;
+import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
+import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;
@@ -24,9 +24,9 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     private static final Logger logger = getLogger("VmsTransactionScheduler");
 
-    private final Queue<TransactionalEvent> inputQueue;
+    private final BlockingQueue<TransactionEvent.Payload> inputQueue;
 
-    private final Queue<TransactionalEvent> outputQueue;
+    private final BlockingQueue<TransactionEvent.Payload> outputQueue;
 
     private final Queue<VmsTransactionTaskResult> resultQueue;
 
@@ -43,15 +43,15 @@ public class VmsTransactionScheduler extends StoppableRunnable {
     private final TreeMap<Integer, List<VmsTransactionTask>> readyTasksPerTidMap;
 
     // offset tracking for execution
-    private Offset currentOffset;
+    private OffsetTracker currentOffset;
 
     // offset tracking. i.e., cannot issue a task if predecessor transaction is not ready yet
-    private final Map<Integer, Offset> offsetMap;
+    private final Map<Integer, OffsetTracker> offsetMap;
 
     private final ExecutorService vmsTransactionTaskPool;
 
     public VmsTransactionScheduler(ExecutorService vmsAppLogicTaskPool,
-                                   IVmsInternalPubSub vmsInternalPubSubService,
+                                   IVmsInternalChannels vmsInternalChannels,
                                    Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap){
 
         super();
@@ -66,21 +66,21 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
         this.offsetMap = new TreeMap<>();
 
-        this.inputQueue = vmsInternalPubSubService.inputQueue();
+        this.inputQueue = vmsInternalChannels.transactionInputQueue();
 
-        this.resultQueue = vmsInternalPubSubService.resultQueue();
+        this.resultQueue = vmsInternalChannels.transactionResultQueue();
 
-        this.outputQueue = vmsInternalPubSubService.outputQueue();
+        this.outputQueue = vmsInternalChannels.transactionOutputQueue();
 
     }
 
-    private TransactionalEvent take(){
+    private TransactionEvent.Payload take(){
         if(inputQueue.size() > 0) return inputQueue.poll();
         return null;
     }
 
     private void initializeOffset(){
-        currentOffset = new Offset(0, 1);
+        currentOffset = new OffsetTracker(0, 1);
         currentOffset.signalReady();
         currentOffset.signalFinished();
         offsetMap.put(0, currentOffset);
@@ -135,7 +135,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
                 currentOffset.signalFinished();
 
-                if(currentOffset.status() == Offset.OffsetStatus.FINISHED){
+                if(currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED){
 
                     // clean maps
                     readyTasksPerTidMap.remove( currentOffset.tid() );
@@ -158,7 +158,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         list.add(task);
 
         // handle respective offset
-        Offset offset = offsetMap.get( task.tid() );
+        OffsetTracker offset = offsetMap.get( task.tid() );
 
         offset.signalReady();
 
@@ -166,7 +166,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     private void processNewEvent(){
 
-        TransactionalEvent transactionalEvent = take();
+        TransactionEvent.Payload transactionalEvent = take();
 
         // in case there is a new payload to process
         if(transactionalEvent == null) {
@@ -212,10 +212,10 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
             // create and put in the payload list
 
-            List<IdentifiableNode<VmsTransactionSignature>> signatures = eventToTransactionMap.get(transactionalEvent.queue());
+            List<IdentifiableNode<VmsTransactionSignature>> signatures = eventToTransactionMap.get(transactionalEvent.event());
 
             // create the offset
-            offsetMap.put( transactionalEvent.tid(), new Offset(transactionalEvent.tid(), signatures.size()));
+            offsetMap.put( transactionalEvent.tid(), new OffsetTracker(transactionalEvent.tid(), signatures.size()));
 
             VmsTransactionTask task;
 
@@ -246,7 +246,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     private void dispatchReadyTasksForExecution() {
 
-        if(!readyTasksPerTidMap.isEmpty() && readyTasksPerTidMap.firstKey() == currentOffset.tid() && currentOffset.status() == Offset.OffsetStatus.READY){
+        if(!readyTasksPerTidMap.isEmpty() && readyTasksPerTidMap.firstKey() == currentOffset.tid() && currentOffset.status() == OffsetTracker.OffsetStatus.READY){
 
             List<VmsTransactionTask> tasks = readyTasksPerTidMap.get(readyTasksPerTidMap.firstKey());
 
@@ -284,7 +284,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         // if( offsetMap.size() == 1 ) return; // cannot move, the payload hasn't arrived yet, so the respective offset has not been created
 
         // if next is the right one ---> the concept of "next" may change according to recovery from failures and aborts
-        if(currentOffset.status() == Offset.OffsetStatus.FINISHED && offsetMap.get( currentOffset.tid() + 1 ) != null ){
+        if(currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED && offsetMap.get( currentOffset.tid() + 1 ) != null ){
 
             // should be here to remove the tid 0. the tid 0 never receives a result task
             offsetMap.remove( currentOffset.tid() );

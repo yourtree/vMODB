@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.sdk.core.example;
 
-import dk.ku.di.dms.vms.modb.common.event.IApplicationEvent;
+import dk.ku.di.dms.vms.modb.common.event.IVmsApplicationEvent;
 
-public class EventExample implements IApplicationEvent {
+public class EventExample implements IVmsApplicationEvent {
 
     public int id;
 

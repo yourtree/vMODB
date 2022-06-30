@@ -3,13 +3,12 @@ package dk.ku.di.dms.vms.coordinator.server.follower;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
-import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
-import dk.ku.di.dms.vms.coordinator.server.infra.BatchContext;
-import dk.ku.di.dms.vms.coordinator.server.infra.BufferManager;
-import dk.ku.di.dms.vms.coordinator.server.infra.ConnectionMetadata;
-import dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchReplication;
-import dk.ku.di.dms.vms.coordinator.server.schema.batch.BatchReplicationAck;
-import dk.ku.di.dms.vms.coordinator.server.schema.internal.Presentation;
+import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
+import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
+import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
+import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchReplication;
+import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchReplicationAck;
+import dk.ku.di.dms.vms.web_common.meta.schema.control.Presentation;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
 import java.io.IOException;
@@ -19,15 +18,13 @@ import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 
-import static dk.ku.di.dms.vms.coordinator.server.infra.Constants.BATCH_REPLICATION;
-import static dk.ku.di.dms.vms.coordinator.server.infra.Constants.HEARTBEAT;
-import static dk.ku.di.dms.vms.web_common.runnable.Constants.NO_RESULT;
+import static dk.ku.di.dms.vms.web_common.meta.Constants.BATCH_REPLICATION;
+import static dk.ku.di.dms.vms.web_common.meta.Constants.HEARTBEAT;
 import static java.lang.Thread.sleep;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
@@ -56,7 +53,7 @@ public final class Follower extends SignalingStoppableRunnable {
 
     private final ServerIdentifier leader;
 
-    // using this?
+    // are we using this?
     // private final Map<Long, BatchContext> batchContextMap;
 
     private volatile long lastBatchOffsetCommitted;
@@ -162,7 +159,7 @@ public final class Follower extends SignalingStoppableRunnable {
                         null // no need to lock, only one thread writing
                 );
 
-                Presentation.write(connectionMetadata.writeBuffer, me);
+                Presentation.writeServer(connectionMetadata.writeBuffer, me);
 
                 channel.write(connectionMetadata.writeBuffer).get();
 
@@ -287,8 +284,8 @@ public final class Follower extends SignalingStoppableRunnable {
                         ConnectionMetadata.NodeType.SERVER,
                         readBuffer,
                         writeBuffer,
-                        channel
-                        // no need to lock, only one thread writing
+                        channel,
+                        null // no need to lock, only one thread writing
                 );
 
                 channel.read( readBuffer, connectionMetadata, new ReadCompletionHandler() );

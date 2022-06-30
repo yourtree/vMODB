@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.coordinator.election;
 
 import dk.ku.di.dms.vms.coordinator.election.schema.*;
-import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
+import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
@@ -17,7 +17,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
-import static dk.ku.di.dms.vms.web_common.runnable.Constants.FINISHED;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 

@@ -8,7 +8,7 @@ package dk.ku.di.dms.vms.modb.common.event;
  * Handshake (after sending the data and event schemas)
  *
  */
-public class SystemEvent implements IVmsEvent {
+public class SystemEvent implements IVmsSystemEvent {
 
     public int op; // 0 = ERR 1 = OK
 

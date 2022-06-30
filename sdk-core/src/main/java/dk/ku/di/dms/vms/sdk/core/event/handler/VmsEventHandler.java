@@ -3,11 +3,11 @@ package dk.ku.di.dms.vms.sdk.core.event.handler;
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.event.SystemEvent;
-import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
-import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSub;
+import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
-import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
-import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
+import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
+import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionEvent;
+import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
 
 import java.io.IOException;
@@ -16,24 +16,18 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
-import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import static java.net.StandardSocketOptions.*;
-import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
-import static java.util.logging.Logger.getLogger;
 
 /**
  * Rate of consumption of events and data are different, as well as their payload
  */
-public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandler {
-
-    private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
+public final class VmsEventHandler extends SignalingStoppableRunnable implements IVmsEventHandler {
 
     /** EXECUTOR SERVICE (for socket channels) **/
     private final ExecutorService executorService;
@@ -48,22 +42,12 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
     private AsynchronousSocketChannel dataChannel;
 
     // store off-heap to avoid overhead
-    private final ByteBuffer eventReadByteBuffer;
+    private final ByteBuffer eventReadBuffer;
 
     // to avoid allocation of byte buffer on every write
-    private final ByteBuffer eventWriteByteBuffer;
+    private final ByteBuffer eventWriteBuffer;
 
-    private final ByteBuffer dataSocketByteBuffer;
-
-    /** TRANSACTIONAL EVENTS **/
-    private final Queue<TransactionalEvent> outputQueue;
-
-    private final Queue<TransactionalEvent> inputQueue;
-
-    /** DATA **/
-    private final Queue<DataRequestEvent> requestQueue;
-
-    private final Map<Long, DataResponseEvent> responseMap;
+    private final ByteBuffer dataSocketBuffer;
 
     private final Map<Long, DataRequestEvent> pendingRequestsMap;
 
@@ -73,24 +57,18 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
     /** SERIALIZATION **/
     private final IVmsSerdesProxy serdes;
 
-    public VmsEventHandler(IVmsInternalPubSub vmsInternalPubSubService, VmsMetadata vmsMetadata, IVmsSerdesProxy serdes, ExecutorService executorService) {
+    public VmsEventHandler(IVmsInternalChannels vmsInternalQueues, VmsMetadata vmsMetadata, IVmsSerdesProxy serdes, ExecutorService executorService) {
 
         super();
-
-        this.outputQueue = vmsInternalPubSubService.outputQueue();
-        this.inputQueue = vmsInternalPubSubService.inputQueue();
-
-        this.requestQueue = vmsInternalPubSubService.requestQueue();
-        this.responseMap = vmsInternalPubSubService.responseMap();
 
         this.vmsMetadata = vmsMetadata;
 
         // event
-        this.eventReadByteBuffer = ByteBuffer.allocateDirect(1024);
-        this.eventWriteByteBuffer = ByteBuffer.allocateDirect(1024);
+        this.eventReadBuffer = BufferManager.loanByteBuffer();
+        this.eventWriteBuffer = BufferManager.loanByteBuffer();
 
         // data
-        this.dataSocketByteBuffer = ByteBuffer.allocateDirect(1024);
+        this.dataSocketBuffer = BufferManager.loanByteBuffer();
 
         this.serdes = serdes;
 
@@ -99,6 +77,13 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
         this.pendingRequestsMap = new HashMap<>();
     }
 
+    /**
+     * Maybe a new design would better fit this class.
+     * We can reuse the socket threads to parse the incoming data and deliver back to the correct queues.
+     * Otherwise, the parsing of incoming bytes becomes a bottleneck (single threaded).
+     * This thread would make the job to be a conciliator between the application code and the external world
+     * For instance, delivering events to the socket threads and returning data to the code...
+     */
     @Override
     public void run() {
 
@@ -108,10 +93,10 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
         while(!isStopped()){
 
             // do we have an input payload to process?
-            processNewEvent();
+            processIncomingEvent();
 
             // do we have an input data (from sidecar) to process?
-            processNewData();
+            processIncomingData();
 
             // do we have an output payload to dispatch? can be another thread, the sdk is dominated by IOs
             dispatchOutputEvents();
@@ -123,22 +108,21 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
 
     }
 
-    private void processNewEvent(){
+    private void processIncomingEvent(){
 
         if(futureEvent.isDone()){
 
             try {
                 futureEvent.get();
 
-                TransactionalEvent event = serdes.deserializeToTransactionalEvent( eventReadByteBuffer.array() );
-                inputQueue.add( event );
+//                TransactionalEvent event = serdes.deserializeToTransactionalEvent( eventReadBuffer.array() );
+//                inputQueue.add( event );
 
             } catch (InterruptedException | ExecutionException e) {
                 logger.info("ERROR: "+e.getLocalizedMessage());
             } finally {
-                eventReadByteBuffer.clear();
-                // TODO should we do that with completion handler?
-                futureEvent = eventChannel.read(eventReadByteBuffer);
+                eventReadBuffer.clear();
+                futureEvent = eventChannel.read(eventReadBuffer);
             }
 
         }
@@ -148,7 +132,7 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
     /**
      * Everything should be a DTO
      */
-    private void processNewData() {
+    private void processIncomingData() {
 
         if(futureData.isDone()){
 
@@ -156,9 +140,9 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
                 futureData.get();
 
                 // that would be the fulfillment of the future
-                DataResponseEvent dataResponse = serdes.deserializeToDataResponseEvent( dataSocketByteBuffer.array() );
+                DataResponseEvent dataResponse = serdes.deserializeToDataResponseEvent( dataSocketBuffer.array() );
 
-                responseMap.put( dataResponse.identifier, dataResponse );
+//                responseMap.put( dataResponse.identifier, dataResponse );
 
                 DataRequestEvent dataRequestEvent = pendingRequestsMap.remove( dataResponse.identifier );
 
@@ -171,8 +155,8 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
                 logger.log(Level.WARNING, "ERR: on reading the new data: "+ e.getLocalizedMessage());
             } finally {
 
-                dataSocketByteBuffer.clear();
-                futureData = eventChannel.read(eventReadByteBuffer);
+                dataSocketBuffer.clear();
+                futureData = eventChannel.read(eventReadBuffer);
             }
 
         }
@@ -181,34 +165,33 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
 
     private void dispatchOutputEvents() {
 
-        while( !outputQueue.isEmpty() ){
-
-           TransactionalEvent outputEvent = outputQueue.poll();
-
-            byte[] bytes = serdes.serializeTransactionalEvent( outputEvent );
-            eventChannel.write(ByteBuffer.wrap(bytes));
-
-        }
+//        while( !outputQueue.isEmpty() ){
+//
+//           TransactionalEvent outputEvent = outputQueue.poll();
+//
+//            byte[] bytes = serdes.serializeTransactionalEvent( outputEvent );
+//            eventChannel.write(ByteBuffer.wrap(bytes));
+//
+//        }
 
     }
 
     private void dispatchDataRequests() {
 
-        while( !requestQueue.isEmpty() ){
-
-            DataRequestEvent dataRequestEvent = requestQueue.poll();
-
-            pendingRequestsMap.put( dataRequestEvent.identifier, dataRequestEvent );
-
-            byte[] bytes = serdes.serializeDataRequestEvent( dataRequestEvent );
-
-            // TODO build mechanism for send failure
-            eventWriteByteBuffer.clear();
-            eventWriteByteBuffer.put( bytes );
-
-            eventChannel.write( eventWriteByteBuffer );
-
-        }
+//        while( !requestQueue.isEmpty() ){
+//
+//            DataRequestEvent dataRequestEvent = requestQueue.poll();
+//
+//            pendingRequestsMap.put( dataRequestEvent.identifier, dataRequestEvent );
+//
+//            byte[] bytes = serdes.serializeDataRequestEvent( dataRequestEvent );
+//
+//            eventWriteBuffer.clear();
+//            eventWriteBuffer.put( bytes );
+//
+//            eventChannel.write(eventWriteBuffer);
+//
+//        }
 
     }
 
@@ -223,7 +206,6 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
         AsynchronousChannelGroup dataGroup;
 
         try {
-            // FIXME it should be same group....
             eventGroup = AsynchronousChannelGroup.withThreadPool( executorService );
             dataGroup = AsynchronousChannelGroup.withThreadPool( executorService );
         } catch (IOException e) {
@@ -247,22 +229,22 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
         // PHASE 2- send schemas, this is compared to a handshake in a WebSocket protocol
 
         // send event schema
-        byte[] eventSchemaBytes = serdes.serializeEventSchema( vmsMetadata.vmsEventSchema() );
-        eventChannel.write( ByteBuffer.wrap(eventSchemaBytes) );
+        String eventSchemaStr = serdes.serializeEventSchema( vmsMetadata.vmsEventSchema() );
+        eventChannel.write( ByteBuffer.wrap(eventSchemaStr.getBytes(StandardCharsets.UTF_8)) );
 
         // send data schema
-        byte[] dataSchemaBytes = serdes.serializeDataSchema( vmsMetadata.vmsDataSchema() );
-        dataChannel.write( ByteBuffer.wrap(dataSchemaBytes) );
+        String dataSchemaStr = serdes.serializeDataSchema( vmsMetadata.vmsDataSchema() );
+        dataChannel.write( ByteBuffer.wrap(dataSchemaStr.getBytes(StandardCharsets.UTF_8)) );
 
         // PHASE 3 -  get confirmation whether the schemas are fine
 
         // to avoid checking for nullability in the payload loop
         // besides, the framework must wait for events either way
-        eventReadByteBuffer.clear();
-        futureEvent = eventChannel.read(eventReadByteBuffer);
+        eventReadBuffer.clear();
+        futureEvent = eventChannel.read(eventReadBuffer);
 
-        dataSocketByteBuffer.clear();
-        futureData = dataChannel.read(dataSocketByteBuffer);
+        dataSocketBuffer.clear();
+        futureData = dataChannel.read(dataSocketBuffer);
 
         try {
             futureEvent.get();
@@ -271,24 +253,24 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
             throw new RuntimeException("ERROR on retrieving handshake from sidecar.");
         }
 
-        SystemEvent eventSchemaResponse = serdes.deserializeSystemEvent( eventReadByteBuffer.array() );
+        SystemEvent eventSchemaResponse = serdes.deserializeSystemEvent( eventReadBuffer.array() );
 
         if(eventSchemaResponse.op == 0){
             throw new RuntimeException(eventSchemaResponse.message);
         }
 
-        SystemEvent dataSchemaResponse = serdes.deserializeSystemEvent( dataSocketByteBuffer.array() );
+        SystemEvent dataSchemaResponse = serdes.deserializeSystemEvent( dataSocketBuffer.array() );
 
         if(dataSchemaResponse.op == 0){
             throw new RuntimeException(dataSchemaResponse.message);
         }
 
         // prepare futures
-        eventReadByteBuffer.clear();
-        futureEvent = eventChannel.read(eventReadByteBuffer);
+        eventReadBuffer.clear();
+        futureEvent = eventChannel.read(eventReadBuffer);
 
-        dataSocketByteBuffer.clear();
-        futureData = dataChannel.read(dataSocketByteBuffer);
+        dataSocketBuffer.clear();
+        futureData = dataChannel.read(dataSocketBuffer);
 
     }
 
@@ -307,8 +289,8 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
 
     /**
      * TODO does this thread pool should be shared among web tasks and app-logic tasks?
-     * @param channelName
-     * @param group
+     * @param channelName data or event
+     * @param group socket group
      * @return Connection future
      */
     private Future<Void> connectToSidecar(String channelName, AsynchronousChannelGroup group){
@@ -328,13 +310,13 @@ public class VmsEventHandler extends StoppableRunnable implements IVmsEventHandl
 
                 // FIXME send vmsmetada as part of the connection
 
-                byte[] eventSchemaBytes = serdes.serializeEventSchema( vmsMetadata.vmsEventSchema() );
+                String eventSchemaStr = serdes.serializeEventSchema( vmsMetadata.vmsEventSchema() );
 //                eventChannel.write( ByteBuffer.wrap(eventSchemaBytes) );
-                eventWriteByteBuffer.put( eventSchemaBytes );
+                eventWriteBuffer.put( eventSchemaStr.getBytes(StandardCharsets.UTF_8) );
                 // TODO send only one vms schema, later we figure out how to deal with many... these are the case to explore many-core architectures...
 
 
-                dataChannel.connect(address, eventWriteByteBuffer, new CompletionHandler<Void, ByteBuffer>() {
+                dataChannel.connect(address, eventWriteBuffer, new CompletionHandler<>() {
 
                     @Override
                     public void completed(Void result, ByteBuffer attachment) {

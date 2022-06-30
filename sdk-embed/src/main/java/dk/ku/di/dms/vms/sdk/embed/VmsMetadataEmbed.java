@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.sdk.embed;
 
 import dk.ku.di.dms.vms.modb.catalog.Catalog;
 import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
-import dk.ku.di.dms.vms.modb.common.event.IApplicationEvent;
+import dk.ku.di.dms.vms.modb.common.event.IVmsApplicationEvent;
 import dk.ku.di.dms.vms.modb.store.table.Table;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 
@@ -16,8 +16,8 @@ import java.util.Map;
 public class VmsMetadataEmbed {
 
     private final Map<String, List<VmsTransactionSignature>> eventToOperationMap;
-    private final Map<String,Class<IApplicationEvent>> queueToEventMap;
-    private final Map<Class<IApplicationEvent>,String> eventToQueueMap;
+    private final Map<String,Class<IVmsApplicationEvent>> queueToEventMap;
+    private final Map<Class<IVmsApplicationEvent>,String> eventToQueueMap;
     private final Map<String,Object> loadedMicroserviceClasses;
     private final Catalog catalog;
 

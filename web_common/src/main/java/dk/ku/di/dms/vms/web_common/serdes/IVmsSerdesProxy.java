@@ -3,11 +3,9 @@ package dk.ku.di.dms.vms.web_common.serdes;
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.event.SystemEvent;
-import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
 import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
 
-import java.util.Collection;
 import java.util.Map;
 
 /**
@@ -16,24 +14,21 @@ import java.util.Map;
  */
 public interface IVmsSerdesProxy {
 
-    byte[] serializeEventSchema(Map<String, VmsEventSchema> vmsEventSchema);
-    byte[] serializeEventSchema( Collection<VmsEventSchema> vmsEventSchema);
-    Map<String, VmsEventSchema> deserializeEventSchema(byte[] bytes);
+    String serializeEventSchema(Map<String, VmsEventSchema> vmsEventSchema);
     Map<String, VmsEventSchema> deserializeEventSchema(String json);
 
-    byte[] serializeDataSchema(Map<String, VmsDataSchema> vmsEventSchema);
-    Map<String, VmsDataSchema> deserializeDataSchema(byte[] bytes);
+    String serializeDataSchema(VmsDataSchema vmsDataSchema);
+    VmsDataSchema deserializeDataSchema(String vmsDataSchema);
 
+    /** System event... do we need that? **/
     byte[] serializeSystemEvent(SystemEvent systemEvent);
     SystemEvent deserializeSystemEvent(byte[] bytes);
 
     /**
      * A transactional event serves for both input and output
-     * @param event
-     * @return
      */
-    byte[] serializeTransactionalEvent(TransactionalEvent event);
-    TransactionalEvent deserializeToTransactionalEvent(byte[] bytes);
+//    byte[] serializeTransactionalEvent(TransactionalEvent event);
+//    TransactionalEvent deserializeToTransactionalEvent(byte[] bytes);
 
     byte[] serializeDataRequestEvent(DataRequestEvent event);
     DataRequestEvent deserializeDataRequestEvent(byte[] bytes);
@@ -41,4 +36,9 @@ public interface IVmsSerdesProxy {
     byte[] serializeDataResponseEvent(DataResponseEvent event);
     DataResponseEvent deserializeToDataResponseEvent(byte[] bytes);
 
+    <K,V> String serializeMap( Map<K,V> map );
+    <K,V> Map<K,V> deserializeMap(String mapStr);
+
+    <T> String serialize( T value, Class<T> clazz );
+    <T> T deserialize( String valueStr, Class<T> clazz );
 }

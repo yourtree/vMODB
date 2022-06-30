@@ -11,7 +11,6 @@ import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
 import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
 import java.util.Map;
 
 class DefaultVmsSerdes implements IVmsSerdesProxy {
@@ -23,39 +22,27 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
     }
 
     /**
-     SYSTEM EVENTS
+     VMS METADATA EVENTS
      **/
 
     @Override
-    public byte[] serializeEventSchema(Map<String, VmsEventSchema> vmsEventSchema) {
-        return gson.toJson( vmsEventSchema ).getBytes(StandardCharsets.UTF_8);
+    public String serializeEventSchema(Map<String, VmsEventSchema> vmsEventSchema) {
+        return gson.toJson( vmsEventSchema );
     }
 
     @Override
-    public byte[] serializeEventSchema(Collection<VmsEventSchema> vmsEventSchema) {
-        return gson.toJson( vmsEventSchema ).getBytes(StandardCharsets.UTF_8);
+    public Map<String, VmsEventSchema> deserializeEventSchema(String vmsEventSchemaStr) {
+        return gson.fromJson(vmsEventSchemaStr, new TypeToken<Map<String, VmsEventSchema>>(){}.getType());
     }
 
     @Override
-    public Map<String, VmsEventSchema> deserializeEventSchema(byte[] bytes) {
-        String json = new String(bytes);
-        return gson.fromJson(json, new TypeToken<Map<String, VmsEventSchema>>(){}.getType());
+    public String serializeDataSchema(VmsDataSchema vmsDataSchema) {
+        return gson.toJson( vmsDataSchema );
     }
 
     @Override
-    public Map<String, VmsEventSchema> deserializeEventSchema(String json) {
-        return gson.fromJson(json, new TypeToken<Map<String, VmsEventSchema>>(){}.getType());
-    }
-
-    @Override
-    public byte[] serializeDataSchema(Map<String, VmsDataSchema> vmsDataSchema) {
-        return gson.toJson( vmsDataSchema ).getBytes(StandardCharsets.UTF_8);
-    }
-
-    @Override
-    public Map<String, VmsDataSchema> deserializeDataSchema(byte[] bytes) {
-        String json = new String(bytes);
-        return gson.fromJson(json, new TypeToken<Map<String, VmsDataSchema>>(){}.getType());
+    public VmsDataSchema deserializeDataSchema(String dataSchema) {
+        return gson.fromJson(dataSchema, VmsDataSchema.class);
     }
 
     @Override
@@ -111,5 +98,27 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
         String json = new String( bytes );
         return gson.fromJson(json, DataResponseEvent.class);
     }
+
+
+    @Override
+    public <K,V> String serializeMap( Map<K,V> map ){
+        return gson.toJson( map );
+    }
+
+    @Override
+    public <K,V> Map<K,V> deserializeMap(String mapStr){
+         return gson.fromJson(mapStr, new TypeToken<Map<K, V>>(){}.getType());
+    }
+
+    @Override
+    public <T> String serialize(T value, Class<T> clazz) {
+        return gson.toJson( value, clazz );
+    }
+
+    @Override
+    public <T> T deserialize(String valueStr, Class<T> clazz) {
+        return gson.fromJson( valueStr, clazz );
+    }
+
 
 }

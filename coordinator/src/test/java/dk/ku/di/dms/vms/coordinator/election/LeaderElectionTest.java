@@ -1,11 +1,11 @@
 package dk.ku.di.dms.vms.coordinator.election;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
-import static dk.ku.di.dms.vms.web_common.runnable.Constants.FINISHED;
-import static dk.ku.di.dms.vms.web_common.runnable.Constants.NO_RESULT;
+import static dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable.FINISHED;
+import static dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable.NO_RESULT;
 import static java.lang.Thread.sleep;
 
-import dk.ku.di.dms.vms.coordinator.metadata.ServerIdentifier;
+import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
 import org.junit.Test;
 
@@ -16,8 +16,6 @@ import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 

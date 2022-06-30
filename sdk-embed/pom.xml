@@ -26,27 +26,19 @@
 
   <dependencies>
 
+    <!-- modb -->
+    <dependency>
+      <groupId>dk.di.ku.dms.vms</groupId>
+      <artifactId>modb</artifactId>
+      <version>1.0-SNAPSHOT</version>
+      <scope>compile</scope>
+    </dependency>
+
     <!-- sdk-core -->
     <dependency>
         <groupId>dk.ku.di.dms.vms</groupId>
         <artifactId>sdk-core</artifactId>
         <version>1.0-SNAPSHOT</version>
-        <!-- with embedded execution, no need for zeromq -->
-        <exclusions>
-          <exclusion>
-            <groupId>org.zeromq</groupId>
-            <artifactId>jeromq</artifactId>
-          </exclusion>
-        </exclusions>
-        <scope>compile</scope>
-    </dependency>
-
-    <!-- sidecar -->
-    <dependency>
-      <groupId>dk.ku.di.dms.vms</groupId>
-      <artifactId>sidecar</artifactId>
-      <version>1.0-SNAPSHOT</version>
-      <scope>compile</scope>
     </dependency>
 
   </dependencies>

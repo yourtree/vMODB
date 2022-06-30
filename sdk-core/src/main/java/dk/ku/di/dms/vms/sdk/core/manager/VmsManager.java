@@ -3,8 +3,8 @@ package dk.ku.di.dms.vms.sdk.core.manager;
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.event.handler.VmsEventHandler;
 import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
-import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSub;
-import dk.ku.di.dms.vms.sdk.core.event.pubsub.VmsInternalPubSub;
+import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
+import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
@@ -53,7 +53,7 @@ public final class VmsManager {
 //        }
 
         // this.metadata.executorService = executorService;
-        IVmsInternalPubSub vmsInternalPubSubService = VmsInternalPubSub.newInstance();
+        IVmsInternalChannels vmsInternalPubSubService = VmsInternalChannels.getInstance();
 
         VmsMetadata vmsMetadata;
         try {

@@ -3,10 +3,10 @@ package dk.ku.di.dms.vms.sdk.core.metadata;
 import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.meta.*;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
-import dk.ku.di.dms.vms.sdk.core.event.pubsub.IVmsInternalPubSub;
+import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.UnsupportedConstraint;
 import dk.ku.di.dms.vms.sdk.core.annotations.*;
-import dk.ku.di.dms.vms.modb.common.event.IApplicationEvent;
+import dk.ku.di.dms.vms.modb.common.event.IVmsApplicationEvent;
 import dk.ku.di.dms.vms.sdk.core.client.VmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.QueueMappingException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NotAcceptableTypeException;
@@ -42,7 +42,7 @@ public class VmsMetadataLoader {
 
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
-    public static VmsMetadata load(String packageName, IVmsInternalPubSub vmsInternalPubSubService) throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    public static VmsMetadata load(String packageName, IVmsInternalChannels vmsInternalPubSubService) throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
         Reflections reflections = configureReflections(packageName);
 
@@ -54,12 +54,15 @@ public class VmsMetadataLoader {
 
         Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, vmsTableNames);
 
+        // get only the first one
+        Optional<VmsDataSchema> vmsDataSchemaOpt = vmsDataSchemas.values().stream().findFirst();
+
         Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, vmsDataSchemas, vmsInternalPubSubService);
 
         // necessary remaining data structures to store a vms metadata
         Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToVmsTransactionMap = new HashMap<>();
-        Map<String, Class<? extends IApplicationEvent>> queueToEventMap = new HashMap<>();
-        Map<Class<? extends IApplicationEvent>,String> eventToQueueMap = new HashMap<>();
+        Map<String, Class<? extends IVmsApplicationEvent>> queueToEventMap = new HashMap<>();
+        Map<Class<? extends IVmsApplicationEvent>,String> eventToQueueMap = new HashMap<>();
 
         mapVmsTransactionInputOutput(reflections, loadedVmsInstances, queueToEventMap, eventToQueueMap, eventToVmsTransactionMap);
 
@@ -71,7 +74,7 @@ public class VmsMetadataLoader {
             SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
          */
 
-        return new VmsMetadata( vmsDataSchemas, vmsEventSchema, eventToVmsTransactionMap, queueToEventMap, eventToQueueMap, loadedVmsInstances );
+        return new VmsMetadata(vmsDataSchemaOpt.orElse(null), vmsEventSchema, eventToVmsTransactionMap, queueToEventMap, eventToQueueMap, loadedVmsInstances );
 
     }
 
@@ -112,13 +115,13 @@ public class VmsMetadataLoader {
     /**
      * Building virtual microservice event schemas
      */
-    protected static Map<String, VmsEventSchema> buildEventSchema(Reflections reflections, Map<Class<? extends IApplicationEvent>, String> eventToQueueMap) {
+    protected static Map<String, VmsEventSchema> buildEventSchema(Reflections reflections, Map<Class<? extends IVmsApplicationEvent>, String> eventToQueueMap) {
 
         Map<String, VmsEventSchema> schemaMap = new HashMap<>();
 
-        Set<Class<? extends IApplicationEvent>> eventsClazz = reflections.getSubTypesOf( IApplicationEvent.class );
+        Set<Class<? extends IVmsApplicationEvent>> eventsClazz = reflections.getSubTypesOf( IVmsApplicationEvent.class );
 
-        for( Class<? extends IApplicationEvent> eventClazz : eventsClazz ){
+        for( Class<? extends IVmsApplicationEvent> eventClazz : eventsClazz ){
 
             Field[] fields = eventClazz.getDeclaredFields();
 
@@ -301,20 +304,11 @@ public class VmsMetadataLoader {
                 for (Annotation constraint : constraintAnnotations) {
                     String constraintName = constraint.annotationType().getName();
                     switch (constraintName) {
-                        case "javax.validation.constraints.PositiveOrZero":
-                            constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE_OR_ZERO, columnPosition);
-                            break;
-                        case "javax.validation.constraints.Positive":
-                            constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE, columnPosition);
-                            break;
-                        case "javax.validation.constraints.Null":
-                            constraints[nC] = new ConstraintReference(ConstraintEnum.NULL, columnPosition);
-                            break;
-                        case "javax.validation.constraints.NotNull":
-                            constraints[nC] = new ConstraintReference(ConstraintEnum.NOT_NULL, columnPosition);
-                            break;
-                        default:
-                            throw new UnsupportedConstraint("Constraint " + constraintName + " not supported.");
+                        case "javax.validation.constraints.PositiveOrZero" -> constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE_OR_ZERO, columnPosition);
+                        case "javax.validation.constraints.Positive" -> constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE, columnPosition);
+                        case "javax.validation.constraints.Null" -> constraints[nC] = new ConstraintReference(ConstraintEnum.NULL, columnPosition);
+                        case "javax.validation.constraints.NotNull" -> constraints[nC] = new ConstraintReference(ConstraintEnum.NOT_NULL, columnPosition);
+                        default -> throw new UnsupportedConstraint("Constraint currently " + constraintName + " not supported.");
                     }
                     nC++;
                 }
@@ -329,7 +323,7 @@ public class VmsMetadataLoader {
         return null;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked","rawtypes"})
     protected static Map<Class<? extends IEntity<?>>,String> mapEntitiesToVirtualMicroservice(Set<Class<?>> vmsClasses) throws ClassNotFoundException {
 
         Map<Class<? extends IEntity<?>>,String> entityToVirtualMicroservice = new HashMap<>();
@@ -360,8 +354,8 @@ public class VmsMetadataLoader {
 
     }
 
-    @SuppressWarnings("unchecked")
-    protected static Map<String,Object> loadMicroserviceClasses(Set<Class<?>> vmsClasses, Map<String, VmsDataSchema> vmsDataSchemas, IVmsInternalPubSub vmsInternalPubSubService)
+    @SuppressWarnings({"unchecked","rawtypes"})
+    protected static Map<String,Object> loadMicroserviceClasses(Set<Class<?>> vmsClasses, Map<String, VmsDataSchema> vmsDataSchemas, IVmsInternalChannels vmsInternalPubSubService)
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
         Map<String,Object> loadedMicroserviceInstances = new HashMap<>();
@@ -380,7 +374,7 @@ public class VmsMetadataLoader {
 
             for (Class parameterType : constructor.getParameterTypes()) {
 
-                VmsRepositoryFacade facade = new VmsRepositoryFacade(parameterType, vmsInternalPubSubService.requestQueue(), vmsInternalPubSubService.responseMap(), dataSchema);
+                VmsRepositoryFacade facade = new VmsRepositoryFacade(parameterType, vmsInternalPubSubService.dataRequestQueue(), vmsInternalPubSubService.dataResponseMap(), dataSchema);
 
                 Object proxyInstance = Proxy.newProxyInstance(
                         VmsMetadataLoader.class.getClassLoader(),
@@ -408,8 +402,8 @@ public class VmsMetadataLoader {
     @SuppressWarnings("unchecked")
     protected static void mapVmsTransactionInputOutput(Reflections reflections,
                                                        Map<String, Object> loadedMicroserviceInstances,
-                                                       Map<String, Class<? extends IApplicationEvent>> queueToEventMap,
-                                                       Map<Class<? extends IApplicationEvent>, String> eventToQueueMap,
+                                                       Map<String, Class<? extends IVmsApplicationEvent>> queueToEventMap,
+                                                       Map<Class<? extends IVmsApplicationEvent>, String> eventToQueueMap,
                                                        Map<String,
                                                                List<IdentifiableNode<VmsTransactionSignature>>>
                                                                eventToVmsTransactionMap) {
@@ -422,18 +416,18 @@ public class VmsMetadataLoader {
             String className = method.getDeclaringClass().getCanonicalName();
             Object obj = loadedMicroserviceInstances.get(className);
 
-            Class<? extends IApplicationEvent> outputType;
+            Class<? extends IVmsApplicationEvent> outputType;
             try{
-                outputType = (Class<? extends IApplicationEvent>) method.getReturnType();
+                outputType = (Class<? extends IVmsApplicationEvent>) method.getReturnType();
             } catch(Exception e) {
                 throw new QueueMappingException("All output events must implement IEvent interface.");
             }
 
-            List<Class<? extends IApplicationEvent>> inputTypes = new ArrayList<>();
+            List<Class<? extends IVmsApplicationEvent>> inputTypes = new ArrayList<>();
 
             for(int i = 0; i < method.getParameters().length; i++){
                 try{
-                    Class<? extends IApplicationEvent> clazz = (Class<? extends IApplicationEvent>) method.getParameters()[i].getType();
+                    Class<? extends IVmsApplicationEvent> clazz = (Class<? extends IVmsApplicationEvent>) method.getParameters()[i].getType();
                     inputTypes.add( clazz);
                 } catch(Exception e) {
                     throw new QueueMappingException("All input events must implement IEvent interface.");

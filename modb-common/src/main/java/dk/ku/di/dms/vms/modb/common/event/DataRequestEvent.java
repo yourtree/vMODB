@@ -6,7 +6,7 @@ import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
  * It represents a request for data (i.e., triggers a query in the sidecar)
  * or the issuing of an insert or update in the sidecar
  */
-public class DataRequestEvent implements IVmsEvent {
+public class DataRequestEvent implements IVmsSystemEvent {
 
     // request identifier. the thread id
     public long identifier;

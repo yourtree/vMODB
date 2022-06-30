@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.common.event;
 /**
  * It represents the result of a request for data
  */
-public class DataResponseEvent implements IVmsEvent {
+public class DataResponseEvent implements IVmsSystemEvent {
 
     // request identifier. the thread id
     public long identifier;

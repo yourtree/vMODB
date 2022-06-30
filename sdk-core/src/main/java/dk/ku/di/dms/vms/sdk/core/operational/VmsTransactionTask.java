@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
-import dk.ku.di.dms.vms.modb.common.event.IApplicationEvent;
+import dk.ku.di.dms.vms.modb.common.event.IVmsApplicationEvent;
 import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 
 import java.lang.reflect.InvocationTargetException;
@@ -22,7 +22,7 @@ public class VmsTransactionTask implements Runnable {
     // internal identification of this specific task in the scheduler (can later be used to specify ordering criteria between tasks)
     private int identifier;
 
-    private final IApplicationEvent[] inputs;
+    private final IVmsApplicationEvent[] inputs;
 
     private int remainingTasks;
 
@@ -34,14 +34,14 @@ public class VmsTransactionTask implements Runnable {
                                Queue<TransactionalEvent> outputQueue, Queue<VmsTransactionTaskResult> resultQueue){
         this.tid = tid;
         this.signature = signature;
-        this.inputs = new IApplicationEvent[inputSize];
+        this.inputs = new IVmsApplicationEvent[inputSize];
         this.remainingTasks = inputSize;
 
         this.outputQueue = outputQueue;
         this.resultQueue = resultQueue;
     }
 
-    public void putEventInput(int index, IApplicationEvent event){
+    public void putEventInput(int index, IVmsApplicationEvent event){
         this.inputs[index] = event;
         this.remainingTasks--;
     }
@@ -58,9 +58,9 @@ public class VmsTransactionTask implements Runnable {
         return remainingTasks == 0;
     }
 
-    private IApplicationEvent callMethod(){
+    private IVmsApplicationEvent callMethod(){
         try {
-            return (IApplicationEvent) signature.method().invoke(signature.vmsInstance(), inputs);
+            return (IVmsApplicationEvent) signature.method().invoke(signature.vmsInstance(), inputs);
         } catch (IllegalAccessException | InvocationTargetException e) {
             // logger.info(e.getLocalizedMessage());
             throw new RuntimeException("ERROR"); // perhaps should forward this error to scheduler? what can be used for?
@@ -70,7 +70,7 @@ public class VmsTransactionTask implements Runnable {
     @Override
     public void run() {
 
-        IApplicationEvent output = callMethod();
+        IVmsApplicationEvent output = callMethod();
 
         // if null, something went wrong, thus look at the logs
         if(output != null){
