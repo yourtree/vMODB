@@ -19,7 +19,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * This event loop targets at allowing external clients to communicate via HTTP protocol.
  * Mainly for receiving transaction requests.
  * Based on micro-http project: https://github.com/ebarlas/microhttp
- * Removed the scheduler, task queue, and logging
+ * Removed the scheduler, task queue, and logging.
  */
 public class HttpEventLoop implements Runnable {
 

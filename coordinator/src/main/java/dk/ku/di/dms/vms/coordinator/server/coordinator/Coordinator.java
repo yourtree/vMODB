@@ -66,6 +66,10 @@ public final class Coordinator extends SignalingStoppableRunnable {
     /** VMS data structures **/
     private final Map<Integer, VmsIdentifier> VMSs;
 
+    private final Map<Integer, List<VmsIdentifier>> vmsConsumerSet;
+
+    private final Map<String, TransactionDAG> transactionMap;
+
     private final Map<Integer, VmsConnectionMetadata> vmsConnectionMetadataMap;
 
     // the identification of this server
@@ -105,15 +109,16 @@ public final class Coordinator extends SignalingStoppableRunnable {
             Queue<TransactionAbort.TransactionAbortPayload> transactionAbortEvents
     ){}
 
+    /** serialization and deserialization of complex objects **/
     private final IVmsSerdesProxy serdesProxy;
-
-    private final Map<String, TransactionDAG> transactionMap;
 
     public Coordinator(AsynchronousServerSocketChannel serverSocket,
                        AsynchronousChannelGroup group,
                        ExecutorService taskExecutor,
                        Map<Integer, ServerIdentifier> servers,
                        Map<Integer, VmsIdentifier> VMSs,
+                       Map<String, TransactionDAG> transactionMap,
+                       Map<Integer, List<VmsIdentifier>> vmsDependenceSet, // built from the transactionMap
                        Map<Integer, ConnectionMetadata> serverConnectionMetadataMap,
                        ServerIdentifier me,
                        CoordinatorOptions options,
@@ -121,8 +126,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
                        long batchOffset,
                        BatchReplicationStrategy batchReplicationStrategy,
                        BlockingQueue<byte[]> transactionRequestsToParse,
-                       IVmsSerdesProxy serdesProxy,
-                       Map<String, TransactionDAG> transactionMap) {
+                       IVmsSerdesProxy serdesProxy
+                       ) {
         super();
 
         // network and executor
@@ -153,6 +158,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         this.transactionRequestsToParse = transactionRequestsToParse; // shared data structure
         this.drainedTransactionRequests = new ArrayList<>(100000);
         this.transactionMap = Objects.requireNonNull(transactionMap); // in production, it requires receiving new transaction definitions
+        this.vmsConsumerSet = vmsDependenceSet;
         this.txManagerCtx = new TransactionManagerContext(
                 new LinkedBlockingQueue<>(),
                 new ConcurrentLinkedQueue<>(),
@@ -188,7 +194,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // perhaps not a good idea to have this thread in a pool, since this thread will get blocked
         // BUT, it is simply about increasing the pool size with +1...
         TransactionManager txManager = new TransactionManager();
-        taskExecutor.submit( txManager );
+        Future<?> txManagerTask = taskExecutor.submit( txManager );
         // txManager.run();
 
         // they can run concurrently, max 3 at a time always
@@ -204,22 +210,25 @@ public final class Coordinator extends SignalingStoppableRunnable {
         while(!isStopped()){
 
             try {
-                issueQueue.poll(5, TimeUnit.MINUTES); // blocking, this thread should only act when necessary
-                // do we have more?
-//                if(issueQueue.size() > 0){
-//                    /// drain to
-//                }
+                // issueQueue.poll(5, TimeUnit.MINUTES); // blocking, this thread should only act when necessary
+                issueQueue.take();
             } catch (InterruptedException ignored) {} // not going to be interrupted by our code
 
         }
 
+        failSafeClose(batchCommitTask, heartbeatTask, parseTask, txManagerTask, txManager);
+
+    }
+
+    private void failSafeClose(ScheduledFuture<?> batchCommitTask, ScheduledFuture<?> heartbeatTask,
+                               ScheduledFuture<?> parseTask, Future<?> txManagerTask, TransactionManager txManager){
         // safe close
         batchCommitTask.cancel(false);
         heartbeatTask.cancel(false); // do not interrupt given the lock management
         parseTask.cancel(false);
-        txManager.stop();
+        if(!txManagerTask.isDone())
+            txManager.stop();
         try { serverSocket.close(); } catch (IOException ignored) {}
-
     }
 
     /**
@@ -402,7 +411,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 VmsIdentifier newVms = Presentation.readVms(buffer, serdesProxy);
 
-                if(VMSs.get( newVms.name.hashCode() ) != null){
+                if(VMSs.get( newVms.hashCode() ) != null){
                     // vms reconnecting
 
                     VmsConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( newVms.hashCode() );
@@ -411,7 +420,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     connectionMetadata.writeLock.lock();
 
                     // update metadata of this node
-                    VMSs.put( newVms.name.hashCode(), newVms );
+                    VMSs.put( newVms.hashCode(), newVms );
 
                     // update channel and possibly the address
                     connectionMetadata.channel = channel;
@@ -428,7 +437,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
 
                 } else {
-                    VMSs.put( newVms.name.hashCode(), newVms );
+                    VMSs.put( newVms.hashCode(), newVms );
                     VmsConnectionMetadata connectionMetadata = new VmsConnectionMetadata( newVms.hashCode(), buffer, BufferManager.loanByteBuffer(), channel, new ReentrantLock() );
                     vmsConnectionMetadataMap.put( newVms.hashCode(), connectionMetadata );
                     channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
@@ -551,7 +560,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
             // a map of the last tid for each vms
             lastTidOfBatchPerVms = VMSs.values().stream().collect(
-                    Collectors.toMap( VmsIdentifier::getName, VmsIdentifier::getLastTid ) );
+                    Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getLastTid ) );
 
             // define new batch context
             // need to get
@@ -694,8 +703,14 @@ public final class Coordinator extends SignalingStoppableRunnable {
                             BufferManager.loanByteBuffer(), BufferManager.loanByteBuffer(), channel, new ReentrantLock());
                     vmsConnectionMetadataMap.put(vms.hashCode(), connMetadata);
 
+                    // get dependence set of given VMS
+                    List<VmsIdentifier> consumerSet = vmsConsumerSet.get( vms.hashCode() );
+
+                    // why not sending only the host+address? the vms must be able to identify the cross-cutting constraints
+                    String consumerSetJson = serdesProxy.serializeList(consumerSet);
+
                     // write presentation
-                    Presentation.writeServer( connMetadata.writeBuffer, this.me );
+                    Presentation.writeServer( connMetadata.writeBuffer, this.me, consumerSetJson );
 
                     connMetadata.channel.write( connMetadata.writeBuffer ).get();
 
@@ -711,7 +726,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     channel.read(connMetadata.readBuffer, connMetadata, new ReadCompletionHandler());
 
                 } catch (InterruptedException | ExecutionException e) {
-                    e.printStackTrace();
+                    issueQueue.add( new Issue( CANNOT_READ_FROM_NODE, vms ) ); // or write to
                 }
 
 
@@ -831,7 +846,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                             for(VmsIdentifier vms : VMSs.values()){
 
                                 // don't need to send to the vms that aborted
-                                if(vms.name.equalsIgnoreCase( msg.vms() )) continue;
+                                if(vms.getIdentifier().equalsIgnoreCase( msg.vms() )) continue;
 
                                 VmsConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.hashCode() );
 
@@ -875,7 +890,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 // having more than one write buffer does not help us, since the connection is the limitation (one writer at a time)
                 BatchCommitRequest.write( connectionMetadata.writeBuffer,
-                        batchContext.batchOffset, batchContext.lastTidOfBatchPerVms.get( vms.getName() ) );
+                        batchContext.batchOffset, batchContext.lastTidOfBatchPerVms.get( vms.getIdentifier() ) );
 
                 connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata, new WriteCompletionHandler());
 

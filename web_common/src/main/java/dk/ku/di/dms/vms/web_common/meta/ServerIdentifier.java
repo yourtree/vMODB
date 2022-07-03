@@ -11,7 +11,7 @@ public final class ServerIdentifier extends NetworkObject {
     public long lastOffset;
 
     public ServerIdentifier(String host, int port) {
-        super(host,port);
+        super(host, port);
         this.lastOffset = 0L;
     }
 

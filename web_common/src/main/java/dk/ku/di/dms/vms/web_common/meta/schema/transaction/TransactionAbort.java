@@ -28,8 +28,8 @@ public class TransactionAbort {
     public static void write(ByteBuffer buffer, VmsIdentifier vmsIdentifier, long tid){
         buffer.put(TX_ABORT);
         buffer.putLong(tid);
-        buffer.putInt( vmsIdentifier.name.length() );
-        buffer.put( vmsIdentifier.name.getBytes(StandardCharsets.UTF_8) );
+        buffer.putInt( vmsIdentifier.identifier.length() );
+        buffer.put( vmsIdentifier.identifier.getBytes(StandardCharsets.UTF_8) );
     }
 
     public static TransactionAbortPayload read(ByteBuffer buffer){

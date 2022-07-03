@@ -26,6 +26,7 @@ public class ConnectionMetadata {
     public AsynchronousSocketChannel channel;
 
     // unique read thread by design (completion handler)
+    // with batching of messages in windows, this will be no longer necessary
     public final ReentrantLock writeLock;
 
     public ConnectionMetadata(int key, NodeType nodeType, ByteBuffer readBuffer, ByteBuffer writeBuffer, AsynchronousSocketChannel channel, ReentrantLock writeLock) {

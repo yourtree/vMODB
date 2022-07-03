@@ -13,10 +13,10 @@ import java.util.Map;
  * A data class that stores the mappings between events, queues, and transactions
  */
 public record VmsMetadata (
-        VmsDataSchema vmsDataSchema,
+        VmsDataSchema vmsDataSchema, // solo schema
         Map<String, VmsEventSchema> vmsEventSchema,
         Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToVmsTransactionMap,
-        Map<String, Class<? extends IVmsApplicationEvent>> queueToEventMap,
-        Map<Class<? extends IVmsApplicationEvent>,String> eventToQueueMap,
+        Map<String, Class<? extends IVmsApplicationEvent>> queueToEventMap, // input
+        Map<Class<? extends IVmsApplicationEvent>,String> eventToQueueMap, // output
         Map<String, Object> loadedVmsInstances
 ){}

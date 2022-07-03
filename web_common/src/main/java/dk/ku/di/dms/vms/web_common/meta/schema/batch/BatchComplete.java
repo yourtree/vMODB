@@ -22,8 +22,8 @@ public final class BatchComplete {
     public static void write(ByteBuffer buffer, long batch, VmsIdentifier vmsIdentifier){
         buffer.put(BATCH_COMPLETE);
         buffer.putLong( batch );
-        buffer.putInt( vmsIdentifier.name.length() );
-        buffer.put( vmsIdentifier.name.getBytes(StandardCharsets.UTF_8) );
+        buffer.putInt( vmsIdentifier.identifier.length() );
+        buffer.put( vmsIdentifier.identifier.getBytes(StandardCharsets.UTF_8) );
     }
 
     public static BatchCompletePayload read(ByteBuffer buffer){

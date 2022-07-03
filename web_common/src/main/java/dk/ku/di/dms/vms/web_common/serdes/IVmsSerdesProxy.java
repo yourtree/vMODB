@@ -6,10 +6,11 @@ import dk.ku.di.dms.vms.modb.common.event.SystemEvent;
 import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
 import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
 
+import java.util.List;
 import java.util.Map;
 
 /**
- * A proxy for all types of events exchanged between the sdk and the sidecar
+ * A proxy for all types of events exchanged between the sdk and the servers
  * Used for complex objects like schema definitions
  */
 public interface IVmsSerdesProxy {
@@ -39,6 +40,10 @@ public interface IVmsSerdesProxy {
     <K,V> String serializeMap( Map<K,V> map );
     <K,V> Map<K,V> deserializeMap(String mapStr);
 
+    <V> String serializeList( List<V> map );
+    <V> List<V> deserializeList(String listStr);
+
     <T> String serialize( T value, Class<T> clazz );
     <T> T deserialize( String valueStr, Class<T> clazz );
+
 }

@@ -11,7 +11,8 @@ public class Issue {
         CHANNEL_CLOSED,
         CHANNEL_NOT_REGISTERED,
         COMMIT_FAILED,
-        TRANSACTION_MANAGER_STOPPED
+        TRANSACTION_MANAGER_STOPPED,
+        CANNOT_READ_FROM_NODE
     }
 
     // category of the issue

@@ -5,12 +5,14 @@ import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 import static dk.ku.di.dms.vms.web_common.meta.Constants.PRESENTATION;
 
 /**
  * A presentation is a message that carries out the necessary info of a node
+ * Only for leader <--> VMS communication
  */
 public final class Presentation {
 
@@ -30,7 +32,11 @@ public final class Presentation {
     // + size of data schema and event schema lists
     private static final int fixedVmsSize = vmsHeader + Integer.BYTES + Integer.BYTES;
 
-    public static void writeServer(ByteBuffer buffer, ServerIdentifier serverIdentifier, boolean includeMetadataOnAck){
+    public static void writeServer(ByteBuffer buffer,
+                                   ServerIdentifier serverIdentifier,
+                                   String listOfVMSsToConnect,
+                                   boolean includeMetadataOnAck
+                                   ){
         buffer.put( PRESENTATION );
         buffer.put( SERVER_TYPE );
 
@@ -43,10 +49,42 @@ public final class Presentation {
         byte[] host = serverIdentifier.host.getBytes(StandardCharsets.UTF_8);
         buffer.putInt( host.length );
         buffer.put( host );
+
+        // send the list of nodes this  VMS needs to connect to
+        byte[] list = listOfVMSsToConnect.getBytes(StandardCharsets.UTF_8);
+        buffer.putInt( list.length );
+        buffer.put(list);
     }
 
-    public static void writeServer(ByteBuffer buffer, ServerIdentifier serverIdentifier){
-        writeServer(buffer,serverIdentifier, true);
+    public record PayloadFromServer(
+            ServerIdentifier serverIdentifier,
+            List<VmsIdentifier> consumers
+    ){}
+
+    public static void writeServer(ByteBuffer buffer, ServerIdentifier serverIdentifier, String listOfVMSsToConnect){
+        writeServer(buffer,serverIdentifier, listOfVMSsToConnect, true);
+    }
+
+    public static PayloadFromServer readServer(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){
+
+        long offset = buffer.getLong();
+
+        int port = buffer.getInt();
+
+        int hostSize = buffer.getInt();
+
+        String host = new String( buffer.array(), serverHeader, hostSize, StandardCharsets.UTF_8 );
+
+        int newOffset = serverHeader + hostSize;
+
+        int consumerSetSize = buffer.getInt();
+
+        String consumerVmsSetJSON = new String( buffer.array(), newOffset, consumerSetSize, StandardCharsets.UTF_8 );
+
+        List<VmsIdentifier> consumerSet = serdesProxy.deserializeList( consumerVmsSetJSON );
+
+        return new PayloadFromServer( new ServerIdentifier( host, port, offset ), consumerSet );
+
     }
 
     public static ServerIdentifier readServer(ByteBuffer buffer){
@@ -63,7 +101,10 @@ public final class Presentation {
 
     }
 
-    public static void writeVms(ByteBuffer buffer, VmsIdentifier vms, String dataSchema, String eventSchema){
+    public static void writeVms(ByteBuffer buffer,
+                                VmsIdentifier vms,
+                                String dataSchema,
+                                String eventSchema){
 
         buffer.put( PRESENTATION );
         buffer.put( VMS_TYPE );
@@ -111,11 +152,11 @@ public final class Presentation {
 
         Map<String, VmsEventSchema> eventSchema = serdesProxy.deserializeEventSchema( eventSchemaStr );
 
-        return new VmsIdentifier( dataSchema.virtualMicroservice, host, port, lastTid, lastBatch, dataSchema, eventSchema );
+        return new VmsIdentifier( host, port, lastTid, lastBatch, dataSchema, eventSchema );
 
     }
 
-    public static void writeAck(ByteBuffer buffer, VmsIdentifier vms) {
+    public static void writeAck(ByteBuffer buffer) {
         buffer.put( PRESENTATION );
         buffer.put( VMS_TYPE );
     }

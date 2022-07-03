@@ -21,6 +21,11 @@ public class NetworkObject {
         return hashCode;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        return hashCode() == (o.hashCode());
+    }
+
     public NetworkObject(String host, int port) {
         this.host = host;
         this.port = port;

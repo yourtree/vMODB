@@ -31,8 +31,16 @@ public final class BufferManager {
         return buffer;
     }
 
+    /**
+     *
+     * @param buffer returned buffer
+     */
     public static void returnByteBuffer(ByteBuffer buffer){
         byteBufferQueue.add(buffer);
+    }
+
+    public static ByteBuffer loanByteBuffer(int size){
+        return ByteBuffer.allocateDirect(size);
     }
 
 }
