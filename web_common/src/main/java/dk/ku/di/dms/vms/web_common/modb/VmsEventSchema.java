@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.web_common.meta;
+package dk.ku.di.dms.vms.web_common.modb;
 
 import dk.ku.di.dms.vms.modb.common.meta.DataType;
 

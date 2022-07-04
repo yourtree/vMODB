@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.store.meta;
 
-import dk.ku.di.dms.vms.modb.common.meta.ConstraintReference;
+import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.meta.DataType;
 import dk.ku.di.dms.vms.modb.store.table.Table;
 

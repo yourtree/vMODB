@@ -5,12 +5,11 @@ import com.google.gson.reflect.TypeToken;
 
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
-import dk.ku.di.dms.vms.modb.common.event.SystemEvent;
-import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
-import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
-import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
+import dk.ku.di.dms.vms.web_common.modb.VmsDataSchema;
+import dk.ku.di.dms.vms.web_common.modb.VmsEventSchema;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 class DefaultVmsSerdes implements IVmsSerdesProxy {
@@ -45,32 +44,6 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
         return gson.fromJson(dataSchema, VmsDataSchema.class);
     }
 
-    @Override
-    public byte[] serializeSystemEvent(SystemEvent systemEvent) {
-        return gson.toJson( systemEvent ).getBytes(StandardCharsets.UTF_8);
-    }
-
-    @Override
-    public SystemEvent deserializeSystemEvent(byte[] bytes) {
-        String json = new String( bytes );
-        return gson.fromJson(json, SystemEvent.class);
-    }
-
-    /**
-     TRANSACTIONAL EVENT
-     **/
-
-    @Override
-    public byte[] serializeTransactionalEvent(TransactionalEvent event) {
-        return gson.toJson(event).getBytes(StandardCharsets.UTF_8);
-    }
-
-    @Override
-    public TransactionalEvent deserializeToTransactionalEvent(byte[] bytes) {
-        String json = new String( bytes );
-        return gson.fromJson(json, TransactionalEvent.class);
-    }
-
     /**
         DATA
     **/
@@ -102,12 +75,22 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
 
     @Override
     public <K,V> String serializeMap( Map<K,V> map ){
-        return gson.toJson( map );
+        return gson.toJson( map, new TypeToken<Map<K, V>>(){}.getType() );
     }
 
     @Override
     public <K,V> Map<K,V> deserializeMap(String mapStr){
          return gson.fromJson(mapStr, new TypeToken<Map<K, V>>(){}.getType());
+    }
+
+    @Override
+    public <V> String serializeList(List<V> list) {
+        return gson.toJson( list, new TypeToken<List<V>>(){}.getType() );
+    }
+
+    @Override
+    public <V> List<V> deserializeList(String listStr) {
+        return gson.fromJson(listStr, new TypeToken<List<V>>(){}.getType());
     }
 
     @Override

@@ -9,7 +9,7 @@ class OffsetTracker {
         FINISHED
     }
 
-    private final int tid;
+    private final long tid;
 
     // how many tasks from this tid remain to be scheduled?
     private int remainingReadyTasks;
@@ -19,7 +19,7 @@ class OffsetTracker {
 
     private OffsetStatus status;
 
-    public OffsetTracker(int tid, int remainingReadyTasks) {
+    public OffsetTracker(long tid, int remainingReadyTasks) {
         this.tid = tid;
         this.remainingReadyTasks = remainingReadyTasks;
         this.remainingFinishedTasks = remainingReadyTasks;
@@ -40,19 +40,21 @@ class OffsetTracker {
 
     // constraints in objects would be great! e.g., remainingTasks >= 0 always
     public void signalReady(){
-        if(this.remainingReadyTasks == 0) throw new RuntimeException("Cannot have below zero remaining tasks.");
+        // if(this.remainingReadyTasks == 0) throw new RuntimeException("Cannot have below zero remaining tasks.");
+        assert this.remainingReadyTasks > 0;
         this.remainingReadyTasks--;
         if(remainingReadyTasks == 0) moveToReadyState();
     }
 
     public void signalFinished(){
-        if(this.remainingFinishedTasks-1 < this.remainingReadyTasks) throw new RuntimeException("Cannot have finished tasks lower than ready tasks.");
-        if(this.remainingFinishedTasks == 0) throw new RuntimeException("Cannot have below zero remaining tasks.");
+        // if( (this.remainingFinishedTasks - 1) < this.remainingReadyTasks) throw new RuntimeException("Cannot have finished tasks lower than ready tasks.");
+        assert this.remainingFinishedTasks > this.remainingReadyTasks;
+        // if(this.remainingFinishedTasks == 0) throw new RuntimeException("Cannot have below zero remaining tasks.");
         this.remainingFinishedTasks--;
         if(remainingFinishedTasks == 0) moveToDoneState();
     }
 
-    public int tid() {
+    public long tid() {
         return this.tid;
     }
 

@@ -2,9 +2,8 @@ package dk.ku.di.dms.vms.web_common.serdes;
 
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
-import dk.ku.di.dms.vms.modb.common.event.SystemEvent;
-import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
-import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
+import dk.ku.di.dms.vms.web_common.modb.VmsDataSchema;
+import dk.ku.di.dms.vms.web_common.modb.VmsEventSchema;
 
 import java.util.List;
 import java.util.Map;
@@ -20,16 +19,6 @@ public interface IVmsSerdesProxy {
 
     String serializeDataSchema(VmsDataSchema vmsDataSchema);
     VmsDataSchema deserializeDataSchema(String vmsDataSchema);
-
-    /** System event... do we need that? **/
-    byte[] serializeSystemEvent(SystemEvent systemEvent);
-    SystemEvent deserializeSystemEvent(byte[] bytes);
-
-    /**
-     * A transactional event serves for both input and output
-     */
-//    byte[] serializeTransactionalEvent(TransactionalEvent event);
-//    TransactionalEvent deserializeToTransactionalEvent(byte[] bytes);
 
     byte[] serializeDataRequestEvent(DataRequestEvent event);
     DataRequestEvent deserializeDataRequestEvent(byte[] bytes);

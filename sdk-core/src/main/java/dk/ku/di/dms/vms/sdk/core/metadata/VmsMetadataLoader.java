@@ -1,19 +1,21 @@
 package dk.ku.di.dms.vms.sdk.core.metadata;
 
+import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
+import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
+import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.meta.*;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.UnsupportedConstraint;
 import dk.ku.di.dms.vms.sdk.core.annotations.*;
-import dk.ku.di.dms.vms.modb.common.event.IVmsApplicationEvent;
 import dk.ku.di.dms.vms.sdk.core.client.VmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.QueueMappingException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NotAcceptableTypeException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NoPrimaryKeyFoundException;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
-import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
-import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
+import dk.ku.di.dms.vms.web_common.modb.VmsDataSchema;
+import dk.ku.di.dms.vms.web_common.modb.VmsEventSchema;
 import org.reflections.Configuration;
 import org.reflections.Reflections;
 
@@ -61,17 +63,17 @@ public class VmsMetadataLoader {
 
         // necessary remaining data structures to store a vms metadata
         Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToVmsTransactionMap = new HashMap<>();
-        Map<String, Class<? extends IVmsApplicationEvent>> queueToEventMap = new HashMap<>();
-        Map<Class<? extends IVmsApplicationEvent>,String> eventToQueueMap = new HashMap<>();
+        Map<String, Class> queueToEventMap = new HashMap<>();
+        Map<Class,String> eventToQueueMap = new HashMap<>();
 
         mapVmsTransactionInputOutput(reflections, loadedVmsInstances, queueToEventMap, eventToQueueMap, eventToVmsTransactionMap);
 
         Map<String, VmsEventSchema> vmsEventSchema = buildEventSchema( reflections, eventToQueueMap );
 
-        /* TODO look at this. we should provide this implementation
-            SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
-            SLF4J: Defaulting to no-operation (NOP) logger implementation
-            SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+        /** TODO look at this. we should provide this implementation
+         *   SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+         *   SLF4J: Defaulting to no-operation (NOP) logger implementation
+         *   SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
          */
 
         return new VmsMetadata(vmsDataSchemaOpt.orElse(null), vmsEventSchema, eventToVmsTransactionMap, queueToEventMap, eventToQueueMap, loadedVmsInstances );
@@ -115,13 +117,13 @@ public class VmsMetadataLoader {
     /**
      * Building virtual microservice event schemas
      */
-    protected static Map<String, VmsEventSchema> buildEventSchema(Reflections reflections, Map<Class<? extends IVmsApplicationEvent>, String> eventToQueueMap) {
+    protected static Map<String, VmsEventSchema> buildEventSchema(Reflections reflections, Map<Class, String> eventToQueueMap) {
 
         Map<String, VmsEventSchema> schemaMap = new HashMap<>();
 
-        Set<Class<? extends IVmsApplicationEvent>> eventsClazz = reflections.getSubTypesOf( IVmsApplicationEvent.class );
+        Set<Class<?>> eventsClazz = reflections.getTypesAnnotatedWith( Event.class );
 
-        for( Class<? extends IVmsApplicationEvent> eventClazz : eventsClazz ){
+        for( Class eventClazz : eventsClazz ){
 
             Field[] fields = eventClazz.getDeclaredFields();
 
@@ -402,8 +404,8 @@ public class VmsMetadataLoader {
     @SuppressWarnings("unchecked")
     protected static void mapVmsTransactionInputOutput(Reflections reflections,
                                                        Map<String, Object> loadedMicroserviceInstances,
-                                                       Map<String, Class<? extends IVmsApplicationEvent>> queueToEventMap,
-                                                       Map<Class<? extends IVmsApplicationEvent>, String> eventToQueueMap,
+                                                       Map<String, Class> queueToEventMap,
+                                                       Map<Class, String> eventToQueueMap,
                                                        Map<String,
                                                                List<IdentifiableNode<VmsTransactionSignature>>>
                                                                eventToVmsTransactionMap) {
@@ -416,18 +418,18 @@ public class VmsMetadataLoader {
             String className = method.getDeclaringClass().getCanonicalName();
             Object obj = loadedMicroserviceInstances.get(className);
 
-            Class<? extends IVmsApplicationEvent> outputType;
+            Class outputType;
             try{
-                outputType = (Class<? extends IVmsApplicationEvent>) method.getReturnType();
+                outputType = method.getReturnType();
             } catch(Exception e) {
                 throw new QueueMappingException("All output events must implement IEvent interface.");
             }
 
-            List<Class<? extends IVmsApplicationEvent>> inputTypes = new ArrayList<>();
+            List<Class> inputTypes = new ArrayList<>();
 
             for(int i = 0; i < method.getParameters().length; i++){
                 try{
-                    Class<? extends IVmsApplicationEvent> clazz = (Class<? extends IVmsApplicationEvent>) method.getParameters()[i].getType();
+                    Class clazz = method.getParameters()[i].getType();
                     inputTypes.add( clazz);
                 } catch(Exception e) {
                     throw new QueueMappingException("All input events must implement IEvent interface.");

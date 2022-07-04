@@ -11,7 +11,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public final class BufferManager {
 
-    private static final int DEFAULT_BUFFER_SIZE = 1024;
+    private static final int DEFAULT_BUFFER_SIZE = 8192;
 
     private static final BlockingQueue<ByteBuffer> byteBufferQueue = new LinkedBlockingQueue<>();
 

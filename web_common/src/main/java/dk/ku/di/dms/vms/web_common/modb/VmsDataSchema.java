@@ -1,8 +1,8 @@
-package dk.ku.di.dms.vms.web_common.meta;
+package dk.ku.di.dms.vms.web_common.modb;
 
-import dk.ku.di.dms.vms.modb.common.meta.ConstraintReference;
+import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.meta.DataType;
-import dk.ku.di.dms.vms.modb.common.meta.ForeignKeyReference;
+import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 
 /**
  * The <code>VmsSchema</code> record describes the schema of VmsTable.

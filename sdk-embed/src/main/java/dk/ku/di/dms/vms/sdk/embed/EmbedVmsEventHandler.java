@@ -3,8 +3,10 @@ package dk.ku.di.dms.vms.sdk.embed;
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
+import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
+import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitRequest;
@@ -25,6 +27,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static dk.ku.di.dms.vms.web_common.meta.Constants.*;
+import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.CANNOT_CONNECT_TO_NODE;
 import static dk.ku.di.dms.vms.web_common.meta.schema.control.Presentation.SERVER_TYPE;
 import static dk.ku.di.dms.vms.web_common.meta.schema.control.Presentation.YES;
 import static java.net.StandardSocketOptions.*;
@@ -72,16 +75,13 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
     private long currentTid;
     private long currentBatchOffset;
 
-
-
     public EmbedVmsEventHandler(IVmsInternalChannels vmsInternalChannels, // for communicating with other components
-                                VmsIdentifier me,
-                                VmsMetadata vmsMetadata, //
+                                VmsIdentifier me, // to identify which vms this is
+                                VmsMetadata vmsMetadata, // metadata about this vms
                                 IVmsSerdesProxy serdesProxy, // ser/des of objects
                                 ExecutorService executorService, // for recurrent and continuous tasks
                                 AsynchronousServerSocketChannel serverSocket,
-                                AsynchronousChannelGroup group
-                                ) {
+                                AsynchronousChannelGroup group) {
         super();
 
         this.vmsInternalChannels = vmsInternalChannels;
@@ -108,6 +108,16 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
         while(!isStopped()){
 
             //  write events to leader and VMSs...
+
+            try {
+
+                OutboundEventResult outboundEventRes = vmsInternalChannels.transactionOutputQueue().take();
+
+
+
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
 
         }
 
@@ -137,8 +147,10 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
 
                 channel.connect(address).get();
 
-                ConnectionMetadata connMetadata = new ConnectionMetadata(vms.hashCode(), ConnectionMetadata.NodeType.VMS,
-                        BufferManager.loanByteBuffer(), BufferManager.loanByteBuffer(), channel, new ReentrantLock());
+                ConnectionMetadata connMetadata = new ConnectionMetadata(vms.hashCode(),
+                        ConnectionMetadata.NodeType.VMS,
+                        BufferManager.loanByteBuffer(),
+                        BufferManager.loanByteBuffer(), channel, new ReentrantLock());
 
                 vmsConnectionMetadataMap.put(vms.hashCode(), connMetadata);
 
@@ -152,7 +164,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
                 channel.read(connMetadata.readBuffer, connMetadata, new VmsReadCompletionHandler() );
 
             } catch (IOException | ExecutionException | InterruptedException e) {
-                e.printStackTrace();
+                issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, vms) );
             }
 
         }

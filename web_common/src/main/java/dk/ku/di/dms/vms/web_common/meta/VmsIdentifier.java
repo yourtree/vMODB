@@ -1,5 +1,8 @@
 package dk.ku.di.dms.vms.web_common.meta;
 
+import dk.ku.di.dms.vms.web_common.modb.VmsDataSchema;
+import dk.ku.di.dms.vms.web_common.modb.VmsEventSchema;
+
 import java.util.Map;
 
 /**

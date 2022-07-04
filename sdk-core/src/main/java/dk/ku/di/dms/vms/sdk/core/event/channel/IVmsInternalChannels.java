@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.sdk.core.event.channel;
 
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
+import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitRequest;
@@ -33,7 +34,7 @@ import java.util.concurrent.BlockingQueue;
  */
 public interface IVmsInternalChannels {
 
-    /**
+    /*
      * TRANSACTIONAL EVENTS
      */
 
@@ -46,7 +47,7 @@ public interface IVmsInternalChannels {
      *  It represents events ready for delivery
      *  The payload handler thread consumes (and never inserts!) from this queue
      */
-    BlockingQueue<TransactionEvent.Payload> transactionOutputQueue();
+    BlockingQueue<OutboundEventResult> transactionOutputQueue();
 
     /**
      * BATCH COMMIT, ABORT EVENTS
@@ -61,7 +62,7 @@ public interface IVmsInternalChannels {
      */
     BlockingQueue<TransactionEvent.Payload> batchCommitRequestQueue();
 
-    /**
+    /*
      * DATA
      */
 

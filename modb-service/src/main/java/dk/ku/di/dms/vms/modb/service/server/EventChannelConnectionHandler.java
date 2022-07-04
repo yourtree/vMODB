@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.modb.service.server;
 
-import dk.ku.di.dms.vms.modb.common.event.SystemEvent;
-import dk.ku.di.dms.vms.web_common.meta.VmsEventSchema;
+import dk.ku.di.dms.vms.web_common.modb.VmsEventSchema;
 import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
 
 import java.nio.ByteBuffer;
@@ -39,10 +38,10 @@ public class EventChannelConnectionHandler implements CompletionHandler<Asynchro
 
         latch.countDown();
 
-        writeBuffer.put( serdes.serializeSystemEvent( new SystemEvent(1) ) );
-
-        // write ack to framework/sdk/runtime
-        socketChannel.write( writeBuffer );
+//        writeBuffer.put( serdes.serializeSystemEvent( new SystemEvent(1) ) );
+//
+//        // write ack to framework/sdk/runtime
+//        socketChannel.write( writeBuffer );
 
         // FIXME what if the write does not succeed? can i somehow return this future together with the result to the server thread?
     }

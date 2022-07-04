@@ -5,8 +5,7 @@ import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.interfaces.IDTO;
 import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.interfaces.IRepository;
-import dk.ku.di.dms.vms.modb.common.meta.Row;
-import dk.ku.di.dms.vms.web_common.meta.VmsDataSchema;
+import dk.ku.di.dms.vms.web_common.modb.VmsDataSchema;
 import dk.ku.di.dms.vms.web_common.runnable.VMSFutureTask;
 import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 

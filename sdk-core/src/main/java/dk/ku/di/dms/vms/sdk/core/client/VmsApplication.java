@@ -13,7 +13,7 @@ public class VmsApplication {
         // check first whether we are in decoupled or embed mode
         try {
 
-            VmsManager vmsManager = new VmsManager()
+            // VmsManager vmsManager = new VmsManager()
 
             // Class<?> metadataLoaderEmbedClazz = Class.forName("VmsMetadataLoader");
 

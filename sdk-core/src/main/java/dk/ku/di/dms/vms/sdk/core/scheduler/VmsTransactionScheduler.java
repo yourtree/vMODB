@@ -24,12 +24,6 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     private static final Logger logger = getLogger("VmsTransactionScheduler");
 
-    private final BlockingQueue<TransactionEvent.Payload> inputQueue;
-
-    private final BlockingQueue<TransactionEvent.Payload> outputQueue;
-
-    private final Queue<VmsTransactionTaskResult> resultQueue;
-
     private final Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap;
 
     // payload that cannot execute because some dependence need to be fulfilled
@@ -37,21 +31,23 @@ public class VmsTransactionScheduler extends StoppableRunnable {
     // TODO check later (after HTM impl) if I can do it with a Hash...
 
     // Based on the transaction id (tid), I can find the task very fast
-    private final Map<Integer, List<VmsTransactionTask>> waitingTasksPerTidMap;
+    private final Map<Long, List<VmsTransactionTask>> waitingTasksPerTidMap;
 
     // A tree map because the executor requires executing the operation in order
-    private final TreeMap<Integer, List<VmsTransactionTask>> readyTasksPerTidMap;
+    private final TreeMap<Long, List<VmsTransactionTask>> readyTasksPerTidMap;
 
     // offset tracking for execution
     private OffsetTracker currentOffset;
 
     // offset tracking. i.e., cannot issue a task if predecessor transaction is not ready yet
-    private final Map<Integer, OffsetTracker> offsetMap;
+    private final Map<Long, OffsetTracker> offsetMap;
 
     private final ExecutorService vmsTransactionTaskPool;
 
+    private final IVmsInternalChannels vmsChannels;
+
     public VmsTransactionScheduler(ExecutorService vmsAppLogicTaskPool,
-                                   IVmsInternalChannels vmsInternalChannels,
+                                   IVmsInternalChannels vmsChannels,
                                    Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap){
 
         super();
@@ -66,16 +62,12 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
         this.offsetMap = new TreeMap<>();
 
-        this.inputQueue = vmsInternalChannels.transactionInputQueue();
-
-        this.resultQueue = vmsInternalChannels.transactionResultQueue();
-
-        this.outputQueue = vmsInternalChannels.transactionOutputQueue();
+        this.vmsChannels = vmsChannels;
 
     }
 
     private TransactionEvent.Payload take(){
-        if(inputQueue.size() > 0) return inputQueue.poll();
+        if(vmsChannels.transactionInputQueue().size() > 0) return vmsChannels.transactionInputQueue().poll();
         return null;
     }
 
@@ -83,7 +75,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         currentOffset = new OffsetTracker(0, 1);
         currentOffset.signalReady();
         currentOffset.signalFinished();
-        offsetMap.put(0, currentOffset);
+        offsetMap.put(0L, currentOffset);
         logger.info("Offset initialized");
     }
 
@@ -127,11 +119,11 @@ public class VmsTransactionScheduler extends StoppableRunnable {
      */
     private void processTaskResult() {
 
-        while(!resultQueue.isEmpty()){
+        while(!vmsChannels.transactionResultQueue().isEmpty()){
 
-            VmsTransactionTaskResult res = resultQueue.poll();
+            VmsTransactionTaskResult res = vmsChannels.transactionResultQueue().poll();
 
-            if(!res.failed()){
+            if(res != null && !res.failed()){
 
                 currentOffset.signalFinished();
 
@@ -180,7 +172,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
             // add
             List<VmsTransactionTask> notReadyTasks = waitingTasksPerTidMap.get( transactionalEvent.tid() );
 
-            List<IdentifiableNode<VmsTransactionSignature>> signatures = eventToTransactionMap.get(transactionalEvent.queue());
+            List<IdentifiableNode<VmsTransactionSignature>> signatures = eventToTransactionMap.get(transactionalEvent.event());
 
             List<Integer> toRemoveList = new ArrayList<>();
 
@@ -226,8 +218,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
                         transactionalEvent.tid(),
                         vmsTransactionSignatureIdentifiableNode.object(),
                         signature.inputQueues().length,
-                        outputQueue,
-                        resultQueue
+                        vmsChannels
                         );
 
                 task.putEventInput(vmsTransactionSignatureIdentifiableNode.id(), transactionalEvent.payload());

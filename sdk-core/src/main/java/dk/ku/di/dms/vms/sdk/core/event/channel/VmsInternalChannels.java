@@ -2,7 +2,10 @@ package dk.ku.di.dms.vms.sdk.core.event.channel;
 
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
+import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
+import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitRequest;
+import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitResponse;
 import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionEvent;
 
 import java.util.Map;
@@ -44,7 +47,7 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
 
     private static final BlockingQueue<TransactionEvent.Payload> inputChannel;
 
-    private static final BlockingQueue<TransactionEvent.Payload> outputChannel;
+    private static final BlockingQueue<OutboundEventResult> outputChannel;
 
     private static final Queue<VmsTransactionTaskResult> resultQueue;
 
@@ -67,8 +70,23 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
     }
 
     @Override
-    public BlockingQueue<TransactionEvent.Payload> transactionOutputQueue() {
+    public BlockingQueue<OutboundEventResult> transactionOutputQueue() {
         return outputChannel;
+    }
+
+    @Override
+    public BlockingQueue<BatchCommitRequest.Payload> commitInputQueue() {
+        return null;
+    }
+
+    @Override
+    public BlockingQueue<BatchCommitResponse.Payload> commitOutputQueue() {
+        return null;
+    }
+
+    @Override
+    public BlockingQueue<TransactionEvent.Payload> batchCommitRequestQueue() {
+        return null;
     }
 
     @Override
