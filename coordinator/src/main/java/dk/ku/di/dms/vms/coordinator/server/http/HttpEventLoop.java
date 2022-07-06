@@ -20,6 +20,8 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * Mainly for receiving transaction requests.
  * Based on micro-http project: https://github.com/ebarlas/microhttp
  * Removed the scheduler, task queue, and logging.
+ *
+ * https://josephmate.github.io/2022-04-14-max-connections/
  */
 public class HttpEventLoop implements Runnable {
 

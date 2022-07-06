@@ -34,6 +34,21 @@ public final class Presentation {
     // + size of data schema and event schema lists
     private static final int fixedVmsSize = vmsHeader + Integer.BYTES + Integer.BYTES;
 
+    // for server consumption
+    public static void writeServer(ByteBuffer buffer,
+                                   ServerIdentifier serverIdentifier){
+        buffer.put( PRESENTATION );
+        buffer.put( SERVER_TYPE );
+
+        buffer.putLong( serverIdentifier.lastOffset );
+        buffer.putInt( serverIdentifier.port );
+
+        byte[] host = serverIdentifier.host.getBytes(StandardCharsets.UTF_8);
+        buffer.putInt( host.length );
+        buffer.put( host );
+    }
+
+    // for VMS consumption
     public static void writeServer(ByteBuffer buffer,
                                    ServerIdentifier serverIdentifier,
                                    String listOfVMSsToConnect,
@@ -67,6 +82,7 @@ public final class Presentation {
         writeServer(buffer,serverIdentifier, listOfVMSsToConnect, true);
     }
 
+    // to be read by a VMS
     public static PayloadFromServer readServer(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){
 
         long offset = buffer.getLong();
@@ -89,6 +105,7 @@ public final class Presentation {
 
     }
 
+    // to be read by a server (leader or follower)
     public static ServerIdentifier readServer(ByteBuffer buffer){
 
         long offset = buffer.getLong();
@@ -156,11 +173,6 @@ public final class Presentation {
 
         return new VmsIdentifier( host, port, lastTid, lastBatch, dataSchema, eventSchema );
 
-    }
-
-    public static void writeAck(ByteBuffer buffer) {
-        buffer.put( PRESENTATION );
-        buffer.put( VMS_TYPE );
     }
 
 }

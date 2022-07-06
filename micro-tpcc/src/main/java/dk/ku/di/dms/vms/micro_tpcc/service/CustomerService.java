@@ -13,8 +13,6 @@ import dk.ku.di.dms.vms.micro_tpcc.events.CustomerNewOrderIn;
 import dk.ku.di.dms.vms.micro_tpcc.repository.ICustomerRepository;
 import dk.ku.di.dms.vms.micro_tpcc.dto.CustomerInfoDTO;
 
-import java.util.concurrent.Future;
-
 import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.EQUALS;
 
 @Microservice("customer")

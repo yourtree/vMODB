@@ -16,7 +16,7 @@ import java.util.Date;
 @IdClass(Order.OrderId.class)
 public class Order implements IEntity<Order.OrderId> {
 
-    public class OrderId implements Serializable {
+    public static class OrderId implements Serializable {
 
         public Integer o_id;
         public Integer o_d_id;

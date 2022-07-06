@@ -6,9 +6,10 @@ import dk.ku.di.dms.vms.web_common.meta.VmsIdentifier;
 import java.util.Map;
 
 /**
- * In-memory (off-heap) representation of the metadata maintained by the coordinator
+ * In-memory (off-heap) representation of the metadata
+ * maintained by a server (coordinator and followers)
  */
-public class Metadata {
+public class ServerMetadata {
 
     public long committedOffset;
 

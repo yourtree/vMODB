@@ -18,7 +18,7 @@ public class TransactionAbort {
     // type | tid  | size vms name | vms name
     private static final int headerSize = Byte.BYTES + Long.BYTES + Integer.BYTES;
 
-    public static void write(ByteBuffer buffer, TransactionAbortPayload payload) {
+    public static void write(ByteBuffer buffer, Payload payload) {
         buffer.put(TX_ABORT);
         buffer.putLong(payload.tid);
         buffer.putInt( payload.vms().length() );
@@ -28,20 +28,20 @@ public class TransactionAbort {
     public static void write(ByteBuffer buffer, VmsIdentifier vmsIdentifier, long tid){
         buffer.put(TX_ABORT);
         buffer.putLong(tid);
-        buffer.putInt( vmsIdentifier.identifier.length() );
-        buffer.put( vmsIdentifier.identifier.getBytes(StandardCharsets.UTF_8) );
+        buffer.putInt( vmsIdentifier.getIdentifier().length() );
+        buffer.put( vmsIdentifier.getIdentifier().getBytes(StandardCharsets.UTF_8) );
     }
 
-    public static TransactionAbortPayload read(ByteBuffer buffer){
+    public static Payload read(ByteBuffer buffer){
         long tid = buffer.getLong();
         int size = buffer.getInt();
         String vms = new String(buffer.array(), headerSize, size, StandardCharsets.UTF_8 );
-        return new TransactionAbortPayload(tid, vms);
+        return new Payload(tid, vms);
     }
 
     // a leader cannot issue new events (and batches of course) without receiving batch ACKs from all vms involved
     // so no need for further information in the payload
-    public record TransactionAbortPayload (
+    public record Payload(
             long tid, String vms
     ) {}
 

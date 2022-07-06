@@ -95,7 +95,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
         initializeOffset();
 
-        while(!isStopped()) {
+        while(isRunning()) {
 
             processNewEvent();
 

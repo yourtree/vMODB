@@ -3,11 +3,12 @@ package dk.ku.di.dms.vms.coordinator.server.follower;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
+import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchReplication;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchReplicationAck;
+import dk.ku.di.dms.vms.web_common.meta.schema.batch.follower.BatchReplication;
+import dk.ku.di.dms.vms.web_common.meta.schema.batch.follower.BatchReplicationAck;
 import dk.ku.di.dms.vms.web_common.meta.schema.control.Presentation;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
@@ -20,12 +21,10 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.*;
 
 import static dk.ku.di.dms.vms.web_common.meta.Constants.BATCH_REPLICATION;
 import static dk.ku.di.dms.vms.web_common.meta.Constants.HEARTBEAT;
-import static java.lang.Thread.sleep;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -106,25 +105,38 @@ public final class Follower extends SignalingStoppableRunnable {
             return;
         }
 
-        // start timestamp
+        // start timestamp for heartbeat check
         lastTimestamp = System.nanoTime();
 
-        // setup accept handler, since new servers may enter the system. besides
-        long timeout = options.getHeartbeatTimeout();
+        ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool( 1 );
 
-        while(!isStopped()) {
+        ScheduledFuture<?> heartbeatTask = scheduledExecutorService.
+                scheduleAtFixedRate(this::checkHeartbeat, 0L,  options.getHeartbeatTimeout(), TimeUnit.MILLISECONDS);
 
-            // if heartbeat timed out, leave loop
-            // can just sleep until the next timestamp (slightly after is better due to network latency)
+        while(isRunning()) {
+
             try {
-                sleep(timeout);
+                Issue issue = issueQueue.take();
+
+
+
             } catch (InterruptedException ignored) { }
 
-            if (System.nanoTime() - lastTimestamp >= timeout){
-                stop();
-                this.signal.add( NO_RESULT );
-            }
+        }
 
+    }
+
+    private void checkHeartbeat(){
+
+        // if heartbeat timed out, leave loop
+        // can just sleep until the next timestamp (slightly after is better due to network latency)
+
+        // setup accept handler, since new servers may enter the system. besides
+        // long timeout = options.getHeartbeatTimeout();
+
+        if (System.nanoTime() - lastTimestamp >= options.getHeartbeatTimeout()){
+            stop();
+            this.signal.add( NO_RESULT );
         }
 
     }

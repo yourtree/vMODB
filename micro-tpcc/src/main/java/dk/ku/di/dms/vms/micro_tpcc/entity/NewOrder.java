@@ -14,7 +14,7 @@ import java.io.Serializable;
 @IdClass(NewOrder.NewOrderId.class)
 public class NewOrder implements IEntity<NewOrder.NewOrderId> {
 
-    public class NewOrderId implements Serializable {
+    public static class NewOrderId implements Serializable {
         public Integer no_o_id;
         public Integer no_d_id;
         public Integer no_w_id;

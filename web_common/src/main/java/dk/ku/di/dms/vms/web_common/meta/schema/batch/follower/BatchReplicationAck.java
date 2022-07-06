@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.web_common.meta.schema.batch;
+package dk.ku.di.dms.vms.web_common.meta.schema.batch.follower;
 
 import java.nio.ByteBuffer;
 

@@ -13,26 +13,18 @@ import static dk.ku.di.dms.vms.web_common.meta.Constants.BATCH_ABORT_REQUEST;
  */
 public final class BatchAbortRequest {
 
-    // commit  vms last tid
-    // type  | offset       |
-    private static final int headerSize = Byte.BYTES + Long.BYTES;
-
     // send the last tid (corresponding to the vms) and batch id
     public static void write(ByteBuffer buffer, long batch){
-
         buffer.put(BATCH_ABORT_REQUEST);
         buffer.putLong( batch );
-
     }
 
-    public static CommitRequestPayload read(ByteBuffer buffer){
+    public static Payload read(ByteBuffer buffer){
         long tid = buffer.getLong();
         long batch = buffer.getLong();
-        return new CommitRequestPayload(tid,batch);
+        return new Payload(tid,batch);
     }
 
-    public record CommitRequestPayload (
-            long tid, long batch
-    ){}
+    public record Payload (long tid, long batch){}
 
 }

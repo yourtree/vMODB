@@ -110,6 +110,7 @@ public class VmsRepositoryFacade implements IVmsRepositoryFacade, InvocationHand
 //                SynchronousQueue<DataResponseEvent> queue = new SynchronousQueue<>();
 //                queue.take(); // how the thread is handled by the jvm, if they put back in the pool or not
 
+                // https://josephmate.wordpress.com/2016/02/04/how-to-avoid-busy-waiting/
                 // now wait until event handler wakes me up
                 synchronized (dataRequestEvent){
 
@@ -119,14 +120,14 @@ public class VmsRepositoryFacade implements IVmsRepositoryFacade, InvocationHand
                     dataRequestEvent.wait(); // this is asynchronous nature
                 }
 
-                // woke up
+                // woke up, then can get the respective response
                 DataResponseEvent response = responseMap.remove( identifier );
 
                 return response.result;
 
             }
             case "fetchOnePromise" : {
-                VMSFutureTask<IDTO> futureTask = new VMSFutureTask<IDTO>(currentThread);
+                VMSFutureTask<IDTO> futureTask = new VMSFutureTask<>(currentThread);
             }
             case "issue": {
 

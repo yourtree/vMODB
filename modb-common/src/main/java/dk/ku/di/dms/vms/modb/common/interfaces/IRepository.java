@@ -4,7 +4,6 @@ import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.concurrent.Future;
 
 /**
  * User-facing database operations

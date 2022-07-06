@@ -5,7 +5,6 @@ import dk.ku.di.dms.vms.web_common.runnable.IVMsFutureCancellable;
 import dk.ku.di.dms.vms.web_common.runnable.VMSFutureTask;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.random.RandomGenerator;
@@ -157,7 +156,7 @@ public class DbmsDaemonThread extends MailBox {
 
         RandomGenerator random = RandomGenerator.of("DbmsThread");
 
-        while(!isStopped()) {
+        while(isRunning()) {
 
             if (!queue.isEmpty()) {
                 Message msg = queue.peekFirst();

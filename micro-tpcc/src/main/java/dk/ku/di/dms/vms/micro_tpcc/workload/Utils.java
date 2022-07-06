@@ -20,9 +20,8 @@ public class Utils {
         if (div < 0) {
             div = div * -1;
         }
-        int value = min + div;
 
-        return value;
+        return min + div;
     }
 
     public static int nuRand(int A, int x, int y) {
@@ -65,7 +64,7 @@ public class Utils {
     }
 
     public static String makeAlphaString(int x, int y) {
-        String str = null;
+        StringBuilder str = null;
         String temp = "0123456789" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ" + "abcdefghijklmnopqrstuvwxyz";
         char[] alphanum = temp.toCharArray();
         int arrmax = 61;  /* index of last array element */
@@ -73,14 +72,21 @@ public class Utils {
         int len;
         len = randomNumber(x, y);
 
-        for (i = 0; i < len; i++)
-            if (str != null) {
-                str = str + alphanum[randomNumber(0, arrmax)];
-            } else {
-                str = "" + alphanum[randomNumber(0, arrmax)];
-            }
+        //      BEFORE
+//        for (i = 0; i < len; i++) {
+//            if (str != null) {
+//                str = str + alphanum[randomNumber(0, arrmax)];
+//            } else {
+//                str = "" + alphanum[randomNumber(0, arrmax)];
+//            }
+//        }
 
-        return str;
+        str = new StringBuilder("" + alphanum[randomNumber(0, arrmax)]);
+        for (i = 1; i < len; i++) {
+            str.append(alphanum[randomNumber(0, arrmax)]);
+        }
+
+        return str.toString();
 
     }
 

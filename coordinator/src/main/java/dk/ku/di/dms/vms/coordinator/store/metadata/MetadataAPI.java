@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.metadata;
+package dk.ku.di.dms.vms.coordinator.store.metadata;
 
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.web_common.meta.VmsIdentifier;
@@ -40,6 +40,5 @@ public class MetadataAPI {
     public boolean registerVmsMetadata(VmsIdentifier vmsMetadata){
         return false;
     }
-
 
 }

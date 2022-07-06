@@ -13,7 +13,7 @@ public class NetworkObject {
     private int hashCode;
 
     // whether this node is active
-    public volatile boolean active = false;
+    public volatile boolean active = true;
 
     // mutable since the VMS can crash
     @Override

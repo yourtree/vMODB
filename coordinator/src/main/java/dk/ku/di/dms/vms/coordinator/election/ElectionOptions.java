@@ -1,71 +1,28 @@
-package dk.ku.di.dms.vms.coordinator.server.coordinator;
+package dk.ku.di.dms.vms.coordinator.election;
 
 /**
- * Initialized with default values
+ *
  */
-public class CoordinatorOptions {
+public class ElectionOptions {
 
-    // a slack must be considered due to network overhead
-    // e.g., by the time the timeout is reached, the time
-    // taken to build the payload + sending the request over
-    // the network may force the followers to initiate an
-    // election. the slack is a conservative way to avoid
-    // this from occurring, initiating a heartbeat sending
-    // before the timeout is reached
-    private int heartbeatSlack = 1000;
+    private double roundDeltaIncrease = 0.25; // 25 % by default
 
-    // the batch window
-    private long batchWindow = 60000; // a minute
+    private long initRoundTimeout = 60000; // a minute by default
 
-    // timeout to keep track when to send heartbeats to followers
-    private long heartbeatTimeout = 20000;
-
-    private long parseTimeout = 10000;
-
-    public long getParseTimeout() {
-        return parseTimeout;
+    public long getInitRoundTimeout() {
+        return initRoundTimeout;
     }
 
-    public CoordinatorOptions withParseTimeout(long parseTimeout) {
-        this.parseTimeout = parseTimeout;
-        return this;
+    public void withInitRoundTimeout(long initRoundTimeout) {
+        this.initRoundTimeout = initRoundTimeout;
     }
 
-    private BatchEmissionPolicy batchEmissionPolicy;
-
-    public CoordinatorOptions withBatchEmissionPolicy(BatchEmissionPolicy batchEmissionPolicy){
-        this.batchEmissionPolicy = batchEmissionPolicy;
-        return this;
+    public void withRoundDeltaIncrease(double delta){
+        this.roundDeltaIncrease = roundDeltaIncrease;
     }
 
-    public BatchEmissionPolicy getBatchEmissionPolicy() {
-        return batchEmissionPolicy;
+    public double getRoundDeltaIncrease(){
+        return this.roundDeltaIncrease;
     }
 
-    public int getHeartbeatSlack() {
-        return heartbeatSlack;
-    }
-
-    public CoordinatorOptions withHeartbeatSlack(int heartbeatSlack) {
-        this.heartbeatSlack = heartbeatSlack;
-        return this;
-    }
-
-    public long getBatchWindow() {
-        return batchWindow;
-    }
-
-    public CoordinatorOptions withBatchWindow(long batchWindow) {
-        this.batchWindow = batchWindow;
-        return this;
-    }
-
-    public long getHeartbeatTimeout() {
-        return heartbeatTimeout;
-    }
-
-    public CoordinatorOptions withHeartbeatTimeout(long heartbeatTimeout) {
-        this.heartbeatTimeout = heartbeatTimeout;
-        return this;
-    }
 }

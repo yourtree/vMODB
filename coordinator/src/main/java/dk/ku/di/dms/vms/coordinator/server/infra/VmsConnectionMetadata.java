@@ -14,6 +14,8 @@ import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.VMS;
 
 public final class VmsConnectionMetadata extends ConnectionMetadata {
 
+    // in case the VMS fails, we can resend (the inputs only)
+    // the internal events must be sent by the other VMSs in case this VMS is in the center of a DAG
     public Map<Long, List<TransactionEvent.Payload>> transactionEventsPerBatch;
 
     public VmsConnectionMetadata(int key, ByteBuffer readBuffer, ByteBuffer writeBuffer, AsynchronousSocketChannel channel, ReentrantLock writeLock) {

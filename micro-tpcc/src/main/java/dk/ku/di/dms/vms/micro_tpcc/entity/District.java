@@ -12,15 +12,7 @@ import java.io.Serializable;
 @IdClass(District.DistrictId.class)
 public class District implements IEntity<District.DistrictId> {
 
-    public static class DistrictId implements Serializable {
-        public final Integer d_id;
-        public final Integer d_w_id;
-
-        public DistrictId(Integer d_id, Integer d_w_id) {
-            this.d_id = d_id;
-            this.d_w_id = d_w_id;
-        }
-    }
+    public record DistrictId(Integer d_id, Integer d_w_id) implements Serializable { }
 
     @Id
     public int d_id;

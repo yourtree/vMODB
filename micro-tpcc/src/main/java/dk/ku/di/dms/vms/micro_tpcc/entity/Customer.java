@@ -16,7 +16,7 @@ import java.util.Date;
 @IdClass(Customer.CustomerId.class)
 public class Customer implements IEntity<Customer.CustomerId> {
 
-    public class CustomerId implements Serializable {
+    public static class CustomerId implements Serializable {
         public Long c_id;
         public Integer c_d_id;
         public Integer c_w_id;

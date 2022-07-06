@@ -22,18 +22,18 @@ public final class BatchComplete {
     public static void write(ByteBuffer buffer, long batch, VmsIdentifier vmsIdentifier){
         buffer.put(BATCH_COMPLETE);
         buffer.putLong( batch );
-        buffer.putInt( vmsIdentifier.identifier.length() );
-        buffer.put( vmsIdentifier.identifier.getBytes(StandardCharsets.UTF_8) );
+        buffer.putInt( vmsIdentifier.getIdentifier().length() );
+        buffer.put( vmsIdentifier.getIdentifier().getBytes(StandardCharsets.UTF_8) );
     }
 
-    public static BatchCompletePayload read(ByteBuffer buffer){
+    public static Payload read(ByteBuffer buffer){
         long batch = buffer.getLong();
         int size = buffer.getInt();
         String vms = new String(buffer.array(), headerSize, size, StandardCharsets.UTF_8 );
-        return new BatchCompletePayload(batch, vms);
+        return new Payload(batch, vms);
     }
 
-    public record BatchCompletePayload (
+    public record Payload(
         long batch, String vms
     ){}
 

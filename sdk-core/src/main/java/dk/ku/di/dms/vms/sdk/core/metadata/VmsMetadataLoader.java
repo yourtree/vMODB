@@ -63,14 +63,15 @@ public class VmsMetadataLoader {
 
         // necessary remaining data structures to store a vms metadata
         Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToVmsTransactionMap = new HashMap<>();
-        Map<String, Class> queueToEventMap = new HashMap<>();
-        Map<Class,String> eventToQueueMap = new HashMap<>();
+        Map<String, Class<?>> queueToEventMap = new HashMap<>();
+        Map<Class<?>,String> eventToQueueMap = new HashMap<>();
 
         mapVmsTransactionInputOutput(reflections, loadedVmsInstances, queueToEventMap, eventToQueueMap, eventToVmsTransactionMap);
 
         Map<String, VmsEventSchema> vmsEventSchema = buildEventSchema( reflections, eventToQueueMap );
 
-        /** TODO look at this. we should provide this implementation
+        /*
+         *   TODO look at this. we should provide this implementation
          *   SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
          *   SLF4J: Defaulting to no-operation (NOP) logger implementation
          *   SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
@@ -107,7 +108,8 @@ public class VmsMetadataLoader {
 
             Optional<Annotation> optionalVmsTableAnnotation = Arrays.stream(vmsTable.getAnnotations())
                     .filter(p -> p.annotationType() == VmsTable.class).findFirst();
-            optionalVmsTableAnnotation.ifPresent(annotation -> vmsTableNameMap.put(vmsTable, ((VmsTable) annotation).name()));
+            optionalVmsTableAnnotation.ifPresent(
+                    annotation -> vmsTableNameMap.put(vmsTable, ((VmsTable) annotation).name()));
         }
 
         return vmsTableNameMap;
@@ -117,13 +119,14 @@ public class VmsMetadataLoader {
     /**
      * Building virtual microservice event schemas
      */
-    protected static Map<String, VmsEventSchema> buildEventSchema(Reflections reflections, Map<Class, String> eventToQueueMap) {
+    protected static Map<String, VmsEventSchema> buildEventSchema(
+            Reflections reflections, Map<Class<?>, String> eventToQueueMap) {
 
         Map<String, VmsEventSchema> schemaMap = new HashMap<>();
 
         Set<Class<?>> eventsClazz = reflections.getTypesAnnotatedWith( Event.class );
 
-        for( Class eventClazz : eventsClazz ){
+        for( Class<?> eventClazz : eventsClazz ){
 
             Field[] fields = eventClazz.getDeclaredFields();
 
@@ -132,12 +135,10 @@ public class VmsMetadataLoader {
             int i = 0;
 
             for( Field field : fields ){
-
                 Class<?> attributeType = field.getType();
                 columnDataTypes[i] = getColumnDataTypeFromAttributeType(attributeType);
                 columnNames[i] = field.getName();
                 i++;
-
             }
 
             // get queue name
@@ -401,11 +402,10 @@ public class VmsMetadataLoader {
     /**
      * Map transactions to input and output events
      */
-    @SuppressWarnings("unchecked")
     protected static void mapVmsTransactionInputOutput(Reflections reflections,
                                                        Map<String, Object> loadedMicroserviceInstances,
-                                                       Map<String, Class> queueToEventMap,
-                                                       Map<Class, String> eventToQueueMap,
+                                                       Map<String, Class<?>> queueToEventMap,
+                                                       Map<Class<?>, String> eventToQueueMap,
                                                        Map<String,
                                                                List<IdentifiableNode<VmsTransactionSignature>>>
                                                                eventToVmsTransactionMap) {
@@ -418,18 +418,18 @@ public class VmsMetadataLoader {
             String className = method.getDeclaringClass().getCanonicalName();
             Object obj = loadedMicroserviceInstances.get(className);
 
-            Class outputType;
+            Class<?> outputType;
             try{
                 outputType = method.getReturnType();
             } catch(Exception e) {
                 throw new QueueMappingException("All output events must implement IEvent interface.");
             }
 
-            List<Class> inputTypes = new ArrayList<>();
+            List<Class<?>> inputTypes = new ArrayList<>();
 
             for(int i = 0; i < method.getParameters().length; i++){
                 try{
-                    Class clazz = method.getParameters()[i].getType();
+                    Class<?> clazz = method.getParameters()[i].getType();
                     inputTypes.add( clazz);
                 } catch(Exception e) {
                     throw new QueueMappingException("All input events must implement IEvent interface.");

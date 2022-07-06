@@ -5,8 +5,10 @@ import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
+import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchAbortRequest;
 import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitRequest;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitResponse;
+import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchComplete;
+import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionEvent;
 
 import java.util.Map;
@@ -53,19 +55,33 @@ public interface IVmsInternalChannels {
      * BATCH COMMIT, ABORT EVENTS
      */
 
-    BlockingQueue<BatchCommitRequest.Payload> commitInputQueue();
+    // this should be sent by terminal vms
+    BlockingQueue<BatchComplete.Payload> batchCompleteQueue();
 
-    BlockingQueue<BatchCommitResponse.Payload> commitOutputQueue();
+    // abort a specific transaction from the batch and restart state from there
+    // should maintain a MV scheme to avoid rolling back to the last committed state
+    BlockingQueue<TransactionAbort.Payload> transactionAbortInputQueue();
+
+    BlockingQueue<TransactionAbort.Payload> transactionAbortOutputQueue();
 
     /**
-     *
+     *  This is sent by the leader by all non-terminal VMSs involved in the last batch commit
      */
-    BlockingQueue<TransactionEvent.Payload> batchCommitRequestQueue();
+    BlockingQueue<BatchCommitRequest.Payload> batchCommitQueue();
+
+    // sent by the new leader
+    BlockingQueue<BatchAbortRequest.Payload> batchAbortQueue();
+
+    // no response, al vms will definitely commit. if there is crash, they rerun the events
+    // methods must be deterministic if developers want to maintain the same state as run before the crash
+//    BlockingQueue<BatchCommitResponse.Payload> batchCommitResponseQueue();
 
     /*
-     * DATA
+     * ACTION
      */
 
+    /** Writer action **/
+    BlockingQueue<byte> actionQueue();
 
     /**
      * It represents the queue holding the results of the submitted tasks
@@ -75,6 +91,10 @@ public interface IVmsInternalChannels {
      * whereas the result queue is the metadata regarding the output (TID and more)
      */
     Queue<VmsTransactionTaskResult> transactionResultQueue();
+
+    /*
+     * DATA --> only for dbms-service
+     */
 
     /**
      * A queue of requests for data

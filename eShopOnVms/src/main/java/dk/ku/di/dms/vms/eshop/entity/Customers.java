@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.eshop.entity;
 
-import import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
+import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
 import dk.ku.di.dms.vms.sdk.core.annotations.VmsTable;
 
 import javax.persistence.*;

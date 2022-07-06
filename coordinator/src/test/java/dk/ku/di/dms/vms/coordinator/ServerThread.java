@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.coordinator;
 
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.random.RandomGenerator;
 
@@ -40,7 +39,7 @@ public class ServerThread extends MailBox {
 
         // TODO contact f+1 dbms to get the current offset. after a crash this info is lost
 
-        while(!isStopped()) {
+        while(isRunning()) {
 
             if (!queue.isEmpty()) {
                 Message msg = queue.peekFirst();

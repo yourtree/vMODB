@@ -4,8 +4,10 @@ import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
+import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchAbortRequest;
 import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitRequest;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitResponse;
+import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchComplete;
+import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionEvent;
 
 import java.util.Map;
@@ -55,6 +57,8 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
 
     private static final Map<Long, DataResponseEvent> responseMap;
 
+    private static final BlockingQueue<byte> actionQueue;
+
     static {
         INSTANCE = new VmsInternalChannels();
         inputChannel = new LinkedBlockingQueue<>();
@@ -62,6 +66,8 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
         resultQueue = new ConcurrentLinkedQueue<>();
         requestQueue = new ConcurrentLinkedQueue<>();
         responseMap = new ConcurrentHashMap<>();
+
+        actionQueue = new LinkedBlockingQueue<byte>();
     }
 
     @Override
@@ -75,19 +81,31 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
     }
 
     @Override
-    public BlockingQueue<BatchCommitRequest.Payload> commitInputQueue() {
+    public BlockingQueue<BatchComplete.Payload> batchCompleteQueue() {
         return null;
     }
 
     @Override
-    public BlockingQueue<BatchCommitResponse.Payload> commitOutputQueue() {
+    public BlockingQueue<TransactionAbort.Payload> transactionAbortInputQueue() {
+        return null;
+    }
+
+
+    @Override
+    public BlockingQueue<BatchCommitRequest.Payload> batchCommitQueue() {
         return null;
     }
 
     @Override
-    public BlockingQueue<TransactionEvent.Payload> batchCommitRequestQueue() {
+    public BlockingQueue<BatchAbortRequest.Payload> batchAbortQueue() {
         return null;
     }
+
+    @Override
+    public BlockingQueue<byte> actionQueue() {
+        return actionQueue;
+    }
+
 
     @Override
     public Queue<VmsTransactionTaskResult> transactionResultQueue() {

@@ -9,10 +9,6 @@ import static dk.ku.di.dms.vms.web_common.meta.Constants.BATCH_COMMIT_REQUEST;
  */
 public final class BatchCommitRequest {
 
-    // commit                 respective vms last tid
-    // type  | offset       | tid
-    private static final int headerSize = Byte.BYTES + Long.BYTES + Long.BYTES;
-
     // send the last tid (corresponding to the vms) and batch id
     public static void write(ByteBuffer buffer, long batch, long tid){
         buffer.put(BATCH_COMMIT_REQUEST);

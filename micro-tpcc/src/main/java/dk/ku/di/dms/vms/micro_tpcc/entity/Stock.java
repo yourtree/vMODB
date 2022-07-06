@@ -16,7 +16,7 @@ import java.io.Serializable;
 @IdClass(Stock.StockId.class)
 public class Stock implements IEntity<Stock.StockId> {
 
-    public class StockId implements Serializable {
+    public static class StockId implements Serializable {
         public Integer s_i_id;
         public Integer s_w_id;
 

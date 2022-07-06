@@ -3,16 +3,18 @@ package dk.ku.di.dms.vms.sdk.embed;
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
-import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchAbortRequest;
 import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitRequest;
 import dk.ku.di.dms.vms.web_common.meta.schema.control.Presentation;
+import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
+import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
 
 import java.io.IOException;
@@ -21,9 +23,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static dk.ku.di.dms.vms.web_common.meta.Constants.*;
@@ -105,15 +105,13 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
         serverSocket.accept( null, new AcceptCompletionHandler());
 
         // while not stopped
-        while(!isStopped()){
+        while(isRunning()){
 
             //  write events to leader and VMSs...
 
             try {
 
-                OutboundEventResult outboundEventRes = vmsInternalChannels.transactionOutputQueue().take();
-
-
+                issueQueue.take();
 
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -121,6 +119,54 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
 
         }
 
+    }
+
+    /**
+     * A thread that basically writes events to other VMSs and the Leader
+     * Retrieves data from all output queues
+     *
+     * All output queues must be read in order to send their data
+     *
+     * A batch strategy for sending would involve sleeping until the next timeout for batch,
+     * send and set up the next. Do that iteratively
+     */
+    private class WriterThread extends StoppableRunnable {
+
+        @Override
+        public void run() {
+
+            BlockingQueue<byte> actionQueue = vmsInternalChannels.actionQueue();
+
+            while (isRunning()){
+
+                try {
+                    byte action = actionQueue.take();
+
+                    switch (action){
+
+                        case BATCH_COMPLETE -> {
+                            // batchCompleteQueue
+                        }
+
+                        case TX_ABORT -> {
+                            // transactionAbortOutputQueue
+                        }
+
+                        case EVENT -> {
+                            // transactionOutputQueue
+                        }
+
+                    }
+
+
+
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+            }
+
+        }
     }
 
     /**
@@ -252,51 +298,53 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
 
             // only connects to all VMSs on first leader connection
             boolean connectToVMSs = false;
-            if(leader == null) {
+            if(leader == null || !leader.active) {
                 connectToVMSs = true;
                 this.consumerVms = payloadFromServer.consumers();
-            }
-            this.leader = payloadFromServer.serverIdentifier();
 
-            readBuffer.clear();
+                ByteBuffer writeBuffer = BufferManager.loanByteBuffer();
 
-            ByteBuffer writeBuffer = BufferManager.loanByteBuffer();
+                readBuffer.clear();
 
-            if(includeMetadata) {
-                String vmsDataSchemaStr = serdesProxy.serializeDataSchema(me.dataSchema);
-                String vmsEventSchemaStr = serdesProxy.serializeEventSchema(me.eventSchema);
-                Presentation.writeVms(writeBuffer, me, vmsDataSchemaStr, vmsEventSchemaStr);
+                if(includeMetadata) {
+                    String vmsDataSchemaStr = serdesProxy.serializeDataSchema(me.dataSchema);
+                    String vmsEventSchemaStr = serdesProxy.serializeEventSchema(me.eventSchema);
+                    Presentation.writeVms(writeBuffer, me, vmsDataSchemaStr, vmsEventSchemaStr);
 
-                try {
-                    channel.write( writeBuffer ).get();
-                    writeBuffer.clear();
-                } catch (InterruptedException | ExecutionException ignored) {
+                    try {
+                        channel.write( writeBuffer ).get();
+                        writeBuffer.clear();
+                    } catch (InterruptedException | ExecutionException ignored) {
 
-                    // return buffers
-                    BufferManager.returnByteBuffer(readBuffer);
-                    BufferManager.returnByteBuffer(writeBuffer);
+                        if(!channel.isOpen()) {
+                            leader.off();
 
-                    if(!channel.isOpen())
-                        leader.off();
-                    // else what to do try again?
+                            // return buffers
+                            BufferManager.returnByteBuffer(readBuffer);
+                            BufferManager.returnByteBuffer(writeBuffer);
 
-                    return;
+                            return;
+                        }
+                        // else what to do try again?
+
+                    }
 
                 }
 
+                // then setup connection metadata and read completion handler
+                leaderConnectionMetadata = new ConnectionMetadata(
+                        leader.hashCode(),
+                        ConnectionMetadata.NodeType.SERVER,
+                        readBuffer,
+                        writeBuffer,
+                        channel,
+                        new ReentrantLock()
+                );
+
+            } else {
+                this.leader = payloadFromServer.serverIdentifier(); // this will set on again
+                leaderConnectionMetadata.channel = channel; // update channel
             }
-
-            leader.on();
-
-            // then setup connection metadata and read completion handler
-            leaderConnectionMetadata = new ConnectionMetadata(
-                    leader.hashCode(),
-                    ConnectionMetadata.NodeType.SERVER,
-                    readBuffer,
-                    writeBuffer,
-                    channel,
-                    new ReentrantLock()
-            );
 
             channel.read(readBuffer, leaderConnectionMetadata, new LeaderReadCompletionHandler() );
 
@@ -343,32 +391,25 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
 
                 TransactionEvent.Payload transactionEventPayload = TransactionEvent.read(connectionMetadata.readBuffer);
 
-                connectionMetadata.readBuffer.clear();
-
                 // send to scheduler.... drop if the event cannot be processed (not an input event in this vms)
                 if(vmsMetadata.queueToEventMap().get( transactionEventPayload.event() ) != null) {
                     vmsInternalChannels.transactionInputQueue().add(transactionEventPayload);
                 }
 
             } else if (messageType == BATCH_COMMIT_REQUEST){
-
                 // must send batch commit ok
-                BatchCommitRequest.read( connectionMetadata.readBuffer );
-
-                connectionMetadata.readBuffer.clear();
-
-                //connectionMetadata.writeLock.lock();
-
-                // actually need to log state (but only if all events have been processed)
-
-                //connectionMetadata.writeLock.unlock();
-
+                BatchCommitRequest.Payload batchCommitReq = BatchCommitRequest.read( connectionMetadata.readBuffer );
+                vmsInternalChannels.batchCommitQueue().add( batchCommitReq );
             } else if(messageType == TX_ABORT){
-
-                //
-
+                TransactionAbort.Payload transactionAbortReq = TransactionAbort.read( connectionMetadata.readBuffer );
+                vmsInternalChannels.transactionAbortInputQueue().add( transactionAbortReq );
+            } else if (messageType == BATCH_ABORT_REQUEST){
+                // some new leader request to rollback to last batch commit
+                BatchAbortRequest.Payload batchAbortReq = BatchAbortRequest.read( connectionMetadata.readBuffer );
+                vmsInternalChannels.batchAbortQueue().add(batchAbortReq);
             }
 
+            connectionMetadata.readBuffer.clear();
             connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
         }
 

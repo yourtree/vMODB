@@ -71,7 +71,7 @@ public class AsyncSocketEventHandler extends StoppableRunnable {
         initialize();
 
         // while not closed connection, continue
-        while(!isStopped() && socketChannel.isOpen()){
+        while(isRunning() && socketChannel.isOpen()){
 
             read();
 

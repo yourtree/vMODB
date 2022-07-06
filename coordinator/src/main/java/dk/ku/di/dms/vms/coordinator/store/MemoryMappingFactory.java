@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.coordinator.store;
 
-import dk.ku.di.dms.vms.coordinator.metadata.Metadata;
-import dk.ku.di.dms.vms.coordinator.metadata.MetadataAPI;
+import dk.ku.di.dms.vms.coordinator.store.metadata.ServerMetadata;
+import dk.ku.di.dms.vms.coordinator.store.metadata.MetadataAPI;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,7 +11,7 @@ import java.nio.channels.FileChannel;
 import java.util.logging.Logger;
 
 /**
- * Class that encapsulates the complexitie of dealing with memory-mapping files in Java
+ * Class that encapsulates the complexities of dealing with memory-mapping files in Java
  */
 public class MemoryMappingFactory {
 
@@ -51,8 +51,7 @@ public class MemoryMappingFactory {
                     logger.info("Creating file " + fileName + " to " + newFile.getName());
                 }
             }
-            catch (NullPointerException ignored) {
-            }
+            catch (NullPointerException ignored) { }
 
             RandomAccessFile raf = new RandomAccessFile( filepath, "rw" );
 
@@ -66,29 +65,32 @@ public class MemoryMappingFactory {
                 scan(raf);
             }
 
-
-
-
-
-
-        } catch(NullPointerException | IOException e){
-
-        }
+        } catch(NullPointerException | IOException e){ }
 
         return null;
 
     }
 
+    /**
+     * The structure of a coordinator metadata is as follows:
+     *
+     */
     private static void initialize(RandomAccessFile raf) throws IOException {
 
-        // writing the committed offset, starts with 0
+        // number of records
         raf.writeLong( 0L );
 
     }
 
-    private static Metadata scan(RandomAccessFile raf) {
+    /**
+     *
+     * @param raf the file mapped in memory
+     * @return
+     */
+    private static ServerMetadata scan(RandomAccessFile raf) {
 
         // TODO implement read after finishing the write methods
+        // reading the committed offset, starts with 0
         return null;
 
     }

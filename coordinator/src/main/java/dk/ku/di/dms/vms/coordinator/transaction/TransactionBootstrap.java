@@ -8,16 +8,16 @@ import java.util.*;
 public class TransactionBootstrap {
 
     private final List<EventIdentifier> topology; // the input events
-    //protected List<EventIdentifier> terminals;
+
     // for fast seek
     private final Map<String, EventIdentifier> map;
 
     private String name; // transaction name
-    private List<String> terminals;
+    private final List<String> terminals;
 
     public TransactionBootstrap(){
         this.topology = new ArrayList<>();
-        //this.terminals = new ArrayList<>();
+        this.terminals = new ArrayList<>();
         this.map = new HashMap<>();
     }
 
@@ -63,7 +63,9 @@ public class TransactionBootstrap {
             if(deps == null) throw new RuntimeException("Cannot have a terminal event without a parent event");
 
             EventIdentifier terminal = new EventIdentifier(alias, vms);
+
             transactionBootstrap.terminals.add(terminal.vms);
+
             for(String dep : deps){
                 EventIdentifier id = transactionBootstrap.map.get(dep);
                 // terminal.addDependence( id );

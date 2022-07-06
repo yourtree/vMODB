@@ -39,7 +39,7 @@ public class LeaderElectionTest
         buffer.putInt( hostBytes.length );
         buffer.put( hostBytes );
 
-        assert 1 == 1;
+        assert true;
 
     }
 
@@ -64,8 +64,8 @@ public class LeaderElectionTest
         servers2.put( serverEm1.hashCode(), serverEm1 );
         servers2.put( serverEm3.hashCode(), serverEm3 );
 
-        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, servers1 );
-        ElectionWorker em2 = new ElectionWorker(serverSocket2, null, Executors.newFixedThreadPool(2), serverEm2, servers2 );
+        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, servers1, new ElectionOptions() );
+        ElectionWorker em2 = new ElectionWorker(serverSocket2, null, Executors.newFixedThreadPool(2), serverEm2, servers2, new ElectionOptions() );
 
         new Thread( em1 ).start();
         new Thread( em2 ).start();
@@ -79,35 +79,6 @@ public class LeaderElectionTest
         assert(take1 == FINISHED && take2 == FINISHED);
 
     }
-
-    // this test does not make sense anymore. the election worker will work forever until a leader is decided
-//    @Test
-//    public void leaderElectionFailTest() throws IOException, InterruptedException {
-//
-//        AsynchronousServerSocketChannel serverSocket1 = AsynchronousServerSocketChannel.open();
-//        serverSocket1.bind( new InetSocketAddress(80) );
-//
-//        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 80 );
-//        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 81 );
-//        ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 82 );
-//
-//        Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
-//        servers1.put( serverEm2.hashCode(), serverEm2 );
-//        servers1.put( serverEm3.hashCode(), serverEm3 );
-//
-//        BlockingQueue<Byte> roundResult1 = new ArrayBlockingQueue<>(1);
-//
-//        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, servers1 );
-//
-//        new Thread( em1 ).start();
-//
-//        byte take1 = roundResult1.take();
-//
-//        logger.info( "result 1: " + take1 );
-//
-//        assert(take1 == NO_RESULT);
-//
-//    }
 
     /**
      * In this test, a server may need to retry the leader election
@@ -133,7 +104,7 @@ public class LeaderElectionTest
         var group1 = AsynchronousChannelGroup.withFixedThreadPool(1, new VmsDaemonThreadFactory());
         var group2 = AsynchronousChannelGroup.withFixedThreadPool(1, new VmsDaemonThreadFactory());
 
-        ElectionWorker em1 = new ElectionWorker(serverSocket1, group1, Executors.newFixedThreadPool(2), serverEm1, servers1, 10000 );
+        ElectionWorker em1 = new ElectionWorker(serverSocket1, group1, Executors.newFixedThreadPool(2), serverEm1, servers1, new ElectionOptions() );
 
         // TODO that should be integrated into the class instantiation
         new Thread( em1 ).setUncaughtExceptionHandler( em1.exceptionHandler );
@@ -147,7 +118,7 @@ public class LeaderElectionTest
         AsynchronousServerSocketChannel serverSocket2 = AsynchronousServerSocketChannel.open();
         serverSocket2.bind( new InetSocketAddress(81) );
 
-        ElectionWorker em2 = new ElectionWorker(serverSocket2, group2, Executors.newFixedThreadPool(2), serverEm2, servers2, 10000 );
+        ElectionWorker em2 = new ElectionWorker(serverSocket2, group2, Executors.newFixedThreadPool(2), serverEm2, servers2, new ElectionOptions() );
         new Thread( em2 ).start();
 
         byte take2 = em2.getResult();
@@ -194,7 +165,7 @@ public class LeaderElectionTest
         servers1.put( serverEm2.hashCode(), serverEm2 );
         servers1.put( serverEm3.hashCode(), serverEm3 );
 
-        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, servers1 );
+        ElectionWorker em1 = new ElectionWorker(serverSocket1, null, Executors.newFixedThreadPool(2), serverEm1, servers1, new ElectionOptions() );
 
         new Thread( em1 ).start();
 

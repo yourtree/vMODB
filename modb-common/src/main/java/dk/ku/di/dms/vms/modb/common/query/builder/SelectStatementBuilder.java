@@ -175,7 +175,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
     }
 
     // not of my interest to make it static, otherwise developers could instantiate it directly (in case the constructor were public)
-    public class QuerySeal implements IQueryBuilder<SelectStatement> {
+    public static class QuerySeal implements IQueryBuilder<SelectStatement> {
 
         private final SelectStatement statement;
 

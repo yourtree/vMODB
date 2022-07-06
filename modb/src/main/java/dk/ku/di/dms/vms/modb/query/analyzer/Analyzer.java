@@ -6,7 +6,6 @@ import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.modb.common.query.builder.UpdateStatementBuilder;
 import dk.ku.di.dms.vms.modb.common.query.clause.GroupBySelectElement;
 import dk.ku.di.dms.vms.modb.common.query.clause.JoinClauseElement;
 import dk.ku.di.dms.vms.modb.common.query.clause.WhereClauseElement;

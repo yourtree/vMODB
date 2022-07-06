@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.schema.external;
+package dk.ku.di.dms.vms.coordinator.server.schema;
 
 import java.util.ArrayList;
 

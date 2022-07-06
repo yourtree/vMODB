@@ -18,8 +18,8 @@ public interface IFilter<T> {
     /*
      * For IN clause
      */
-    default boolean eval(T x, T... y){
-        return false;
-    }
+//    default boolean eval(T x, T... y){
+//        return false;
+//    }
 
 }

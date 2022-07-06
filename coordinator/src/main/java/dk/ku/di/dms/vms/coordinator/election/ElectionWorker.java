@@ -1,6 +1,8 @@
 package dk.ku.di.dms.vms.coordinator.election;
 
 import dk.ku.di.dms.vms.coordinator.election.schema.*;
+import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
+import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
@@ -11,14 +13,14 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.CompletionHandler;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
-import static java.net.StandardSocketOptions.SO_KEEPALIVE;
-import static java.net.StandardSocketOptions.TCP_NODELAY;
 
 /**
  * An election task is a thread that encapsulates all subtasks (i.e., threads)
@@ -30,7 +32,10 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  *
  * We assume the nodes are fixed. Later we revisit this choice.
  * TODO Cluster membership management (e.g., adding nodes, removing nodes, replacing nodes)
- * TODO make connections fixed, so can be subsequently reused by the leader/follower class
+ *
+ * Protocol SCTP is maybe a better fit for leader election since it is message-oriented, rather than stream oriented
+ * On the other hand, the UDP allows multicast, which is good for leader election (sending messages to all nodes
+ * by design instead of iterating over the nodes to send individual messages)
  */
 public final class ElectionWorker extends SignalingStoppableRunnable {
 
@@ -47,9 +52,6 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
     // general tasks, like sending info to VMSs and other servers
     private final ExecutorService taskExecutor;
 
-    // even though we can start with a known number of servers, their payload may have changed after a crash
-    private final Map<Integer, ServerIdentifier> servers;
-
     // the identification of this server
     private final ServerIdentifier me;
 
@@ -57,31 +59,52 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
     // only one thread modifying it, no need for atomic reference
     private volatile ServerIdentifier leader;
 
+    // even though we can start with a known number of servers, their payload may have changed after a crash
+    private final Map<Integer, ServerIdentifier> servers;
+
+    private final Map<Integer, ReentrantLock> lockConnectionMetadata = new ConcurrentHashMap<>();
+    private final Map<Integer, ConnectionMetadata> connectionMetadataMap;
+
     // a bounded time in which a leader election must occur, otherwise it should restart. in milliseconds
     // only one thread modifying, no need to use AtomicLong
-    private final AtomicLong timeout;
+    private volatile long timeout;
 
     // https://stackoverflow.com/questions/3786825/volatile-boolean-vs-atomicboolean
     private final AtomicBoolean voted;
 
-    private final MessageHandler messageHandler;
+    private final Object responseMapLock = new Object();
+    private final Map<Integer, VoteResponse.Payload> responses;
 
-    public ElectionWorker(AsynchronousServerSocketChannel serverSocket,
-                          AsynchronousChannelGroup group,
-                          ExecutorService taskExecutor,
-                          ServerIdentifier me,
-                          Map<Integer, ServerIdentifier> servers){
-        super();
-        this.state = NEW;
-        this.serverSocket = serverSocket;
-        this.group = group;
-        this.taskExecutor = taskExecutor;
-        this.me = me;
-        this.servers = servers;
-        this.timeout = new AtomicLong(60000 ); // 1 minute default
-        this.state = CANDIDATE;
-        this.voted = new AtomicBoolean(false);
-        this.messageHandler = new MessageHandler();
+    // making sure read-after-write atomicity for writers
+    private final AtomicInteger opN = new AtomicInteger(0);
+    // volatile to make sure all threads don't read from their cpu cache
+    private volatile int N; // only gets updated when a round terminates
+
+    private final ElectionOptions options;
+
+    // for broadcaster
+    private final BlockingQueue<byte> actionQueue;
+
+    // for simple sender
+    private final BlockingQueue<VoteMessageContext> voteMessagesToSend;
+
+    private static class VoteMessageContext {
+        byte type; // vote or response
+        ServerIdentifier source;
+        ServerIdentifier target;
+        boolean response;
+
+        public VoteMessageContext(byte type, ServerIdentifier target, boolean response) {
+            this.type = type;
+            this.target = target;
+            this.response = response;
+        }
+
+        public VoteMessageContext(ServerIdentifier source, ServerIdentifier target) {
+            this.type = VOTE_REQUEST;
+            this.source = source;
+            this.target = target;
+        }
     }
 
     public ElectionWorker(AsynchronousServerSocketChannel serverSocket,
@@ -89,7 +112,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                           ExecutorService taskExecutor,
                           ServerIdentifier me,
                           Map<Integer, ServerIdentifier> servers,
-                          long timeout){
+                          ElectionOptions options){
         super();
         this.state = NEW;
         this.serverSocket = serverSocket;
@@ -97,10 +120,247 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
         this.taskExecutor = taskExecutor;
         this.me = me;
         this.servers = servers;
-        this.timeout = new AtomicLong( timeout );
+        this.connectionMetadataMap = new ConcurrentHashMap<>();
+
         this.state = CANDIDATE;
         this.voted = new AtomicBoolean(false);
-        this.messageHandler = new MessageHandler();
+
+        this.N = servers.size();
+        this.responses = new ConcurrentHashMap<>();
+
+        this.options = options;
+        this.actionQueue = new LinkedBlockingQueue<byte>();
+        this.voteMessagesToSend = new LinkedBlockingQueue<>();
+    }
+
+    private void runRound(){
+
+        // start round sending vote requests
+        actionQueue.add( VOTE_REQUEST );
+
+        int state_ = state;
+
+        // force read from memory only once
+        long timeout_ = timeout;
+
+        /* while majority cannot be established, we cannot proceed safely */
+        long elapsed = 0L;
+        long startTime = System.currentTimeMillis();
+        while(elapsed < timeout_ && state_ == CANDIDATE){
+            try { Thread.sleep(1000); } catch (InterruptedException ignored) {} // this can make messages not being handled. it is the timeout making this happen
+            elapsed = System.currentTimeMillis() - startTime;
+            state_ = state;
+        }
+
+        // round is over, responses received no longer hold
+        // this is the same in all servers
+        if(state_ == CANDIDATE){
+            resetVoteResponses();// data races may still allow old votes to be computed
+            voted.set(false); // make sure the next round this server is able to vote
+        }
+
+        logger.info("Event loop has finished. I am "+me.host+":"+me.port+" and my state is "+state_);
+
+    }
+
+    /**
+     *  Have to cancel all read completion handlers and queued
+     *  writes after leader is elected
+     */
+    @Override
+    public void run() {
+
+        logger.info("Initializing election round. I am "+me.host+":"+me.port);
+
+        initialize();
+
+        long timeout_;
+
+        while(isRunning() && state == CANDIDATE){
+
+            // the round is an abstraction to avoid a vote given from holding forever (e.g., the requesting node may have crashed)
+            runRound();
+
+            // define a new delta since defining a leader is taking too long
+            // increment since nothing has been defined
+            timeout_ = timeout; // avoid two reads from memory
+            timeout = (long) (timeout_ + (timeout_ * options.getRoundDeltaIncrease()));
+
+        }
+
+        // signal the server
+        signal.add(FINISHED);
+
+    }
+
+    private void initialize() {
+
+        for(ServerIdentifier server : servers.values()) {
+            lockConnectionMetadata.put(server.hashCode(), new ReentrantLock());
+        }
+
+        // being single thread makes it easier to avoid data races
+        serverSocket.accept( null, new AcceptCompletionHandler() );
+
+        // connect to all nodes first
+        connectToAllServers();
+
+        // then start the broadcaster and vote response threads
+        taskExecutor.submit( new Broadcaster() );
+        taskExecutor.submit( new SimpleSender() );
+
+        timeout = options.getInitRoundTimeout();
+
+    }
+
+    private void connectToAllServers(){
+
+        for(ServerIdentifier server : servers.values()){
+
+            // lock first so accept operations do not race with this one
+            lockConnectionMetadata.get( server.hashCode() ).lock();
+
+            // check whether accept thread has already handled this connection
+            if(connectionMetadataMap.get( server.hashCode() ) != null){
+                lockConnectionMetadata.get( server.hashCode() ).unlock();
+                continue;
+            }
+
+            ConnectionMetadata connectionMetadata = null;
+
+            try {
+
+                InetSocketAddress address = new InetSocketAddress(server.host, server.port);
+                AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
+                withDefaultSocketOptions(channel);
+
+                connectionMetadata = new ConnectionMetadata(
+                        server.hashCode(),
+                        ConnectionMetadata.NodeType.SERVER,
+                        BufferManager.loanByteBuffer(DEFAULT_BUFFER_SIZE),
+                        BufferManager.loanByteBuffer(DEFAULT_BUFFER_SIZE),
+                        channel,
+                        new ReentrantLock()
+                        );
+
+                channel.connect(address).get(); //, connectionMetadata, new ConnectCompletionHandler());
+
+                connectionMetadataMap.put(connectionMetadata.key, connectionMetadata);
+
+            } catch(InterruptedException | IOException | ExecutionException ignored){
+
+                if(connectionMetadata != null) {
+                    BufferManager.returnByteBuffer(connectionMetadata.readBuffer);
+                    BufferManager.returnByteBuffer(connectionMetadata.writeBuffer);
+
+                    if(connectionMetadata.channel.isOpen()){
+                        try {
+                            connectionMetadata.channel.close();
+                        } catch (IOException ignored1) { }
+                        finally {
+                            if(connectionMetadataMap.get(connectionMetadata.key) != null ){
+                                connectionMetadataMap.remove( connectionMetadata.key );
+                            }
+                        }
+                    }
+
+                }
+
+            }
+
+            lockConnectionMetadata.get( server.hashCode() ).unlock();
+
+        }
+    }
+
+    private void resetVoteResponses(){
+        synchronized (responseMapLock) {
+            this.responses.clear();
+            // do we have any new node?
+            this.N += opN.get();
+        }
+        this.opN.set(0);
+    }
+
+    private class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, Void> {
+
+        @Override
+        public void completed(AsynchronousSocketChannel channel, Void void_) {
+
+            // logger.info("I am "+me.host+":"+me.port+". Initializing message handler for "+server.host+":"+server.port);
+
+            try {
+                InetSocketAddress remoteAddress = (InetSocketAddress) channel.getRemoteAddress();
+                String host = remoteAddress.getHostName();
+                int port = remoteAddress.getPort();
+                int key = Objects.hash( host, port );
+
+                // is in the list of known servers?
+                if (servers.get( key ) != null) {
+
+                    // is reconnecting after failure?
+                    lockConnectionMetadata.get(key).lock();
+
+                    ConnectionMetadata connMeta = connectionMetadataMap.get(key);
+                    if (connMeta == null) {
+
+                        connMeta = new ConnectionMetadata(
+                                key,
+                                ConnectionMetadata.NodeType.SERVER,
+                                BufferManager.loanByteBuffer(DEFAULT_BUFFER_SIZE),
+                                BufferManager.loanByteBuffer(DEFAULT_BUFFER_SIZE),
+                                channel,
+                                new ReentrantLock()
+                        );
+
+                        connectionMetadataMap.put(key, connMeta);
+
+                    } else {
+                        // update channel
+                        if(!servers.get( key ).active) {
+                            connMeta.channel = channel;
+                            servers.get( key ).active = true;
+                        }
+                    }
+
+                    lockConnectionMetadata.get(key).unlock();
+                    channel.read(connMeta.readBuffer, connMeta, new ReadCompletionHandler());
+
+                } else {
+
+                    // new server added dynamically
+
+                    ServerIdentifier newServer = new ServerIdentifier( host, port);
+                    servers.put(key, newServer);
+
+                    opN.addAndGet(1);
+
+                    ConnectionMetadata connMeta = new ConnectionMetadata(
+                            key,
+                            ConnectionMetadata.NodeType.SERVER,
+                            BufferManager.loanByteBuffer(DEFAULT_BUFFER_SIZE),
+                            BufferManager.loanByteBuffer(DEFAULT_BUFFER_SIZE),
+                            channel,
+                            new ReentrantLock()
+                    );
+
+                    // not necessary for new connections, since this thread won't try to connect to this node
+                    // lockConnectionMetadata.put(key, new ReentrantLock());
+                    connectionMetadataMap.put(key, connMeta);
+
+                    channel.read( connMeta.readBuffer, connMeta, new ReadCompletionHandler() );
+
+                }
+
+            } catch(IOException ignored) {}
+
+        }
+
+        @Override
+        public void failed(Throwable exc, Void attachment) {
+            // nothing to do
+        }
+
     }
 
     /**
@@ -111,300 +371,246 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
      * https://blog.gceasy.io/2021/02/24/java-threads-may-not-be-memory-efficient/
      * Single thread, so no need to deal with data races.
      */
-    private class MessageHandler extends StoppableRunnable {
-
-        // positive responses
-        private final Map<Integer, VoteResponse.VoteResponsePayload> responses;
-        private final Object _lock = new Object();
-        private final int N;
-
-        public MessageHandler() {
-            this.N = servers.size();
-            this.responses = new ConcurrentHashMap<>(N);
-        }
-
-        public void resetVoteResponses(){
-            synchronized (_lock) {
-                this.responses.clear();
-            }
-        }
+    private class ReadCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
 
         @Override
-        public void run() {
+        public void completed(Integer result, ConnectionMetadata connectionMetadata) {
 
-            AsynchronousSocketChannel channel;
+            ByteBuffer readBuffer = connectionMetadata.readBuffer;
 
-            logger.info("Initializing message handler. I am "+me.host+":"+me.port);
+            byte messageIdentifier = readBuffer.get();
 
-            while(!isStopped()){
+            logger.info("Message read. I am "+me.host+":"+me.port+" identifier is "+messageIdentifier);
 
-                try {
+            switch (messageIdentifier) {
+                case VOTE_RESPONSE -> {
 
-                    channel = serverSocket.accept().get();
-                    channel.setOption( TCP_NODELAY, true ); // true disables the nagle's algorithm. not useful to have coalescence of messages in election
-                    channel.setOption( SO_KEEPALIVE, false ); // no need to keep alive here
+                    VoteResponse.Payload payload = VoteResponse.read(readBuffer);
 
-                    ByteBuffer readBuffer = ByteBuffer.allocate(128);
+                    logger.info("Vote response received: "+ payload.response +". I am " + me.host + ":" + me.port);
 
-                    channel.read(readBuffer).get();
+                    int serverId = Objects.hash(payload.host, payload.port);
 
-                    byte messageIdentifier = readBuffer.get(0);
+                    // is it a yes? add to responses
+                    if (!payload.response) {
+                        break;
+                    }
 
-                    // message identifier
-                    readBuffer.position(1);
+                    synchronized (responseMapLock) { // the responses are perhaps being reset
+                        if (!responses.containsKey(serverId)) { // avoid duplicate vote
 
-                    logger.info("Message read. I am "+me.host+":"+me.port+" identifier is "+messageIdentifier);
+                            responses.put(serverId, payload);
 
-                    switch (messageIdentifier) {
-                        case VOTE_RESPONSE -> {
+                            // do I have the majority of votes?
+                            // !voted prevent two servers from winning the election... but does not prevent
+                            if (!voted.get() && responses.size() + 1 > (N / 2)) {
+                                logger.info("I am leader. I am " + me.host + ":" + me.port);
+                                leader = me; // only this thread is writing
 
-                            VoteResponse.VoteResponsePayload payload = VoteResponse.read(readBuffer);
+                                actionQueue.add(LEADER_REQUEST);
 
-                            logger.info("Vote response received: "+ payload.response +". I am " + me.host + ":" + me.port);
-
-                            int serverId = Objects.hash(payload.host, payload.port);
-
-                            // is it a yes? add to responses
-                            if (payload.response) {
-
-                                synchronized (_lock) { // the responses are perhaps being reset
-                                    if (!responses.containsKey(serverId)) { // avoid duplicate vote
-
-                                        responses.put(serverId, payload);
-
-                                        // do I have the majority of votes?
-                                        // !voted prevent two servers from winning the election... but does not prevent
-                                        if (!voted.get() && responses.size() + 1 > (N / 2)) {
-                                            logger.info("I am leader. I am " + me.host + ":" + me.port);
-                                            leader = me; // only this thread is writing
-                                            sendLeaderRequests();
-                                            state = LEADER;
-                                        }
-
-                                    }
-                                }
+                                state = LEADER;
                             }
-                        }
-                        case VOTE_REQUEST -> {
 
-                            logger.info("Vote request received. I am " + me.host + ":" + me.port);
-
-                            ServerIdentifier serverRequestingVote = VoteRequest.read(readBuffer);
-
-                            if (voted.get()) {
-                                taskExecutor.submit(new WriteTask(VOTE_RESPONSE, serverRequestingVote, false));
-                                logger.info("Vote not granted, already voted. I am " + me.host + ":" + me.port);
-                            } else {
-
-                                // TO AVOID TWO (OR MORE) LEADERS!!!
-                                // if a server is requesting a vote, it means this server is in another round, so I need to remove his vote from my (true) responses
-                                // because this server may give a vote to another server
-                                // in this case I will send a vote request again
-                                boolean previousVoteReceived = false;
-                                synchronized (_lock) { // the responses are perhaps being reset, cannot count on this vote anymore
-                                    if (responses.get(serverRequestingVote.hashCode()) != null) {
-                                        responses.remove( serverRequestingVote.hashCode() );
-                                        previousVoteReceived = true;
-                                    }
-                                }
-
-                                if (serverRequestingVote.lastOffset > me.lastOffset) {
-                                    // grant vote
-                                    taskExecutor.submit(new WriteTask(VOTE_RESPONSE, serverRequestingVote, true));
-                                    voted.set(true);
-                                    logger.info("Vote granted. I am " + me.host + ":" + me.port);
-                                } else if (serverRequestingVote.lastOffset < me.lastOffset) {
-                                    taskExecutor.submit(new WriteTask(VOTE_RESPONSE, me, serverRequestingVote, group, false));
-                                    logger.info("Vote not granted. I am " + me.host + ":" + me.port);
-                                } else { // equal
-
-                                    if (serverRequestingVote.hashCode() > me.hashCode()) {
-                                        // grant vote
-                                        taskExecutor.submit(new WriteTask(VOTE_RESPONSE, serverRequestingVote, true));
-                                        voted.set(true);
-                                        logger.info("Vote granted. I am " + me.host + ":" + me.port);
-                                    } else {
-                                        taskExecutor.submit(new WriteTask(VOTE_RESPONSE, serverRequestingVote, false));
-                                        logger.info("Vote not granted. I am " + me.host + ":" + me.port);
-                                    }
-
-                                }
-
-                                // this is basically attempt to refresh the vote in case of intersecting distinct rounds in different servers
-                                if(!voted.get() && previousVoteReceived){
-                                    taskExecutor.submit( new WriteTask( VOTE_REQUEST, serverRequestingVote ) );
-                                }
-
-                            }
-                        }
-                        case LEADER_REQUEST -> {
-                            logger.info("Leader request received. I am " + me.host + ":" + me.port);
-                            LeaderRequest.LeaderRequestPayload leaderRequest = LeaderRequest.read(readBuffer);
-                            leader = servers.get(leaderRequest.hashCode());
-                            state = FOLLOWER;
                         }
                     }
 
-                    channel.close();
-
-                } catch (InterruptedException | ExecutionException | IOException ignored) {
-                    logger.info("Error on reading message....");
                 }
 
+                case VOTE_REQUEST -> {
+
+                    logger.info("Vote request received. I am " + me.host + ":" + me.port);
+
+                    ServerIdentifier serverRequestingVote = VoteRequest.read(readBuffer);
+
+                    if (voted.get()) {
+                        // taskExecutor.submit(new Broadcaster(VOTE_RESPONSE, serverRequestingVote, false));
+                        logger.info("Vote not granted, already voted. I am " + me.host + ":" + me.port);
+                    } else {
+
+                        // TO AVOID TWO (OR MORE) LEADERS!!!
+                        // if a server is requesting a vote, it means this server is
+                        // in another round, so I need to remove its vote from my (true) responses
+                        // because this server may give a vote to another server
+                        // in this case I will send a vote request again (or solely remove it)
+                        boolean previousVoteReceived = false;
+                        synchronized (responseMapLock) { // the responses are perhaps being reset, cannot count on this vote anymore
+                            if (responses.get(serverRequestingVote.hashCode()) != null) {
+                                responses.remove( serverRequestingVote.hashCode() );
+                                previousVoteReceived = true;
+                            }
+                        }
+
+                        if (serverRequestingVote.lastOffset > me.lastOffset) {
+                            // grant vote
+                            voteMessagesToSend.add( new VoteMessageContext( VOTE_RESPONSE, serverRequestingVote, true ) );
+                            voted.set(true);
+                            logger.info("Vote granted. I am " + me.host + ":" + me.port);
+                        } else if (serverRequestingVote.lastOffset < me.lastOffset) {
+                            voteMessagesToSend.add( new VoteMessageContext( VOTE_RESPONSE, serverRequestingVote, false ) );
+                            logger.info("Vote not granted. I am " + me.host + ":" + me.port);
+                        } else { // equal
+
+                            if (serverRequestingVote.hashCode() > me.hashCode()) {
+                                // grant vote
+                                voteMessagesToSend.add( new VoteMessageContext( VOTE_RESPONSE, serverRequestingVote, true ) );
+                                voted.set(true);
+                                logger.info("Vote granted. I am " + me.host + ":" + me.port);
+                            } else {
+                                voteMessagesToSend.add( new VoteMessageContext( VOTE_RESPONSE, serverRequestingVote, false ) );
+                                logger.info("Vote not granted. I am " + me.host + ":" + me.port);
+                            }
+
+                        }
+
+                        // this is basically attempt to refresh the vote in case of intersecting distinct rounds in different servers
+                        if(!voted.get() && previousVoteReceived){
+                            voteMessagesToSend.add( new VoteMessageContext( me, serverRequestingVote ) );
+                        }
+
+                    }
+                }
+
+                case LEADER_REQUEST -> {
+                    logger.info("Leader request received. I am " + me.host + ":" + me.port);
+                    LeaderRequest.LeaderRequestPayload leaderRequest = LeaderRequest.read(readBuffer);
+                    leader = servers.get(leaderRequest.hashCode());
+                    state = FOLLOWER;
+                }
             }
 
-            logger.info("Message handler is finished. I am "+me.host+":"+me.port);
+            readBuffer.clear();
+            connectionMetadata.channel.read( readBuffer, connectionMetadata, this );
 
-        }
-
-        private void sendLeaderRequests(){
-            logger.info("Sending leader requests. I am "+ me.host+":"+me.port);
-            for(ServerIdentifier server : servers.values()){
-                taskExecutor.submit( new WriteTask( LEADER_REQUEST, server ) );
-            }
-        }
-
-    }
-
-    private class WriteTask implements Callable<Boolean> {
-
-        private final byte messageType;
-        private final ServerIdentifier connectTo;
-        private final Object[] args;
-
-        public WriteTask(byte messageType, ServerIdentifier connectTo, Object... args){
-            this.messageType = messageType;
-            this.connectTo = connectTo;
-            this.args = args;
         }
 
         @Override
-        public Boolean call() {
-
-            ByteBuffer buffer = ByteBuffer.allocate(128);
-
-            try {
-
-                InetSocketAddress address = new InetSocketAddress(connectTo.host, connectTo.port);
-                AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
-                channel.setOption( TCP_NODELAY, true );
-                channel.setOption( SO_KEEPALIVE, false );
-
-                try {
-                    channel.connect(address).get();
-                } catch (InterruptedException | ExecutionException e) {
-                    // cannot connect to host
-                    logger.info("Error connecting to host. I am "+ me.host+":"+me.port+" and the target is "+ connectTo.host+":"+ connectTo.port);
-                    return false;
-                }
-
-                // now send the request
-                if(messageType == VOTE_REQUEST) {
-                    VoteRequest.write(buffer, me);
-                } else if( messageType == LEADER_REQUEST ){
-                    LeaderRequest.write(buffer, me);
-                } else if (messageType == VOTE_RESPONSE){
-                    VoteResponse.write( buffer, me, (Boolean) args[0]);
-                }
-
-                /*
-                 * https://www.baeldung.com/java-bytebuffer
-                 *    Capacity: the maximum number of data elements the buffer can hold
-                 *    Limit: an index to stop read or write
-                 *    Position: the current index to read or write
-                 *    Mark: a remembered position
-                 */
-                Integer write = channel.write(ByteBuffer.wrap( buffer.array() )).get();
-
-                // number of bytes written
-                if (write == -1) {
-                    logger.info("Error on write (-1). I am "+ me.host+":"+me.port+" message type is "+messageType);
-                    return false;
-                }
-
-                logger.info("Write performed. I am "+ me.host+":"+me.port+" message type is "+messageType+" and return was "+write);
-
-                if (channel.isOpen()) {
-                    channel.close();
-                }
-
-                return true;
-
-            } catch(Exception ignored){
-                logger.info("Error on write. I am "+ me.host+":"+me.port+" message type is "+messageType);
-                return false;
+        public void failed(Throwable exc, ConnectionMetadata connectionMetadata) {
+            if (connectionMetadata.channel.isOpen()){
+                connectionMetadata.readBuffer.clear();
+                connectionMetadata.channel.read( connectionMetadata.readBuffer, connectionMetadata, this );
             }
-
+            // else, the node will try to contact again, and we will update the connection metadata
         }
+
+        // logger.info("Message handler is finished. I am "+me.host+":"+me.port);
 
     }
 
-    private void runRound(){
+    private static final class WriteCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
 
-        sendVoteRequests();
-
-        int state_ = state;
-        long timeout_ = timeout.get();
-
-        /* while majority cannot be established, we cannot proceed safely */
-        long elapsed = 0L;
-        long startTime = System.currentTimeMillis();
-        while(elapsed < timeout_ && state_ == CANDIDATE){
-            try { Thread.sleep(1000); } catch (InterruptedException ignored) {} // this can make messages not being handled. it is the timeout making this happen
-            elapsed = System.currentTimeMillis() - startTime;
-            state_ = state;
-            timeout_ = timeout.get();
+        @Override
+        public void completed(Integer result, ConnectionMetadata connectionMetadata) {
+            unlockSafely(connectionMetadata);
         }
 
-        // round is over, responses received no longer hold
-        // this is the same in all servers
-        if(state_ == CANDIDATE){
-            messageHandler.resetVoteResponses();// data races may still allow old votes to be computed
-            voted.set(false); // make sure the next round this server is able to vote
+        @Override
+        public void failed(Throwable exc, ConnectionMetadata connectionMetadata) {
+            unlockSafely(connectionMetadata);
         }
 
-        logger.info("Event loop has finished. I am "+me.host+":"+me.port+" and my state is "+state_);
+        private void unlockSafely(ConnectionMetadata connectionMetadata){
+            connectionMetadata.writeBuffer.clear();
+            connectionMetadata.writeLock.unlock();
+        }
 
     }
 
     /**
-     *
+     * Responsible for sending voting and leader requests
+     * Each action in the action queue means the respective message
+     * must be sent to all nodes
      */
-    @Override
-    public void run() {
+    private class Broadcaster extends StoppableRunnable {
 
-        double roundDeltaIncrease = 0.25;
+        @Override
+        public void run() {
 
-        logger.info("Initializing election round. I am "+me.host+":"+me.port);
+            try {
 
-        // being single thread makes it easier to avoid data races
+                byte messageType = actionQueue.take();
 
-        taskExecutor.submit( messageHandler );
+                // now send the request
+                if(messageType == VOTE_REQUEST) {
 
-        while(!isStopped() && state == CANDIDATE){
+                    for(ServerIdentifier server : servers.values()){
 
-            // the round is an abstraction to avoid a vote given from holding forever (e.g., the requesting node may have crashed)
-            runRound();
+                        ConnectionMetadata connMeta = connectionMetadataMap.get( server.hashCode() );
 
-            // define a new delta since defining a leader is taking too long
-            long timeout_ = timeout.get();
-            timeout_ = (long) (timeout_ + (timeout_ * roundDeltaIncrease));
-            timeout.set(timeout_); // increment since nothing has been defined
+                        connMeta.writeLock.lock();
+
+                        VoteRequest.write(connMeta.writeBuffer, me);
+
+                        connMeta.channel.write( connMeta.writeBuffer, connMeta, new WriteCompletionHandler() );
+
+                    }
+
+
+                } else if( messageType == LEADER_REQUEST ){
+
+                    for(ServerIdentifier server : servers.values()){
+
+                        ConnectionMetadata connMeta = connectionMetadataMap.get( server.hashCode() );
+
+                        connMeta.writeLock.lock();
+
+                        LeaderRequest.write( connMeta.writeBuffer, me);
+
+                        connMeta.channel.write( connMeta.writeBuffer, connMeta, new WriteCompletionHandler() );
+
+                    }
+
+                } else {
+                    logger.warning("Error on write. I am "+ me.host+":"+me.port+" message type is "+messageType);
+                }
+
+            } catch(Exception ignored){
+                logger.warning("Error on write. I am "+ me.host+":"+me.port+" message type is ...");
+            }
 
         }
 
-        // stop server
-        messageHandler.stop();
-
-        // signal the server
-        signal.add(FINISHED);
-
     }
 
-    private void sendVoteRequests() {
-        logger.info("Sending vote requests. I am "+ me.host+":"+me.port);
-        for(ServerIdentifier server : servers.values()){
-             taskExecutor.submit( new WriteTask( VOTE_REQUEST, server ) );
+    /**
+     * Send individual messages to a particular node
+     */
+    private class SimpleSender extends StoppableRunnable {
+
+        @Override
+        public void run() {
+
+            while (isRunning()){
+
+                try {
+                    VoteMessageContext msgContext = voteMessagesToSend.take();
+
+                    if(msgContext.type == VOTE_RESPONSE){
+
+                        ConnectionMetadata connMeta = connectionMetadataMap.get( msgContext.target.hashCode() );
+
+                        connMeta.writeLock.lock();
+
+                        VoteResponse.write(connMeta.writeBuffer, me, msgContext.response);
+
+                        connMeta.channel.write( connMeta.writeBuffer, connMeta, new WriteCompletionHandler() );
+
+                    } else if (msgContext.type == VOTE_REQUEST){
+
+                        ConnectionMetadata connMeta = connectionMetadataMap.get( msgContext.target.hashCode() );
+
+                        connMeta.writeLock.lock();
+
+                        VoteRequest.write(connMeta.writeBuffer, me);
+
+                        connMeta.channel.write( connMeta.writeBuffer, connMeta, new WriteCompletionHandler() );
+
+                    }
+
+                } catch (InterruptedException ignored) { }
+
+            }
+
         }
     }
 
@@ -414,6 +620,14 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
     public ServerIdentifier getLeader(){
         return this.leader;
+    }
+
+    /**
+     * To reuse connections already established and buffers
+     * @return connection metadata
+     */
+    public Map<Integer,ConnectionMetadata> getServerConnectionMetadata() {
+        return this.connectionMetadataMap;
     }
 
 }

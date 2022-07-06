@@ -49,42 +49,42 @@ public class PersistenceManager { // runnable?
         map.put(table, set);
     }
 
-    public Future<Boolean> run(){
+//    public Future<Boolean> run(){
+//
+//        // get the delta of primary indexes of all tables
+//
+//        // build tasks
+//
+//        synchronized (_lock){
+//
+//
+//
+//        }
+//
+//        return null;
+//
+//    }
 
-        // get the delta of primary indexes of all tables
-
-        // build tasks
-
-        synchronized (_lock){
-
-
-
-        }
-
-        return null;
-
-    }
-
-    private class PersistenceDaemon implements Callable<Boolean> {
-
-        public PersistenceDaemon(AbstractIndex<IKey> pk){
-
-        }
-
-        @Override
-        public Boolean call() throws Exception {
-            return null;
-        }
-
-    }
-
-    public Future<Boolean> commit(){
-
-        // mark non-committed records as committed. use an index for fast access. ranges are better...
-
-
-        return null;
-    }
+//    private class PersistenceDaemon implements Callable<Boolean> {
+//
+//        public PersistenceDaemon(AbstractIndex<IKey> pk){
+//
+//        }
+//
+//        @Override
+//        public Boolean call() throws Exception {
+//            return null;
+//        }
+//
+//    }
+//
+//    public Future<Boolean> commit(){
+//
+//        // mark non-committed records as committed. use an index for fast access. ranges are better...
+//
+//
+//        return null;
+//    }
 
 
 }

@@ -11,8 +11,8 @@ public abstract class StoppableRunnable implements Runnable {
         this.running = true;
     }
 
-    public boolean isStopped() {
-        return !running;
+    public boolean isRunning() {
+        return running;
     }
 
     public void stop() {

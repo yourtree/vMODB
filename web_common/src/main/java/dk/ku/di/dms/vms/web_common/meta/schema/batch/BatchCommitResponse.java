@@ -23,7 +23,7 @@ public final class BatchCommitResponse {
     public static void write(ByteBuffer buffer, long batch, VmsIdentifier vmsIdentifier){
         buffer.put(BATCH_COMMIT_ACK);
         buffer.putLong( batch );
-        byte[] nameBytes = vmsIdentifier.identifier.getBytes(StandardCharsets.UTF_8);
+        byte[] nameBytes = vmsIdentifier.getIdentifier().getBytes(StandardCharsets.UTF_8);
         buffer.putInt( nameBytes.length );
         buffer.put( nameBytes );
     }

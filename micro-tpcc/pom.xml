@@ -30,6 +30,13 @@
           <artifactId>sdk-core</artifactId>
           <version>1.0-SNAPSHOT</version>
           <scope>compile</scope>
+          <exclusions>
+              <exclusion>
+                  <groupId>dk.ku.di.dms.vms</groupId>
+                  <artifactId>web_common</artifactId>
+              </exclusion>
+
+          </exclusions>
       </dependency>
 
   </dependencies>

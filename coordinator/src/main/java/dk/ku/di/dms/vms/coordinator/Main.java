@@ -47,7 +47,7 @@ public class Main
 
         // between checkpoints there is no guarantee, if failure, the dbms proxies they have to restore the old snpashot (checkpoint)
 
-        // when fail, after coming back, the coordinator asks the dbms proxies about the current global state
+        // when failure, after coming back, the coordinator asks the dbms proxies about the current global state
 
         // deterministic execution, no 2-phase commit
         // in the coordinator, we batch the events, try to commit in batches, one at a time

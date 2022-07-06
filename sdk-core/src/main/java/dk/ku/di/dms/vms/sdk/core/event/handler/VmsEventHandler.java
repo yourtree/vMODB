@@ -2,11 +2,9 @@ package dk.ku.di.dms.vms.sdk.core.event.handler;
 
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
-import dk.ku.di.dms.vms.modb.common.event.SystemEvent;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
-import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
 
@@ -90,7 +88,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable implements
         initialize();
 
         // while not stopped
-        while(!isStopped()){
+        while(isRunning()){
 
             // do we have an input payload to process?
             processIncomingEvent();
@@ -253,17 +251,17 @@ public final class VmsEventHandler extends SignalingStoppableRunnable implements
             throw new RuntimeException("ERROR on retrieving handshake from sidecar.");
         }
 
-        SystemEvent eventSchemaResponse = serdes.deserializeSystemEvent( eventReadBuffer.array() );
-
-        if(eventSchemaResponse.op == 0){
-            throw new RuntimeException(eventSchemaResponse.message);
-        }
-
-        SystemEvent dataSchemaResponse = serdes.deserializeSystemEvent( dataSocketBuffer.array() );
-
-        if(dataSchemaResponse.op == 0){
-            throw new RuntimeException(dataSchemaResponse.message);
-        }
+//        SystemEvent eventSchemaResponse = serdes.deserializeSystemEvent( eventReadBuffer.array() );
+//
+//        if(eventSchemaResponse.op == 0){
+//            throw new RuntimeException(eventSchemaResponse.message);
+//        }
+//
+//        SystemEvent dataSchemaResponse = serdes.deserializeSystemEvent( dataSocketBuffer.array() );
+//
+//        if(dataSchemaResponse.op == 0){
+//            throw new RuntimeException(dataSchemaResponse.message);
+//        }
 
         // prepare futures
         eventReadBuffer.clear();

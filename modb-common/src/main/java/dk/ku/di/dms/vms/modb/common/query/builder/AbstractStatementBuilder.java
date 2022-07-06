@@ -107,7 +107,7 @@ public abstract class AbstractStatementBuilder {
 
     }
 
-    public class WhereClausePredicate<T extends AbstractStatement> implements IQueryBuilder<T> {
+    public static class WhereClausePredicate<T extends AbstractStatement> implements IQueryBuilder<T> {
 
         private final T statement;
 

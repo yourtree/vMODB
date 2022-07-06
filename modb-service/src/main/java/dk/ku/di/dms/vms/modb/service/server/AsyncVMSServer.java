@@ -118,7 +118,7 @@ public class AsyncVMSServer extends SignalingStoppableRunnable {
         // connectToCoordinator(); // the coordinator should be modeled as a pub/sub service... a pubsub of data queries, data, not only events...
 
         // no exception were thrown, we are ready to start
-        while( !isStopped() ){
+        while( isRunning() ){
 
 
 

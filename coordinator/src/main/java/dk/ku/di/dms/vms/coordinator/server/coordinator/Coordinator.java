@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.coordinator.server.coordinator;
 
 import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
-import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
@@ -10,8 +9,8 @@ import dk.ku.di.dms.vms.coordinator.server.infra.*;
 import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitRequest;
 import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchComplete;
 import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionAbort;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchReplication;
-import dk.ku.di.dms.vms.coordinator.server.schema.external.TransactionInput;
+import dk.ku.di.dms.vms.web_common.meta.schema.batch.follower.BatchReplication;
+import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
@@ -31,7 +30,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
-import static dk.ku.di.dms.vms.coordinator.election.Constants.VOTE_REQUEST;
+import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
 import static dk.ku.di.dms.vms.coordinator.server.coordinator.BatchReplicationStrategy.*;
 import static dk.ku.di.dms.vms.web_common.meta.Constants.*;
 import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.SERVER;
@@ -104,9 +103,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
     private record TransactionManagerContext (
             // transaction manager actions
             // this provides a natural separation of tasks in the transaction manager thread. commit handling, transaction parsing, leaving the main thread free (only sending heartbeats)
-            BlockingQueue<Byte> transactionManagerActionQueue,
-            Queue<BatchComplete.BatchCompletePayload> batchCompleteEvents,
-            Queue<TransactionAbort.TransactionAbortPayload> transactionAbortEvents
+            BlockingQueue<byte> actionQueue,
+
+            // channels
+            Queue<BatchComplete.Payload> batchCompleteEvents,
+            Queue<TransactionAbort.Payload> transactionAbortEvents
     ){}
 
     /** serialization and deserialization of complex objects **/
@@ -160,7 +161,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         this.transactionMap = Objects.requireNonNull(transactionMap); // in production, it requires receiving new transaction definitions
         this.vmsConsumerSet = vmsDependenceSet;
         this.txManagerCtx = new TransactionManagerContext(
-                new LinkedBlockingQueue<>(),
+                new LinkedBlockingQueue<byte>(),
                 new ConcurrentLinkedQueue<>(),
                 new ConcurrentLinkedQueue<>() );
 
@@ -201,13 +202,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
         ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool( 3 );
 
         // callbacks
-        ScheduledFuture<?> parseTask = scheduledExecutorService.schedule(this::parseAndSendTransactionInputEvents, options.getParseTimeout(), TimeUnit.MILLISECONDS);
-        ScheduledFuture<?> heartbeatTask = scheduledExecutorService.schedule(this::sendHeartbeats, options.getHeartbeatTimeout() - options.getHeartbeatSlack(), TimeUnit.MILLISECONDS);
-        ScheduledFuture<?> batchCommitTask = scheduledExecutorService.schedule(this::spawnBatchCommit, options.getBatchWindow(), TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> parseTask = scheduledExecutorService.scheduleWithFixedDelay(this::parseAndSendTransactionInputEvents, 0L, options.getParseTimeout(), TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> heartbeatTask = scheduledExecutorService.scheduleAtFixedRate(this::sendHeartbeats, 0L, options.getHeartbeatTimeout() - options.getHeartbeatSlack(), TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> batchCommitTask = scheduledExecutorService.scheduleAtFixedRate(this::spawnBatchCommit, 0L, options.getBatchWindow(), TimeUnit.MILLISECONDS);
 
         // if the transaction manager thread blocks (e.g., waiting for a queue), the thread is not delivered back to the pool
 
-        while(!isStopped()){
+        while(isRunning()){
 
             try {
                 // issueQueue.poll(5, TimeUnit.MINUTES); // blocking, this thread should only act when necessary
@@ -254,9 +255,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
             if(type == BATCH_COMPLETE){
 
                 // don't actually need the host and port in the payload since we have the attachment to this read operation...
-                BatchComplete.BatchCompletePayload response = BatchComplete.read( connectionMetadata.readBuffer );
+                BatchComplete.Payload response = BatchComplete.read( connectionMetadata.readBuffer );
                 txManagerCtx.batchCompleteEvents().add( response );
-                txManagerCtx.transactionManagerActionQueue.add(BATCH_COMPLETE); // must have a context, i.e., what batch, the last?
+                txManagerCtx.actionQueue.add(BATCH_COMPLETE); // must have a context, i.e., what batch, the last?
 
                 // if one abort, no need to keep receiving
                 // actually it is unclear in which circumstances a vms would respond no... probably in case it has not received an ack from an aborted commit response?
@@ -265,9 +266,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
             } else if (type == TX_ABORT){
 
                 // get information of what
-                TransactionAbort.TransactionAbortPayload response = TransactionAbort.read(connectionMetadata.readBuffer);
+                TransactionAbort.Payload response = TransactionAbort.read(connectionMetadata.readBuffer);
                 txManagerCtx.transactionAbortEvents().add( response );
-                txManagerCtx.transactionManagerActionQueue.add(TX_ABORT);
+                txManagerCtx.actionQueue.add(TX_ABORT);
 
             } else {
                 logger.warning("Unknown message received.");
@@ -314,9 +315,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 // do I need this check? I believe that if the operation completed and keep alive connection, this is always true
 //                if ((channel != null) && (channel.isOpen())) {}
-
-                channel.setOption(TCP_NODELAY, true); // true disable the nagle's algorithm. not useful to have coalescence of messages in election'
-                channel.setOption(SO_KEEPALIVE, true); // better to keep alive now, independently if that is a VMS or follower
+                withDefaultSocketOptions(channel);
 
                 // right now I cannot discern whether it is a VMS or follower. perhaps I can keep alive channels from leader election?
 
@@ -351,18 +350,39 @@ public final class Coordinator extends SignalingStoppableRunnable {
             }
         }
 
+        /**
+         *
+         * Process Accept connection request
+         *
+         * Task for informing the server running for leader that a leader is already established
+         * We would no longer need to establish connection in case the {@link dk.ku.di.dms.vms.coordinator.election.ElectionWorker}
+         * maintains the connections.
+         */
         private boolean acceptConnection(AsynchronousSocketChannel channel, ByteBuffer buffer){
 
             // message identifier
             byte messageIdentifier = buffer.get(0);
 
-            if(messageIdentifier == VOTE_REQUEST){
+            if(messageIdentifier == VOTE_REQUEST || messageIdentifier == VOTE_RESPONSE){
                 // so I am leader, and I respond with a leader request to this new node
                 // taskExecutor.submit( new ElectionWorker.WriteTask( LEADER_REQUEST, server ) );
                 // would be better to maintain the connection open.....
                 buffer.clear();
-                ServerIdentifier serverRequestingVote = VoteRequest.read(buffer);
-                taskExecutor.submit( new InformLeadershipTask(serverRequestingVote) );
+
+                if(channel.isOpen()) {
+                    LeaderRequest.write(buffer, me);
+                    try {
+                        channel.write(buffer);
+                        channel.close();
+                    } catch(IOException ignored) {}
+                }
+
+                return false;
+            }
+
+            if(messageIdentifier == LEADER_REQUEST){
+                // buggy node intending to pose as leader...
+                // issueQueue.add(  )
                 return false;
             }
 
@@ -455,47 +475,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
             }
 
             return true;
-        }
-
-    }
-
-    /**
-     * Task for informing the server running for leader that a leader is already established
-     * We would no longer need to establish connection in case the {@link dk.ku.di.dms.vms.coordinator.election.ElectionWorker}
-     * maintains the connections.
-     */
-    private class InformLeadershipTask implements Runnable {
-
-        private final ServerIdentifier connectTo;
-
-        public InformLeadershipTask(ServerIdentifier connectTo){
-            this.connectTo = connectTo;
-        }
-
-        @Override
-        public void run() {
-
-            try {
-
-                InetSocketAddress address = new InetSocketAddress(connectTo.host, connectTo.port);
-                AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
-                channel.setOption(TCP_NODELAY, true);
-                channel.setOption(SO_KEEPALIVE, false);
-
-                channel.connect(address).get();
-
-                ByteBuffer buffer = ByteBuffer.allocate(128);
-
-                LeaderRequest.write(buffer, me);
-
-                channel.write(ByteBuffer.wrap(buffer.array())).get();
-
-                if(channel.isOpen()) {
-                    channel.close();
-                }
-
-            } catch(Exception ignored){}
-
         }
 
     }
@@ -693,8 +672,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 InetSocketAddress address = new InetSocketAddress(vms.host, vms.port);
                 AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
-                channel.setOption(TCP_NODELAY, true);
-                channel.setOption(SO_KEEPALIVE, true);
+                withDefaultSocketOptions(channel);
 
                 try {
                     channel.connect(address).get();
@@ -793,11 +771,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
         @Override
         public void run() {
 
-            while(!isStopped()){
+            while(isRunning()){
 
                 try {
                     // https://web.mit.edu/6.005/www/fa14/classes/20-queues-locks/message-passing/
-                    byte action = txManagerCtx.transactionManagerActionQueue().take();
+                    byte action = txManagerCtx.actionQueue().take();
 
                     // do we have any transaction-related event?
                     switch(action){
@@ -806,7 +784,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                             // what if ACKs from VMSs take too long? or never arrive?
                             // need to deal with intersecting batches? actually just continue emitting for higher throughput
 
-                            BatchComplete.BatchCompletePayload msg = txManagerCtx.batchCompleteEvents().remove();
+                            BatchComplete.Payload msg = txManagerCtx.batchCompleteEvents().remove();
 
                             BatchContext batchContext = batchContextMap.get( msg.batch() );
 
@@ -840,7 +818,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                             // cannot commit the batch unless the VMS is sure there will be no aborts...
                             // this is guaranteed by design, since the batch complete won't arrive unless all events of the batch arrive at the terminal VMSs
 
-                            TransactionAbort.TransactionAbortPayload msg = txManagerCtx.transactionAbortEvents.remove();
+                            TransactionAbort.Payload msg = txManagerCtx.transactionAbortEvents.remove();
 
                             // can reuse the same buffer since the message does not change across VMSs like the commit request
                             for(VmsIdentifier vms : VMSs.values()){
