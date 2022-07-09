@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.query.analyzer;
 
 import dk.ku.di.dms.vms.modb.catalog.Catalog;
-import dk.ku.di.dms.vms.modb.store.meta.Schema;
+import dk.ku.di.dms.vms.modb.schema.Schema;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
@@ -13,8 +13,8 @@ import dk.ku.di.dms.vms.modb.common.query.enums.JoinTypeEnum;
 import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.query.statement.UpdateStatement;
-import dk.ku.di.dms.vms.modb.store.meta.ColumnReference;
-import dk.ku.di.dms.vms.modb.store.table.Table;
+import dk.ku.di.dms.vms.modb.schema.ColumnReference;
+import dk.ku.di.dms.vms.modb.table.Table;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -9,7 +9,9 @@ import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
  */
 public class VmsDataSchema {
 
-    public String virtualMicroservice;
+    // possibly a code might have more than a vms to execute
+    // co-locate services
+    public String vmsName;
 
     public String tableName;
 
@@ -22,14 +24,17 @@ public class VmsDataSchema {
     // the data types of the columns
     public DataType[] columnDataTypes;
 
-    // foreign key references
-    public ForeignKeyReference[] foreignKeyReferences; // this can be outside, other vms
+    // foreign key references within the same vms
+    public ForeignKeyReference[] foreignKeyReferences;
+
+    // this can be outside, another vms
+    // public ExternalForeignKeyReference[] externalForeignKeyReferences;
 
     // constraints, referred by column position
     public ConstraintReference[] constraintReferences;
 
-    public VmsDataSchema(String virtualMicroservice, String tableName, int[] primaryKeyColumns, String[] columnNames, DataType[] columnDataTypes, ForeignKeyReference[] foreignKeyReferences, ConstraintReference[] constraintReferences) {
-        this.virtualMicroservice = virtualMicroservice;
+    public VmsDataSchema(String vmsName, String tableName, int[] primaryKeyColumns, String[] columnNames, DataType[] columnDataTypes, ForeignKeyReference[] foreignKeyReferences, ConstraintReference[] constraintReferences) {
+        this.vmsName = vmsName;
         this.tableName = tableName;
         this.primaryKeyColumns = primaryKeyColumns;
         this.columnNames = columnNames;

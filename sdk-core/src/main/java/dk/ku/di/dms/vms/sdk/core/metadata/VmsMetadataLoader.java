@@ -44,7 +44,7 @@ public class VmsMetadataLoader {
 
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
-    public static VmsMetadata load(String packageName, IVmsInternalChannels vmsInternalPubSubService) throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    public static VmsRuntimeMetadata load(String packageName, IVmsInternalChannels vmsInternalPubSubService) throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
         Reflections reflections = configureReflections(packageName);
 
@@ -56,9 +56,6 @@ public class VmsMetadataLoader {
 
         Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, vmsTableNames);
 
-        // get only the first one
-        Optional<VmsDataSchema> vmsDataSchemaOpt = vmsDataSchemas.values().stream().findFirst();
-
         Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, vmsDataSchemas, vmsInternalPubSubService);
 
         // necessary remaining data structures to store a vms metadata
@@ -68,7 +65,7 @@ public class VmsMetadataLoader {
 
         mapVmsTransactionInputOutput(reflections, loadedVmsInstances, queueToEventMap, eventToQueueMap, eventToVmsTransactionMap);
 
-        Map<String, VmsEventSchema> vmsEventSchema = buildEventSchema( reflections, eventToQueueMap );
+        Map<String, VmsEventSchema> vmsEventSchemas = buildEventSchema( reflections, eventToQueueMap );
 
         /*
          *   TODO look at this. we should provide this implementation
@@ -77,7 +74,7 @@ public class VmsMetadataLoader {
          *   SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
          */
 
-        return new VmsMetadata(vmsDataSchemaOpt.orElse(null), vmsEventSchema, eventToVmsTransactionMap, queueToEventMap, eventToQueueMap, loadedVmsInstances );
+        return new VmsRuntimeMetadata(vmsDataSchemas, vmsEventSchemas, eventToVmsTransactionMap, queueToEventMap, eventToQueueMap, loadedVmsInstances );
 
     }
 
@@ -269,8 +266,8 @@ public class VmsMetadataLoader {
                     .filter(p -> p.annotationType() == VmsTable.class).findFirst();
             if(optionalVmsTableAnnotation.isPresent()){
                 String vmsTableName = ((VmsTable)optionalVmsTableAnnotation.get()).name();
-                String virtualMicroservice = entityToVirtualMicroservice.get( tableClass );
-                VmsDataSchema schema = new VmsDataSchema(virtualMicroservice, vmsTableName, pkFieldsStr, columnNames, columnDataTypes, foreignKeyReferences, constraints);
+                String vms = entityToVirtualMicroservice.get( tableClass );
+                VmsDataSchema schema = new VmsDataSchema(vms, vmsTableName, pkFieldsStr, columnNames, columnDataTypes, foreignKeyReferences, constraints);
                 schemaMap.put(vmsTableName, schema);
             } else {
                 throw new RuntimeException("should be annotated with vms table");
@@ -502,9 +499,6 @@ public class VmsMetadataLoader {
         }
         else if (attributeCanonicalName.equalsIgnoreCase("char") || attributeType == Character.class){
             return DataType.CHAR;
-        }
-        else if (attributeType == String.class){
-            return DataType.STRING;
         }
         else if (attributeCanonicalName.equalsIgnoreCase("long") || attributeType == Long.class){
             return DataType.LONG;

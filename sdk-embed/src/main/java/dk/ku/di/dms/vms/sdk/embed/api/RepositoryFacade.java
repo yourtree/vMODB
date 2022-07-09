@@ -11,8 +11,8 @@ import dk.ku.di.dms.vms.sdk.embed.VmsMetadataEmbed;
 import dk.ku.di.dms.vms.modb.query.planner.Planner;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.DataTransferObjectOperatorResult;
 import dk.ku.di.dms.vms.modb.query.planner.tree.PlanNode;
-import dk.ku.di.dms.vms.modb.common.meta.Row;
-import dk.ku.di.dms.vms.modb.store.table.Table;
+import dk.ku.di.dms.vms.modb.schema.Row;
+import dk.ku.di.dms.vms.modb.table.Table;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;

@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.sdk.core.event.handler.VmsEventHandler;
 import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
@@ -55,7 +55,7 @@ public final class VmsManager {
         // this.metadata.executorService = executorService;
         IVmsInternalChannels vmsInternalPubSubService = VmsInternalChannels.getInstance();
 
-        VmsMetadata vmsMetadata;
+        VmsRuntimeMetadata vmsMetadata;
         try {
             vmsMetadata = VmsMetadataLoader.load(null, vmsInternalPubSubService);
         } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {

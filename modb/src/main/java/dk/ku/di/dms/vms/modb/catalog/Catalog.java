@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.catalog;
 
-import dk.ku.di.dms.vms.modb.store.table.Table;
+import dk.ku.di.dms.vms.modb.table.Table;
 
 import java.util.HashMap;
 import java.util.Map;

@@ -22,6 +22,10 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * Removed the scheduler, task queue, and logging.
  *
  * https://josephmate.github.io/2022-04-14-max-connections/
+ *
+ *  Could just use the default java http server (with code for TLS)
+ * {@link com.sun.net.httpserver.HttpServer}
+ * Have to make experiments to see which one is faster
  */
 public class HttpEventLoop implements Runnable {
 

@@ -2,8 +2,8 @@ package dk.ku.di.dms.vms.modb.query.planner.operator.join;
 
 import dk.ku.di.dms.vms.modb.query.planner.operator.filter.FilterInfo;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.interfaces.IOperatorResult;
-import dk.ku.di.dms.vms.modb.store.common.IKey;
-import dk.ku.di.dms.vms.modb.store.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.schema.key.IKey;
+import dk.ku.di.dms.vms.modb.index.onheap.AbstractIndex;
 
 import java.util.function.Supplier;
 

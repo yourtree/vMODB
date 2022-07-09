@@ -1,18 +1,14 @@
 package dk.ku.di.dms.vms.modb.storage;
 
 import dk.ku.di.dms.vms.modb.catalog.Catalog;
-import dk.ku.di.dms.vms.modb.store.common.IKey;
-import dk.ku.di.dms.vms.modb.store.index.AbstractIndex;
-import dk.ku.di.dms.vms.modb.common.meta.Row;
-import dk.ku.di.dms.vms.modb.store.table.Table;
+import dk.ku.di.dms.vms.modb.schema.Row;
+import dk.ku.di.dms.vms.modb.table.Table;
 
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 
 /**
  * Often while get the records and persist in the memory
@@ -86,5 +82,6 @@ public class PersistenceManager { // runnable?
 //        return null;
 //    }
 
+    // how to store data?
 
 }

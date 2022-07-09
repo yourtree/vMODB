@@ -2,8 +2,6 @@ package dk.ku.di.dms.vms.web_common.serdes;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import dk.ku.di.dms.vms.modb.common.event.IVmsApplicationEvent;
-import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 
 import java.util.Map;
 
@@ -18,12 +16,12 @@ import java.util.Map;
  */
 public final class VmsSerdesProxyBuilder {
 
-    public static IVmsSerdesProxy build(Map<String, Class<? extends IVmsApplicationEvent>> queueToEventMap){
+    public static IVmsSerdesProxy build(Map<String, Class<?>> queueToEventMap){
 
         GsonBuilder builder = new GsonBuilder();
 
         // register new type adapter here
-        builder.registerTypeAdapter(TransactionalEvent.class, new TransactionEventAdapter( queueToEventMap ));
+        // builder.registerTypeAdapter(TransactionalEvent.class, new TransactionEventAdapter( queueToEventMap ));
 
         Gson gson1 = builder.create();
 

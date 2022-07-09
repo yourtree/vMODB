@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.query.analyzer.predicate;
 
 import dk.ku.di.dms.vms.modb.common.query.enums.OrderBySortOrderEnum;
-import dk.ku.di.dms.vms.modb.store.meta.ColumnReference;
+import dk.ku.di.dms.vms.modb.schema.ColumnReference;
 
 public class OrderByPredicate {
 

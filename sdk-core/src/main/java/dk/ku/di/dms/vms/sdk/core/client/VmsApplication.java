@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.sdk.core.client;
 
-import dk.ku.di.dms.vms.sdk.core.manager.VmsManager;
-
 /**
  * Starting point for initializing the runtime
  */
@@ -17,7 +15,7 @@ public class VmsApplication {
 
             // Class<?> metadataLoaderEmbedClazz = Class.forName("VmsMetadataLoader");
 
-            Class<?> metadataLoaderEmbedClazz = Class.forName("dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata");
+            Class<?> metadataLoaderEmbedClazz = Class.forName("dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata");
 
             // IVmsMetadataLoader metadataLoader = metadataLoaderEmbedClazz.getClassLoader();
 

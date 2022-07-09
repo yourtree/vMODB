@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.sdk.embed;
 
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
@@ -58,7 +58,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
 
     /** VMS METADATA **/
     private final VmsIdentifier me; // this merges network and semantic data about the vms
-    private final VmsMetadata vmsMetadata;
+    private final VmsRuntimeMetadata vmsMetadata;
 
     /** EXTERNAL VMSs **/
     private List<VmsIdentifier> consumerVms;
@@ -77,7 +77,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
 
     public EmbedVmsEventHandler(IVmsInternalChannels vmsInternalChannels, // for communicating with other components
                                 VmsIdentifier me, // to identify which vms this is
-                                VmsMetadata vmsMetadata, // metadata about this vms
+                                VmsRuntimeMetadata vmsMetadata, // metadata about this vms
                                 IVmsSerdesProxy serdesProxy, // ser/des of objects
                                 ExecutorService executorService, // for recurrent and continuous tasks
                                 AsynchronousServerSocketChannel serverSocket,

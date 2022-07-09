@@ -35,13 +35,13 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
     }
 
     @Override
-    public String serializeDataSchema(VmsDataSchema vmsDataSchema) {
+    public String serializeDataSchema(Map<String, VmsDataSchema> vmsDataSchema) {
         return gson.toJson( vmsDataSchema );
     }
 
     @Override
-    public VmsDataSchema deserializeDataSchema(String dataSchema) {
-        return gson.fromJson(dataSchema, VmsDataSchema.class);
+    public Map<String, VmsDataSchema> deserializeDataSchema(String dataSchemaStr) {
+        return gson.fromJson(dataSchemaStr, new TypeToken<Map<String, VmsDataSchema>>(){}.getType());
     }
 
     /**
@@ -102,6 +102,5 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
     public <T> T deserialize(String valueStr, Class<T> clazz) {
         return gson.fromJson( valueStr, clazz );
     }
-
 
 }

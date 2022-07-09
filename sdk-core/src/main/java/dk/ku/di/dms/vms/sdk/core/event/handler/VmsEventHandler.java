@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.sdk.core.event.handler;
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
@@ -50,12 +50,12 @@ public final class VmsEventHandler extends SignalingStoppableRunnable implements
     private final Map<Long, DataRequestEvent> pendingRequestsMap;
 
     /** METADATA **/
-    private final VmsMetadata vmsMetadata;
+    private final VmsRuntimeMetadata vmsMetadata;
 
     /** SERIALIZATION **/
     private final IVmsSerdesProxy serdes;
 
-    public VmsEventHandler(IVmsInternalChannels vmsInternalQueues, VmsMetadata vmsMetadata, IVmsSerdesProxy serdes, ExecutorService executorService) {
+    public VmsEventHandler(IVmsInternalChannels vmsInternalQueues, VmsRuntimeMetadata vmsMetadata, IVmsSerdesProxy serdes, ExecutorService executorService) {
 
         super();
 

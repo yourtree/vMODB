@@ -31,7 +31,7 @@ import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
  * while election is not defined and election timeout has not timed out, continue
  *
  * We assume the nodes are fixed. Later we revisit this choice.
- * TODO Cluster membership management (e.g., adding nodes, removing nodes, replacing nodes)
+ * TODO Cluster membership management (e.g., removing nodes, replacing nodes)
  *
  * Protocol SCTP is maybe a better fit for leader election since it is message-oriented, rather than stream oriented
  * On the other hand, the UDP allows multicast, which is good for leader election (sending messages to all nodes

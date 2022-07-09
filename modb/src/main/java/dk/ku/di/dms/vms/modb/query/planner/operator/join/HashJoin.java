@@ -3,10 +3,10 @@ package dk.ku.di.dms.vms.modb.query.planner.operator.join;
 import dk.ku.di.dms.vms.modb.query.planner.operator.filter.IFilter;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
-import dk.ku.di.dms.vms.modb.store.common.IKey;
-import dk.ku.di.dms.vms.modb.store.index.AbstractIndex;
-import dk.ku.di.dms.vms.modb.store.index.UnsupportedIndexOperationException;
-import dk.ku.di.dms.vms.modb.common.meta.Row;
+import dk.ku.di.dms.vms.modb.schema.key.IKey;
+import dk.ku.di.dms.vms.modb.index.onheap.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.onheap.UnsupportedIndexOperationException;
+import dk.ku.di.dms.vms.modb.schema.Row;
 
 import java.util.Collection;
 import java.util.Iterator;

@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.sdk.embed;
 import dk.ku.di.dms.vms.modb.catalog.Catalog;
 import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.event.IVmsApplicationEvent;
-import dk.ku.di.dms.vms.modb.store.table.Table;
+import dk.ku.di.dms.vms.modb.table.Table;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 
 import java.util.HashMap;

@@ -1,9 +1,9 @@
 package dk.ku.di.dms.vms.modb.query.planner.operator.aggregate;
 
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.RowOperatorResult;
-import dk.ku.di.dms.vms.modb.store.meta.ColumnReference;
-import dk.ku.di.dms.vms.modb.common.meta.Row;
-import dk.ku.di.dms.vms.modb.store.table.Table;
+import dk.ku.di.dms.vms.modb.schema.ColumnReference;
+import dk.ku.di.dms.vms.modb.schema.Row;
+import dk.ku.di.dms.vms.modb.table.Table;
 
 import java.util.*;
 import java.util.stream.DoubleStream;

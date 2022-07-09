@@ -1,19 +1,27 @@
 package dk.ku.di.dms.vms.modb.common.meta;
 
+import static dk.ku.di.dms.vms.modb.common.meta.Constants.DEFAULT_MAX_SIZE_CHAR;
+
 public enum DataType {
 
-    INT,
+    // used for boolean
+    BYTE(Byte.BYTES),
 
-    STRING,
+    INT(Integer.BYTES),
 
-    CHAR,
+    CHAR(Character.BYTES * DEFAULT_MAX_SIZE_CHAR),
 
-    LONG,
+    LONG(Long.BYTES),
 
-    FLOAT,
+    FLOAT(Float.BYTES),
 
-    DOUBLE,
+    DOUBLE(Double.BYTES),
 
-    DATE
+    DATE(Long.BYTES);
 
+    public final int value;
+
+    DataType(int bytes) {
+        this.value = bytes;
+    }
 }

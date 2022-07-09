@@ -22,12 +22,12 @@ import dk.ku.di.dms.vms.modb.query.planner.tree.PlanNode;
 import dk.ku.di.dms.vms.modb.query.planner.tree.QueryTreeTypeEnum;
 import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.query.planner.operator.join.*;
-import dk.ku.di.dms.vms.modb.store.common.IKey;
-import dk.ku.di.dms.vms.modb.store.index.AbstractIndex;
-import dk.ku.di.dms.vms.modb.store.table.Table;
-import dk.ku.di.dms.vms.modb.store.index.IndexDataStructureEnum;
-import dk.ku.di.dms.vms.modb.store.common.CompositeKey;
-import dk.ku.di.dms.vms.modb.store.common.SimpleKey;
+import dk.ku.di.dms.vms.modb.schema.key.IKey;
+import dk.ku.di.dms.vms.modb.index.onheap.AbstractIndex;
+import dk.ku.di.dms.vms.modb.table.Table;
+import dk.ku.di.dms.vms.modb.index.onheap.IndexDataStructureEnum;
+import dk.ku.di.dms.vms.modb.schema.key.CompositeKey;
+import dk.ku.di.dms.vms.modb.schema.key.SimpleKey;
 
 import java.util.*;
 import java.util.stream.Collectors;

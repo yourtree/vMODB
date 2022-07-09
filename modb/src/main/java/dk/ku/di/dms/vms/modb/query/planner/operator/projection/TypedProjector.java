@@ -3,8 +3,8 @@ package dk.ku.di.dms.vms.modb.query.planner.operator.projection;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.DataTransferObjectOperatorResult;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.interfaces.IOperatorResult;
-import dk.ku.di.dms.vms.modb.store.meta.ColumnReference;
-import dk.ku.di.dms.vms.modb.common.meta.Row;
+import dk.ku.di.dms.vms.modb.schema.ColumnReference;
+import dk.ku.di.dms.vms.modb.schema.Row;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;

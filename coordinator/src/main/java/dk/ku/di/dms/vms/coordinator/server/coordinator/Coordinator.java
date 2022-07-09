@@ -507,6 +507,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
      * send a batch request.
      *
      * Callback to start batch commit process
+     *
+     * TODO store the transactions in disk before sending
      */
     private void spawnBatchCommit(){
 
@@ -882,6 +884,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
      *  Should read in a proportion that matches the batch and heartbeat window, otherwise
      *  how long does it take to process a batch of input transactions?
      *  instead of trying to match the rate of processing, perhaps we can create read tasks
+     *
+     * TODO do not send the transactions. the batch commit should perform this
+     *  only parse then and save in memory data structure
      */
     private void parseAndSendTransactionInputEvents(){
 

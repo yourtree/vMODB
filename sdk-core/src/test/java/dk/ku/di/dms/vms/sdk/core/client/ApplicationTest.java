@@ -6,7 +6,7 @@ import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.example.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadata;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -23,7 +23,7 @@ public class ApplicationTest
 
     private static Gson gson;
 
-    private static VmsMetadata vmsMetadata;
+    private static VmsRuntimeMetadata vmsMetadata;
 
     @BeforeClass
     public static void setup(){
@@ -103,7 +103,7 @@ public class ApplicationTest
 
         IVmsInternalChannels internalPubSub = VmsInternalChannels.getInstance();
 
-        VmsMetadata metadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.tpcc", internalPubSub);
+        VmsRuntimeMetadata metadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.tpcc", internalPubSub);
 
 //        SyntheticDataLoader dataLoader = metadata.loadedVmsInstances().get(SyntheticDataLoader.class);
 //

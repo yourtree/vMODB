@@ -4,8 +4,8 @@ import dk.ku.di.dms.vms.modb.query.analyzer.predicate.OrderByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.modb.store.meta.ColumnReference;
-import dk.ku.di.dms.vms.modb.store.table.Table;
+import dk.ku.di.dms.vms.modb.schema.ColumnReference;
+import dk.ku.di.dms.vms.modb.table.Table;
 
 import java.util.*;
 

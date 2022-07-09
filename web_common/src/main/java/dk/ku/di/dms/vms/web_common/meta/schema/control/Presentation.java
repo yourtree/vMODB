@@ -128,6 +128,10 @@ public final class Presentation {
         buffer.put( PRESENTATION );
         buffer.put( VMS_TYPE );
 
+        byte[] name = vms.getIdentifier().getBytes(StandardCharsets.UTF_8);
+        buffer.putInt(name.length );
+        buffer.put(name);
+
         buffer.putLong( vms.lastTid );
         buffer.putLong( vms.lastBatch );
 
@@ -149,6 +153,9 @@ public final class Presentation {
 
     public static VmsIdentifier readVms(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){
 
+        int sizeName = buffer.getInt();
+        String vmsIdentifier = new String( buffer.array(), buffer.position(), sizeName, StandardCharsets.UTF_8 );
+
         long lastTid = buffer.getLong();
         long lastBatch = buffer.getLong();
 
@@ -157,21 +164,21 @@ public final class Presentation {
         int sizeHost = buffer.getInt();
 
         // 1 + 8 + 4 = 8 + 4 =
-        String host = new String( buffer.array(), vmsHeader, sizeHost, StandardCharsets.UTF_8 );
+        String host = new String( buffer.array(), buffer.position(), sizeHost, StandardCharsets.UTF_8 );
 
         // now read the rest
         int sizeDataSchema = buffer.getInt();
         int sizeEventSchema = buffer.getInt();
 
-        String dataSchemaStr = new String( buffer.array(), fixedVmsSize, sizeDataSchema, StandardCharsets.UTF_8 );
+        String dataSchemaStr = new String( buffer.array(), buffer.position(), sizeDataSchema, StandardCharsets.UTF_8 );
 
-        VmsDataSchema dataSchema = serdesProxy.deserializeDataSchema( dataSchemaStr );
+        Map<String,VmsDataSchema> dataSchema = serdesProxy.deserializeDataSchema( dataSchemaStr );
 
-        String eventSchemaStr = new String( buffer.array(), fixedVmsSize + (sizeDataSchema * 4), sizeEventSchema, StandardCharsets.UTF_8 );
+        String eventSchemaStr = new String( buffer.array(), buffer.position(), sizeEventSchema, StandardCharsets.UTF_8 );
 
         Map<String, VmsEventSchema> eventSchema = serdesProxy.deserializeEventSchema( eventSchemaStr );
 
-        return new VmsIdentifier( host, port, lastTid, lastBatch, dataSchema, eventSchema );
+        return new VmsIdentifier( host, port, vmsIdentifier, lastTid, lastBatch, dataSchema, eventSchema );
 
     }
 

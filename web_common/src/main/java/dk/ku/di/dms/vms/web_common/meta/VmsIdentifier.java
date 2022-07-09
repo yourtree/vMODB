@@ -15,6 +15,7 @@ import java.util.Map;
 public class VmsIdentifier extends NetworkObject {
 
     // identifier is the vms name
+    public final String vmsIdentifier;
 
     public long lastTid;
 
@@ -24,14 +25,15 @@ public class VmsIdentifier extends NetworkObject {
     public long lastBatch;
 
     // data model
-    // public List<VmsDataSchema> dataSchema;
-    public VmsDataSchema dataSchema;
+     public Map<String, VmsDataSchema> dataSchema;
 
     // event data model
     public Map<String, VmsEventSchema> eventSchema;
 
-    public VmsIdentifier(String host, int port, long lastTid, long lastBatch, VmsDataSchema dataSchema, Map<String, VmsEventSchema> eventSchema) {
+    public VmsIdentifier(String host, int port, String vmsIdentifier, long lastTid, long lastBatch,
+                         Map<String, VmsDataSchema> dataSchema, Map<String, VmsEventSchema> eventSchema) {
         super(host,port);
+        this.vmsIdentifier = vmsIdentifier;
         this.lastTid = lastTid;
         this.lastBatch = lastBatch;
         this.dataSchema = dataSchema;
@@ -39,7 +41,7 @@ public class VmsIdentifier extends NetworkObject {
     }
 
     public String getIdentifier(){
-        return dataSchema.virtualMicroservice;
+        return vmsIdentifier;
     }
 
     public long getLastTid(){

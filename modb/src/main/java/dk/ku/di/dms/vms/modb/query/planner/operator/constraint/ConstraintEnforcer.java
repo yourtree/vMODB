@@ -3,9 +3,9 @@ package dk.ku.di.dms.vms.modb.query.planner.operator.constraint;
 import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.EntityOperatorResult;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.interfaces.IOperatorResult;
-import dk.ku.di.dms.vms.modb.store.common.IKey;
-import dk.ku.di.dms.vms.modb.store.index.AbstractIndex;
-import dk.ku.di.dms.vms.modb.store.table.Table;
+import dk.ku.di.dms.vms.modb.schema.key.IKey;
+import dk.ku.di.dms.vms.modb.index.onheap.AbstractIndex;
+import dk.ku.di.dms.vms.modb.table.Table;
 
 import java.util.List;
 import java.util.Map;

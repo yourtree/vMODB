@@ -17,8 +17,8 @@ public interface IVmsSerdesProxy {
     String serializeEventSchema(Map<String, VmsEventSchema> vmsEventSchema);
     Map<String, VmsEventSchema> deserializeEventSchema(String json);
 
-    String serializeDataSchema(VmsDataSchema vmsDataSchema);
-    VmsDataSchema deserializeDataSchema(String vmsDataSchema);
+    String serializeDataSchema(Map<String, VmsDataSchema> vmsDataSchema);
+    Map<String, VmsDataSchema> deserializeDataSchema(String vmsDataSchema);
 
     byte[] serializeDataRequestEvent(DataRequestEvent event);
     DataRequestEvent deserializeDataRequestEvent(byte[] bytes);
