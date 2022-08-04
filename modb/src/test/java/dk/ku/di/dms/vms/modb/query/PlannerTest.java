@@ -1,5 +1,6 @@
-package dk.ku.di.dms.vms.modb;
+package dk.ku.di.dms.vms.modb.query;
 
+import dk.ku.di.dms.vms.modb.TestCommon;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.planner.tree.PlanNode;

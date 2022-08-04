@@ -17,7 +17,7 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.schema.control.Heartbeat;
 import dk.ku.di.dms.vms.web_common.meta.schema.control.Presentation;
-import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
+import dk.ku.di.dms.vms.web_common.network.NetworkSenderRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
 
@@ -43,7 +43,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * Class that encapsulates all logic related to issuing of
  * batch commits, transaction aborts, ...
  */
-public final class Coordinator extends SignalingStoppableRunnable {
+public final class Coordinator extends NetworkSenderRunnable {
 
     private final CoordinatorOptions options;
 
@@ -89,14 +89,14 @@ public final class Coordinator extends SignalingStoppableRunnable {
     // metadata about all non-committed batches. when a batch commit finishes, it is removed from this map
     private final Map<Long, BatchContext> batchContextMap;
 
+    // defines how the batch metadata is replicated across servers
     private final BatchReplicationStrategy batchReplicationStrategy;
 
     // transaction requests coming from the http event loop
-    private final BlockingQueue<byte[]> transactionRequestsToParse;
+    private final BlockingQueue<TransactionInput> parsedTransactionRequests;
 
-    // to reuse the same collection to avoid creating collection every run
-    // maybe this can be off-heap???
-    private final Collection<byte[]> drainedTransactionRequests; // 100000 requests per second can be handled
+    /** serialization and deserialization of complex objects **/
+    private final IVmsSerdesProxy serdesProxy;
 
     private final TransactionManagerContext txManagerCtx;
 
@@ -109,9 +109,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
             Queue<BatchComplete.Payload> batchCompleteEvents,
             Queue<TransactionAbort.Payload> transactionAbortEvents
     ){}
-
-    /** serialization and deserialization of complex objects **/
-    private final IVmsSerdesProxy serdesProxy;
 
     public Coordinator(AsynchronousServerSocketChannel serverSocket,
                        AsynchronousChannelGroup group,
@@ -126,7 +123,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                        long startingTid,
                        long batchOffset,
                        BatchReplicationStrategy batchReplicationStrategy,
-                       BlockingQueue<byte[]> transactionRequestsToParse,
+                       BlockingQueue<TransactionInput> parsedTransactionRequests,
                        IVmsSerdesProxy serdesProxy
                        ) {
         super();
@@ -156,8 +153,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         // transactions
         this.tid = startingTid;
-        this.transactionRequestsToParse = transactionRequestsToParse; // shared data structure
-        this.drainedTransactionRequests = new ArrayList<>(100000);
+        this.parsedTransactionRequests = parsedTransactionRequests; // shared data structure
         this.transactionMap = Objects.requireNonNull(transactionMap); // in production, it requires receiving new transaction definitions
         this.vmsConsumerSet = vmsDependenceSet;
         this.txManagerCtx = new TransactionManagerContext(
@@ -202,7 +198,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool( 3 );
 
         // callbacks
-        ScheduledFuture<?> parseTask = scheduledExecutorService.scheduleWithFixedDelay(this::parseAndSendTransactionInputEvents, 0L, options.getParseTimeout(), TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> parseTask = scheduledExecutorService.scheduleWithFixedDelay(this::processTransactionInputEvents, 0L, options.getParseTimeout(), TimeUnit.MILLISECONDS);
         ScheduledFuture<?> heartbeatTask = scheduledExecutorService.scheduleAtFixedRate(this::sendHeartbeats, 0L, options.getHeartbeatTimeout() - options.getHeartbeatSlack(), TimeUnit.MILLISECONDS);
         ScheduledFuture<?> batchCommitTask = scheduledExecutorService.scheduleAtFixedRate(this::spawnBatchCommit, 0L, options.getBatchWindow(), TimeUnit.MILLISECONDS);
 
@@ -451,8 +447,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     // let's vms is back online from crash or is simply a new vms.
                     // we need to send batch info or simply the vms assume...
                     // if a vms crashed, it has lost all the events since the last batch commit, so need to resend it now
-                    if(connectionMetadata.transactionEventsPerBatch.get( newVms.lastBatch + 1 ) != null) // avoiding creating a thread for nothing
-                        taskExecutor.submit( () -> resendTransactionalInputEvents(connectionMetadata, newVms) );
+                    if(connectionMetadata.transactionEventsPerBatch.get( newVms.lastBatch + 1 ) != null) {// avoiding creating a thread for nothing
+                         taskExecutor.submit(() -> resendTransactionalInputEvents(connectionMetadata, newVms));
+                    }
 
                     channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
 
@@ -740,6 +737,48 @@ public final class Coordinator extends SignalingStoppableRunnable {
         }
     }
 
+    private static final class WriteCompletionHandler0 implements CompletionHandler<Integer, ConnectionMetadata> {
+
+        private int overflowPos;
+
+        public WriteCompletionHandler0(){
+            this.overflowPos = 0;
+        }
+
+        public WriteCompletionHandler0(int pos){
+            this.overflowPos = pos;
+        }
+
+        @Override
+        public void completed(Integer result, ConnectionMetadata connectionMetadata) {
+
+            if(overflowPos == 0) {
+                connectionMetadata.writeBuffer.rewind();
+                return;
+            }
+
+            int initPos = connectionMetadata.writeBuffer.position() + 1;
+
+            byte[] overflowContent = connectionMetadata.writeBuffer.
+                    slice( initPos, overflowPos ).array();
+
+            connectionMetadata.writeBuffer.rewind();
+
+            connectionMetadata.writeBuffer.put( overflowContent );
+
+        }
+
+        /**
+         * If failed, probably the VMS is down.
+         * When getting back, the resend task will write data to the buffer again
+         */
+        @Override
+        public void failed(Throwable exc, ConnectionMetadata connectionMetadata) {
+            connectionMetadata.writeBuffer.rewind();
+        }
+
+    }
+
     /**
      * Allows to reuse the thread pool assigned to socket to complete the writing
      * That refrains the main thread and the TransactionManager to block, thus allowing its progress
@@ -748,13 +787,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         @Override
         public void completed(Integer result, ConnectionMetadata connectionMetadata) {
-            connectionMetadata.writeBuffer.clear();
+            connectionMetadata.writeBuffer.rewind();
             connectionMetadata.writeLock.unlock();
         }
 
         @Override
         public void failed(Throwable exc, ConnectionMetadata connectionMetadata) {
-            connectionMetadata.writeBuffer.clear();
+            connectionMetadata.writeBuffer.rewind();
             connectionMetadata.writeLock.unlock();
         }
 
@@ -767,6 +806,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
      * This task also involves making sure the writes are performed successfully
      * A writer manager is responsible for defining strategies, policies, safety guarantees on
      * writing concurrently to channels.
+     *
+     * TODO make this the only thread writing to the socket
+     *      that requires buffers to read what should be written (for the spawn batch?)
+     *      network flutuaction is another problem...
+     *      - resend bring here
+     *      - process transaction input events here
+     *
      */
     private class TransactionManager extends StoppableRunnable {
 
@@ -887,36 +933,22 @@ public final class Coordinator extends SignalingStoppableRunnable {
      *
      * TODO do not send the transactions. the batch commit should perform this
      *  only parse then and save in memory data structure
+     *
+     *  processing the transaction input and creating the
+     *  corresponding events
+     *  the network buffering will send
      */
-    private void parseAndSendTransactionInputEvents(){
+    private void processTransactionInputEvents(){
 
-        if (transactionRequestsToParse.size() == 0) {
+        int size = parsedTransactionRequests.size();
+        if( parsedTransactionRequests.size() == 0 ){
             return;
         }
 
-        // the payload received in bytes is json format
+        Collection<TransactionInput> transactionRequests = new ArrayList<>(size + 50); // threshold, for concurrent appends
+        parsedTransactionRequests.drainTo( transactionRequests );
 
-        transactionRequestsToParse.drainTo(drainedTransactionRequests);
-
-        List<TransactionInput> parsedTransactionRequests = new ArrayList<>( drainedTransactionRequests.size() );
-
-        // do not send another until the last has been completed, so we can better adjust the rate of parsing
-        for (byte[] drainedElement : drainedTransactionRequests) {
-            String json = new String(drainedElement);
-
-            // must also check whether the event is correct, that is, contains all events
-            try {
-                TransactionInput transactionInput = serdesProxy.deserialize(json, TransactionInput.class);
-                // order by name, since we guarantee the topology input events are ordered by name
-                transactionInput.events.sort( Comparator.comparing(o -> o.name) );
-                parsedTransactionRequests.add(transactionInput);
-            } catch(Exception ignored) {} // simply ignore, probably problem in the JSON
-        }
-
-        // clean for next iteration
-        drainedTransactionRequests.clear();
-
-        for(TransactionInput transactionInput : parsedTransactionRequests){
+        for(TransactionInput transactionInput : transactionRequests){
 
             // this is the only thread updating this value, so it is by design an atomic operation
             long tid_ = ++tid;
@@ -950,10 +982,27 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 // we could employ deterministic writes to the channel, that is, an order that would not require locking for writes
                 // we could possibly open a channel per write operation, but... what are the consequences of too much opened connections?
+                // FIXME make this thread handles the resend, this way we don't need locks
                 connectionMetadata.writeLock.lock();
+
+                // get current pos to later verify whether
+                // int currentPos = connectionMetadata.writeBuffer.position();
+                connectionMetadata.writeBuffer.mark();
 
                 // write. think about failures/atomicity later
                 TransactionEvent.Payload txEvent = TransactionEvent.write(connectionMetadata.writeBuffer, tid_, vms.lastTid, batch_, inputEvent.name, inputEvent.payload);
+
+                // always assuming the buffer capacity is able to sustain the next write...
+                if(connectionMetadata.writeBuffer.position() > batchBufferSize){
+                    int overflowPos = connectionMetadata.writeBuffer.position();
+
+                    // return to marked position, so the overflow content is not written
+                    connectionMetadata.writeBuffer.reset();
+
+                    connectionMetadata.channel.write(connectionMetadata.writeBuffer,
+                            connectionMetadata, new WriteCompletionHandler0(overflowPos));
+
+                }
 
                 // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
                 List<TransactionEvent.Payload> list = connectionMetadata.transactionEventsPerBatch.get(batch_);
@@ -969,9 +1018,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 // update for next transaction
                 vms.lastTid = tid_;
-
-                connectionMetadata.channel.write(connectionMetadata.writeBuffer,
-                        connectionMetadata, new WriteCompletionHandler());
 
             }
 

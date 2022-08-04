@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.service;
+package dk.ku.di.dms.vms.modb.service.query;
 
 import dk.ku.di.dms.vms.modb.catalog.Catalog;
 import dk.ku.di.dms.vms.modb.common.meta.DataType;
@@ -8,6 +8,7 @@ import dk.ku.di.dms.vms.modb.schema.ColumnReference;
 import dk.ku.di.dms.vms.modb.schema.Row;
 import dk.ku.di.dms.vms.modb.schema.Schema;
 import dk.ku.di.dms.vms.modb.schema.key.SimpleKey;
+import dk.ku.di.dms.vms.modb.service.CustomerInfoDTO;
 import dk.ku.di.dms.vms.modb.table.HashIndexedTable;
 import dk.ku.di.dms.vms.modb.table.Table;
 import org.junit.BeforeClass;
@@ -58,8 +59,8 @@ public class QueryTest {
         SimpleKey key1 = new SimpleKey(4);
         Row row1 = new Row(4,3L,"HAHAdedede","HEHEdeded");
 
-        table.getPrimaryKeyIndex().upsert(key, row);
-        table.getPrimaryKeyIndex().upsert(key1, row1);
+        table.getPrimaryKeyIndex().update(key, row);
+        table.getPrimaryKeyIndex().update(key1, row1);
     }
 
     @Test

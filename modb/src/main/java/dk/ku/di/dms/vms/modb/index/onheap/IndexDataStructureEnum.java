@@ -7,8 +7,6 @@ public enum IndexDataStructureEnum {
 
     public final String name;
 
-    IndexDataStructureEnum(){ this.name = name(); }
-
     IndexDataStructureEnum(String name) {
         this.name = name;
     }

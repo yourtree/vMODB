@@ -1,5 +1,6 @@
-package dk.ku.di.dms.vms.modb;
+package dk.ku.di.dms.vms.modb.query;
 
+import dk.ku.di.dms.vms.modb.TestCommon;
 import dk.ku.di.dms.vms.modb.catalog.Catalog;
 import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;

@@ -27,24 +27,25 @@ public final class SequentialScan extends AbstractScan {
     @Override
     public RowOperatorResult get() {
 
-        final boolean noFilter = filters == null;
-
-        if (noFilter) {
-            return new RowOperatorResult(index.rows());
-        }
-
-        // it avoids resizing in most cases array
-        RowOperatorResult result = new RowOperatorResult(index.rows().size());
-
-        Collection<Row> rows = index.rows();
-
-        for(Row row : rows){
-            if(check(row)) {
-                result.accept(row);
-            }
-        }
-
-        return result;
+//        final boolean noFilter = filters == null;
+//
+//        if (noFilter) {
+//            return new RowOperatorResult(index.rows());
+//        }
+//
+//        // it avoids resizing in most cases array
+//        RowOperatorResult result = new RowOperatorResult(index.rows().size());
+//
+//        Collection<Row> rows = index.rows();
+//
+//        for(Row row : rows){
+//            if(check(row)) {
+//                result.accept(row);
+//            }
+//        }
+//
+//        return result;
+        return null;
     }
 
 }

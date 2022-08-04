@@ -26,10 +26,10 @@ public class IndexScan extends AbstractScan {
     @Override
     public RowOperatorResult get() {
 
-        Row row = index.retrieve( hashProbeKey );
+        Object row = index.retrieve( hashProbeKey );
 
-        if(filters == null || check(row)){
-            return buildResult(row);
+        if(filters == null || check((Row) row)){
+            return buildResult((Row) row);
         }
 
         // perhaps can avoid the overhead of creating the object

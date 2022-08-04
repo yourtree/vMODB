@@ -5,4 +5,6 @@ import java.util.function.Consumer;
 
 public interface ContinuousStreamOperator extends Consumer<ByteBuffer> {
 
+    byte ZERO = 0;
+
 }

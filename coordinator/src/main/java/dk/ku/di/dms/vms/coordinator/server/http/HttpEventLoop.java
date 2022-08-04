@@ -1,5 +1,8 @@
 package dk.ku.di.dms.vms.coordinator.server.http;
 
+import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
+import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
@@ -41,14 +44,17 @@ public class HttpEventLoop implements Runnable {
     private final Map<SelectionKey, Connection> connectionMap;
 
     // this is the producer, single-thread. the consumer is also a single-thread (the leader)
-    private final BlockingQueue<byte[]> queue;
+    private final BlockingQueue<TransactionInput> parsedTransactionRequests;
 
-    public HttpEventLoop(Options options, BlockingQueue<byte[]> queue) throws IOException {
+    private final IVmsSerdesProxy serdesProxy;
+
+    public HttpEventLoop(Options options, IVmsSerdesProxy serdesProxy, BlockingQueue<TransactionInput> parsedTransactionRequests) throws IOException {
 
         // set maximum number of connections this socket can handle per second
         this.connectionMap = new HashMap<>();
 
-        this.queue = queue;
+        this.serdesProxy = serdesProxy;
+        this.parsedTransactionRequests = parsedTransactionRequests;
         this.stop = false;
         this.options = options;
 
@@ -192,6 +198,20 @@ public class HttpEventLoop implements Runnable {
             }
         }
 
+        private void parseRequestIntoTransactionInput(byte[] body){
+
+            String json = new String(body);
+
+            // must also check whether the event is correct, that is, contains all events
+            try {
+                TransactionInput transactionInput = serdesProxy.deserialize(json, TransactionInput.class);
+                // order by name, since we guarantee the topology input events are ordered by name
+                transactionInput.events.sort( Comparator.comparing(o -> o.name) );
+                parsedTransactionRequests.add(transactionInput);
+            } catch(Exception ignored) {} // simply ignore, probably problem in the JSON
+
+        }
+
         private void onParseRequest() throws IOException {
             if (selectionKey.interestOps() != 0) {
                 selectionKey.interestOps(0);
@@ -201,7 +221,7 @@ public class HttpEventLoop implements Runnable {
             Request request = requestParser.request();
 
             // put into a queue for leader consumption
-            queue.add(request.body());
+            parseRequestIntoTransactionInput( request.body() );
 
             httpOneDotZero = request.version().equalsIgnoreCase(HTTP_1_0);
             keepAlive = request.hasHeader(HEADER_CONNECTION, KEEP_ALIVE);

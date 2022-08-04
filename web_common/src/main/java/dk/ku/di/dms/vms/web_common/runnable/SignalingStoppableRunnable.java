@@ -3,21 +3,15 @@ package dk.ku.di.dms.vms.web_common.runnable;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.meta.NetworkObject;
 
-import java.io.IOException;
-import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Logger;
 
-import static java.net.StandardSocketOptions.*;
-
 /**
  * Abstract class that provides common features for server classes
  */
 public abstract class SignalingStoppableRunnable extends StoppableRunnable {
-
-    protected final int DEFAULT_BUFFER_SIZE = 8192;
 
     /**
      * Protocol result. Now also any result from a thread...
@@ -48,34 +42,6 @@ public abstract class SignalingStoppableRunnable extends StoppableRunnable {
      */
     public Byte getResult() throws InterruptedException {
         return signal.take();
-    }
-
-    /**
-     * This link may help to decide:
-     * https://www.ibm.com/docs/en/oala/1.3.5?topic=SSPFMY_1.3.5/com.ibm.scala.doc/config/iwa_cnf_scldc_kfk_prp_exmpl_c.html
-     *
-     * Look for socket.send.buffer.bytes
-     * https://kafka.apache.org/08/documentation.html
-     *
-     * https://developpaper.com/analysis-of-kafka-network-layer/
-     *
-     */
-    protected void withDefaultSocketOptions( AsynchronousSocketChannel socketChannel ) throws IOException {
-
-        // true disables the nagle's algorithm. not useful to have coalescence of messages in election
-        socketChannel.setOption( TCP_NODELAY, Boolean.TRUE ); // false is the default value
-
-        socketChannel.setOption( SO_KEEPALIVE, Boolean.TRUE );
-
-        socketChannel.setOption( SO_SNDBUF, DEFAULT_BUFFER_SIZE );
-        socketChannel.setOption( SO_RCVBUF, DEFAULT_BUFFER_SIZE );
-
-        // for blocking mode only, does not apply to async
-        // socketChannel.setOption(SO_LINGER, )
-
-        // does that apply to our system?
-        // socketChannel.setOption( SO_REUSEADDR, true );
-        // socketChannel.setOption( SO_REUSEPORT, true );
     }
 
     /**

@@ -28,7 +28,7 @@ public class AsyncSocketEventHandler extends StoppableRunnable {
     private final Logger logger = getLogger(AsyncSocketEventHandler.class.getName());
 
     /** EVENT QUEUES **/
-    private final Queue<TransactionalEvent> inputQueue;
+    private final Queue<TransactionEvent> inputQueue;
 
     private final Queue<TransactionalEvent> outputQueue;
 

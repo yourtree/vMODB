@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.coordinator.election.schema.*;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
+import dk.ku.di.dms.vms.web_common.network.NetworkSenderRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
@@ -37,7 +38,7 @@ import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
  * On the other hand, the UDP allows multicast, which is good for leader election (sending messages to all nodes
  * by design instead of iterating over the nodes to send individual messages)
  */
-public final class ElectionWorker extends SignalingStoppableRunnable {
+public final class ElectionWorker extends NetworkSenderRunnable {
 
     private volatile int state;
     public static final int NEW          = 0;
@@ -237,8 +238,8 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                 connectionMetadata = new ConnectionMetadata(
                         server.hashCode(),
                         ConnectionMetadata.NodeType.SERVER,
-                        BufferManager.loanByteBuffer(DEFAULT_BUFFER_SIZE),
-                        BufferManager.loanByteBuffer(DEFAULT_BUFFER_SIZE),
+                        BufferManager.loanByteBuffer(),
+                        BufferManager.loanByteBuffer(),
                         channel,
                         new ReentrantLock()
                         );
@@ -307,8 +308,8 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                         connMeta = new ConnectionMetadata(
                                 key,
                                 ConnectionMetadata.NodeType.SERVER,
-                                BufferManager.loanByteBuffer(DEFAULT_BUFFER_SIZE),
-                                BufferManager.loanByteBuffer(DEFAULT_BUFFER_SIZE),
+                                BufferManager.loanByteBuffer(),
+                                BufferManager.loanByteBuffer(),
                                 channel,
                                 new ReentrantLock()
                         );
@@ -338,8 +339,8 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                     ConnectionMetadata connMeta = new ConnectionMetadata(
                             key,
                             ConnectionMetadata.NodeType.SERVER,
-                            BufferManager.loanByteBuffer(DEFAULT_BUFFER_SIZE),
-                            BufferManager.loanByteBuffer(DEFAULT_BUFFER_SIZE),
+                            BufferManager.loanByteBuffer(),
+                            BufferManager.loanByteBuffer(),
                             channel,
                             new ReentrantLock()
                     );

@@ -3,6 +3,8 @@ package dk.ku.di.dms.vms.coordinator.http;
 import dk.ku.di.dms.vms.coordinator.server.http.HttpEventLoop;
 import dk.ku.di.dms.vms.coordinator.server.http.Options;
 import dk.ku.di.dms.vms.coordinator.server.http.Response;
+import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
+import dk.ku.di.dms.vms.web_common.serdes.VmsSerdesProxyBuilder;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -23,7 +25,7 @@ public class HttpServerTest {
     static HttpEventLoop eventLoop;
     static Thread eventLoopThread;
 
-    static LinkedBlockingQueue<byte[]> queue;
+    static LinkedBlockingQueue<TransactionInput> queue;
 
     // Should we accept keep alive? maybe yes, the same client may send other transactions....
     static final String HTTP10_KEEP_ALIVE_REQUEST = """
@@ -52,7 +54,7 @@ public class HttpServerTest {
 
         queue = new LinkedBlockingQueue<>();
 
-        eventLoop = new HttpEventLoop(options, queue);
+        eventLoop = new HttpEventLoop(options, VmsSerdesProxyBuilder.build(), queue);
 
         port = eventLoop.getPort();
         eventLoopThread = new Thread(eventLoop);

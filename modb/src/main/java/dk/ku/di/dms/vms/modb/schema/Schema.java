@@ -31,6 +31,8 @@ public class Schema {
     // basically a map of column name to exact position in row values
     private final Map<String, Integer> columnPositionMap;
 
+    private final int recordSize; // the sum of all possible data types
+
     public Schema(final String[] columnNames, final DataType[] columnDataTypes, final int[] primaryKeyColumns, final ConstraintReference[] constraints) {
         this.columnNames = columnNames;
         this.columnDataTypes = columnDataTypes;
@@ -40,14 +42,17 @@ public class Schema {
         int acc = 0;
         for(int j = 0; j < columnDataTypes.length; j++){
             switch (columnDataTypes[j]){
-                case LONG -> acc += Long.BYTES;
+                case LONG, DATE -> acc += Long.BYTES;
                 case CHAR -> acc += Constants.DEFAULT_MAX_SIZE_CHAR;
                 case INT -> acc += Integer.BYTES;
                 case FLOAT -> acc += Float.BYTES;
                 case DOUBLE -> acc += Double.BYTES;
+                case BYTE -> acc += Byte.BYTES;
             }
             columnOffset[j] = acc;
         }
+
+        this.recordSize = acc;
 
         int size = columnNames.length;
         this.columnPositionMap = new HashMap<>(size);
@@ -81,6 +86,10 @@ public class Schema {
 
     public int[] columnOffset(){
         return this.columnOffset;
+    }
+
+    public int getRecordSize(){
+        return this.recordSize;
     }
 
     private void addConstraints( final ConstraintReference[] constraints ){

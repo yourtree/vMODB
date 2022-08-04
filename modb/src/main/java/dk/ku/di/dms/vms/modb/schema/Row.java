@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.modb.schema;
 
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 
 /**
  * Defines an abstract row.

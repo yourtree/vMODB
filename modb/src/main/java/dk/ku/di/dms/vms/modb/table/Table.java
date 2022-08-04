@@ -43,6 +43,15 @@ public abstract sealed class Table permits HashIndexedTable {
         this.foreignKeysGroupedByTableMap = foreignKeysGroupedByTableMap;
     }
 
+    public Table(final String name, final Schema schema){
+        this.name = name;
+        this.schema = schema;
+        this.hashCode = name.hashCode();
+        this.indexes = new HashMap<>();
+        this.indexList = new ArrayList<>();
+        this.foreignKeysGroupedByTableMap = null;
+    }
+
     @Override
     public int hashCode(){
         return this.hashCode;

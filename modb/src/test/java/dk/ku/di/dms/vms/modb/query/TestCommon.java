@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.modb;
 
 import dk.ku.di.dms.vms.modb.catalog.Catalog;
 import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
+import dk.ku.di.dms.vms.modb.query.PlannerTest;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;

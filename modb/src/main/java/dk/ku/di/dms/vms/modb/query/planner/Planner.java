@@ -45,7 +45,7 @@ public final class Planner {
     public PlanNode planBulkInsert(Table table, List<? extends IEntity<?>> entities){
 
         // get the indexes to check for foreign key first
-        Map<Table, int[]> foreignKeysGroupedByTable = table.getSchema().getForeignKeysGroupedByTable();
+        Map<Table, int[]> foreignKeysGroupedByTable = table.getForeignKeysGroupedByTable();
 
         Map<Table, AbstractIndex<IKey>> indexPerFk = new HashMap<>();
 
@@ -416,7 +416,7 @@ public final class Planner {
 
             IAggregate aggregate = aggregates.get(0);
 
-            RowOperatorResult input = new RowOperatorResult( aggregate.getTable().getPrimaryKeyIndex().rows() );
+            RowOperatorResult input = null; // new RowOperatorResult( aggregate.getTable().getPrimaryKeyIndex().rows() );
 
             aggregate.accept( input );
 
