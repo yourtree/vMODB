@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.common.utils;
+package dk.ku.di.dms.vms.modb.common.etc;
 
 /**
  * Utility class to help with the identification and ordering of objects in lists or tree

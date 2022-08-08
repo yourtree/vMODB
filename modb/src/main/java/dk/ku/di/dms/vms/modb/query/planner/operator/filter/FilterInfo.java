@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.query.planner.operator.filter;
 
-import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
+import dk.ku.di.dms.vms.modb.common.etc.IdentifiableNode;
 
 import java.util.Collection;
 

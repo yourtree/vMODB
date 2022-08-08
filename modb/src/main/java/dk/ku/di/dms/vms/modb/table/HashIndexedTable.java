@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.modb.index.onheap.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.schema.Schema;
 
 /**
- * Map-based Table for primary key index lookup
+ * Hash-based table for primary-key index lookup
  *
  */
 public final class HashIndexedTable extends Table {

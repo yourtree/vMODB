@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.index.onheap;
 
-import dk.ku.di.dms.vms.modb.index.BufferContext;
+import dk.ku.di.dms.vms.modb.storage.BufferContext;
 import dk.ku.di.dms.vms.modb.table.Table;
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
 
@@ -8,7 +8,11 @@ import sun.misc.Unsafe;
 
 import java.nio.ByteBuffer;
 
+import static dk.ku.di.dms.vms.modb.schema.Header.inactive;
+
 /**
+ * Unique hash indexes are used primarily for primary keys
+ * But can also be used for secondary indexes
  *
  * In the future:
  *  - use UNSAFE for faster operations
@@ -20,11 +24,6 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
 
     private static final Unsafe UNSAFE = Unsafe.getUnsafe();
 
-    private static class Header {
-        static final byte active = 1;
-        static final byte unactive = 0;
-    }
-
     private volatile int size;
 
     public UniqueHashIndex(BufferContext bufferContext, Table table, int... columnsIndex){
@@ -34,7 +33,8 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
 
     // 1 - get (overall) position in the bytebuffer
     private int getLogicalPosition(IKey key){
-        return key.hashCode() % bufferContext.capacity;
+        // https://algs4.cs.princeton.edu/34hash/
+        return (key.hashCode() & 0x7fffffff) % bufferContext.capacity;
     }
 
     // 2 - get bucket from the set of bytebuffers
@@ -43,7 +43,7 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
     }
 
     // 3 - calculate relative position in the buffer
-    private int getPhysicalPosition(int logicalPosition, IKey key){
+    private int getPhysicalPosition(int logicalPosition){
         // need the record size from table
         return ( table.getSchema().getRecordSize() * logicalPosition ) / BUCKET_SIZE;
     }
@@ -51,20 +51,19 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
     @Override
     public void insert(IKey key, ByteBuffer row) {
         update(key, row);
+        this.size++;
     }
 
     /**
      * The update can be possibly optimized for updating only the fields required
      * instead of the whole record
-     * @param key
-     * @param row
      */
     @Override
     public void update(IKey key, ByteBuffer row) {
 
         int logicalPos = getLogicalPosition(key);
         int bucket = getBucket(logicalPos);
-        int physicalPos = getPhysicalPosition(logicalPos, key);
+        int physicalPos = getPhysicalPosition(logicalPos);
 
         // 4 - copy contents
         // consider the active flag is already set by the entity parser
@@ -78,16 +77,17 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
     public void delete(IKey key) {
         int logicalPos = getLogicalPosition(key);
         int bucket = getBucket(logicalPos);
-        int physicalPos = getPhysicalPosition(logicalPos, key);
+        int physicalPos = getPhysicalPosition(logicalPos);
         bufferContext.buffers[bucket].position(physicalPos);
-        bufferContext.buffers[bucket].put(Header.unactive);
+        bufferContext.buffers[bucket].put(inactive);
+        this.size--;
     }
 
     @Override
     public ByteBuffer retrieve(IKey key) {
         int logicalPos = getLogicalPosition(key);
         int bucket = getBucket(logicalPos);
-        int physicalPos = getPhysicalPosition(logicalPos, key);
+        int physicalPos = getPhysicalPosition(logicalPos);
         return bufferContext.buffers[bucket].slice(physicalPos, table.getSchema().getRecordSize() );
     }
 
@@ -98,8 +98,20 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
     public void retrieve(IKey key, ByteBuffer destBase) {
         int logicalPos = getLogicalPosition(key);
         int bucket = getBucket(logicalPos);
-        int srcOffset = getPhysicalPosition(logicalPos, key);
+        int srcOffset = getPhysicalPosition(logicalPos);
         UNSAFE.copyMemory(bufferContext.buffers[bucket], srcOffset, destBase, 0, table.getSchema().getRecordSize());
+    }
+
+    /**
+     * Check whether the record is active (if exists)
+     */
+    @Override
+    public boolean exists(IKey key){
+        int logicalPos = getLogicalPosition(key);
+        int bucket = getBucket(logicalPos);
+        int physicalPos = getPhysicalPosition(logicalPos);
+        bufferContext.buffers[bucket].position(physicalPos);
+        return bufferContext.buffers[bucket].get() != inactive;
     }
 
     @Override
@@ -108,8 +120,8 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
     }
 
     @Override
-    public IndexDataStructureEnum getType() {
-        return IndexDataStructureEnum.HASH;
+    public IndexTypeEnum getType() {
+        return IndexTypeEnum.HASH;
     }
 
 }

@@ -1,9 +1,8 @@
 package dk.ku.di.dms.vms.modb.index.onheap;
 
-import dk.ku.di.dms.vms.modb.index.BufferContext;
+import dk.ku.di.dms.vms.modb.storage.BufferContext;
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
 import dk.ku.di.dms.vms.modb.table.Table;
-import jdk.incubator.foreign.MemorySegment;
 
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -18,8 +17,6 @@ import java.util.*;
 public abstract class AbstractIndex<K> {
 
     protected static final int BUCKET_SIZE = Integer.MAX_VALUE - 8;
-
-    private final IndexKeyTypeEnum keyType;
 
     private final int[] columns;
 
@@ -36,10 +33,8 @@ public abstract class AbstractIndex<K> {
         this.columns = columnsIndex;
         if(columnsIndex.length == 1) {
             this.hashCode = columnsIndex[0];
-            this.keyType = IndexKeyTypeEnum.SIMPLE;
         } else {
             this.hashCode = Arrays.hashCode(columnsIndex);
-            this.keyType = IndexKeyTypeEnum.COMPOSITE;
         }
     }
 
@@ -57,20 +52,14 @@ public abstract class AbstractIndex<K> {
 
     public abstract ByteBuffer retrieve(K key);
 
-    // public abstract Collection<Row> retrieveCollection(K key);
+    public abstract boolean exists(K key);
 
     public abstract void retrieve(K key, ByteBuffer target);
 
     public abstract int size();
 
-    // public abstract Collection<Row> rows();
-
     /** information used by the planner to decide for the appropriate operator */
-    public abstract IndexDataStructureEnum getType();
-
-    public IndexKeyTypeEnum getIndexKeyType(){
-        return this.keyType;
-    }
+    public abstract IndexTypeEnum getType();
 
     public Table getTable(){
         return this.table;

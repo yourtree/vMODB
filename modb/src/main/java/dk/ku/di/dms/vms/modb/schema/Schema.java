@@ -52,7 +52,7 @@ public class Schema {
             columnOffset[j] = acc;
         }
 
-        this.recordSize = acc;
+        this.recordSize = acc + Header.SIZE;
 
         int size = columnNames.length;
         this.columnPositionMap = new HashMap<>(size);

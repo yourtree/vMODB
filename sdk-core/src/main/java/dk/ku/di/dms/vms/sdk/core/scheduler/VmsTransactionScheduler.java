@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
-import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
+import dk.ku.di.dms.vms.modb.common.etc.IdentifiableNode;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;

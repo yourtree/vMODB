@@ -1,15 +1,15 @@
 package dk.ku.di.dms.vms.modb.query.planner;
 
-import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
+import dk.ku.di.dms.vms.modb.common.etc.IdentifiableNode;
+import dk.ku.di.dms.vms.modb.index.onheap.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum;
+import dk.ku.di.dms.vms.modb.query.insert.SeekTask;
 import dk.ku.di.dms.vms.modb.query.planner.operator.aggregate.Average;
 import dk.ku.di.dms.vms.modb.query.planner.operator.aggregate.IAggregate;
-import dk.ku.di.dms.vms.modb.query.planner.operator.constraint.BulkInsert;
-import dk.ku.di.dms.vms.modb.query.planner.operator.constraint.ConstraintEnforcer;
 import dk.ku.di.dms.vms.modb.query.planner.operator.filter.FilterBuilder;
 import dk.ku.di.dms.vms.modb.query.planner.operator.filter.FilterInfo;
 import dk.ku.di.dms.vms.modb.query.planner.operator.filter.IFilter;
@@ -20,12 +20,10 @@ import dk.ku.di.dms.vms.modb.query.planner.operator.scan.IndexScan;
 import dk.ku.di.dms.vms.modb.query.planner.operator.scan.SequentialScan;
 import dk.ku.di.dms.vms.modb.query.planner.tree.PlanNode;
 import dk.ku.di.dms.vms.modb.query.planner.tree.QueryTreeTypeEnum;
-import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.query.planner.operator.join.*;
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
 import dk.ku.di.dms.vms.modb.index.onheap.AbstractIndex;
 import dk.ku.di.dms.vms.modb.table.Table;
-import dk.ku.di.dms.vms.modb.index.onheap.IndexDataStructureEnum;
 import dk.ku.di.dms.vms.modb.schema.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.schema.key.SimpleKey;
 
@@ -40,38 +38,57 @@ import java.util.stream.Collectors;
  */
 public final class Planner {
 
-    public Planner(){}
+    private static Planner INSTANCE = new Planner();
 
-    public PlanNode planBulkInsert(Table table, List<? extends IEntity<?>> entities){
-
-        // get the indexes to check for foreign key first
-        Map<Table, int[]> foreignKeysGroupedByTable = table.getForeignKeysGroupedByTable();
-
-        Map<Table, AbstractIndex<IKey>> indexPerFk = new HashMap<>();
-
-        // for each table, get appropriate index
-        for( Map.Entry<Table, int[]> fkEntry : foreignKeysGroupedByTable.entrySet() ){
-            Optional<AbstractIndex<IKey>> index = findOptimalIndex(fkEntry.getKey(), fkEntry.getValue() );
-            indexPerFk.put(fkEntry.getKey(), index.get());
-        }
-
-        ConstraintEnforcer constraintEnforcer = new ConstraintEnforcer(entities, indexPerFk, table);
-
-        PlanNode constraintPlanNode = new PlanNode( constraintEnforcer );
-
-        BulkInsert bulkInsert = new BulkInsert();
-
-        PlanNode bulkInsertPlanNode = new PlanNode(bulkInsert);
-
-        constraintPlanNode.father = bulkInsertPlanNode;
-        bulkInsertPlanNode.left = constraintPlanNode;
-
-        return constraintPlanNode;
+    public static Planner instance(){
+        return INSTANCE;
     }
 
-    // TODO we can also have the option: AUTO, meaning the planner will look for the possibility of building a bushy tree
+    private Planner(){}
+
+//    public PlanNode planBulkInsert(Table table, List<? extends IEntity<?>> entities){
+//
+//        // get the indexes to check for foreign key first
+//        Map<Table, int[]> foreignKeysGroupedByTable = table.getForeignKeysGroupedByTable();
+//
+//        Map<Table, AbstractIndex<IKey>> indexPerFk = new HashMap<>();
+//
+//        // for each table, get appropriate index
+//        for( Map.Entry<Table, int[]> fkEntry : foreignKeysGroupedByTable.entrySet() ){
+//            Optional<AbstractIndex<IKey>> index = findOptimalIndex(fkEntry.getKey(), fkEntry.getValue() );
+//            indexPerFk.put(fkEntry.getKey(), index.get());
+//        }
+//
+//        ConstraintEnforcer constraintEnforcer = new ConstraintEnforcer(entities, indexPerFk, table);
+//
+//        PlanNode constraintPlanNode = new PlanNode( constraintEnforcer );
+//
+//        BulkInsert bulkInsert = new BulkInsert();
+//
+//        PlanNode bulkInsertPlanNode = new PlanNode(bulkInsert);
+//
+//        constraintPlanNode.father = bulkInsertPlanNode;
+//        bulkInsertPlanNode.left = constraintPlanNode;
+//
+//        return constraintPlanNode;
+//    }
+
+    // we can also have the option: AUTO, meaning the planner will look for the possibility of building a bushy tree
     public PlanNode plan(QueryTree queryTree) {
         return this.plan( queryTree, QueryTreeTypeEnum.LEFT_DEEP );
+    }
+
+    // API for simple queries
+    public SeekTask planSeek(Table table, int[] columnSet){
+
+        AbstractIndex<IKey> index = findOptimalIndex( table, columnSet );
+
+        // how do I know it is full scan or not?
+        if(index == null){
+            // then full scan
+
+        }
+        return null;
     }
 
     // tables involved in join
@@ -134,11 +151,11 @@ public final class Planner {
 
             Table tableLeft = joinPredicate.getLeftTable();
             int[] colPosArr = { joinPredicate.columnLeftReference.columnPosition };
-            Optional<AbstractIndex<IKey>> leftIndexOptional = findOptimalIndex( tableLeft, colPosArr );
+            AbstractIndex<IKey> leftTableIndex = findOptimalIndex( tableLeft, colPosArr );
 
             Table tableRight = joinPredicate.getRightTable();
             colPosArr = new int[]{ joinPredicate.columnRightReference.columnPosition };
-            Optional<AbstractIndex<IKey>> rightIndexOptional = findOptimalIndex( tableRight, colPosArr );
+            AbstractIndex<IKey> rightTableIndex = findOptimalIndex( tableRight, colPosArr );
 
             AbstractJoin join;
             Table tableInner;
@@ -149,10 +166,9 @@ public final class Planner {
             //      take care to leave the holes whenever the substitution is necessary
 
             // now we have to decide the physical operators
-            if(leftIndexOptional.isPresent() && rightIndexOptional.isPresent()){
+            if(leftTableIndex != null && rightTableIndex != null){
                 // does this case necessarily lead to symmetric HashJoin? https://cs.uwaterloo.ca/~david/cs448/
-                final AbstractIndex<IKey> leftTableIndex = leftIndexOptional.get();
-                final AbstractIndex<IKey> rightTableIndex = rightIndexOptional.get();
+
                 if(leftTableIndex.size() < rightTableIndex.size()){
                     join = new HashJoin( counter, leftTableIndex, rightTableIndex );
                     tableInner = tableLeft;
@@ -162,14 +178,14 @@ public final class Planner {
                     tableInner = tableRight;
                     tableOuter = tableLeft;
                 }
-            } else if( leftIndexOptional.isPresent() ){ // indexed nested loop join on inner table. the outer probes its rows
+            } else if( leftTableIndex != null ){ // indexed nested loop join on inner table. the outer probes its rows
                 tableInner = tableRight;
                 tableOuter = tableLeft;
-                join = new IndexedNestedLoopJoin( counter, tableRight.getPrimaryKeyIndex(), leftIndexOptional.get() );
-            } else if( rightIndexOptional.isPresent() ) {
+                join = new IndexedNestedLoopJoin( counter, tableRight.getPrimaryKeyIndex(), leftTableIndex );
+            } else if( rightTableIndex != null ) {
                 tableInner = tableLeft;
                 tableOuter = tableRight;
-                join = new IndexedNestedLoopJoin( counter, tableLeft.getPrimaryKeyIndex(), rightIndexOptional.get() );
+                join = new IndexedNestedLoopJoin( counter, tableLeft.getPrimaryKeyIndex(), rightTableIndex );
             } else { // nested loop join
                 // ideally this is pushed upstream to benefit from pruning performed by downstream nodes
                 if(tableLeft.getPrimaryKeyIndex().size() < tableRight.getPrimaryKeyIndex().size()){
@@ -319,10 +335,9 @@ public final class Planner {
             int[] filterColumns = wherePredicates.stream().mapToInt( WherePredicate::getColumnPosition ).toArray();
 
             // I need the index information to decide which operator, e.g., index scan
-            final Optional<AbstractIndex<IKey>> optimalIndexOptional = findOptimalIndex( currTable, filterColumns );
-            if(optimalIndexOptional.isPresent()){
-                AbstractIndex<IKey> optimalIndex = optimalIndexOptional.get();
-                if( optimalIndex.getType() == IndexDataStructureEnum.HASH) {
+            final AbstractIndex<IKey> optimalIndex = findOptimalIndex( currTable, filterColumns );
+            if(optimalIndex != null){
+                if( optimalIndex.getType() == IndexTypeEnum.HASH) {
                     // what columns are not subject for hash probing?
                     int[] indexColumns = optimalIndex.getColumns();
 
@@ -598,18 +613,55 @@ public final class Planner {
     }
 
     /**
-     *  Here we are relying on the fact that the developer has declared the columns
+     * The index may not be composed by all the columns in the set of columns
+     * passed as parameter
+     */
+    private float calculateSelectivity(AbstractIndex<IKey> index, int[] columns){
+
+        // optimistic belief that the number of columns would lead to higher pruning of records
+
+        // 0.1 ~~> 10% of the table is checked
+        // 1.0 ~~> 100% of the table is checked
+
+        // the actual values of the columns are disregard in this calc. OK for now...
+
+        // 1 - how much this index cover the columns?
+        return ((float) (index.getColumns().length / columns.length)) - 1;
+
+        // unique hash 0
+        // non unique hash 0.25
+        // range 0.5
+
+        // a non-unique hash index can be implemented similarly to the unique hash index
+        // but the hash in a file and the actual records mapped to a second file
+        // the records in the second file are linked lists
+
+        // the linked lists are ordered by the PK, so binary search could be implemented
+        // using a linked list, although scattering records from different hashes,
+        // (forcing paging...) allow for easier implementation
+
+    }
+
+    /**
+     *  Here we are relying on the fact that, either the developer has declared the columns
+     *  or system code safeguards the columns are provided in order of definition,
      *  in the where clause matching the actual index column order definition
      */
-    private Optional<AbstractIndex<IKey>> findOptimalIndex(Table table, int[] filterColumns){
+    private AbstractIndex<IKey> findOptimalIndex(Table table, int[] filterColumns){
 
-        // all combinations... TODO this can be built in the analyzer
-        final List<int[]> combinations = getAllPossibleColumnCombinations(filterColumns);
+        // fast path: do the columns form the PK?
+        int hashCodeAllColumns = Arrays.hashCode(filterColumns);
+        if(table.getPrimaryKeyIndex().hashCode() == hashCodeAllColumns){
+            return table.getPrimaryKeyIndex();
+        }
+
+        // all combinations... this can be built in the analyzer
+        List<int[]> combinations = getAllPossibleColumnCombinations(filterColumns);
 
         // build map of hash code
-        Map<Integer,int[]> hashCodeMap = new HashMap<>(combinations.size());
+        Map<Integer, int[]> hashCodeMap = new HashMap<>(combinations.size());
 
-        for(final int[] arr : combinations){
+        for(int[] arr : combinations){
             if( arr.length == 1 ) {
                 hashCodeMap.put(arr[0], arr);
             } else {
@@ -621,15 +673,11 @@ public final class Planner {
         float bestSelectivity = Float.MAX_VALUE;
         AbstractIndex<IKey> optimalIndex = null;
 
-        final List<AbstractIndex<IKey>> indexes = new ArrayList<>(table.getIndexes().size() + 1 );
-        indexes.addAll( table.getIndexes() );
-        indexes.add(0, table.getPrimaryKeyIndex() );
-
         // the selectivity may be unknown, we should use simple heuristic here to decide what is the best index
         // the heuristic is simply the number of columns an index covers
         // of course this can be misleading, since the selectivity can be poor, leading to scan the entire table anyway...
-        // TODO we could insert a selectivity collector in the sequential scan so later this data can be used here
-        for( final AbstractIndex<IKey> index : indexes ){
+        // we could insert a selectivity collector in the sequential scan so later this data can be used here
+        for( AbstractIndex<IKey> index : table.getIndexes() ){
 
             /*
              * in case selectivity is not present,
@@ -640,21 +688,21 @@ public final class Planner {
             int[] columns = hashCodeMap.getOrDefault( index.hashCode(), null );
             if( columns != null ){
 
-                // optimistic belief that the number of columns would lead to higher pruning of records
-                int heuristicSelectivity = table.getPrimaryKeyIndex().size() / columns.length;
+                float heuristicSelectivity = calculateSelectivity(index, columns);
 
                 // try next index then
                 if(heuristicSelectivity > bestSelectivity) continue;
 
                 // if tiebreak, hash index type is chosen as the tiebreaker criterion
-                if(heuristicSelectivity == bestSelectivity
-                        && optimalIndex.getType() == IndexDataStructureEnum.TREE
-                        && index.getType() == IndexDataStructureEnum.HASH){
-                    // do not need to check whether optimalIndex != null since totalSize
-                    // can never be equals to FLOAT.MAX_VALUE
-                    optimalIndex = index;
-                    continue;
-                }
+//                if(heuristicSelectivity == bestSelectivity
+////                        && optimalIndex.getType() == IndexDataStructureEnum.TREE
+////                        && index.getType() == IndexDataStructureEnum.HASH
+//                        ){
+//                    // do not need to check whether optimalIndex != null since totalSize
+//                    // can never be equals to FLOAT.MAX_VALUE
+//                    optimalIndex = index;
+//                    continue;
+//                }
 
                 // heuristicSelectivity < bestSelectivity
                 optimalIndex = index;
@@ -664,7 +712,7 @@ public final class Planner {
 
         }
 
-        return Optional.of(optimalIndex);
+        return optimalIndex;
 
     }
 

@@ -1,11 +1,10 @@
 package dk.ku.di.dms.vms.modb.query.planner.operator.join;
 
+import dk.ku.di.dms.vms.modb.common.etc.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.query.planner.operator.filter.IFilter;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.RowOperatorResult;
-import dk.ku.di.dms.vms.modb.common.utils.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
 import dk.ku.di.dms.vms.modb.index.onheap.AbstractIndex;
-import dk.ku.di.dms.vms.modb.index.onheap.UnsupportedIndexOperationException;
 import dk.ku.di.dms.vms.modb.schema.Row;
 
 import java.util.Collection;
@@ -33,12 +32,9 @@ public class HashJoin extends AbstractJoin {
     public RowOperatorResult get() {
 
         Set<Map.Entry<IKey,Row>> entries = null;
-        try {
-            entries = innerIndex.entrySet();
-        } catch (UnsupportedIndexOperationException e) {
-            e.printStackTrace();
-            return null;
-        }
+
+            // entries = innerIndex.entrySet();
+
 
         for(final Map.Entry<IKey,Row> rowEntry : entries){
 
@@ -58,22 +54,22 @@ public class HashJoin extends AbstractJoin {
 
             Row probedRow = null;
             // and then probe
-            if(leftIsGreen && outerIndex.retrieve(currRowKey, probedRow)){
-                boolean rightIsGreen = true;
-                // then check whether the probed row satisfy
-                if(filterOuter.filters != null) {
-                    rightIsGreen = check(
-                            currRowVal,
-                            filterInner.filters,
-                            filterInner.filterColumns,
-                            filterInner.filterParams);
-                }
-
-                if(rightIsGreen){
-                    // TODO push result upstream... it would call the accept API of a consumer
-                }
-
-            }
+//            if(leftIsGreen && outerIndex.retrieve(currRowKey, probedRow)){
+//                boolean rightIsGreen = true;
+//                // then check whether the probed row satisfy
+//                if(filterOuter.filters != null) {
+//                    rightIsGreen = check(
+//                            currRowVal,
+//                            filterInner.filters,
+//                            filterInner.filterColumns,
+//                            filterInner.filterParams);
+//                }
+//
+//                if(rightIsGreen){
+//                    // TODO push result upstream... it would call the accept API of a consumer
+//                }
+//
+//            }
 
         }
 

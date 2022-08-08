@@ -31,7 +31,7 @@ public abstract sealed class Table permits HashIndexedTable {
     // Other indexes, hashed by the column set in order of the schema. The IKey is indexed by the order of columns in the index
     protected Map<IIndexKey, Map<IKey,AbstractIndex<IKey>>> indexes;
 
-    // just a cached list of the indexes map
+    // just a cached list of the indexes map to avoid using iterators from the map when deciding for an index
     protected List<AbstractIndex<IKey>> indexList;
 
     public Table(final String name, final Schema schema, Map<Table,int[]> foreignKeysGroupedByTableMap) {
@@ -69,17 +69,9 @@ public abstract sealed class Table permits HashIndexedTable {
         return primaryKeyIndex;
     }
 
-    // A key is formed by a column set ordered by the order specified in the schema definition
-//    public AbstractIndex<IKey> getIndexByKey(final IIndexKey key){
-//        if(indexes.containsKey( key )) {
-//            return indexes.get( key ).get( key );
-//        }
-//        return null;
-//    }
-
-//    public Collection<AbstractIndex<IKey>> getIndexesByIndexKey(final IIndexKey key) {
-//        return indexes.get( key ).values();
-//    }
+    public Map<IIndexKey, Map<IKey,AbstractIndex<IKey>>> getSecondaryIndexes(){
+        return indexes;
+    }
 
     public List<AbstractIndex<IKey>> getIndexes() {
         // return indexes.values().stream().flatMap(List::stream).collect(Collectors.toList());

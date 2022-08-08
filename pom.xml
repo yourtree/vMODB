@@ -8,7 +8,7 @@
   <artifactId>vms-runtime-java</artifactId>
   <packaging>pom</packaging>
   <version>1.0-SNAPSHOT</version>
-  <description>A runtime for execution of virtual microservices written in Java.</description>
+  <description>A runtime for execution of virtual microservices written in Java</description>
 
   <modules>
 
@@ -27,6 +27,8 @@
 
     <!-- general -->
     <module>web_common</module>
+
+    <!-- operations -->
     <module>coordinator</module>
 
   </modules>
@@ -71,7 +73,5 @@
 <!--    </dependency>-->
 
   </dependencies>
-
-
 
 </project>

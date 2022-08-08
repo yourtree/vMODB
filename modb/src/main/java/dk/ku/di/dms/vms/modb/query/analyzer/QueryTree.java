@@ -65,14 +65,45 @@ public class QueryTree {
       */
     public void addWhereClauseSortedByColumnIndex( final WherePredicate wherePredicate ){
 
-        Iterator<WherePredicate> it = wherePredicates.iterator();
-        int posToInsert = 0;
-        while (it.hasNext() && wherePredicate.columnReference.columnPosition >
-                                    it.next().columnReference.columnPosition){
-                posToInsert++;
+        if(wherePredicates.size() == 0){
+            this.wherePredicates.add(wherePredicate);
+            return;
         }
 
-        this.wherePredicates.add(posToInsert, wherePredicate);
+        if(wherePredicates.size() == 1){
+            if(wherePredicate.columnReference.columnPosition >
+                    wherePredicates.get(0).columnReference.columnPosition) {
+                this.wherePredicates.add(1,wherePredicate);
+                return;
+            }
+            this.wherePredicates.add(wherePredicate);
+        }
+
+        // if size >= 2 then use binary search
+
+        int half;
+
+        int start = 0, end = wherePredicates.size() - 1;
+
+        do{
+
+            half = ((end + start) / 2);
+
+            if(wherePredicates.get(half).columnReference.columnPosition >
+                    wherePredicate.columnReference.columnPosition){
+                end = half; // always guarantee end is within bounds
+            } else {
+                start = half;// always guarantee start is within bounds
+            }
+
+        } while(start != end);
+
+        if(wherePredicates.get(half).columnReference.columnPosition <
+                wherePredicate.columnReference.columnPosition){
+            half++;
+        }
+
+        this.wherePredicates.add(half, wherePredicate);
 
     }
 

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.index;
+package dk.ku.di.dms.vms.modb.storage;
 
 import jdk.incubator.foreign.MemorySegment;
 

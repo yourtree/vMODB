@@ -7,4 +7,7 @@ import dk.ku.di.dms.vms.modb.schema.key.IKey;
  * Differently from {@link IKey}, which serves for identifying unique values or unique index entries
  */
 public interface IIndexKey {
+
+    int hashCode();
+
 }
