@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.query.planner.operator.scan;
 
 import dk.ku.di.dms.vms.modb.common.etc.IdentifiableNode;
-import dk.ku.di.dms.vms.modb.index.onheap.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.query.planner.operator.filter.FilterInfo;
 import dk.ku.di.dms.vms.modb.query.planner.operator.filter.IFilter;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.interfaces.IOperatorResult;

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.index.onheap;
+package dk.ku.di.dms.vms.modb.index;
 
 import dk.ku.di.dms.vms.modb.table.Table;
 import dk.ku.di.dms.vms.modb.common.meta.DataType;

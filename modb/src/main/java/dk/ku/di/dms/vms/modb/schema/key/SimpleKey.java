@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.schema.key;
 
-import dk.ku.di.dms.vms.modb.index.onheap.IIndexKey;
+import dk.ku.di.dms.vms.modb.index.IIndexKey;
 
 /**
  * A value that serves both for identifying a unique row (e.g., as PK) or a unique index entry.

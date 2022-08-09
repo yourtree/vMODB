@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.schema.key;
 
-import dk.ku.di.dms.vms.modb.index.onheap.IIndexKey;
+import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.schema.Row;
 
 import java.util.Arrays;

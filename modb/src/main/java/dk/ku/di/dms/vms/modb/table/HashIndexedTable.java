@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.table;
 
-import dk.ku.di.dms.vms.modb.index.onheap.UniqueHashIndex;
+import dk.ku.di.dms.vms.modb.index.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.schema.Schema;
 
 /**

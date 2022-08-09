@@ -1,9 +1,9 @@
 package dk.ku.di.dms.vms.modb.table;
 
-import dk.ku.di.dms.vms.modb.index.onheap.IIndexKey;
+import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
 import dk.ku.di.dms.vms.modb.schema.Schema;
-import dk.ku.di.dms.vms.modb.index.onheap.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 
 import java.util.*;
 

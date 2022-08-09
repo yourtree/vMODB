@@ -1,13 +1,12 @@
 package dk.ku.di.dms.vms.modb.query.planner;
 
 import dk.ku.di.dms.vms.modb.common.etc.IdentifiableNode;
-import dk.ku.di.dms.vms.modb.index.onheap.IndexTypeEnum;
+import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum;
-import dk.ku.di.dms.vms.modb.query.insert.SeekTask;
 import dk.ku.di.dms.vms.modb.query.planner.operator.aggregate.Average;
 import dk.ku.di.dms.vms.modb.query.planner.operator.aggregate.IAggregate;
 import dk.ku.di.dms.vms.modb.query.planner.operator.filter.FilterBuilder;
@@ -22,7 +21,7 @@ import dk.ku.di.dms.vms.modb.query.planner.tree.PlanNode;
 import dk.ku.di.dms.vms.modb.query.planner.tree.QueryTreeTypeEnum;
 import dk.ku.di.dms.vms.modb.query.planner.operator.join.*;
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
-import dk.ku.di.dms.vms.modb.index.onheap.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.table.Table;
 import dk.ku.di.dms.vms.modb.schema.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.schema.key.SimpleKey;
@@ -76,19 +75,6 @@ public final class Planner {
     // we can also have the option: AUTO, meaning the planner will look for the possibility of building a bushy tree
     public PlanNode plan(QueryTree queryTree) {
         return this.plan( queryTree, QueryTreeTypeEnum.LEFT_DEEP );
-    }
-
-    // API for simple queries
-    public SeekTask planSeek(Table table, int[] columnSet){
-
-        AbstractIndex<IKey> index = findOptimalIndex( table, columnSet );
-
-        // how do I know it is full scan or not?
-        if(index == null){
-            // then full scan
-
-        }
-        return null;
     }
 
     // tables involved in join
@@ -337,7 +323,7 @@ public final class Planner {
             // I need the index information to decide which operator, e.g., index scan
             final AbstractIndex<IKey> optimalIndex = findOptimalIndex( currTable, filterColumns );
             if(optimalIndex != null){
-                if( optimalIndex.getType() == IndexTypeEnum.HASH) {
+                if( optimalIndex.getType() == IndexTypeEnum.NON_UNIQUE) {
                     // what columns are not subject for hash probing?
                     int[] indexColumns = optimalIndex.getColumns();
 

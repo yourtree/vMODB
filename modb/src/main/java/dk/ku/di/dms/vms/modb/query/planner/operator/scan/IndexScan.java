@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.query.planner.operator.scan;
 import dk.ku.di.dms.vms.modb.query.planner.operator.result.RowOperatorResult;
 import dk.ku.di.dms.vms.modb.query.planner.operator.filter.FilterInfo;
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
-import dk.ku.di.dms.vms.modb.index.onheap.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.schema.Row;
 
 /**

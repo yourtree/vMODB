@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.modb.common.meta.DataType;
 import dk.ku.di.dms.vms.modb.common.meta.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.schema.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
+import dk.ku.di.dms.vms.modb.schema.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.schema.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.table.Table;
 
@@ -69,30 +70,6 @@ public class BulkInsert implements Runnable,
         this.atomic = atomic;
     }
 
-    private IKey buildRecordKey(ByteBuffer record, int[] pkColumns){
-
-        IKey key;
-
-        // 2 - build the pk
-        if(pkColumns.length == 1){
-            DataType columnType = table.getSchema().getColumnDataType( pkColumns[0] );
-            key = new SimpleKey( DataTypeUtils.getFunction(columnType).apply(record) );
-        } else {
-
-            Object[] values = new Object[pkColumns.length];
-
-            for(int i = 0; i < pkColumns.length; i++){
-                DataType columnType = table.getSchema().getColumnDataType( pkColumns[i] );
-                values[i] = DataTypeUtils.getFunction(columnType).apply(record);
-            }
-
-            key = new CompositeKey( values );
-
-        }
-
-        return key;
-    }
-
     @Override
     public void run() {
 //
@@ -132,8 +109,7 @@ public class BulkInsert implements Runnable,
 
                 }
             }
-            // processAtomically();
-            // return an int. if int == size, all records were processed. otherwise all records up to int must be active == 0
+            processAtomically();
             return;
         }
 
@@ -170,7 +146,7 @@ public class BulkInsert implements Runnable,
             // how would a seek execute?
 
             // a fk is always a PK of the other table
-            IKey pk = buildRecordKey( record, fkTable.getValue() );
+            IKey pk = KeyUtils.buildRecordKey( fkTable.getKey().getSchema(), record, fkTable.getValue() );
 
             // 2 - does the record exists in the table?
             if( ! fkTable.getKey().getPrimaryKeyIndex().exists( pk ) )
@@ -180,32 +156,6 @@ public class BulkInsert implements Runnable,
 
         return true;
 
-    }
-    
-    private void process(){
-
-        boolean violation;
-
-        for(ByteBuffer record : records){
-
-            // the table must contain the reference of the buffer, so we can query it
-            violation = safeguardFKs(record);
-
-            if(violation) continue;// go to next record
-
-            violation = safeguardOtherConstraints(record);
-
-            if (violation) continue; // don't need to check other constraints
-
-            // build key
-            // 1 - get columns that form the PK from the schema
-            IKey recordKey = buildRecordKey( record, table.getSchema().getPrimaryKeyColumns() );
-
-            // everything fine for this row
-            table.getPrimaryKeyIndex().insert( recordKey, record );
-
-        }
-        
     }
 
     private boolean safeguardOtherConstraints(ByteBuffer record) {
@@ -271,6 +221,58 @@ public class BulkInsert implements Runnable,
 
         return violation;
 
+    }
+
+    private void processAtomically(){
+
+        boolean violation = false;
+
+        for(ByteBuffer record : records){
+
+            // the table must contain the reference of the buffer, so we can query it
+            violation = safeguardFKs(record);
+
+            if(violation) break;// go to next record
+
+            violation = safeguardOtherConstraints(record);
+
+            if (violation) break;
+
+        }
+
+        if(violation) return;
+
+        for(ByteBuffer record : records){
+            IKey recordKey = KeyUtils.buildRecordKey( table.getSchema(), record, table.getSchema().getPrimaryKeyColumns() );
+            table.getPrimaryKeyIndex().insert( recordKey, record );
+        }
+
+    }
+
+    private void process(){
+
+        boolean violation;
+
+        for(ByteBuffer record : records){
+
+            // the table must contain the reference of the buffer, so we can query it
+            violation = safeguardFKs(record);
+
+            if(violation) continue;// go to next record
+
+            violation = safeguardOtherConstraints(record);
+
+            if (violation) continue;
+
+            // build key
+            // 1 - get columns that form the PK from the schema
+            IKey recordKey = KeyUtils.buildRecordKey( table.getSchema(), record, table.getSchema().getPrimaryKeyColumns() );
+
+            // everything fine for this row
+            table.getPrimaryKeyIndex().insert( recordKey, record );
+
+        }
+        
     }
 
     // comparator helper... caches and provides comparators for usage across queries

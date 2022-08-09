@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.index.onheap;
+package dk.ku.di.dms.vms.modb.index;
 
 import dk.ku.di.dms.vms.modb.storage.BufferContext;
 import dk.ku.di.dms.vms.modb.table.Table;
@@ -19,6 +19,19 @@ import static dk.ku.di.dms.vms.modb.schema.Header.inactive;
  *  - pending writes must share the same buffer, so the operation can be faster (it is a bulk)
  *
  * Read @link{https://stackoverflow.com/questions/20824686/what-is-difference-between-primary-index-and-secondary-index-exactly}
+ *
+ *
+ * Rehash is not yet implemented. To circumvent that we could have hierarchies of hash (e.g., second-level, another hash is applied) within the bucket....
+ *
+ * That means we keep the modified tuples in a separate memory buffer
+ * When batch commit occurs, we parallelly commit the records
+ * (only the latest versions, overwritten and serialized execution)
+ *
+ * The parallel occurs at the bucket level. Each thread can take a bucket,
+ * look for its respective records (we can also avoid skews [one thread
+ * with many records] and useless work [threads spawned to do nothing
+ * since there are no records]).
+ *
  */
 public class UniqueHashIndex extends AbstractIndex<IKey> {
 
@@ -51,7 +64,7 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
     @Override
     public void insert(IKey key, ByteBuffer row) {
         update(key, row);
-        this.size++;
+        this.size++; // this should only be set after commit, so we spread the overhead
     }
 
     /**
@@ -121,7 +134,7 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
 
     @Override
     public IndexTypeEnum getType() {
-        return IndexTypeEnum.HASH;
+        return IndexTypeEnum.UNIQUE;
     }
 
 }

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.index.onheap;
+package dk.ku.di.dms.vms.modb.index;
 
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
 

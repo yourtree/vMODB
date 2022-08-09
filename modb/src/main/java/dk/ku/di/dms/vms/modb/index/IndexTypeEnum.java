@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.index.onheap;
+package dk.ku.di.dms.vms.modb.index;
 
 public enum IndexTypeEnum {
 
@@ -6,8 +6,7 @@ public enum IndexTypeEnum {
 
     // non-unique
 
-    HASH, // non-unique hash-based column set identifies several table
+    NON_UNIQUE, // non-unique hash-based column set identifies several table
 
     // RANGE, FILTER
-    RANGE
 }
