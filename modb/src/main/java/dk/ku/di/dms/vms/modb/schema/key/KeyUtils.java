@@ -17,6 +17,7 @@ public class KeyUtils {
         // 2 - build the pk
         if(pkColumns.length == 1){
             DataType columnType = schema.getColumnDataType( pkColumns[0] );
+            record.position( schema.columnOffset()[pkColumns[0]] );
             key = new SimpleKey( DataTypeUtils.getFunction(columnType).apply(record) );
         } else {
 
@@ -24,6 +25,7 @@ public class KeyUtils {
 
             for(int i = 0; i < pkColumns.length; i++){
                 DataType columnType = schema.getColumnDataType( pkColumns[i] );
+                record.position( schema.columnOffset()[pkColumns[0]] );
                 values[i] = DataTypeUtils.getFunction(columnType).apply(record);
             }
 
@@ -31,7 +33,9 @@ public class KeyUtils {
 
         }
 
+        record.position(0);
         return key;
+
     }
 
 }

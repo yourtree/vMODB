@@ -27,8 +27,14 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
 
     private volatile int size;
 
+    private volatile int nextLogicalPosition;
+
+    private record RecordContext(
+            int bucket, int physicalPosition, ByteBuffer record // view over the entire buffer
+    ){}
+
     // cache of inactive records
-    private List<Integer> inactiveLogicalPositions;
+    private final List<Integer> inactiveLogicalPositions;
 
     public NonUniqueHashIndex(BufferContext metadataBufferContext,
                               BufferContext recordBufferContext,
@@ -61,8 +67,6 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
         return ( (Byte.BYTES + Integer.BYTES + Integer.BYTES)
                 * logicalPosition );
     }
-
-    private volatile int nextLogicalPosition;
 
     /**
      * Ordered by latest
@@ -136,18 +140,11 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
     }
 
     /**
-     * The update can be possibly optimized for updating only the fields required
-     * instead of the whole record
-     *
-     * Optimization: order by key, so binary search could be applied
-     * The code now is doing O(M) where M is the average number of records per hash key
+     * We have to iterate over the records of this hash key
+     * We start from the latest
+     * It is an implicit linked list
      */
-    @Override
-    public void update(IKey key, ByteBuffer record) {
-
-        // we have to iterate over the records of this hash key
-        // we start from the latest
-        // it is an implicit linked list
+    private RecordContext findRecord(IKey key){
 
         int logicalPosition = getLogicalPosition(key, metadataBufferContext.capacity);
         int physicalPosition = getMetaPhysicalPosition( logicalPosition );
@@ -193,33 +190,52 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
 
         if(!found) throw new IllegalStateException("Cannot find record in the respective hash bucket.");
 
-        // update
-        bufferContext.buffers[bucket].position( physicalPosition );
-        bufferContext.buffers[bucket].put(record);
+        //
+        currRecord.position(0);
+
+        return new RecordContext(bucket, physicalPosition, currRecord);
 
     }
 
+    /**
+     * The update can be possibly optimized for updating only the fields required
+     * instead of the whole record
+     *
+     * Optimization: order by key, so binary search could be applied
+     * The code now is doing O(M) where M is the average number of records per hash key
+     */
+    @Override
+    public void update(IKey key, ByteBuffer record) {
 
+        RecordContext recordContext = findRecord(key);
+
+        // update
+        bufferContext.buffers[recordContext.bucket].position( recordContext.physicalPosition );
+        bufferContext.buffers[recordContext.bucket].put(record);
+
+    }
 
     /**
      * Must also mark the records as inactive
      */
     @Override
     public void delete(IKey key) {
-        int logicalPos = getLogicalPosition(key, metadataBufferContext.capacity);
-        int bucket = getBucket(logicalPos);
-        int physicalPos = getRecordPhysicalPosition(logicalPos);
-        bufferContext.buffers[bucket].position(physicalPos);
-        bufferContext.buffers[bucket].put(inactive);
+
+        RecordContext recordContext = findRecord(key);
+
+        bufferContext.buffers[recordContext.bucket].position( recordContext.physicalPosition );
+        bufferContext.buffers[recordContext.bucket].put(inactive);
+
+        // and now what?
+        inactiveLogicalPositions.add( recordContext.physicalPosition );
+
         this.size--;
     }
 
     @Override
     public ByteBuffer retrieve(IKey key) {
-        int logicalPos = getLogicalPosition(key, bufferContext.capacity);
-        int bucket = getBucket(logicalPos);
-        int physicalPos = getRecordPhysicalPosition(logicalPos);
-        return bufferContext.buffers[bucket].slice(physicalPos, table.getSchema().getRecordSize() );
+        RecordContext recordContext = findRecord(key);
+        return recordContext.record;
     }
 
     /**
@@ -227,10 +243,8 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
      */
     @Override
     public void retrieve(IKey key, ByteBuffer destBase) {
-        int logicalPos = getLogicalPosition(key, metadataBufferContext.capacity);
-        int bucket = getBucket(logicalPos);
-        int srcOffset = getRecordPhysicalPosition(logicalPos);
-        UNSAFE.copyMemory(bufferContext.buffers[bucket], srcOffset, destBase, 0, table.getSchema().getRecordSize());
+        RecordContext recordContext = findRecord(key);
+        UNSAFE.copyMemory(bufferContext.buffers[recordContext.bucket], 0, destBase, 0, table.getSchema().getRecordSize());
     }
 
     /**
@@ -239,11 +253,8 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
      */
     @Override
     public boolean exists(IKey key){
-        int logicalPos = getLogicalPosition(key, metadataBufferContext.capacity);
-        int bucket = getBucket(logicalPos);
-        int physicalPos = getRecordPhysicalPosition(logicalPos);
-        bufferContext.buffers[bucket].position(physicalPos);
-        return bufferContext.buffers[bucket].get() != inactive;
+        RecordContext recordContext = findRecord(key);
+        return bufferContext.buffers[recordContext.bucket].get() != inactive;
     }
 
     @Override
