@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.coordinator.election.schema;
 
-import dk.ku.di.dms.vms.web_common.meta.NetworkObject;
-import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
+import dk.ku.di.dms.vms.web_common.network.NetworkNode;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -16,7 +15,7 @@ public class VoteResponse {
     // type | response | port | size | <host address is variable>
     private static final int headerSize = Byte.BYTES + Byte.BYTES + Integer.BYTES + Integer.BYTES;
 
-    public static void write(ByteBuffer buffer, NetworkObject serverIdentifier, boolean response){
+    public static void write(ByteBuffer buffer, NetworkNode serverIdentifier, boolean response){
         byte[] hostBytes = serverIdentifier.host.getBytes();
         buffer.put( VOTE_RESPONSE );
         buffer.putInt( response ? 1 : 0 );

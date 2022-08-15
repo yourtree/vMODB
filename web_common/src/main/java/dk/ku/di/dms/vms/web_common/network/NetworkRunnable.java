@@ -9,10 +9,11 @@ import static java.net.StandardSocketOptions.*;
 import static java.net.StandardSocketOptions.SO_RCVBUF;
 
 /**
- * Responsible for sending the buffers
+ * Responsible for batching messages in a buffer before
+ * sending over the network
  * It is agnostic to data type, only dealing with bytes
  */
-public abstract class NetworkSenderRunnable extends SignalingStoppableRunnable {
+public abstract class NetworkRunnable extends SignalingStoppableRunnable {
 
     // https://stackoverflow.com/questions/39406603/what-is-the-default-value-of-so-sndbuff-and-so-rcvbuff-set-in-the-os-x-system
     // https://stackoverflow.com/questions/4508798/how-to-get-maximum-tcp-receive-send-window-in-mac-os-x
@@ -26,19 +27,19 @@ public abstract class NetworkSenderRunnable extends SignalingStoppableRunnable {
 
     // protected Deque
 
-    public NetworkSenderRunnable(){
+    public NetworkRunnable(){
         super();
         this.batchSendTimeout = DEFAULT_BATCH_SEND_TIMEOUT;
         this.batchBufferSize = DEFAULT_BUFFER_SIZE;
     }
 
-    public NetworkSenderRunnable(long batchSendTimeout){
+    public NetworkRunnable(long batchSendTimeout){
         super();
         this.batchSendTimeout = batchSendTimeout;
         this.batchBufferSize = DEFAULT_BUFFER_SIZE;
     }
 
-    public NetworkSenderRunnable(long batchSendTimeout, int batchBufferSize){
+    public NetworkRunnable(long batchSendTimeout, int batchBufferSize){
         super();
         this.batchSendTimeout = batchSendTimeout;
         this.batchBufferSize = batchBufferSize;

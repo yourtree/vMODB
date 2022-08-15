@@ -1,11 +1,13 @@
 package dk.ku.di.dms.vms.web_common.meta;
 
+import dk.ku.di.dms.vms.web_common.network.NetworkNode;
+
 import java.util.Objects;
 
 /**
  * Basic data of a server running for leader
  */
-public final class ServerIdentifier extends NetworkObject {
+public final class ServerIdentifier extends NetworkNode {
 
     // maybe volatile?
     public long lastOffset;

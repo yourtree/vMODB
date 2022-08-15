@@ -189,7 +189,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
 
                 InetSocketAddress address = new InetSocketAddress(vms.host, vms.port);
                 AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
-                withDefaultSocketOptions( channel );
+                // withDefaultSocketOptions( channel );
 
                 channel.connect(address).get();
 
@@ -298,7 +298,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
 
             // only connects to all VMSs on first leader connection
             boolean connectToVMSs = false;
-            if(leader == null || !leader.active) {
+            if(leader == null || !leader.isActive()) {
                 connectToVMSs = true;
                 this.consumerVms = payloadFromServer.consumers();
 

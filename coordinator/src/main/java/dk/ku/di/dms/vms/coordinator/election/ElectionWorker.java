@@ -4,8 +4,7 @@ import dk.ku.di.dms.vms.coordinator.election.schema.*;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.web_common.network.NetworkSenderRunnable;
-import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
+import dk.ku.di.dms.vms.web_common.network.NetworkRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
@@ -38,7 +37,7 @@ import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
  * On the other hand, the UDP allows multicast, which is good for leader election (sending messages to all nodes
  * by design instead of iterating over the nodes to send individual messages)
  */
-public final class ElectionWorker extends NetworkSenderRunnable {
+public final class ElectionWorker extends NetworkRunnable {
 
     private volatile int state;
     public static final int NEW          = 0;
@@ -318,9 +317,9 @@ public final class ElectionWorker extends NetworkSenderRunnable {
 
                     } else {
                         // update channel
-                        if(!servers.get( key ).active) {
+                        if(!servers.get( key ).isActive()) {
                             connMeta.channel = channel;
-                            servers.get( key ).active = true;
+                            servers.get( key ).on();
                         }
                     }
 

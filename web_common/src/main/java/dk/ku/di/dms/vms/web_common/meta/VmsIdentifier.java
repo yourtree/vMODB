@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.web_common.meta;
 
 import dk.ku.di.dms.vms.web_common.modb.VmsDataSchema;
 import dk.ku.di.dms.vms.web_common.modb.VmsEventSchema;
+import dk.ku.di.dms.vms.web_common.network.NetworkNode;
 
 import java.util.Map;
 
@@ -12,7 +13,7 @@ import java.util.Map;
  *
  * I'm relying on the fact that VMSs do not switch name, host, and port
  */
-public class VmsIdentifier extends NetworkObject {
+public class VmsIdentifier extends NetworkNode {
 
     // identifier is the vms name
     public final String vmsIdentifier;

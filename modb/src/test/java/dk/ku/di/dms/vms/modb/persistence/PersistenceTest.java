@@ -1,7 +1,10 @@
 package dk.ku.di.dms.vms.modb.persistence;
 
+import dk.ku.di.dms.vms.modb.storage.MemoryUtils;
 import jdk.incubator.foreign.*;
+import org.junit.BeforeClass;
 import org.junit.Test;
+import sun.misc.Unsafe;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,6 +14,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class PersistenceTest {
+
+    private static Unsafe unsafe;
+
+    @BeforeClass
+    public static void setUp(){
+        unsafe = MemoryUtils.getUnsafe();
+        if(unsafe == null) { assert false; }
+    }
 
     // private static final 10737418240
     private static final long ONE_GB = 1073741824;
@@ -54,53 +65,57 @@ public class PersistenceTest {
                 FileChannel.MapMode.READ_WRITE,
                 ResourceScope.newSharedScope());
 
-        long offsetInit = 0;
+        long nextOffset = 0;
         // long offsetEnd = divFactor - 1;
 
         ByteBuffer mappedBuffer;
 
+        long[] initOffsetPerBuffer = new long[numberBuckets];
+
         Map<Integer, ByteBuffer> buffers = new HashMap<>( numberBuckets);
         for(int i = 0; i < numberBuckets; i++){
 
+            initOffsetPerBuffer[i] = nextOffset;
 //            long bufSize = offsetEnd-offsetInit;
 //            System.out.println("Size of the buffer "+i+" :"+bufSize);
 
-            MemorySegment seg0 = segment.asSlice(offsetInit, divFactor);
+            MemorySegment seg0 = segment.asSlice(nextOffset, divFactor);
             mappedBuffer = seg0.asByteBuffer();
 
             buffers.put(i, mappedBuffer);
 
-            offsetInit += divFactor;
-            offsetInit++;
+            nextOffset += divFactor;
+            nextOffset++;
         }
 
         mappedBuffer = buffers.get(0);
 
         ByteBuffer appBuffer = ByteBuffer.allocate(Integer.BYTES);
-
         appBuffer.putInt(1);
-
-        // do it before it gets read by mapped buffer
         appBuffer.clear();
 
+        // writing an integer value to mapped buffer
         mappedBuffer.put( appBuffer );
 
+        // flush
         segment.force();
 
+        // reset position
         mappedBuffer.clear();
 
-        // does the segment increases offset after calling
-        buffers.get(1).putInt(2);
+        assert(mappedBuffer.getInt() == appBuffer.getInt());
 
-        int testInt = mappedBuffer.getInt();
+        // next check is regarding the last buffer
+        long offsetToTest = initOffsetPerBuffer[2];
 
-        System.out.println(testInt);
+        mappedBuffer.position(0);
+        mappedBuffer.putInt(10);
 
-        assert(testInt != 2);
+        // https://github.com/apache/flink/blob/master/flink-core/src/main/java/org/apache/flink/core/memory/MemoryUtils.java
+        unsafe.copyMemory( segment.address().toRawLongValue(), segment.address().toRawLongValue() + offsetToTest, Integer.BYTES );
+
+        assert (buffers.get(2).getInt() == 10);
 
     }
-
-    // create here a test.. a 4 gb segment is created and then a slice of 2gb is created.
-    // the slice is transformed into a bytebuffer. does this slice starts at 0?
 
 }

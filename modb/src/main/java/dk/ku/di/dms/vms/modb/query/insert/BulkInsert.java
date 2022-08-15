@@ -2,12 +2,9 @@ package dk.ku.di.dms.vms.modb.query.insert;
 
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
-import dk.ku.di.dms.vms.modb.common.meta.DataTypeUtils;
-import dk.ku.di.dms.vms.modb.schema.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
 import dk.ku.di.dms.vms.modb.schema.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.schema.key.SimpleKey;
+import dk.ku.di.dms.vms.modb.storage.MemoryUtils;
 import dk.ku.di.dms.vms.modb.table.Table;
 
 import java.nio.ByteBuffer;
@@ -244,7 +241,7 @@ public class BulkInsert implements Runnable,
 
         for(ByteBuffer record : records){
             IKey recordKey = KeyUtils.buildRecordKey( table.getSchema(), record, table.getSchema().getPrimaryKeyColumns() );
-            table.getPrimaryKeyIndex().insert( recordKey, record );
+            table.getPrimaryKeyIndex().insert( recordKey, MemoryUtils.getByteBufferAddress(record) );
         }
 
     }
@@ -269,7 +266,7 @@ public class BulkInsert implements Runnable,
             IKey recordKey = KeyUtils.buildRecordKey( table.getSchema(), record, table.getSchema().getPrimaryKeyColumns() );
 
             // everything fine for this row
-            table.getPrimaryKeyIndex().insert( recordKey, record );
+            table.getPrimaryKeyIndex().insert( recordKey, MemoryUtils.getByteBufferAddress(record) );
 
         }
         

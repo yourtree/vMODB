@@ -41,21 +41,6 @@ public final class FilterBuilder {
                 filter = getFilter( wherePredicate.expression, Integer::compareTo );
                 break;
             }
-            case STRING: {
-
-                if(wherePredicate.expression == ExpressionTypeEnum.LIKE){
-                    // the default comparator interface does not allow taking advantage of specific type, since it is generic
-                    filter = new IFilter<String>() {
-                        public boolean eval(String v, String y) {
-                            return v.contains(y);
-                        }
-                    };
-                } else {
-                    filter = getFilter( wherePredicate.expression, String::compareTo );
-                }
-
-                break;
-            }
             case CHAR: {
                 filter = getFilter( wherePredicate.expression, Character::compareTo );
                 break;

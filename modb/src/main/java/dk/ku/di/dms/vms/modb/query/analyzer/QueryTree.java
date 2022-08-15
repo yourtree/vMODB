@@ -60,7 +60,7 @@ public class QueryTree {
       * This method allows the index selection to avoid a great number of combinations
       * on selecting an index. An index is stored with columns ordered.
       * So when we pass the columns of table involved in a query to the planner,
-      * this goes already in order. TODO binary search
+      * this goes already in order.
       * @param wherePredicate
       */
     public void addWhereClauseSortedByColumnIndex( final WherePredicate wherePredicate ){
@@ -85,7 +85,7 @@ public class QueryTree {
 
         int start = 0, end = wherePredicates.size() - 1;
 
-        do{
+        do {
 
             half = ((end + start) / 2);
 

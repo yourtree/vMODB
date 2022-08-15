@@ -17,7 +17,7 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.schema.control.Heartbeat;
 import dk.ku.di.dms.vms.web_common.meta.schema.control.Presentation;
-import dk.ku.di.dms.vms.web_common.network.NetworkSenderRunnable;
+import dk.ku.di.dms.vms.web_common.network.NetworkRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
 
@@ -43,7 +43,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * Class that encapsulates all logic related to issuing of
  * batch commits, transaction aborts, ...
  */
-public final class Coordinator extends NetworkSenderRunnable {
+public final class Coordinator extends NetworkRunnable {
 
     private final CoordinatorOptions options;
 
@@ -284,9 +284,9 @@ public final class Coordinator extends NetworkSenderRunnable {
 
                 // modify status
                 if(connectionMetadata.nodeType == VMS){
-                    VMSs.get(connectionMetadata.key).active = false;
+                    VMSs.get(connectionMetadata.key).off();
                 } else {
-                    servers.get(connectionMetadata.key).active = false;
+                    servers.get(connectionMetadata.key).off();
                 }
 
             }
@@ -567,7 +567,7 @@ public final class Coordinator extends NetworkSenderRunnable {
         int i = 0;
         for(ServerIdentifier server : activeServers){
 
-            if(!server.active) continue;
+            if(!server.isActive()) continue;
             promises[i] = CompletableFuture.supplyAsync( () ->
             {
                 // could potentially use another channel for writing commit-related messages...

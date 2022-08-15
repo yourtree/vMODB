@@ -1,10 +1,10 @@
 package dk.ku.di.dms.vms.modb.index;
 
-import dk.ku.di.dms.vms.modb.storage.BufferContext;
+import dk.ku.di.dms.vms.modb.storage.MemoryUtils;
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
 import dk.ku.di.dms.vms.modb.table.Table;
+import sun.misc.Unsafe;
 
-import java.nio.ByteBuffer;
 import java.util.*;
 
 /**
@@ -16,19 +16,16 @@ import java.util.*;
  */
 public abstract class AbstractIndex<K> {
 
-    protected static final int BUCKET_SIZE = Integer.MAX_VALUE - 8;
+    protected static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
-    private final int[] columns;
+    protected final int[] columns;
 
     private final int hashCode;
 
     // respective table of this index
     protected final Table table;
 
-    protected final BufferContext bufferContext;
-
-    public AbstractIndex(BufferContext bufferContext, Table table, int... columnsIndex) {
-        this.bufferContext = bufferContext;
+    public AbstractIndex(Table table, int... columnsIndex) {
         this.table = table;
         this.columns = columnsIndex;
         if(columnsIndex.length == 1) {
@@ -44,17 +41,15 @@ public abstract class AbstractIndex<K> {
         return this.hashCode;
     }
 
-    public abstract void insert(K key, ByteBuffer record);
+    public abstract void insert(K key, long srcAddress);
 
-    public abstract void update(K key, ByteBuffer record);
+    public abstract void update(K key, long srcAddress);
 
     public abstract void delete(K key);
 
-    public abstract ByteBuffer retrieve(K key);
+    public abstract long retrieve(K key);
 
     public abstract boolean exists(K key);
-
-    public abstract void retrieve(K key, ByteBuffer target);
 
     public abstract int size();
 

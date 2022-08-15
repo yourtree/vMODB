@@ -6,7 +6,8 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Link is the term used to describe the communication channel between nodes in a network
+ * Link is the term used to describe the communication
+ * channel between nodes in a network
  */
 public class LinkOptions {
 
@@ -21,7 +22,7 @@ public class LinkOptions {
 
     private ByteBuffer offHeapBuffer = BufferManager.loanByteBuffer(32000);
 
-    // header to send.. is only the size of used buffer.
+    // header to send... is only the size of used buffer.
     // the consumer knows when the consumption is over by iterating over the objects
 
     int bufferSize;

@@ -90,6 +90,11 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
         return null;
     }
 
+    @Override
+    public BlockingQueue<TransactionAbort.Payload> transactionAbortOutputQueue() {
+        return null;
+    }
+
 
     @Override
     public BlockingQueue<BatchCommitRequest.Payload> batchCommitQueue() {

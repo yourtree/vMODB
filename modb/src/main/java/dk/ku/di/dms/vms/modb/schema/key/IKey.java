@@ -7,8 +7,4 @@ public interface IKey {
 
     int hashCode();
 
-    default boolean isSimple(){
-        return false;
-    }
-
 }

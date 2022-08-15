@@ -1,5 +1,7 @@
 package dk.ku.di.dms.vms.web_common.meta;
 
+import dk.ku.di.dms.vms.web_common.network.NetworkNode;
+
 /**
  * Writer threads must report issues to the main loop thread
  * So the next loop the main loop can take care of the problem
@@ -20,9 +22,9 @@ public class Issue {
     public Category category;
 
     // the network object on which the error was identified
-    public NetworkObject node;
+    public NetworkNode node;
 
-    public Issue(Category category, NetworkObject node) {
+    public Issue(Category category, NetworkNode node) {
         this.category = category;
         this.node = node;
     }
