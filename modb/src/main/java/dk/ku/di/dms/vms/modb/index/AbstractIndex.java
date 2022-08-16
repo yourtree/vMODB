@@ -53,6 +53,8 @@ public abstract class AbstractIndex<K> {
 
     public abstract int size();
 
+    public abstract Iterator<long> iterator();
+
     /** information used by the planner to decide for the appropriate operator */
     public abstract IndexTypeEnum getType();
 

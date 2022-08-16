@@ -15,10 +15,15 @@ import java.util.Map;
  */
 public final class Catalog {
 
+    private Map<Integer, Table> tableMap_;
     private Map<String, Table> tableMap;
 
     public Catalog() {
         this.tableMap = new HashMap<>();
+    }
+
+    public Table getTable(int tableId) {
+        return tableMap.get(tableId);
     }
 
     public Table getTable(String tableName) {

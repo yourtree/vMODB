@@ -41,8 +41,6 @@ public enum ExpressionTypeEnum {
 
     public final String name;
 
-    ExpressionTypeEnum(){ this.name = name(); }
-
     ExpressionTypeEnum(String name) {
         this.name = name;
     }

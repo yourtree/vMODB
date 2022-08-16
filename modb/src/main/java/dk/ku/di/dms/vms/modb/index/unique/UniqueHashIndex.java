@@ -6,6 +6,8 @@ import dk.ku.di.dms.vms.modb.storage.RecordBufferContext;
 import dk.ku.di.dms.vms.modb.table.Table;
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
 
+import java.util.Iterator;
+
 import static dk.ku.di.dms.vms.modb.schema.Header.inactive;
 
 /**
@@ -70,6 +72,49 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
     @Override
     public int size() {
         return this.recordBufferContext.size;
+    }
+
+    @Override
+    public Iterator<long> iterator() {
+        return new UniqueHashIterator(this.recordBufferContext.address, this.table.getSchema().getRecordSize(),
+                this.recordBufferContext.capacity);
+    }
+
+    private static class UniqueHashIterator implements Iterator<long> {
+
+        private long address;
+        private final int recordSize;
+        private final int capacity;
+
+        private int progress; // how many records have been iterated
+
+        public UniqueHashIterator(long address, int recordSize, int capacity){
+            this.address = address;
+            this.recordSize = recordSize;
+            this.capacity = capacity;
+            this.progress = 0;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return progress < capacity;
+        }
+
+        /**
+         * This method should always comes after a hasNext call
+         * @return the record address
+         */
+        @Override
+        public long next() {
+            // check for bit active
+            while(UNSAFE.getByte(address) == inactive){
+                this.progress++;
+                this.address += recordSize;
+            }
+            long addrToRet = address;
+            this.address += recordSize;
+            return addrToRet;
+        }
     }
 
     @Override
