@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.modb.table;
 
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
+import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.schema.key.IKey;
 import dk.ku.di.dms.vms.modb.schema.Schema;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
@@ -12,27 +13,27 @@ import java.util.*;
  * This class holds the metadata to other data structures that concern a table and its operations
  * In other words, it does not hold/store rows, since this is the task of an index
  */
-public abstract sealed class Table permits HashIndexedTable {
+public final class Table {
 
     // at first, I am considering the table name is immutable. the hash code is cached to uniquely identify the table in java maps
-    private final int hashCode;
+    public final int hashCode;
 
-    protected final String name;
+    public final String name;
 
-    protected final Schema schema;
+    public final Schema schema;
 
     // to avoid circular dependence schema <-> table
     // the array int[] means the column indexes, ordered, that refer to the other table
-    protected final Map<Table, int[]> foreignKeysGroupedByTableMap;
+    public final Map<Table, int[]> foreignKeysGroupedByTableMap;
 
     // all tables must have a pk. besides, used for fast path on planner
-    protected AbstractIndex<IKey> primaryKeyIndex;
+    public UniqueHashIndex primaryKeyIndex;
 
     // Other indexes, hashed by the column set in order of the schema. The IKey is indexed by the order of columns in the index
-    protected Map<IIndexKey, Map<IKey,AbstractIndex<IKey>>> indexes;
+    public Map<IIndexKey, Map<IKey, AbstractIndex<IKey>>> indexes;
 
     // just a cached list of the indexes map to avoid using iterators from the map when deciding for an index
-    protected List<AbstractIndex<IKey>> indexList;
+    public List<AbstractIndex<IKey>> indexList;
 
     public Table(final String name, final Schema schema, Map<Table,int[]> foreignKeysGroupedByTableMap) {
         this.name = name;
@@ -70,7 +71,7 @@ public abstract sealed class Table permits HashIndexedTable {
     }
 
     public Map<IIndexKey, Map<IKey,AbstractIndex<IKey>>> getSecondaryIndexes(){
-        return indexes;
+        return this.indexes;
     }
 
     public List<AbstractIndex<IKey>> getIndexes() {

@@ -6,17 +6,17 @@ import java.util.function.Predicate;
 
 public class FilterContext {
 
-    public FilterContextBuilder.FilterType[] filterTypes;
+    public FilterType[] filterTypes;
 
-    public TypedBiPredicate<?>[] biPredicates;
+    public int[] filterColumns; // allow querying the schema to get the corresponding data type
+
+    public TypedBiPredicate<Object>[] biPredicates;
+
+    // case of literals passed to the query
+    // transient, may change on every application code call
+    public Object[] biPredicateParams;
 
     // only applied to null
-    public Predicate<?>[] predicates;
-
-    public int[] filterColumns;
-
-    // case of literals
-    public Object[] filterParams;
-
+    public Predicate<Object>[] predicates;
 
 }

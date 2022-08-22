@@ -65,15 +65,15 @@ public class Schema {
     }
 
     public Integer getColumnPosition(String columnName){
-        return columnPositionMap.get(columnName);
+        return this.columnPositionMap.get(columnName);
     }
 
     public String[] getColumnNames(){
-        return columnNames;
+        return this.columnNames;
     }
 
     public DataType getColumnDataType(int columnIndex){
-        return columnDataTypes[columnIndex];
+        return this.columnDataTypes[columnIndex];
     }
 
     public int[] getPrimaryKeyColumns(){
@@ -84,15 +84,15 @@ public class Schema {
         return this.constraintMap;
     }
 
-    public int[] columnOffset(){
-        return this.columnOffset;
+    public int getColumnOffset(int columnIndex){
+        return this.columnOffset[columnIndex];
     }
 
     public int getRecordSize(){
         return this.recordSize;
     }
 
-    private void addConstraints( final ConstraintReference[] constraints ){
+    private void addConstraints( ConstraintReference[] constraints ){
 
         if(constraints != null && constraints.length > 0){
             this.constraintMap = new HashMap<>( constraints.length );
@@ -103,7 +103,7 @@ public class Schema {
 
     }
 
-    public int[] buildColumnPositionArray(final String[] columnList){
+    public int[] buildColumnPositionArray(String[] columnList){
         final int[] columnPosArray = new int[ columnList.length ];
         for(int j = 0; j < columnList.length; j++){
             columnPosArray[j] = getColumnPosition( columnList[j] );

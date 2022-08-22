@@ -53,7 +53,7 @@ public abstract class AbstractScan implements Supplier<IOperatorResult> {
         this.filterParams = null;
     }
 
-    @SuppressWarnings({"unchecked","rawtypes"})
+    //@SuppressWarnings({"unchecked","rawtypes"})
     protected boolean check(final Row row){
 
         boolean conditionHolds = true;

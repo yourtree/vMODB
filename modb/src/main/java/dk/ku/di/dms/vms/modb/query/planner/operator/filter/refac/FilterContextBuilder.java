@@ -12,11 +12,6 @@ import java.util.function.Predicate;
 
 public class FilterContextBuilder {
 
-    public enum FilterType {
-        P, // predicate
-        BP // bipredicate
-    }
-
     public Predicate<Object> predicates;
 
     public static Predicate<?> predicateNull = Objects::isNull;
@@ -61,7 +56,7 @@ public class FilterContextBuilder {
     public static FilterContext build(List<WherePredicate> wherePredicates){
 
         int size = wherePredicates.size();
-        FilterContextBuilder.FilterType[] filterTypes = new FilterType[size];
+        FilterType[] filterTypes = new FilterType[size];
 
         TypedBiPredicate<?>[] biPredicates = new TypedBiPredicate<?>[size];
 

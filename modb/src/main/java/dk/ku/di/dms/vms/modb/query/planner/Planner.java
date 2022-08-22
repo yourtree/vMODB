@@ -265,7 +265,7 @@ public final class Planner {
         //          a first approach is simply deciding now an index and later
         //          when applying the filters, we check whether there are better indexes
 
-        for( final Map.Entry<Table,List<WherePredicate>> tableFilter : filtersForJoinGroupedByTable.entrySet() ){
+        for( Map.Entry<Table,List<WherePredicate>> tableFilter : filtersForJoinGroupedByTable.entrySet() ){
 
             currTable = tableFilter.getKey();
 
@@ -368,11 +368,11 @@ public final class Planner {
                     planNodes.add(indexScan);
                 } else {
                     final FilterInfo filterInfo = buildFilterInfo( wherePredicates );
-                    planNodes.add( new SequentialScan(optimalIndex, filterInfo) );
+                    // planNodes.add( new SequentialScan(optimalIndex, filterInfo) );
                 }
             } else {
                 final FilterInfo filterInfo = buildFilterInfo( wherePredicates );
-                planNodes.add( new SequentialScan(currTable.getPrimaryKeyIndex(), filterInfo) );
+                // planNodes.add( new SequentialScan(currTable.getPrimaryKeyIndex(), filterInfo) );
             }
 
         }

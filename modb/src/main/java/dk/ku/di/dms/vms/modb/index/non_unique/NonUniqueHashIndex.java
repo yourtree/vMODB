@@ -7,6 +7,8 @@ import dk.ku.di.dms.vms.modb.schema.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.storage.OrderedRecordBuffer;
 import dk.ku.di.dms.vms.modb.table.Table;
 
+import java.util.Iterator;
+
 /**
  * Space conscious non-unique hash index
  * It manages a sequential buffer for each hash entry
@@ -60,11 +62,8 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
         // get bucket
         int bucket = getBucket(key);
 
-        // findPosition
-        long targetAddress = buffers[bucket].existsAddress(key);
+        buffers[bucket].update(key, srcAddress);
 
-        // update srcAddress
-        UNSAFE.putLong( targetAddress + Byte.BYTES + Long.BYTES, srcAddress );
     }
 
     /**
@@ -89,15 +88,13 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
     }
 
     @Override
-    public int size() {
-        // sum of all active records?
-        return 0;
-        // return this.size;
+    public IndexTypeEnum getType() {
+        return IndexTypeEnum.NON_UNIQUE;
     }
 
     @Override
-    public IndexTypeEnum getType() {
-        return IndexTypeEnum.NON_UNIQUE;
+    public int size() {
+        return 0;
     }
 
 }

@@ -179,7 +179,7 @@ public class BulkInsert implements Runnable,
 
                     // char and date can be checked
                     case CHAR, DATE -> // is first byte not null? it is sufficient to check in this way?
-                            violation = record.get() != inactive;
+                            violation = false;// TODO adapt record.get() != inactive;
 
                     // default do nothing
 

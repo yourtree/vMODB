@@ -36,7 +36,6 @@ public final class MemoryUtils {
             @SuppressWarnings("SameParameterValue") String className) throws ClassNotFoundException {
 
         return Class.forName(className);
-
     }
 
     // @SuppressWarnings("restriction")

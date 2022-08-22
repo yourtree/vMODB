@@ -1,6 +1,8 @@
-package dk.ku.di.dms.vms.modb.storage;
+package dk.ku.di.dms.vms.modb.storage.infra;
 
 import dk.ku.di.dms.vms.modb.catalog.Catalog;
+import dk.ku.di.dms.vms.modb.storage.MemoryUtils;
+import dk.ku.di.dms.vms.modb.table.Table;
 import jdk.incubator.foreign.MemorySegment;
 
 import java.nio.ByteBuffer;
@@ -24,7 +26,7 @@ import java.util.Map;
  */
 public final class MemoryManager {
 
-    private static int DEFAULT_KB = 2000; // 4KB -> 4000 bytes
+    private static final int DEFAULT_KB = 2000; // 4KB -> 4000 bytes
 
     public record MemoryClaimed(
             long address, long bytes
@@ -52,7 +54,16 @@ public final class MemoryManager {
 
     // based on this input (and also resource constraints and historical usage of this query predicate),
     // the manager will assign a private memory space
-    public MemoryClaimed claim(int tableId, int nRecords, int nScanned, int nPruned){
+
+    // a function maps the operation execution to the needs
+    // tries to optimize how much memory must be assigned
+    // according to historical usage and current usage
+    // if predicates are not taken into consideration (only the pruned), the approximation may be very wrong
+    // for instance, if a different query does not need so much space, memory waste
+    // if only a range has more prunes, then the next claimed is bigger for no reason...
+    // but must fulfill for now
+    // to optimize, must include the columns
+    public MemoryClaimed claim(int operatorExecId, Table table, int nRecords, int nScanned, int nPruned){
 
         // basic case: operation just started
         if(nScanned == 0){
@@ -90,6 +101,11 @@ public final class MemoryManager {
 
         return null;
 
+    }
+
+    public MemoryClaimed claim(int bytes){
+        MemoryClaimed mc = new MemoryClaimed(address, bytes);
+        return mc;
     }
 
     public void disclaim(MemoryClaimed memoryClaimed){

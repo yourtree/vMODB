@@ -29,7 +29,7 @@ public class AppendOnlyBuffer {
     private final long address;
 
     // the offset of the bucket
-    private volatile long nextOffset;
+    private long nextOffset;
 
     // the number of bytes this buffer provides
     private final long capacity;
@@ -53,6 +53,11 @@ public class AppendOnlyBuffer {
     public void append(long srcAddress, long bytes){
         UNSAFE.copyMemory(null, srcAddress, null, nextOffset, bytes);
         this.nextOffset += bytes;
+    }
+
+    public void append(long srcAddress){
+        UNSAFE.putLong(nextOffset, srcAddress);
+        this.nextOffset += Long.BYTES;
     }
 
     // move offset and return the previous one

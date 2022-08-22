@@ -51,10 +51,6 @@ public abstract class AbstractIndex<K> {
 
     public abstract boolean exists(K key);
 
-    public abstract int size();
-
-    public abstract Iterator<long> iterator();
-
     /** information used by the planner to decide for the appropriate operator */
     public abstract IndexTypeEnum getType();
 
@@ -66,4 +62,5 @@ public abstract class AbstractIndex<K> {
         return this.columns;
     }
 
+    public abstract int size();
 }

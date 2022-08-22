@@ -5,8 +5,9 @@ package dk.ku.di.dms.vms.modb.schema;
  */
 public class Header {
 
-    static final int SIZE = Byte.BYTES;
-    public static final byte active = 1;
-    public static final byte inactive = 0;
+    // https://cs.fit.edu/~ryan/java/language/java-data.html
+    static final int SIZE = 1;
+    public static final boolean active = true;
+    public static final boolean inactive = false;
 
 }

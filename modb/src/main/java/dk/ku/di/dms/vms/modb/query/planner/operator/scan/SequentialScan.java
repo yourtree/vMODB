@@ -1,13 +1,15 @@
 package dk.ku.di.dms.vms.modb.query.planner.operator.scan;
 
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.common.meta.DataType;
 import dk.ku.di.dms.vms.modb.query.planner.operator.filter.refac.FilterContext;
-import dk.ku.di.dms.vms.modb.query.planner.operator.result.RowOperatorResult;
-import dk.ku.di.dms.vms.modb.query.planner.operator.filter.FilterInfo;
-import dk.ku.di.dms.vms.modb.schema.key.IKey;
-import dk.ku.di.dms.vms.modb.storage.MemoryManager;
+import dk.ku.di.dms.vms.modb.query.planner.operator.filter.refac.FilterType;
+import dk.ku.di.dms.vms.modb.storage.AppendOnlyBuffer;
+import dk.ku.di.dms.vms.modb.storage.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.storage.infra.MemoryManager;
+import dk.ku.di.dms.vms.modb.storage.TableIterator;
 
-import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 
 /**
  * aka table scan
@@ -35,51 +37,151 @@ import java.util.Iterator;
  * but the
  *
  */
-public final class SequentialScan extends AbstractScan {
+public final class SequentialScan {
 
-    private MemoryManager memoryManager;
+    // the unique identifier of this operator execution
+    private final int id;
 
-    private FilterContext filterContext;
+    // get iterator from index (he knows better how to access its records)
+    private final TableIterator iterator;
 
-    public SequentialScan(AbstractIndex<IKey> index,
-                          FilterInfo filterInfo) {
-        super(index, filterInfo);
+    private final MemoryManager memoryManager;
+
+    private final FilterContext filterContext;
+
+    private int pruned;
+
+    private final LinkedList<MemoryManager.MemoryClaimed> memoryClaimedList;
+
+    // how to know how much of the memory claimed was used?
+    // we need a contextual info about the processing
+//    public record SegmentContext(
+//            List<MemoryManager.MemoryClaimed> segments,
+//            List<int> used
+//    ) {}
+
+    /**
+     * The iterator allows the planner to decide whether
+     * we have several scans working on independent data partitions.
+     *
+     * What information do I need in the iterator?
+     * - size -> total number of records
+     * - table -> what is the table
+     * -
+     */
+    public SequentialScan(int id,
+                          TableIterator iterator,
+                          FilterContext filterContext,
+                          MemoryManager memoryManager) {
+        this.id = id;
+        this.iterator = iterator;
+        this.filterContext = filterContext;
+        this.memoryManager = memoryManager;
+        this.memoryClaimedList = new LinkedList<>();
     }
 
-    public SequentialScan(AbstractIndex<IKey> index) {
-        super(index);
-    }
-
-    @Override
-    public RowOperatorResult get() {
+    // it must return a set of memory segments
+    public List<MemoryManager.MemoryClaimed> get() {
 
         // https://muratbuffalo.blogspot.com/2022/08/hekaton-sql-servers-memory-optimized.html
 
+        // just a matter of managing the indexes of both predicate types
+
+        // the number of filters to apply
+        int filterIdx = 0;
+
+        // the filter index on which a given param (e.g., literals, zero, 1, 'SURNAME', etc) should apply
+        int biPredIdx = 0;
+
+        // simple predicates, do not involve input params (i.e, NULL, NOT NULL, EXISTS?, etc)
+        int predIdx = 0;
+
+        long address;
+
+        boolean conditionHolds = true;
+
+        while(iterator.hasNext()){
+
+            address = iterator.next();
+
+            // if(claimed.) if write surpass lastOffset then get more memory
+            while( conditionHolds && filterIdx < filterContext.filterTypes.length ){
+
+                // no need to read active bit
+
+                // this should go on the filter? probably not
+                int columnIndex = filterContext.filterColumns[filterIdx];
+                int columnOffset = iterator.table().getSchema().getColumnOffset( columnIndex );
+                DataType dataType = iterator.table().getSchema().getColumnDataType( columnIndex );
+
+                Object val = DataTypeUtils.getValue( dataType, address + columnOffset );
+
+                // it is a literal passed to the query
+                if(filterContext.filterTypes[filterIdx] == FilterType.BP) {
+                    conditionHolds = filterContext.biPredicates[biPredIdx].
+                            apply(val, filterContext.biPredicateParams[biPredIdx]);
+                    biPredIdx++;
+                } else {
+                    conditionHolds = filterContext.predicates[predIdx].test( val );
+                    predIdx++;
+                }
+
+                filterIdx++;
+            }
+
+            if(conditionHolds){
+
+                ensureMemoryCapacity();
+
+                // add to the output memory space
+                this.currentBuffer.append(address);
+
+            } else {
+                pruned++;
+                conditionHolds = true; // to prepare for next filter iterations
+            }
+
+            filterIdx = 0;
+
+        }
+
+        return memoryClaimedList;
+    }
+
+    /**
+     * Just abstracts on which memory segment a result will be written to
+     *
+     * Data structure:
+     * - srcAddress (long) -> the src address of the record in the PK index
+     *
+     */
+    private void ensureMemoryCapacity(){
+
 //        SequenceLayout SEQUENCE_LAYOUT = MemoryLayout.sequenceLayout(1024, ValueLayout.JAVA_INT);
 //        MemorySegment segment = MemorySegment.allocateNative(SEQUENCE_LAYOUT, scope);
-//
 //
 //        int sum = segment.elements(ValueLayout.JAVA_INT).parallel()
 //                                            .mapToInt(s -> s.get(ValueLayout.JAVA_INT, 0))
 //                                            .sum();
 
-        MemoryManager.MemoryClaimed claimed = memoryManager.claim(0, index.size(), 0, 0);
-
-        // get iterator from index (he knows better how to access its records)
-        Iterator<long> iterator = index.iterator();
-
-        // just a matter of managing the indexes of both predicate types
-
-        long address;
-        while(iterator.hasNext()){
-
-            address = iterator.next();
-
-
-
+        if(currentBuffer.capacity() - currentBuffer.address() > entrySize){
+            return;
         }
 
-        return null;
+        // write contextual info to this buffer? no need, let the upstream operator infers
+
+        // else, get a new segment
+        MemoryManager.MemoryClaimed claimed = memoryManager.claim(this.id, iterator.table(),
+                iterator.size(), iterator.progress(), pruned);
+
+        memoryClaimedList.add(claimed);
+
+        this.currentBuffer = new AppendOnlyBuffer(claimed.address(), claimed.bytes());
+
     }
+
+    private AppendOnlyBuffer currentBuffer;
+
+    private final int entrySize = Long.BYTES;
 
 }
