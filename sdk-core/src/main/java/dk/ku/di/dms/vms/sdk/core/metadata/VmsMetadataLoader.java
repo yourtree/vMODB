@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.sdk.core.metadata;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
-import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
+import dk.ku.di.dms.vms.modb.common.interfaces.application.IEntity;
 import dk.ku.di.dms.vms.modb.common.meta.*;
 import dk.ku.di.dms.vms.modb.common.etc.IdentifiableNode;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;

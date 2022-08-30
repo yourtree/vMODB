@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.micro_tpcc.repository.waredist;
 import dk.ku.di.dms.vms.sdk.core.annotations.Query;
 import dk.ku.di.dms.vms.sdk.core.annotations.Repository;
 import dk.ku.di.dms.vms.micro_tpcc.entity.Warehouse;
-import dk.ku.di.dms.vms.modb.common.interfaces.IRepository;
+import dk.ku.di.dms.vms.modb.common.interfaces.application.IRepository;
 
 @Repository
 public interface IWarehouseRepository extends IRepository<Integer, Warehouse> {

@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.query.analyzer;
 
-import dk.ku.di.dms.vms.modb.catalog.Catalog;
-import dk.ku.di.dms.vms.modb.schema.Schema;
+import dk.ku.di.dms.vms.modb.definition.Catalog;
+import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
@@ -13,8 +13,8 @@ import dk.ku.di.dms.vms.modb.common.query.enums.JoinTypeEnum;
 import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.query.statement.UpdateStatement;
-import dk.ku.di.dms.vms.modb.schema.ColumnReference;
-import dk.ku.di.dms.vms.modb.table.Table;
+import dk.ku.di.dms.vms.modb.definition.ColumnReference;
+import dk.ku.di.dms.vms.modb.definition.Table;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,17 +31,9 @@ public final class Analyzer {
         this.catalog = catalog;
     }
 
-    public QueryTree analyze(final IStatement statement, final Class<?> clazz) throws AnalyzerException {
-        final QueryTree queryTree = new QueryTree(clazz);
-        return analyze( statement, queryTree );
-    }
+    private QueryTree analyzeSelectStatement(final SelectStatement statement) throws AnalyzerException {
 
-    public QueryTree analyze(final IStatement statement) throws AnalyzerException {
-        final QueryTree queryTree = new QueryTree();
-        return analyze( statement, queryTree );
-    }
-
-    private void analyzeSelectStatement(final SelectStatement statement, final QueryTree queryTree ) throws AnalyzerException {
+        QueryTree queryTree = new QueryTree();
 
         // from
         // obtain the tables to look for the columns in projection first
@@ -232,29 +224,30 @@ public final class Analyzer {
             }
         }
 
+        return queryTree;
+
     }
 
     /**
      * basically transforms the raw input into known and safe metadata, e.g., whether a table, column exists
      * https://docs.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql?view=sql-server-ver15#logical-processing-order-of-the-select-statement
      * @param statement The statement to process
-     * @param queryTree The query tree received from the analyzer
-     * @return The query tree
+     * @return The resulting query tree
      * @throws AnalyzerException Unexpected statement type
      */
-    private QueryTree analyze(final IStatement statement, final QueryTree queryTree) throws AnalyzerException {
+    private QueryTree analyze(final IStatement statement) throws AnalyzerException {
 
         if(statement.isSelect()){
-            analyzeSelectStatement( statement.getAsSelectStatement(), queryTree );
+            return analyzeSelectStatement( statement.getAsSelectStatement() );
         } else if(statement.isUpdate()){
             final UpdateStatement update = statement.getAsUpdateStatement();
             // TODO FINISH
         } else {
-            // TODO FINISH sort and group by
+            // TODO FINISH
             throw new AnalyzerException("Unknown statement type.");
         }
 
-        return queryTree;
+        return null;
 
     }
 

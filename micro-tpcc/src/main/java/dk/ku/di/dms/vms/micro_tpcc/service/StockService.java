@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.micro_tpcc.service;
 
 import dk.ku.di.dms.vms.micro_tpcc.events.StockNewOrderOut;
-import dk.ku.di.dms.vms.modb.common.interfaces.IDTO;
+import dk.ku.di.dms.vms.modb.common.interfaces.application.IDTO;
 import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
 import dk.ku.di.dms.vms.sdk.core.annotations.Microservice;
 import dk.ku.di.dms.vms.sdk.core.annotations.Outbound;
@@ -51,7 +51,6 @@ public class StockService {
                         .where("s_i_id", ExpressionTypeEnum.EQUALS, in.itemsIds()[finalI])
                         .and("s_w_id", ExpressionTypeEnum.EQUALS, in.supware()[finalI])
                         .build();
-
 
                 int s_quantity = stockRepository.fetchOne(sql,Integer.class);
 

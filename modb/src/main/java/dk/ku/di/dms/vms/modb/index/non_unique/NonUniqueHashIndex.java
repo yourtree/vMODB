@@ -2,12 +2,11 @@ package dk.ku.di.dms.vms.modb.index.non_unique;
 
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.modb.schema.key.IKey;
-import dk.ku.di.dms.vms.modb.schema.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.storage.OrderedRecordBuffer;
-import dk.ku.di.dms.vms.modb.table.Table;
-
-import java.util.Iterator;
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
+import dk.ku.di.dms.vms.modb.storage.iterator.BucketIterator;
+import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
+import dk.ku.di.dms.vms.modb.definition.Table;
 
 /**
  * Space conscious non-unique hash index
@@ -18,7 +17,7 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
 
     // private volatile int size;
 
-    // better to have a manager. to manage the appendonlybuffer
+    // better to have a manager. to manage the append-only buffer
     // correctly (safety)... the manager will expand it if necessary
     // will also deal with deleted records
     // and provide
@@ -35,6 +34,10 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
 
     private int getBucket(IKey key){
         return ((key.hashCode() & 0x7fffffff) % buffers.length) - 1;
+    }
+
+    private int getBucket(int key){
+        return ((key & 0x7fffffff) % buffers.length) - 1;
     }
 
     /**
@@ -76,20 +79,38 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
     }
 
     @Override
-    public long retrieve(IKey key) {
-        int bucket = getBucket(key);
-        return buffers[bucket].existsAddress(key);
-    }
-
-    @Override
     public boolean exists(IKey key){
         int bucket = getBucket(key);
         return buffers[bucket].exists(key);
     }
 
+    public boolean isBucketEmpty(int key){
+        int bucket = getBucket(key);
+        return this.buffers[bucket].size() == 0;
+    }
+
+    public BucketIterator iterator(){
+        return new BucketIterator(this.buffers);
+    }
+
+    public RecordBucketIterator iterator(IKey key) {
+        int bucket = getBucket(key);
+        return new RecordBucketIterator(this.buffers[bucket]);
+    }
+
+    public RecordBucketIterator iterator(int key) {
+        int bucket = getBucket(key);
+        return new RecordBucketIterator(this.buffers[bucket]);
+    }
+
     @Override
     public IndexTypeEnum getType() {
         return IndexTypeEnum.NON_UNIQUE;
+    }
+
+    @Override
+    public NonUniqueHashIndex asNonUniqueHashIndex(){
+        return this;
     }
 
     @Override

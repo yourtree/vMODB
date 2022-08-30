@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.annotations;
 
-import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
+import dk.ku.di.dms.vms.modb.common.interfaces.application.IEntity;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;

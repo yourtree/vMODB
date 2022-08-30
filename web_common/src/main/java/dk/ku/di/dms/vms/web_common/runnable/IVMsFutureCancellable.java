@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.web_common.runnable;
 
-import dk.ku.di.dms.vms.modb.common.interfaces.IVmsFuture;
+import dk.ku.di.dms.vms.modb.common.interfaces.application.IVmsFuture;
 
 /**
  * Only for testing distributed checkpointing algorithm, not for exposing as a client API

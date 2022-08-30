@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.index;
 
-import dk.ku.di.dms.vms.modb.schema.key.IKey;
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
 
 /**
  * Serves to identify uniquely an index or set of indexes.

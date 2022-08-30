@@ -2,17 +2,15 @@ package dk.ku.di.dms.vms.modb.index.unique;
 
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.modb.storage.RecordBufferContext;
-import dk.ku.di.dms.vms.modb.storage.TableIterator;
-import dk.ku.di.dms.vms.modb.table.Table;
-import dk.ku.di.dms.vms.modb.schema.key.IKey;
+import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
+import dk.ku.di.dms.vms.modb.storage.iterator.RecordIterator;
+import dk.ku.di.dms.vms.modb.definition.Table;
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
 
-import java.util.Iterator;
-
-import static dk.ku.di.dms.vms.modb.schema.Header.inactive;
+import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
 
 /**
- *
+ * TODO deal with collisions by having a linked list
  */
 public class UniqueHashIndex extends AbstractIndex<IKey> {
 
@@ -28,8 +26,8 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
      * "The code masks off the sign bit (to turn the 32-bit integer into a 31-bit non-negative integer)
      * and then computing the remainder when dividing by M, as in modular hashing."
      */
-    private long getPosition(IKey key){
-        int logicalPosition = (key.hashCode() & 0x7fffffff) % recordBufferContext.capacity;
+    private long getPosition(int key){
+        int logicalPosition = (key & 0x7fffffff) % recordBufferContext.capacity;
         return recordBufferContext.address + ( recordBufferContext.recordSize * logicalPosition );
     }
 
@@ -45,19 +43,22 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
      */
     @Override
     public void update(IKey key, long srcAddress) {
-        long pos = getPosition(key);
+        long pos = getPosition(key.hashCode());
         UNSAFE.copyMemory(null, srcAddress, null, pos, recordBufferContext.recordSize);
     }
 
     @Override
     public void delete(IKey key) {
-        long pos = getPosition(key);
+        long pos = getPosition(key.hashCode());
         UNSAFE.putBoolean(null, pos, inactive);
         // this.size--;
     }
 
-    @Override
     public long retrieve(IKey key) {
+        return getPosition(key.hashCode());
+    }
+
+    public long retrieve(int key) {
         return getPosition(key);
     }
 
@@ -66,8 +67,17 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
      */
     @Override
     public boolean exists(IKey key){
+        long pos = getPosition(key.hashCode());
+        return UNSAFE.getBoolean(null, pos);
+    }
+
+    public boolean exists(int key){
         long pos = getPosition(key);
         return UNSAFE.getBoolean(null, pos);
+    }
+
+    public boolean exists(long address){
+        return UNSAFE.getBoolean(null, address);
     }
 
     @Override
@@ -75,14 +85,19 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
         return this.recordBufferContext.size;
     }
 
-    public Iterator<long> iterator() {
-        return new TableIterator(this.table, this.recordBufferContext.address, this.table.getSchema().getRecordSize(),
+    public RecordIterator iterator() {
+        return new RecordIterator(this.recordBufferContext.address, this.table.getSchema().getRecordSize(),
                 this.recordBufferContext.capacity);
     }
 
     @Override
     public IndexTypeEnum getType() {
         return IndexTypeEnum.UNIQUE;
+    }
+
+    @Override
+    public UniqueHashIndex asUniqueHashIndex(){
+        return this;
     }
 
 }

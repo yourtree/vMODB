@@ -4,8 +4,8 @@ import dk.ku.di.dms.vms.modb.query.analyzer.predicate.OrderByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.modb.schema.ColumnReference;
-import dk.ku.di.dms.vms.modb.table.Table;
+import dk.ku.di.dms.vms.modb.definition.ColumnReference;
+import dk.ku.di.dms.vms.modb.definition.Table;
 
 import java.util.*;
 
@@ -13,8 +13,6 @@ import java.util.*;
  *  Logical query plan tree.
   */
 public class QueryTree {
-
-    public Class<?> returnType;
 
     // projection
     public List<ColumnReference> projections;
@@ -39,16 +37,6 @@ public class QueryTree {
      * since this DBMS is an application-focused DBMS
      */
     public QueryTree() {
-        this.returnType = null;
-        this.projections = new ArrayList<>();
-        this.tables = new HashMap<>();
-        this.joinPredicates = new ArrayList<>();
-        this.wherePredicates = new ArrayList<>();
-        this.groupByPredicates = new ArrayList<>();
-    }
-
-    public QueryTree(final Class<?> returnType) {
-        this.returnType = returnType;
         this.projections = new ArrayList<>();
         this.tables = new HashMap<>();
         this.joinPredicates = new ArrayList<>();
@@ -63,27 +51,29 @@ public class QueryTree {
       * this goes already in order.
       * @param wherePredicate
       */
-    public void addWhereClauseSortedByColumnIndex( final WherePredicate wherePredicate ){
+    public void addWhereClauseSortedByColumnIndex( WherePredicate wherePredicate ){
 
-        if(wherePredicates.size() == 0){
+        int size = wherePredicates.size();
+        if(size == 0){
             this.wherePredicates.add(wherePredicate);
             return;
         }
 
-        if(wherePredicates.size() == 1){
+        if(size == 1){
             if(wherePredicate.columnReference.columnPosition >
                     wherePredicates.get(0).columnReference.columnPosition) {
                 this.wherePredicates.add(1,wherePredicate);
-                return;
+            } else {
+                this.wherePredicates.add(0, wherePredicate);
             }
-            this.wherePredicates.add(wherePredicate);
+            return;
         }
 
         // if size >= 2 then use binary search
 
         int half;
 
-        int start = 0, end = wherePredicates.size() - 1;
+        int start = 0, end = size - 1;
 
         do {
 

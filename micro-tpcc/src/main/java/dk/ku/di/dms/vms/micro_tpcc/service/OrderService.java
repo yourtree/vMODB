@@ -75,7 +75,7 @@ public class OrderService {
             int finalI = i;
             int itemId = stockNewOrderIn.itemsIds()[finalI];
             int wareId = stockNewOrderIn.supware()[finalI];
-            futures[i] = CompletableFuture.runAsync(() -> {
+            futures[i] = CompletableFuture.runAsync(( ) -> {
 
                 float ol_amount = stockNewOrderIn.quantity()[finalI] *
                         itemsNewOrderOut.itemsIds()[finalI] *

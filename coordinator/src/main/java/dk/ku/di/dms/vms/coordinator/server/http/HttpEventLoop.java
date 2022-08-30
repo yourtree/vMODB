@@ -13,7 +13,6 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
 
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
@@ -44,11 +43,11 @@ public class HttpEventLoop implements Runnable {
     private final Map<SelectionKey, Connection> connectionMap;
 
     // this is the producer, single-thread. the consumer is also a single-thread (the leader)
-    private final BlockingQueue<TransactionInput> parsedTransactionRequests;
+    private final Queue<TransactionInput> parsedTransactionRequests;
 
     private final IVmsSerdesProxy serdesProxy;
 
-    public HttpEventLoop(Options options, IVmsSerdesProxy serdesProxy, BlockingQueue<TransactionInput> parsedTransactionRequests) throws IOException {
+    public HttpEventLoop(Options options, IVmsSerdesProxy serdesProxy, Queue<TransactionInput> parsedTransactionRequests) throws IOException {
 
         // set maximum number of connections this socket can handle per second
         this.connectionMap = new HashMap<>();

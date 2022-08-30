@@ -1,8 +1,10 @@
 package dk.ku.di.dms.vms.modb.index;
 
-import dk.ku.di.dms.vms.modb.storage.MemoryUtils;
-import dk.ku.di.dms.vms.modb.schema.key.IKey;
-import dk.ku.di.dms.vms.modb.table.Table;
+import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
+import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
+import dk.ku.di.dms.vms.modb.common.meta.MemoryUtils;
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.definition.Table;
 import sun.misc.Unsafe;
 
 import java.util.*;
@@ -47,12 +49,7 @@ public abstract class AbstractIndex<K> {
 
     public abstract void delete(K key);
 
-    public abstract long retrieve(K key);
-
     public abstract boolean exists(K key);
-
-    /** information used by the planner to decide for the appropriate operator */
-    public abstract IndexTypeEnum getType();
 
     public Table getTable(){
         return this.table;
@@ -63,4 +60,16 @@ public abstract class AbstractIndex<K> {
     }
 
     public abstract int size();
+
+    /** information used by the planner to decide for the appropriate operator */
+    public abstract IndexTypeEnum getType();
+
+    public UniqueHashIndex asUniqueHashIndex(){
+        throw new IllegalStateException("Concrete index does not override this method.");
+    }
+
+    public NonUniqueHashIndex asNonUniqueHashIndex(){
+        throw new IllegalStateException("Concrete index does not override this method.");
+    }
+
 }

@@ -12,6 +12,8 @@ import static java.net.StandardSocketOptions.SO_RCVBUF;
  * Responsible for batching messages in a buffer before
  * sending over the network
  * It is agnostic to data type, only dealing with bytes
+ *
+ * I don't know how useful this class is! Still need to figure out whether I need it
  */
 public abstract class NetworkRunnable extends SignalingStoppableRunnable {
 

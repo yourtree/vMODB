@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.persistence;
 
-import dk.ku.di.dms.vms.modb.storage.MemoryUtils;
+import dk.ku.di.dms.vms.modb.common.meta.MemoryUtils;
 import jdk.incubator.foreign.*;
 import org.junit.BeforeClass;
 import org.junit.Test;

@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.web_common.meta;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
+import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -23,19 +24,27 @@ public class ConnectionMetadata {
 
     public final ByteBuffer readBuffer;
     public final ByteBuffer writeBuffer;
+
     public AsynchronousSocketChannel channel;
 
-    // unique read thread by design (completion handler)
-    // with batching of messages in windows, this will be no longer necessary
-    public final ReentrantLock writeLock;
+    /*
+     * Necessary to access connection metadata
+     * The coordinator is responsible for keeping the connections up to date
+     * The transaction manager just needs a read lock for the given connection
+     */
+    public final ReadWriteLock lock;
 
-    public ConnectionMetadata(int key, NodeType nodeType, ByteBuffer readBuffer, ByteBuffer writeBuffer, AsynchronousSocketChannel channel, ReentrantLock writeLock) {
+    public ConnectionMetadata(int key, NodeType nodeType,
+                              ByteBuffer readBuffer,
+                              ByteBuffer writeBuffer,
+                              AsynchronousSocketChannel channel,
+                              ReadWriteLock lock) {
         this.key = key;
         this.nodeType = nodeType;
         this.readBuffer = readBuffer;
         this.writeBuffer = writeBuffer;
         this.channel = channel;
-        this.writeLock = writeLock;
+        this.lock = lock;
     }
 
 }
