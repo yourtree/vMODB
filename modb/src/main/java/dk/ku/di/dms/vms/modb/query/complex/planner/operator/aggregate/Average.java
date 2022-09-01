@@ -30,14 +30,6 @@ import static java.util.stream.DoubleStream.Builder;
  */
 public class Average extends AbstractOperator {
 
-//        SequenceLayout SEQUENCE_LAYOUT = MemoryLayout.sequenceLayout(1024, ValueLayout.JAVA_INT);
-//        MemorySegment segment = MemorySegment.allocateNative(SEQUENCE_LAYOUT, scope);
-//
-//        int sum = segment.elements(ValueLayout.JAVA_INT).parallel()
-//                                            .mapToInt(s -> s.get(ValueLayout.JAVA_INT, 0))
-//                                            .sum();
-
-
     private final ColumnReference column;
 
     private final List<ColumnReference> groupByColumns;

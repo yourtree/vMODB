@@ -2,21 +2,23 @@ package dk.ku.di.dms.vms.modb.query.planner.filter;
 
 import dk.ku.di.dms.vms.modb.query.planner.filter.types.TypedBiPredicate;
 
+import java.util.List;
 import java.util.function.Predicate;
 
 public class FilterContext {
 
-    public FilterType[] filterTypes;
+    public List<FilterType> filterTypes;
 
-    public int[] filterColumns; // allow querying the schema to get the corresponding data type
+    public List<int> filterColumns; // allow querying the schema to get the corresponding data type
 
-    public TypedBiPredicate<Object>[] biPredicates;
+    @SuppressWarnings("rawtypes")
+    public List<TypedBiPredicate> biPredicates;
 
     // case of literals passed to the query
     // transient, may change on every application code call
-    public Object[] biPredicateParams;
+    public List<Object> biPredicateParams;
 
     // only applied to null
-    public Predicate<Object>[] predicates;
+    public List<Predicate<Object>> predicates;
 
 }

@@ -7,6 +7,9 @@ import java.util.List;
 
 public abstract class AbstractStatement implements IStatement {
 
+    // used later to cache query plans
+    public StringBuilder SQL = new StringBuilder();
+
     public List<WhereClauseElement<?>> whereClause;
 
     public List<JoinClauseElement> joinClause;

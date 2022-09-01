@@ -14,7 +14,6 @@ import dk.ku.di.dms.vms.modb.definition.Table;
  */
 public class NonUniqueHashIndex extends AbstractIndex<IKey> {
 
-
     // private volatile int size;
 
     // better to have a manager. to manage the append-only buffer

@@ -47,6 +47,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
         public NewProjectionOrFromClause select(String param) {
             String[] projection = param.replace(" ","").split(",");
             this.statement.selectClause = new ArrayList<>(Arrays.asList(projection));
+            this.statement.SQL.append(param);
             return new NewProjectionOrFromClause(this.statement,this);
         }
 
@@ -54,6 +55,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
             GroupBySelectElement element = new GroupBySelectElement( param, GroupByOperationEnum.AVG );
             this.statement.groupBySelectClause = new ArrayList<>();
             this.statement.groupBySelectClause.add( element );
+            this.statement.SQL.append(param);
             return new NewProjectionOrFromClause(statement,this);
         }
     }
@@ -87,6 +89,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
         public OrderByGroupByJoinWhereClauseBridge from(String param) {
             String[] projection = param.replace(" ","").split(",");
             this.statement.fromClause = new ArrayList<>(Arrays.asList(projection));
+            this.statement.SQL.append(param);
             return new OrderByGroupByJoinWhereClauseBridge(statement);
         }
 
@@ -107,7 +110,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
                 params[i] = params[i].replace(" ", "");
             }
             this.statement.groupByClause = new ArrayList<>(Arrays.asList(params));
-
+            this.statement.SQL.append(params);
             return new OrderByClause(this.statement);
         }
 
@@ -119,7 +122,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
                 orderByClauseElements.add(new OrderByClauseElement(param.replace(" ", "")));
             }
             this.statement.orderByClause = orderByClauseElements;
-
+            this.statement.SQL.append(params);
             return new OrderByClausePredicate(this.statement);
 
         }
@@ -142,7 +145,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
                 orderByClauseElements.add(new OrderByClauseElement(param.replace(" ", "")));
             }
             this.statement.orderByClause = orderByClauseElements;
-
+            this.statement.SQL.append(params);
             return new OrderByClausePredicate(this.statement);
 
         }
@@ -174,7 +177,8 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
     }
 
-    // not of my interest to make it static, otherwise developers could instantiate it directly (in case the constructor were public)
+    // not of my interest to make it static,
+    // otherwise developers could instantiate it directly (in case the constructor were public)
     public static class QuerySeal implements IQueryBuilder<SelectStatement> {
 
         private final SelectStatement statement;

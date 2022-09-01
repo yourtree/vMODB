@@ -97,4 +97,20 @@ public class QueryTree {
 
     }
 
+    /**
+     * Simple select if no joins, grouping, and sort are present
+     * @return
+     */
+    public boolean isSimpleSelect(){
+        return joinPredicates.isEmpty() && groupByPredicates.isEmpty() && orderByPredicates.isEmpty();
+    }
+
+    public boolean isSimpleAggregate(){
+        return !groupByPredicates.isEmpty() && joinPredicates.isEmpty()  && orderByPredicates.isEmpty();
+    }
+
+    public boolean isSimpleJoin(){
+        return !joinPredicates.isEmpty() && groupByPredicates.isEmpty()  && orderByPredicates.isEmpty();
+    }
+
 }

@@ -4,8 +4,7 @@ import static dk.ku.di.dms.vms.modb.common.meta.Constants.DEFAULT_MAX_SIZE_CHAR;
 
 public enum DataType {
 
-    // used for boolean
-    BYTE(Byte.BYTES),
+    BOOL(0), // actually 1 bit, not 1 byte
 
     INT(Integer.BYTES),
 

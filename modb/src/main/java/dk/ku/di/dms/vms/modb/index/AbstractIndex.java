@@ -22,6 +22,9 @@ public abstract class AbstractIndex<K> {
 
     protected final int[] columns;
 
+    // to speed up queries, so the filters can be build on flight
+    public final HashSet<int> columnHash;
+
     private final int hashCode;
 
     // respective table of this index
@@ -35,6 +38,8 @@ public abstract class AbstractIndex<K> {
         } else {
             this.hashCode = Arrays.hashCode(columnsIndex);
         }
+        columnHash = new HashSet<int>(columns.length);
+        for(int i : columnsIndex) columnHash.add(i);
     }
 
     // use bitwise comparison to find whether a given index exists for such columns

@@ -29,7 +29,8 @@ public final class Table {
     public UniqueHashIndex primaryKeyIndex;
 
     // Other indexes, hashed by the column set in order of the schema. The IKey is indexed by the order of columns in the index
-    public Map<IIndexKey, Map<IKey, AbstractIndex<IKey>>> indexes;
+    // public Map<IIndexKey, Map<IKey, AbstractIndex<IKey>>> indexes;
+    public Map<IIndexKey, AbstractIndex<IKey>> indexes;
 
     // just a cached list of the indexes map to avoid using iterators from the map when deciding for an index
     public List<AbstractIndex<IKey>> indexList;
@@ -69,7 +70,11 @@ public final class Table {
         return primaryKeyIndex;
     }
 
-    public Map<IIndexKey, Map<IKey,AbstractIndex<IKey>>> getSecondaryIndexes(){
+//    public Map<IIndexKey, Map<IKey,AbstractIndex<IKey>>> getSecondaryIndexes(){
+//        return this.indexes;
+//    }
+
+    public Map<IIndexKey, AbstractIndex<IKey>> getSecondaryIndexes(){
         return this.indexes;
     }
 
@@ -81,17 +86,17 @@ public final class Table {
 
     // logical key - column list in order that appear in the schema
     // physical key - column list in order of index definition
-    public void addIndex( final IIndexKey indexLogicalKey, final IKey indexPhysicalKey, AbstractIndex<IKey> index ){
-        Map<IKey,AbstractIndex<IKey>> indexMap = this.indexes.get(indexLogicalKey);
-
-        if( indexMap == null ){
-            indexMap = new HashMap<>();
-        }
-
-        indexMap.put( indexPhysicalKey, index );
-        this.indexes.putIfAbsent( indexLogicalKey, indexMap );
-        this.indexList.add( index );
-    }
+//    public void addIndex( final IIndexKey indexLogicalKey, final IKey indexPhysicalKey, AbstractIndex<IKey> index ){
+//        Map<IKey,AbstractIndex<IKey>> indexMap = this.indexes.get(indexLogicalKey);
+//
+//        if( indexMap == null ){
+//            indexMap = new HashMap<>();
+//        }
+//
+//        indexMap.put( indexPhysicalKey, index );
+//        this.indexes.putIfAbsent( indexLogicalKey, indexMap );
+//        this.indexList.add( index );
+//    }
 
     public Map<Table, int[]> getForeignKeysGroupedByTable(){
         return this.foreignKeysGroupedByTableMap;

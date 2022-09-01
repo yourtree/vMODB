@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.modb.service.server;
 
-import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 import dk.ku.di.dms.vms.web_common.modb.VmsEventSchema;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
@@ -31,7 +30,7 @@ import java.util.concurrent.*;
  *  ===> This thread cannot be put to sleep since it acts as a server, serving requests from both the coordinator and the sdk
  *  To fix what is explained above we need a proper thread pool and completion handlers...
  *
- * TODO: standardize log messages
+ * TODO: standardize log messages, cache query plans
  *
  */
 public class AsyncVMSServer extends SignalingStoppableRunnable {
@@ -42,9 +41,9 @@ public class AsyncVMSServer extends SignalingStoppableRunnable {
 
     private AsynchronousServerSocketChannel serverSocket;
 
-    private final Queue<TransactionalEvent> inputQueue;
+    private final Queue<Object> inputQueue;
 
-    private final Queue<TransactionalEvent> outputQueue;
+    private final Queue<Object> outputQueue;
 
     private final IVmsSerdesProxy serdes;
 
@@ -56,7 +55,7 @@ public class AsyncVMSServer extends SignalingStoppableRunnable {
 
     private final ByteBuffer eventWriteBuffer;
 
-    public AsyncVMSServer(Queue<TransactionalEvent> inputQueue, Queue<TransactionalEvent> outputQueue, IVmsSerdesProxy serdes) {
+    public AsyncVMSServer(Queue<Object> inputQueue, Queue<Object> outputQueue, IVmsSerdesProxy serdes) {
         super();
 
         this.inputQueue = inputQueue;

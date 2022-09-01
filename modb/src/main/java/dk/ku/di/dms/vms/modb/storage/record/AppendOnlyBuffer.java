@@ -1,11 +1,7 @@
 package dk.ku.di.dms.vms.modb.storage.record;
 
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
 import dk.ku.di.dms.vms.modb.common.meta.MemoryUtils;
 import sun.misc.Unsafe;
-
-import java.util.List;
-import java.util.Map;
 
 /**
  * Append-only buffer.
@@ -87,23 +83,30 @@ public class AppendOnlyBuffer {
         this.nextOffset += Long.BYTES;
     }
 
+    public void append(int value){
+        UNSAFE.putInt(nextOffset, value);
+        this.nextOffset += Integer.BYTES;
+    }
+
+    public void append(float value){
+        UNSAFE.putFloat(nextOffset, value);
+        this.nextOffset += Float.BYTES;
+    }
+
     /**
-     * Data type can repeat, but address cannot
-     * Address points to the record column offset
+     * Data type agnostic. Simple memory copy
      *
      * A possible optimization is verifying whether
      * there are subsequent columns
      * so they can be copied together
-     *
-     * @param values the map
      */
-    public void append(List<Map.Entry<long, DataType>> values){
-        DataType dt;
-        for(Map.Entry<long, DataType> entry : values) {
-            dt = entry.getValue();
-            UNSAFE.copyMemory( entry.getKey(), this.nextOffset, dt.value );
-            this.nextOffset += dt.value;
+    public void append(long srcAddress, int[] projectionColumns, int[] columnOffset, int[] valueSizeInBytes) {
+
+        for(int i = 0; i < projectionColumns.length; i++){
+            UNSAFE.copyMemory(null, srcAddress, null,
+                    nextOffset + columnOffset[projectionColumns[i]], valueSizeInBytes[i]);
         }
+
     }
 
 }

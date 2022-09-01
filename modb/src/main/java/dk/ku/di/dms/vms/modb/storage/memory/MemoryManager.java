@@ -31,6 +31,13 @@ import java.util.Map;
  */
 public final class MemoryManager {
 
+    /**
+     * TODO better to rely on the JVM class
+     * {@link sun.nio.ch.Util}
+     * #getTemporaryDirectBuffer
+     * If this class cannot be used, then use it as inspiration?
+     */
+
     private static final int DEFAULT_KB = 2000; // 4KB -> 4000 bytes
 
     private Catalog catalog;

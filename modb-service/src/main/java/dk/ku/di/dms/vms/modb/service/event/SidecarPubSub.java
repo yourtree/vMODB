@@ -2,16 +2,15 @@ package dk.ku.di.dms.vms.modb.service.event;
 
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
-import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 
 import java.util.LinkedList;
 import java.util.Queue;
 
 public class SidecarPubSub {
     
-    public final Queue<TransactionalEvent> inputQueue;
+    public final Queue<Object> inputQueue;
 
-    public final Queue<TransactionalEvent> outputQueue;
+    public final Queue<Object> outputQueue;
 
     public final Queue<DataRequestEvent> requestQueue;
 

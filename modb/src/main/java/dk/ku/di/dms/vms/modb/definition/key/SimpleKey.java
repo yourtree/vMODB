@@ -14,6 +14,10 @@ public class SimpleKey implements IKey, IIndexKey {
         this.value = value;
     }
 
+    public static IKey of(Object value) {
+        return new SimpleKey(value);
+    }
+
     @Override
     public int hashCode() {
         return value.hashCode();

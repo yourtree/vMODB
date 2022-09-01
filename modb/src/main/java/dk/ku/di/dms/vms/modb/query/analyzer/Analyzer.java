@@ -185,10 +185,8 @@ public final class Analyzer {
                     columnReference = findColumnReference(currWhere.column(), queryTree.tables);
                 }
 
-                // is it a reference to a table or a char? e.g., "'something'"
-                // FIXME for now I am considering all strings are joins
-
-                // check if there is some inner join. i.e., the object is a literal?
+                // 1. is it a reference to a table or a char? e.g., "'something'"
+                // 2. check if there is some inner join. i.e., the object is a literal?
                 if (currWhere.value() instanceof String value) {
 
                     ColumnReference columnReference1;
@@ -201,25 +199,20 @@ public final class Analyzer {
                         Table table = queryTree.tables.get(tableName);
                         if (table != null) {
                             columnReference1 = findColumnReference(columnName, table);
-                        } else {
-                            throw new AnalyzerException("Table not defined in the query: " + tableName);
-                        }
-                    } else {
-                        columnReference1 = findColumnReference(currWhere.column(), queryTree.tables);
+                            // build typed join clause
+                            JoinPredicate joinClause = new JoinPredicate(columnReference, columnReference1, currWhere.expression(), JoinTypeEnum.INNER_JOIN);
+                            queryTree.joinPredicates.add(joinClause);
+                            continue;
+                        }  // table is null, so no table, it is a literal
                     }
 
-                    // build typed join clause
-                    JoinPredicate joinClause = new JoinPredicate(columnReference, columnReference1, currWhere.expression(), JoinTypeEnum.INNER_JOIN);
-
-                    queryTree.joinPredicates.add(joinClause);
-
-                } else {
-                    // simple where
-                    WherePredicate whereClause = new WherePredicate(columnReference, currWhere.expression(), currWhere.value());
-
-                    // The order of the columns declared in the index definition matters
-                    queryTree.addWhereClauseSortedByColumnIndex(whereClause);
                 }
+
+                // simple where... maybe I should check the type is correct?
+                WherePredicate whereClause = new WherePredicate(columnReference, currWhere.expression(), currWhere.value());
+
+                // The order of the columns declared in the index definition matters
+                queryTree.addWhereClauseSortedByColumnIndex(whereClause);
 
             }
         }
@@ -229,25 +222,39 @@ public final class Analyzer {
     }
 
     /**
+     * Analyze simple where clauses, those not involving join, only a table
+     * @param whereClause
+     * @return
+     */
+    public List<WherePredicate> analyzeWhere(Table table, List<WhereClauseElement<?>> whereClause) throws AnalyzerException {
+        List<WherePredicate> newList = new ArrayList<>(whereClause.size());
+        // this assumes param is a value (number or char/string)
+        for(WhereClauseElement<?> element : whereClause){
+            ColumnReference columnReference = findColumnReference(element.column(), table);
+            newList.add( new WherePredicate(columnReference, element.expression(), element.value()) );
+        }
+        return newList;
+    }
+
+    /**
      * basically transforms the raw input into known and safe metadata, e.g., whether a table, column exists
      * https://docs.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql?view=sql-server-ver15#logical-processing-order-of-the-select-statement
      * @param statement The statement to process
      * @return The resulting query tree
      * @throws AnalyzerException Unexpected statement type
      */
-    private QueryTree analyze(final IStatement statement) throws AnalyzerException {
+    public QueryTree analyze(final IStatement statement) throws AnalyzerException {
 
         if(statement.isSelect()){
             return analyzeSelectStatement( statement.getAsSelectStatement() );
         } else if(statement.isUpdate()){
             final UpdateStatement update = statement.getAsUpdateStatement();
             // TODO FINISH
+            throw new AnalyzerException("Unknown statement type.");
         } else {
             // TODO FINISH
             throw new AnalyzerException("Unknown statement type.");
         }
-
-        return null;
 
     }
 

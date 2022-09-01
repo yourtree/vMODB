@@ -2,9 +2,6 @@ package dk.ku.di.dms.vms.modb.common.meta;
 
 import sun.misc.Unsafe;
 
-import java.nio.ByteBuffer;
-import java.util.function.Function;
-
 import static dk.ku.di.dms.vms.modb.common.meta.Constants.DEFAULT_MAX_SIZE_CHAR;
 
 public class DataTypeUtils {
@@ -16,8 +13,8 @@ public class DataTypeUtils {
     public static Object getValue(DataType dt, long address){
 
         switch (dt) {
-            case BYTE -> {
-                return UNSAFE.getByte(address);
+            case BOOL -> {
+                return UNSAFE.getBoolean(null, address);
             }
             case INT -> {
                 return UNSAFE.getInt(address);
@@ -44,10 +41,6 @@ public class DataTypeUtils {
 
         }
 
-    }
-
-    private static Object getChar(ByteBuffer buffer) {
-        return buffer.get(buffer.array(), buffer.position(), buffer.position() + DEFAULT_MAX_SIZE_CHAR);
     }
 
 }

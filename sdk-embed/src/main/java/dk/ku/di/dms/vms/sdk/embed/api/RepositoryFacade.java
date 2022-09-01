@@ -1,27 +1,42 @@
 package dk.ku.di.dms.vms.sdk.embed.api;
 
-import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
-import dk.ku.di.dms.vms.modb.common.interfaces.IRepository;
+import dk.ku.di.dms.vms.modb.common.interfaces.application.IEntity;
+import dk.ku.di.dms.vms.modb.common.interfaces.application.IRepository;
+import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
+import dk.ku.di.dms.vms.modb.definition.Row;
+import dk.ku.di.dms.vms.modb.definition.Table;
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
+import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
-import dk.ku.di.dms.vms.modb.query.executor.SequentialQueryExecutor;
 import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
+import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
+import dk.ku.di.dms.vms.modb.query.planner.execution.OperatorExecution;
+import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
+import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
+import dk.ku.di.dms.vms.modb.query.planner.operators.scan.AbstractScan;
+import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
+import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.sdk.core.client.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.VmsMetadataEmbed;
 import dk.ku.di.dms.vms.modb.query.planner.Planner;
-import dk.ku.di.dms.vms.modb.query.planner.operator.result.DataTransferObjectOperatorResult;
-import dk.ku.di.dms.vms.modb.query.planner.tree.PlanNode;
-import dk.ku.di.dms.vms.modb.schema.Row;
-import dk.ku.di.dms.vms.modb.table.Table;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.logging.Logger;
 
-public final class RepositoryFacade implements InvocationHandler {
+public final class RepositoryFacade implements IVmsRepositoryFacade, InvocationHandler {
 
     private static Logger LOGGER = Logger.getLogger(RepositoryFacade.class.getName());
 
@@ -34,6 +49,8 @@ public final class RepositoryFacade implements InvocationHandler {
     private Analyzer analyzer;
     private Planner planner;
 
+    private Map<String, AbstractOperator> cachedPlans;
+
     @SuppressWarnings({"unchecked"})
     public RepositoryFacade(final Class<? extends IRepository<?,?>> repositoryClazz){
 
@@ -41,6 +58,9 @@ public final class RepositoryFacade implements InvocationHandler {
 
         this.entityClazz = (Class<? extends IEntity<?>>) types[1];
         this.pkClazz = (Class<?>) types[0];
+
+        // read-only transactions may put items here
+        this.cachedPlans = new ConcurrentHashMap<>();
     }
 
     public void setAnalyzer(final Analyzer analyzer){
@@ -84,26 +104,60 @@ public final class RepositoryFacade implements InvocationHandler {
 
                 Table tableForInsertion = this.vmsMetadata.getTableByEntityClazz( entityClazz );
 
-                PlanNode node = planner.planBulkInsert(tableForInsertion, (List<? extends IEntity<?>>) args[0]); //(args[0]);
-
-                SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(node);
-
-                queryExecutor.get();
+//                PlanNode node = planner.planBulkInsert(tableForInsertion, (List<? extends IEntity<?>>) args[0]); //(args[0]);
+//
+//                SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(node);
+//
+//                queryExecutor.get();
 
                 break;
             }
             case "fetch": {
 
                 // dispatch to analyzer passing the clazz param
-                QueryTree queryTree = analyzer.analyze( (IStatement) args[0], (Class<?>) args[1]);
-                PlanNode node = planner.plan( queryTree );
 
-                // TODO get concrete executor from application metadata
-                SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(node);
+                // always select because of the repository API
+                SelectStatement selectStatement = ((IStatement) args[0]).getAsSelectStatement();
 
-                DataTransferObjectOperatorResult result = queryExecutor.get().asDataTransferObjectOperatorResult();
-                return result.getDataTransferObjects().size() > 1 ?
-                        result.getDataTransferObjects() : result.getDataTransferObjects().get(0);
+                String sqlAsKey = selectStatement.SQL.toString();
+
+                AbstractOperator scanOperator = cachedPlans.get( sqlAsKey );
+
+                if(scanOperator == null){
+                    QueryTree queryTree;
+                    try {
+                        queryTree = analyzer.analyze(selectStatement);
+                        scanOperator = planner.plan(queryTree);
+                        cachedPlans.put(sqlAsKey, scanOperator );
+                    } catch (AnalyzerException ignored) { return null; }
+
+                } else {
+                    // get only the where clause params
+                    var aux = analyzer.analyzeWhere(scanOperator.asAbstractScan().index.getTable(), selectStatement.whereClause);
+                }
+
+
+                if(scanOperator.isIndexScan()){
+                    // build keys and filters
+
+                    // MemoryRefNode memRes = OperatorExecution.build(  );
+
+                } else {
+                    // build only filters
+
+                }
+
+
+
+                // QueryTree queryTree = analyzer.analyze( (IStatement) args[0], (Class<?>) args[1]);
+//                PlanNode node = planner.plan( queryTree );
+//
+//                // TODO get concrete executor from application metadata
+//                SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(node);
+//
+//                DataTransferObjectOperatorResult result = queryExecutor.get().asDataTransferObjectOperatorResult();
+//                return result.getDataTransferObjects().size() > 1 ?
+//                        result.getDataTransferObjects() : result.getDataTransferObjects().get(0);
 
             }
             default: throw new IllegalStateException("Unknown repository operation.");
@@ -111,5 +165,7 @@ public final class RepositoryFacade implements InvocationHandler {
 
         return null;
     }
+
+
 }
 

@@ -8,6 +8,9 @@ import dk.ku.di.dms.vms.modb.common.query.statement.AbstractStatement;
 
 import java.util.ArrayList;
 
+import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.AND;
+import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.OR;
+
 /**
  * A class that embraces the commonalities found in both SELECT
  * and UPDATE statements such as where and join clauses
@@ -32,12 +35,18 @@ public abstract class AbstractStatementBuilder {
         public WhereClausePredicate<T> where(final String param, final ExpressionTypeEnum expr, final Object value) {
             WhereClauseElement<Object> element = new WhereClauseElement<>(param,expr,value);
             this.statement.whereClause.add( element );
+            this.statement.SQL.append(param);
+            this.statement.SQL.append(expr.name);
+            this.statement.SQL.append('?');
             return new WhereClausePredicate<>(this.statement);
         }
 
         public WhereClausePredicate<T> where(String param1, ExpressionTypeEnum expr, String param2){
             WhereClauseElement<String> element = new WhereClauseElement<>(param1,expr,param2);
             this.statement.whereClause.add( element );
+            this.statement.SQL.append(param1);
+            this.statement.SQL.append(expr.name);
+            this.statement.SQL.append(param2);
             return new WhereClausePredicate<>(this.statement);
         }
 
@@ -68,7 +77,7 @@ public abstract class AbstractStatementBuilder {
             return new CondJoinWhereClauseBridge<>(joinClauseElement, this.statement);
         }
 
-        // TODO implement later
+        // TODO JOIN with OR condition implement later or leave like this?
 //        public CondJoinWhereClauseBridge or(){
 //
 //        }
@@ -95,13 +104,20 @@ public abstract class AbstractStatementBuilder {
             this.statement.joinClause = new ArrayList<>();
         }
 
-        public CondJoinWhereClauseBridge<T> on(ExpressionTypeEnum expression, String table, String param) {
+        public CondJoinWhereClauseBridge<T> on(ExpressionTypeEnum expression, String table, String columnParam) {
             JoinClauseElement joinClauseElement =
-                    new JoinClauseElement(this.table,this.column,this.joinType, expression, table, param);
+                    new JoinClauseElement(this.table,this.column,this.joinType, expression, table, columnParam);
             this.statement.joinClause.add(joinClauseElement);
-            // cannot nullify now given I may still need in case of another join condition for this same JOIN
-            // this.tempJoinTable = null;
-            // this.tempJoinType = null;
+            /*
+               cannot nullify now given I may still need in case of another join condition for this same JOIN
+               this.tempJoinTable = null;
+               this.tempJoinType = null;
+            */
+            this.statement.SQL.append(this.table);
+            this.statement.SQL.append(this.column);
+            this.statement.SQL.append(this.joinType.name);
+            this.statement.SQL.append(table);
+            this.statement.SQL.append(columnParam);
             return new CondJoinWhereClauseBridge<>( joinClauseElement, this.statement );
         }
 
@@ -119,12 +135,20 @@ public abstract class AbstractStatementBuilder {
         public WhereClausePredicate<T> and(String param, final ExpressionTypeEnum expr, final Object value) {
             WhereClauseElement<Object> element = new WhereClauseElement<>(param,expr,value);
             this.statement.whereClause.add( element );
+            this.statement.SQL.append(AND.name);
+            this.statement.SQL.append(param);
+            this.statement.SQL.append(expr.name);
+            this.statement.SQL.append('?');
             return this;
         }
 
         public WhereClausePredicate<T> or(String param, final ExpressionTypeEnum expr, final Object value) {
             WhereClauseElement<Object> element = new WhereClauseElement<>(param,expr,value);
             this.statement.whereClause.add( element );
+            this.statement.SQL.append(OR.name);
+            this.statement.SQL.append(param);
+            this.statement.SQL.append(expr.name);
+            this.statement.SQL.append('?');
             return this;
         }
 

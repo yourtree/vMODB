@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.micro_tpcc.service;
 
 import dk.ku.di.dms.vms.modb.common.interfaces.application.IVmsFuture;
+import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
 import dk.ku.di.dms.vms.sdk.core.annotations.Microservice;
 import dk.ku.di.dms.vms.sdk.core.annotations.Outbound;
@@ -31,7 +32,7 @@ public class CustomerService {
     public CustomerNewOrderOut provideCustomerDataToOrder(CustomerNewOrderIn in) {
 
         SelectStatementBuilder builder = QueryBuilderFactory.select();
-        IStatement sql = builder.select("c_discount, c_last, c_credit")//.into(CustomerInfoDTO.class)
+        SelectStatement sql = builder.select("c_discount, c_last, c_credit")//.into(CustomerInfoDTO.class)
                             .from("customer")
                             .where("c_w_id", EQUALS, in.c_w_id())
                             .and("c_d_id", EQUALS, in.c_d_id())

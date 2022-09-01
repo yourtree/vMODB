@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.micro_tpcc.service;
 
 import dk.ku.di.dms.vms.micro_tpcc.events.StockNewOrderOut;
 import dk.ku.di.dms.vms.modb.common.interfaces.application.IDTO;
+import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
 import dk.ku.di.dms.vms.sdk.core.annotations.Microservice;
 import dk.ku.di.dms.vms.sdk.core.annotations.Outbound;
@@ -46,7 +47,7 @@ public class StockService {
             futures[finalI] = CompletableFuture.runAsync(() -> {
 
                 SelectStatementBuilder builder = QueryBuilderFactory.select();
-                IStatement sql = builder.select("s_quantity")
+                SelectStatement sql = builder.select("s_quantity")
                         .from("stock")
                         .where("s_i_id", ExpressionTypeEnum.EQUALS, in.itemsIds()[finalI])
                         .and("s_w_id", ExpressionTypeEnum.EQUALS, in.supware()[finalI])
@@ -97,7 +98,7 @@ public class StockService {
         for(int i = 0; i < size; i++) {
 
             SelectStatementBuilder builder = QueryBuilderFactory.select();
-            IStatement sql = builder.select("s_i_id, s_dist")//.into(CustomerInfoDTO.class)
+            SelectStatement sql = builder.select("s_i_id, s_dist")//.into(CustomerInfoDTO.class)
                     .from("stock")
                     .where("s_i_id", EQUALS, in.itemsIds()[i])
                     .and("w_i_id", EQUALS, in.supware()[i])

@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.modb.service.server;
 
-import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
 
@@ -28,9 +27,9 @@ public class AsyncSocketEventHandler extends StoppableRunnable {
     private final Logger logger = getLogger(AsyncSocketEventHandler.class.getName());
 
     /** EVENT QUEUES **/
-    private final Queue<TransactionEvent> inputQueue;
+    private final Queue<Object> inputQueue;
 
-    private final Queue<TransactionalEvent> outputQueue;
+    private final Queue<Object> outputQueue;
 
     /** SOCKET CHANNEL */
     private final AsynchronousSocketChannel socketChannel;
@@ -46,7 +45,9 @@ public class AsyncSocketEventHandler extends StoppableRunnable {
     /** SERIALIZATION **/
     private final IVmsSerdesProxy serdes;
 
-    public AsyncSocketEventHandler(AsynchronousSocketChannel clientSocket, Queue<TransactionalEvent> inputQueue, Queue<TransactionalEvent> outputQueue, IVmsSerdesProxy serdes) {
+    public AsyncSocketEventHandler(AsynchronousSocketChannel clientSocket,
+                                   Queue<Object> inputQueue,
+                                   Queue<Object> outputQueue, IVmsSerdesProxy serdes) {
 
         this.inputQueue = inputQueue;
         this.outputQueue = outputQueue;
@@ -113,7 +114,7 @@ public class AsyncSocketEventHandler extends StoppableRunnable {
                 //  i may need to deserialize to store what have been processed so far...
                 //  but i can store the byte directly and deserialize on occasion...
                 //  but for now I can just forward...
-                TransactionalEvent event = serdes.deserializeToTransactionalEvent(readBuffer.array());
+                // Object event = serdes.deserialize(readBuffer.array());
 
             } catch (ExecutionException | InterruptedException e) {
                 logger.log(Level.WARNING, e.getMessage());
