@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
+import dk.ku.di.dms.vms.modb.query.planner.operators.join.HashJoinWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.AbstractScan;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
@@ -20,7 +21,7 @@ public abstract class AbstractOperator {
 
     protected AppendOnlyBuffer currentBuffer;
 
-    private final int entrySize;
+    protected final int entrySize;
 
     public AbstractOperator(int entrySize) {
         this.entrySize = entrySize;
@@ -91,15 +92,14 @@ public abstract class AbstractOperator {
 
     }
 
+    /**
+     * Only used by count operator
+     * @param count
+     */
     protected void append( int count ) {
         ensureMemoryCapacity();
         this.currentBuffer.append(1); // number of rows
         this.currentBuffer.append(count);
-    }
-
-    protected void append( long address, int[] projectionColumns, int[] columnOffset, int[] valueSizeInBytes) {
-        ensureMemoryCapacity();
-        this.currentBuffer.append(address, projectionColumns, columnOffset, valueSizeInBytes);
     }
 
     // must be overridden by the concrete operators
@@ -110,6 +110,8 @@ public abstract class AbstractOperator {
     public boolean isIndexScan(){
         return false;
     }
+
+    public boolean isHashJoin() { return false; }
 
     public IndexScanWithProjection asIndexScan(){
         throw new IllegalStateException("No index scan operator");
@@ -122,5 +124,7 @@ public abstract class AbstractOperator {
     public AbstractScan asScan(){
         throw new IllegalStateException("No abstract scan operator");
     }
+
+    public HashJoinWithProjection asHashJoin() { throw new IllegalStateException("No hash join operator"); }
 
 }

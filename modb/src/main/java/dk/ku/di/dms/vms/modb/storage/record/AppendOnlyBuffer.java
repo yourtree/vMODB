@@ -74,12 +74,8 @@ public class AppendOnlyBuffer {
         this.nextOffset += bytes;
     }
 
-    /**
-     * "Append" operations to support scan
-     * @param srcAddress the source address of the record
-     */
-    public void append(long srcAddress){
-        UNSAFE.putLong(nextOffset, srcAddress);
+    public void append(long value){
+        UNSAFE.putLong(nextOffset, value);
         this.nextOffset += Long.BYTES;
     }
 
@@ -107,6 +103,11 @@ public class AppendOnlyBuffer {
                     nextOffset + columnOffset[projectionColumns[i]], valueSizeInBytes[i]);
         }
 
+    }
+
+    public void append(long srcAddress, int columnOffset, int valueSizeInBytes) {
+        UNSAFE.copyMemory(null, srcAddress, null,
+                nextOffset + columnOffset, valueSizeInBytes);
     }
 
 }

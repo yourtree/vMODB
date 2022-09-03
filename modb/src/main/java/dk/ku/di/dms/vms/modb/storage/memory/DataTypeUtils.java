@@ -3,6 +3,10 @@ package dk.ku.di.dms.vms.modb.storage.memory;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import sun.misc.Unsafe;
 
+import java.nio.Buffer;
+import java.nio.ByteBuffer;
+import java.util.function.Function;
+
 import static dk.ku.di.dms.vms.modb.common.type.Constants.DEFAULT_MAX_SIZE_CHAR;
 
 public class DataTypeUtils {
@@ -42,6 +46,52 @@ public class DataTypeUtils {
 
         }
 
+    }
+
+    /**
+     * Used by the append only buffer?
+     * @param dt
+     * @return
+     */
+    public static Function<ByteBuffer,?> getReadFunction(DataType dt){
+        switch (dt){
+            case BOOL -> {
+                 return ByteBuffer::get; // byte is used. on unsafe, the boolean is used
+             }
+             case INT -> {
+                     return ByteBuffer::getInt;
+                 }
+             case CHAR -> {
+                     return DataTypeUtils::getChar;
+                 }
+             case LONG, DATE -> {
+                     return ByteBuffer::getLong;
+                 }
+             case FLOAT -> {
+                     return ByteBuffer::getFloat;
+                 }
+             case DOUBLE -> {
+                     return ByteBuffer::getDouble;
+                 }
+             default -> throw new IllegalStateException("Unknown data type");
+        }
+    }
+
+    // just a wrapper
+//    public static <T> void callWriteFunction(long address, DataType dt, T value){
+//        switch (dt){
+//            case BOOL -> {
+//                // byte is used. on unsafe, the boolean is used
+//                UNSAFE.copyMemory(heapMemory, sourcePointer, null, targetPointer, numBytes);
+//                UNSAFE.putObject(address, value);
+//            }
+//            case INT, CHAR, LONG, DATE, FLOAT, DOUBLE -> UNSAFE.putObject(buffer, address, value);
+//            default -> throw new IllegalStateException("Unknown data type");
+//        }
+//    }
+
+    private static Object getChar(ByteBuffer buffer) {
+        return buffer.get(buffer.array(), buffer.position(), buffer.position() + DEFAULT_MAX_SIZE_CHAR);
     }
 
 }

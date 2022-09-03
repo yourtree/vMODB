@@ -6,8 +6,11 @@ import jdk.incubator.foreign.MemorySegment;
 
 import java.nio.ByteBuffer;
 import java.time.temporal.ValueRange;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedSet;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 /**
  *
@@ -36,6 +39,59 @@ public final class MemoryManager {
      * #getTemporaryDirectBuffer
      * If this class cannot be used, then use it as inspiration?
      */
+
+    /**
+     * A cache of direct byte buffers.
+     */
+    private static class BufferCache {
+
+        // ordered by size
+        private SortedSet<ByteBuffer> buffers; // concurrent?
+
+        private BufferCache(){
+            this.buffers = new ConcurrentSkipListSet<>( (a,b) -> a.capacity() > b.capacity() ? 1 : 0 );
+        }
+
+        public ByteBuffer get(int size) {
+
+            if (buffers.isEmpty()) return null;
+
+            for (ByteBuffer bb : buffers) {
+                if (bb.capacity() > size) {
+                    boolean res = buffers.remove(bb);
+                    if(res) { //  a concurrent call removed it
+                        // prepare the buffer and return it
+                        bb.rewind();
+                        bb.limit(size);
+                        return bb;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        public void offer(ByteBuffer buf) {
+            this.buffers.add(buf);
+        }
+
+    }
+
+    private static final BufferCache bufferCache = new BufferCache();
+
+    public static ByteBuffer getTemporaryDirectBuffer(int size) {
+
+        ByteBuffer bb = bufferCache.get(size);
+        if(bb == null){
+            return ByteBuffer.allocateDirect(size);
+        }
+        return bb;
+
+    }
+
+    public static void releaseTemporaryDirectBuffer(ByteBuffer buf) {
+        bufferCache.offer(buf);
+    }
 
     private static final int DEFAULT_KB = 2000; // 4KB -> 4000 bytes
 

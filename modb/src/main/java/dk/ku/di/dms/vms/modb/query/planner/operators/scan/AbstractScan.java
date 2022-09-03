@@ -20,8 +20,16 @@ public abstract class AbstractScan extends AbstractOperator  {
         this.projectionColumnSize = projectionColumnSize;
     }
 
-    public AbstractScan asAbstractScan(){
+    @Override
+    public AbstractScan asScan(){
         return this;
+    }
+
+    protected void append( long address, int[] projectionColumns, int[] columnOffset, int[] valueSizeInBytes) {
+        ensureMemoryCapacity();
+        this.currentBuffer.append(address, projectionColumns, columnOffset, valueSizeInBytes);
+        // move the offset pointer
+        this.currentBuffer.reserve(entrySize);
     }
 
 }
