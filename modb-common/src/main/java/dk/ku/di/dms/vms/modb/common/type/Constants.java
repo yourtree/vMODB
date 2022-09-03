@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.common.meta;
+package dk.ku.di.dms.vms.modb.common.type;
 
 public class Constants {
 

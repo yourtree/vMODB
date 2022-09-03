@@ -10,8 +10,6 @@ public enum GroupByOperationEnum {
 
     public final String name;
 
-    GroupByOperationEnum(){ this.name = name(); }
-
     GroupByOperationEnum(String name) {
         this.name = name;
     }

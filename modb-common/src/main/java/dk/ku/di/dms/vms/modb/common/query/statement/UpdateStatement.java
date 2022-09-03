@@ -4,18 +4,20 @@ import dk.ku.di.dms.vms.modb.common.query.clause.SetClauseElement;
 
 import java.util.List;
 
-public class UpdateStatement extends AbstractStatement {
+public final class UpdateStatement extends AbstractStatement {
 
     public String table;
 
     public List<SetClauseElement> setClause;
 
     @Override
-    public UpdateStatement getAsUpdateStatement() {
+    public UpdateStatement asUpdateStatement() {
         return this;
     }
 
     @Override
-    public boolean isUpdate(){ return true; }
+    public StatementType getType() {
+        return StatementType.UPDATE;
+    }
 
 }

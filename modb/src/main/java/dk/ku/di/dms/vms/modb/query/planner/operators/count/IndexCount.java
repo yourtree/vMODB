@@ -27,10 +27,10 @@ public class IndexCount extends AbstractOperator {
 
     private int count;
 
-    public IndexCount(int id, AbstractIndex<IKey> index,
+    public IndexCount(AbstractIndex<IKey> index,
                                    FilterContext filterContext,
                                    IKey... keys) {
-        super(id, Integer.BYTES);
+        super(Integer.BYTES);
         this.index = index;
         this.filterContext = filterContext;
         this.keys = keys;

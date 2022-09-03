@@ -1,6 +1,6 @@
-package dk.ku.di.dms.vms.modb.common.meta;
+package dk.ku.di.dms.vms.modb.common.type;
 
-import static dk.ku.di.dms.vms.modb.common.meta.Constants.DEFAULT_MAX_SIZE_CHAR;
+import static dk.ku.di.dms.vms.modb.common.type.Constants.DEFAULT_MAX_SIZE_CHAR;
 
 public enum DataType {
 

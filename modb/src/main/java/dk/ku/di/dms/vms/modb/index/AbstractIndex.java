@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.index;
 
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
-import dk.ku.di.dms.vms.modb.common.meta.MemoryUtils;
+import dk.ku.di.dms.vms.modb.storage.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import sun.misc.Unsafe;

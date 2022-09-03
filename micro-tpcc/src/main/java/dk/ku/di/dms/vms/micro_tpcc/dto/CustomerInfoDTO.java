@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.micro_tpcc.dto;
 
-import dk.ku.di.dms.vms.modb.common.interfaces.application.IDTO;
+import dk.ku.di.dms.vms.modb.common.interfaces.IDTO;
 
 public class CustomerInfoDTO implements IDTO {
 

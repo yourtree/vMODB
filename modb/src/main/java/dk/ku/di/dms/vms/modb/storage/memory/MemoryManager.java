@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.modb.storage.memory;
 
-import dk.ku.di.dms.vms.modb.common.meta.MemoryUtils;
 import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import jdk.incubator.foreign.MemorySegment;

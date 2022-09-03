@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.storage.iterator;
 
-import dk.ku.di.dms.vms.modb.common.meta.MemoryUtils;
+import dk.ku.di.dms.vms.modb.storage.memory.MemoryUtils;
 import sun.misc.Unsafe;
 
 import java.util.Iterator;

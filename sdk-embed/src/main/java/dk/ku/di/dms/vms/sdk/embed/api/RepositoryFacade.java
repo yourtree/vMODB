@@ -1,24 +1,17 @@
 package dk.ku.di.dms.vms.sdk.embed.api;
 
-import dk.ku.di.dms.vms.modb.common.interfaces.application.IEntity;
-import dk.ku.di.dms.vms.modb.common.interfaces.application.IRepository;
+import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
+import dk.ku.di.dms.vms.modb.common.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.definition.Row;
 import dk.ku.di.dms.vms.modb.definition.Table;
-import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.planner.execution.OperatorExecution;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
-import dk.ku.di.dms.vms.modb.query.planner.operators.scan.AbstractScan;
-import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
 import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.sdk.core.client.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.VmsMetadataEmbed;
@@ -28,12 +21,9 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 import java.util.logging.Logger;
 
 public final class RepositoryFacade implements IVmsRepositoryFacade, InvocationHandler {
@@ -117,47 +107,39 @@ public final class RepositoryFacade implements IVmsRepositoryFacade, InvocationH
                 // dispatch to analyzer passing the clazz param
 
                 // always select because of the repository API
-                SelectStatement selectStatement = ((IStatement) args[0]).getAsSelectStatement();
+                SelectStatement selectStatement = ((IStatement) args[0]).asSelectStatement();
 
                 String sqlAsKey = selectStatement.SQL.toString();
 
                 AbstractOperator scanOperator = cachedPlans.get( sqlAsKey );
 
+                List<WherePredicate> wherePredicates;
+
                 if(scanOperator == null){
                     QueryTree queryTree;
                     try {
                         queryTree = analyzer.analyze(selectStatement);
+                        wherePredicates = queryTree.wherePredicates;
                         scanOperator = planner.plan(queryTree);
                         cachedPlans.put(sqlAsKey, scanOperator );
                     } catch (AnalyzerException ignored) { return null; }
 
                 } else {
                     // get only the where clause params
-                    var aux = analyzer.analyzeWhere(scanOperator.asAbstractScan().index.getTable(), selectStatement.whereClause);
+                    wherePredicates = analyzer.analyzeWhere(
+                            scanOperator.asScan().index.getTable(), selectStatement.whereClause);
                 }
 
 
                 if(scanOperator.isIndexScan()){
                     // build keys and filters
-
-                    // MemoryRefNode memRes = OperatorExecution.build(  );
-
+                    MemoryRefNode memRes = OperatorExecution.run( wherePredicates, scanOperator.asIndexScan() );
                 } else {
                     // build only filters
 
                 }
 
 
-
-                // QueryTree queryTree = analyzer.analyze( (IStatement) args[0], (Class<?>) args[1]);
-//                PlanNode node = planner.plan( queryTree );
-//
-//                // TODO get concrete executor from application metadata
-//                SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(node);
-//
-//                DataTransferObjectOperatorResult result = queryExecutor.get().asDataTransferObjectOperatorResult();
-//                return result.getDataTransferObjects().size() > 1 ?
-//                        result.getDataTransferObjects() : result.getDataTransferObjects().get(0);
 
             }
             default: throw new IllegalStateException("Unknown repository operation.");

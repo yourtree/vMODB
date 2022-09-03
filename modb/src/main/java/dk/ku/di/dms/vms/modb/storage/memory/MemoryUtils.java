@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.common.meta;
+package dk.ku.di.dms.vms.modb.storage.memory;
 
 import sun.misc.Unsafe;
 

@@ -43,7 +43,7 @@ public final class IndexScanWithProjection extends AbstractScan {
         return this;
     }
 
-    public MemoryRefNode run(IKey[] keys, FilterContext filterContext) {
+    public MemoryRefNode run(FilterContext filterContext, IKey... keys) {
 
         if(index.getType() == IndexTypeEnum.UNIQUE){
 

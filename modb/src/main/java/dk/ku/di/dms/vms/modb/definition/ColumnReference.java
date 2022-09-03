@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.definition;
 
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 
 public final class ColumnReference {
 

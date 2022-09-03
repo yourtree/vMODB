@@ -2,16 +2,23 @@ package dk.ku.di.dms.vms.modb.common.query.statement;
 
 public interface IStatement {
 
-    default boolean isSelect(){ return false; }
+    StatementType getType();
 
-    default SelectStatement getAsSelectStatement(){
-        return null;
+    default SelectStatement asSelectStatement(){
+        throw new IllegalStateException("Not implemented.");
     }
 
-    default boolean isUpdate(){ return false; }
-
-    default UpdateStatement getAsUpdateStatement(){
-        return null;
+    default UpdateStatement asUpdateStatement(){
+        throw new IllegalStateException("Not implemented.");
     }
+
+    default DeleteStatement asDeleteStatement() {
+        throw new IllegalStateException("Not implemented.");
+    }
+
+    default InsertStatement asInsertStatement(){
+        throw new IllegalStateException("Not implemented.");
+    }
+
 
 }

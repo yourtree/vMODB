@@ -1,10 +1,9 @@
 package dk.ku.di.dms.vms.modb.common.query.builder;
 
-import dk.ku.di.dms.vms.modb.common.query.clause.GroupBySelectElement;
-import dk.ku.di.dms.vms.modb.common.query.clause.HavingClauseElement;
-import dk.ku.di.dms.vms.modb.common.query.clause.OrderByClauseElement;
+import dk.ku.di.dms.vms.modb.common.query.clause.*;
 import dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.modb.common.query.enums.GroupByOperationEnum;
+import dk.ku.di.dms.vms.modb.common.query.enums.JoinTypeEnum;
 import dk.ku.di.dms.vms.modb.common.query.enums.OrderBySortOrderEnum;
 import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
 
@@ -95,7 +94,109 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
     }
 
-    public class OrderByGroupByJoinWhereClauseBridge extends JoinWhereClauseBridge<SelectStatement> {
+    public class JoinClausePredicate {
+
+        private final SelectStatement statement;
+
+        /**
+         * The following attributes are used to cache the information received in the previous
+         * join method, so it can be used in the "on" method for correctly matching the table and attributes
+         */
+        private final String table;
+        private final String column;
+        private final JoinTypeEnum joinType;
+
+        protected JoinClausePredicate(SelectStatement statement, String table, String column){
+            this.statement = statement;
+            this.table = table;
+            this.column = column;
+            this.joinType = JoinTypeEnum.INNER_JOIN;
+            this.statement.joinClause = new ArrayList<>();
+        }
+
+        public CondJoinWhereClauseBridge on(ExpressionTypeEnum expression, String table, String columnParam) {
+            JoinClauseElement joinClauseElement =
+                    new JoinClauseElement(this.table,this.column,this.joinType, expression, table, columnParam);
+            this.statement.joinClause.add(joinClauseElement);
+            /*
+               cannot nullify now given I may still need in case of another join condition for this same JOIN
+               this.tempJoinTable = null;
+               this.tempJoinType = null;
+            */
+            this.statement.SQL.append(this.table);
+            this.statement.SQL.append(this.column);
+            this.statement.SQL.append(this.joinType.name);
+            this.statement.SQL.append(table);
+            this.statement.SQL.append(columnParam);
+            return new CondJoinWhereClauseBridge( joinClauseElement, this.statement );
+        }
+
+    }
+
+    /**
+     * Since after a FROM clause both WHERE and JOIN clauses can be specified, this class serves as bridge to define what comes next
+     */
+    public class JoinWhereClauseBridge implements IQueryBuilder<SelectStatement> {
+
+        protected final SelectStatement statement;
+
+        protected JoinWhereClauseBridge(SelectStatement statement){
+            this.statement = statement;
+        }
+
+        public WhereClausePredicate<SelectStatement> where(final String param, final ExpressionTypeEnum expr, final Object value) {
+            WhereClauseElement<Object> element = new WhereClauseElement<>(param,expr,value);
+            this.statement.whereClause.add( element );
+            this.statement.SQL.append(param);
+            this.statement.SQL.append(expr.name);
+            this.statement.SQL.append('?');
+            return new WhereClausePredicate<>(this.statement);
+        }
+
+        public WhereClausePredicate<SelectStatement> where(String param1, ExpressionTypeEnum expr, String param2){
+            WhereClauseElement<String> element = new WhereClauseElement<>(param1,expr,param2);
+            this.statement.whereClause.add( element );
+            this.statement.SQL.append(param1);
+            this.statement.SQL.append(expr.name);
+            this.statement.SQL.append(param2);
+            return new WhereClausePredicate<>(this.statement);
+        }
+
+        public JoinClausePredicate join(String table, String column) {
+            return new JoinClausePredicate(this.statement, table, column);
+        }
+
+        public SelectStatement build(){
+            return statement;
+        }
+
+    }
+
+    /**
+     * A join clause predicate can be proceeded by a where clause, another join or another join condition
+     */
+    public class CondJoinWhereClauseBridge extends JoinWhereClauseBridge {
+
+        private final JoinClauseElement joinClauseElement;
+
+        protected CondJoinWhereClauseBridge(JoinClauseElement joinClauseElement, SelectStatement statement){
+            super(statement);
+            this.joinClauseElement = joinClauseElement;
+        }
+
+        public CondJoinWhereClauseBridge and(String columnLeft, ExpressionTypeEnum expression, String columnRight){
+            this.joinClauseElement.addCondition( columnLeft, expression, columnRight );
+            return new CondJoinWhereClauseBridge(joinClauseElement, this.statement);
+        }
+
+        // TODO JOIN with OR condition implement later or leave like this?
+//        public CondJoinWhereClauseBridge or(){
+//
+//        }
+
+    }
+
+    public class OrderByGroupByJoinWhereClauseBridge extends JoinWhereClauseBridge {
 
         private final SelectStatement statement;
 
@@ -156,7 +257,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
     }
 
-    public class OrderByClausePredicate implements IQueryBuilder<SelectStatement> {
+    public static class OrderByClausePredicate implements IQueryBuilder<SelectStatement> {
 
         private final SelectStatement statement;
 
@@ -177,8 +278,6 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
     }
 
-    // not of my interest to make it static,
-    // otherwise developers could instantiate it directly (in case the constructor were public)
     public static class QuerySeal implements IQueryBuilder<SelectStatement> {
 
         private final SelectStatement statement;

@@ -1,14 +1,15 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators;
 
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.AbstractScan;
+import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
 import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
-import dk.ku.di.dms.vms.modb.common.meta.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.storage.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
 
@@ -102,7 +103,7 @@ public abstract class AbstractOperator {
     }
 
     // must be overridden by the concrete operators
-    public boolean isScan(){
+    public boolean isFullScan(){
         return false;
     }
 
@@ -114,12 +115,12 @@ public abstract class AbstractOperator {
         throw new IllegalStateException("No index scan operator");
     }
 
-    public IndexScanWithProjection asScan(){
-        throw new IllegalStateException("No scan operator");
+    public FullScanWithProjection asFullScan(){
+        throw new IllegalStateException("No full scan operator");
     }
 
-    public AbstractScan asAbstractScan(){
-        throw new IllegalStateException("No scan operator");
+    public AbstractScan asScan(){
+        throw new IllegalStateException("No abstract scan operator");
     }
 
 }

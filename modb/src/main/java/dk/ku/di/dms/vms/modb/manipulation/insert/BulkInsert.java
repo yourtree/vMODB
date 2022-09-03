@@ -2,9 +2,6 @@ package dk.ku.di.dms.vms.modb.manipulation.insert;
 
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
-import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.common.meta.MemoryUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 
 import java.nio.ByteBuffer;
@@ -141,11 +138,11 @@ public class BulkInsert implements Runnable,
             // how would a seek execute?
 
             // a fk is always a PK of the other table
-            IKey pk = KeyUtils.buildRecordKey( fkTable.getKey().getSchema(), record, fkTable.getValue() );
-
-            // 2 - does the record exists in the table?
-            if( ! fkTable.getKey().getPrimaryKeyIndex().exists( pk ) )
-                return false;
+//            IKey pk = KeyUtils.buildRecordKey( fkTable.getKey().getSchema(), record, fkTable.getValue() );
+//
+//            // 2 - does the record exists in the table?
+//            if( ! fkTable.getKey().getPrimaryKeyIndex().exists( pk ) )
+//                return false;
 
         }
 
@@ -238,8 +235,8 @@ public class BulkInsert implements Runnable,
         if(violation) return;
 
         for(ByteBuffer record : records){
-            IKey recordKey = KeyUtils.buildRecordKey( table.getSchema(), record, table.getSchema().getPrimaryKeyColumns() );
-            table.getPrimaryKeyIndex().insert( recordKey, MemoryUtils.getByteBufferAddress(record) );
+//            IKey recordKey = KeyUtils.buildRecordKey( table.getSchema(), record, table.getSchema().getPrimaryKeyColumns() );
+//            table.getPrimaryKeyIndex().insert( recordKey, MemoryUtils.getByteBufferAddress(record) );
         }
 
     }
@@ -261,10 +258,10 @@ public class BulkInsert implements Runnable,
 
             // build key
             // 1 - get columns that form the PK from the schema
-            IKey recordKey = KeyUtils.buildRecordKey( table.getSchema(), record, table.getSchema().getPrimaryKeyColumns() );
-
-            // everything fine for this row
-            table.getPrimaryKeyIndex().insert( recordKey, MemoryUtils.getByteBufferAddress(record) );
+//            IKey recordKey = KeyUtils.buildRecordKey( table.getSchema(), record, table.getSchema().getPrimaryKeyColumns() );
+//
+//            // everything fine for this row
+//            table.getPrimaryKeyIndex().insert( recordKey, MemoryUtils.getByteBufferAddress(record) );
 
         }
         

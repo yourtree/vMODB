@@ -2,11 +2,12 @@ package dk.ku.di.dms.vms.modb.common.query.statement;
 
 import dk.ku.di.dms.vms.modb.common.query.clause.GroupBySelectElement;
 import dk.ku.di.dms.vms.modb.common.query.clause.HavingClauseElement;
+import dk.ku.di.dms.vms.modb.common.query.clause.JoinClauseElement;
 import dk.ku.di.dms.vms.modb.common.query.clause.OrderByClauseElement;
 
 import java.util.List;
 
-public class SelectStatement extends AbstractStatement {
+public final class SelectStatement extends AbstractStatement {
 
     public List<String> selectClause;
 
@@ -16,17 +17,21 @@ public class SelectStatement extends AbstractStatement {
 
     public List<String> fromClause;
 
+    public List<JoinClauseElement> joinClause;
+
     public List<OrderByClauseElement> orderByClause;
 
     public List<String> groupByClause;
 
     @Override
-    public SelectStatement getAsSelectStatement() {
-        return this;
+    public StatementType getType() {
+        return StatementType.SELECT;
     }
 
     @Override
-    public boolean isSelect(){ return true; }
+    public SelectStatement asSelectStatement() {
+        return this;
+    }
 
     // No support for UNION, EXCEPT, INTERSECT yet
 }

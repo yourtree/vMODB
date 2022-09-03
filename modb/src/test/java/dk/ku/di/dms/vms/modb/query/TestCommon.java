@@ -1,16 +1,16 @@
 package dk.ku.di.dms.vms.modb.query;
 
 import dk.ku.di.dms.vms.modb.ExecutorTest;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
+import dk.ku.di.dms.vms.modb.common.query.builder.SelectStatementBuilder;
+import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.definition.Catalog;
+import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
-import dk.ku.di.dms.vms.modb.common.query.builder.SelectStatementBuilder;
-import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
-import dk.ku.di.dms.vms.modb.definition.Schema;
 
 import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.EQUALS;
 

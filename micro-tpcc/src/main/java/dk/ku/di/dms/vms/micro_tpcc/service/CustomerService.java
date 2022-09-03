@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.micro_tpcc.service;
 
-import dk.ku.di.dms.vms.modb.common.interfaces.application.IVmsFuture;
+import dk.ku.di.dms.vms.modb.common.interfaces.IVmsFuture;
 import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
 import dk.ku.di.dms.vms.sdk.core.annotations.Microservice;
@@ -8,7 +8,6 @@ import dk.ku.di.dms.vms.sdk.core.annotations.Outbound;
 import dk.ku.di.dms.vms.sdk.core.annotations.Transactional;
 import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
 import dk.ku.di.dms.vms.modb.common.query.builder.SelectStatementBuilder;
-import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 import dk.ku.di.dms.vms.micro_tpcc.events.CustomerNewOrderOut;
 import dk.ku.di.dms.vms.micro_tpcc.events.CustomerNewOrderIn;
 import dk.ku.di.dms.vms.micro_tpcc.repository.ICustomerRepository;

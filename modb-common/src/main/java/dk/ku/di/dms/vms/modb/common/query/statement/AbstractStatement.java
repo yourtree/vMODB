@@ -1,17 +1,15 @@
 package dk.ku.di.dms.vms.modb.common.query.statement;
 
-import dk.ku.di.dms.vms.modb.common.query.clause.JoinClauseElement;
 import dk.ku.di.dms.vms.modb.common.query.clause.WhereClauseElement;
 
 import java.util.List;
 
-public abstract class AbstractStatement implements IStatement {
+public abstract sealed class AbstractStatement
+        implements IStatement permits SelectStatement, UpdateStatement, DeleteStatement {
 
-    // used later to cache query plans
+    // used later to cache query plans. where clause only found in select, update, and delete
     public StringBuilder SQL = new StringBuilder();
 
     public List<WhereClauseElement<?>> whereClause;
-
-    public List<JoinClauseElement> joinClause;
 
 }

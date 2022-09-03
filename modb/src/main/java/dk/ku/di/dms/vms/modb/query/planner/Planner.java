@@ -4,23 +4,16 @@ import dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
-import dk.ku.di.dms.vms.modb.index.IIndexKey;
-import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.AbstractScan;
+import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Planner that only takes into consideration simple queries.
@@ -29,14 +22,12 @@ import java.util.Map;
  */
 public class Planner {
 
-
-
-
+    public Planner(){}
 
     public AbstractOperator plan(QueryTree queryTree) {
 
-        if(queryTree.isSimpleSelect()){
-            planSimpleSelect(queryTree);
+        if(queryTree.isSimpleScan()){
+            return planSimpleSelect(queryTree);
         }
 
         return null;
@@ -61,35 +52,31 @@ public class Planner {
 
         AbstractIndex<IKey> indexSelected = pickIndex(tb, filterColumns);
 
+        // build projection
+
+        // compute before creating this. compute in startup
+        int nProj = queryTree.projections.size();
+        int[] projectionColumns = new int[nProj];
+        int[] valueSizeInBytes = new int[nProj];
+        int entrySize = 0;
+        for(int i = 0; i < nProj; i++){
+            projectionColumns[i] = queryTree.projections.get(i).columnPosition;
+            valueSizeInBytes[i] = indexSelected
+                    .getTable().getSchema()
+                    .getColumnDataType( queryTree.projections.get(i).columnPosition ).value;
+            entrySize += valueSizeInBytes[i];
+        }
+
         if(indexSelected != null) {
-
-            // build projection
-
-            // compute before creating this. compute in startup
-            int nProj = queryTree.projections.size();
-            int[] projectionColumns = new int[nProj];
-            int[] valueSizeInBytes = new int[nProj];
-            int entrySize = 0;
-            for(int i = 0; i < nProj; i++){
-                projectionColumns[i] = queryTree.projections.get(i).columnPosition;
-                valueSizeInBytes[i] = indexSelected
-                        .getTable().getSchema()
-                        .getColumnDataType( queryTree.projections.get(i).columnPosition ).value;
-                entrySize += valueSizeInBytes[i];
-            }
-
             // return the indexscanwithprojection
             return new IndexScanWithProjection(indexSelected, projectionColumns, valueSizeInBytes, entrySize);
 
         } else {
             // then must get the PK index, ScanWithProjection
-
-            // build filter
-
-            // build projection
+            return new FullScanWithProjection( tb.primaryKeyIndex, projectionColumns, valueSizeInBytes, entrySize );
 
         }
-        return null;
+
     }
 
     private AbstractIndex<IKey> pickIndex(Table table, int[] filterColumns){

@@ -1,25 +1,20 @@
 package dk.ku.di.dms.vms.modb.query;
 
-import dk.ku.di.dms.vms.modb.TestCommon;
-import dk.ku.di.dms.vms.modb.catalog.Catalog;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
-import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
-import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
-import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
-import dk.ku.di.dms.vms.modb.query.executor.SequentialQueryExecutor;
 import dk.ku.di.dms.vms.modb.common.query.builder.SelectStatementBuilder;
 import dk.ku.di.dms.vms.modb.common.query.builder.UpdateStatementBuilder;
 import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
-import dk.ku.di.dms.vms.modb.query.planner.operator.result.interfaces.IOperatorResult;
-import dk.ku.di.dms.vms.modb.query.planner.tree.PlanNode;
+import dk.ku.di.dms.vms.modb.definition.Catalog;
+import dk.ku.di.dms.vms.modb.definition.Row;
+import dk.ku.di.dms.vms.modb.definition.Schema;
+import dk.ku.di.dms.vms.modb.definition.Table;
+import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
+import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
+import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
+import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.planner.Planner;
-import dk.ku.di.dms.vms.modb.schema.key.SimpleKey;
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
-import dk.ku.di.dms.vms.modb.schema.Schema;
-import dk.ku.di.dms.vms.modb.schema.Row;
-import dk.ku.di.dms.vms.modb.table.HashIndexedTable;
-import dk.ku.di.dms.vms.modb.table.Table;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -43,8 +38,8 @@ public class QueryTest {
         SimpleKey key1 = new SimpleKey(4);
         Row row1 = new Row(4,3L,"HAHAdedede","HEHEdeded");
 
-        table.getPrimaryKeyIndex().upsert(key, row);
-        table.getPrimaryKeyIndex().upsert(key1, row1);
+//        table.getPrimaryKeyIndex().upsert(key, row);
+//        table.getPrimaryKeyIndex().upsert(key1, row1);
     }
 
     @Test
@@ -59,8 +54,8 @@ public class QueryTest {
         String[] columnNames = { "col1", "col2" };
         DataType[] columnDataTypes = { DataType.INT, DataType.INT };
         final Schema schema = new Schema( columnNames, columnDataTypes, new int[]{0}, null );
-        catalog.insertTable( new HashIndexedTable( "tb1", schema ));
-        catalog.insertTable( new HashIndexedTable( "tb2", schema ));
+        catalog.insertTable( new Table( "tb1", schema ));
+        catalog.insertTable( new Table( "tb2", schema ));
 
         try {
             // TODO move this test to query test
@@ -96,13 +91,13 @@ public class QueryTest {
         QueryTree queryTree = analyzer.analyze( sql );
 
         Planner planner = new Planner();
-        PlanNode planTree = planner.plan(queryTree);
+//        PlanNode planTree = planner.plan(queryTree);
+//
+//        SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(planTree);
+//
+//        IOperatorResult result = queryExecutor.get();
 
-        SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(planTree);
-
-        IOperatorResult result = queryExecutor.get();
-
-        assert(result != null);
+//        assert(result != null);
 
     }
 
@@ -125,9 +120,9 @@ public class QueryTest {
         QueryTree queryTree = analyzer.analyze(sql);
 
         Planner planner = new Planner();
-        PlanNode planTree = planner.plan(queryTree);
-
-        assert(planTree != null);
+//        PlanNode planTree = planner.plan(queryTree);
+//
+//        assert(planTree != null);
 
     }
 

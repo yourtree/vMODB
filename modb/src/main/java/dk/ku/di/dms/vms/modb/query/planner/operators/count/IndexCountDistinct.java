@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.count;
 
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
-import dk.ku.di.dms.vms.modb.common.meta.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
@@ -37,7 +37,7 @@ public class IndexCountDistinct extends AbstractOperator {
                       FilterContext filterContext,
                       int distinctColumnIndex, // today only support for one
                       IKey... keys) {
-        super(id, Integer.BYTES);
+        super(Integer.BYTES);
         this.index = index;
         this.filterContext = filterContext;
         this.keys = keys;

@@ -1,8 +1,9 @@
-package dk.ku.di.dms.vms.modb.common.meta;
+package dk.ku.di.dms.vms.modb.storage.memory;
 
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import sun.misc.Unsafe;
 
-import static dk.ku.di.dms.vms.modb.common.meta.Constants.DEFAULT_MAX_SIZE_CHAR;
+import static dk.ku.di.dms.vms.modb.common.type.Constants.DEFAULT_MAX_SIZE_CHAR;
 
 public class DataTypeUtils {
 

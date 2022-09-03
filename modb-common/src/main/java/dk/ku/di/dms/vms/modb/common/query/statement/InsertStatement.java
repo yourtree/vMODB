@@ -6,4 +6,14 @@ public class InsertStatement implements IStatement {
 
     public String table;
 
+    @Override
+    public StatementType getType() {
+        return StatementType.INSERT;
+    }
+
+    @Override
+    public InsertStatement asInsertStatement() {
+        return this;
+    }
+
 }

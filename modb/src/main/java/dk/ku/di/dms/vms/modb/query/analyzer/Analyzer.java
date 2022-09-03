@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.query.analyzer;
 
+import dk.ku.di.dms.vms.modb.common.query.statement.*;
 import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
@@ -10,9 +11,6 @@ import dk.ku.di.dms.vms.modb.common.query.clause.GroupBySelectElement;
 import dk.ku.di.dms.vms.modb.common.query.clause.JoinClauseElement;
 import dk.ku.di.dms.vms.modb.common.query.clause.WhereClauseElement;
 import dk.ku.di.dms.vms.modb.common.query.enums.JoinTypeEnum;
-import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
-import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
-import dk.ku.di.dms.vms.modb.common.query.statement.UpdateStatement;
 import dk.ku.di.dms.vms.modb.definition.ColumnReference;
 import dk.ku.di.dms.vms.modb.definition.Table;
 
@@ -31,15 +29,32 @@ public final class Analyzer {
         this.catalog = catalog;
     }
 
+    /**
+     * basically transforms the raw input into known and safe metadata, e.g., whether a table, column exists
+     * https://docs.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql?view=sql-server-ver15#logical-processing-order-of-the-select-statement
+     * @param statement The statement to process
+     * @return The resulting query tree
+     * @throws AnalyzerException Unexpected statement type
+     */
+    public QueryTree analyze(final IStatement statement) throws AnalyzerException {
+
+        switch (statement.getType()){
+            case SELECT -> { return analyzeSelectStatement( statement.asSelectStatement() ); }
+            // case INSERT -> { return null; }
+            case UPDATE -> { return analyzeUpdateStatement( statement.asUpdateStatement()); }
+            case DELETE -> { return analyzeDeleteStatement( statement.asDeleteStatement()); }
+            default -> throw new IllegalStateException("No known/queryable statement type identified.");
+        }
+
+    }
+
     private QueryTree analyzeSelectStatement(final SelectStatement statement) throws AnalyzerException {
 
         QueryTree queryTree = new QueryTree();
 
         // from
         // obtain the tables to look for the columns in projection first
-        List<String> fromClause = statement.fromClause;
-
-        for(String tableStr : fromClause){
+        for(String tableStr : statement.fromClause){
             Table table = catalog.getTable(tableStr);
             if(table != null) queryTree.tables.put(tableStr,table);
         }
@@ -88,37 +103,36 @@ public final class Analyzer {
 
         // projection
         // columns in projection may come from join
-        if(statement.selectClause != null) {
-            List<String> columns = statement.selectClause;
+        List<String> columns = statement.selectClause;
 
-            // case where the user input is '*'
-            if (columns.size() == 1 && columns.get(0).contentEquals("*")) {
+        // case where the user input is '*'
+        if (columns.size() == 1 && columns.get(0).contentEquals("*")) {
 
-                // iterate over all tables involved
-                for (final Table table : queryTree.tables.values()) {
-                    Schema tableSchema = table.getSchema();
-                    int colPos = 0;
-                    for (String columnName : tableSchema.getColumnNames()) {
-                        queryTree.projections.add(new ColumnReference(columnName, colPos, table));
-                        colPos++;
-                    }
-                }
-
-            } else {
-                // cannot allow same column name without AS from multiple tables
-                for (String columnRefStr : columns) {
-                    if (columnRefStr.contains(".")) {
-                        String[] splitted = columnRefStr.split("\\."); // FIXME check if there are 2 indexes in array
-                        ColumnReference columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
-                        queryTree.projections.add(columnReference);
-                    } else {
-                        ColumnReference columnReference = findColumnReference(columnRefStr, queryTree.tables);
-                        queryTree.projections.add(columnReference);
-                    }
-
+            // iterate over all tables involved
+            for (final Table table : queryTree.tables.values()) {
+                Schema tableSchema = table.getSchema();
+                int colPos = 0;
+                for (String columnName : tableSchema.getColumnNames()) {
+                    queryTree.projections.add(new ColumnReference(columnName, colPos, table));
+                    colPos++;
                 }
             }
+
+        } else {
+            // cannot allow same column name without AS from multiple tables
+            for (String columnRefStr : columns) {
+                if (columnRefStr.contains(".")) {
+                    String[] splitted = columnRefStr.split("\\."); // FIXME check if there are 2 indexes in array
+                    ColumnReference columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
+                    queryTree.projections.add(columnReference);
+                } else {
+                    ColumnReference columnReference = findColumnReference(columnRefStr, queryTree.tables);
+                    queryTree.projections.add(columnReference);
+                }
+
+            }
         }
+
 
         List<ColumnReference> groupByColumnsReference = null;
         if(statement.groupByClause != null) {
@@ -159,8 +173,7 @@ public final class Analyzer {
         //  e.g., numeric comparisons between numbers and string/characters
         // where
         if(statement.whereClause != null) {
-            List<WhereClauseElement<?>> where = statement.whereClause;
-            for (WhereClauseElement<?> currWhere : where) {
+            for (WhereClauseElement<?> currWhere : statement.whereClause) {
 
                 if (currWhere.value() == null) {
                     throw new AnalyzerException("Parameter of where clause cannot be null value");
@@ -223,8 +236,8 @@ public final class Analyzer {
 
     /**
      * Analyze simple where clauses, those not involving join, only a table
-     * @param whereClause
-     * @return
+     * @param whereClause the passed where clause
+     * @return the parsed predicates
      */
     public List<WherePredicate> analyzeWhere(Table table, List<WhereClauseElement<?>> whereClause) throws AnalyzerException {
         List<WherePredicate> newList = new ArrayList<>(whereClause.size());
@@ -237,25 +250,18 @@ public final class Analyzer {
     }
 
     /**
-     * basically transforms the raw input into known and safe metadata, e.g., whether a table, column exists
-     * https://docs.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql?view=sql-server-ver15#logical-processing-order-of-the-select-statement
-     * @param statement The statement to process
-     * @return The resulting query tree
-     * @throws AnalyzerException Unexpected statement type
+     * For now, return a query tree. Later, revisit this choice
+     * @param deleteStatement delete with where
+     * @return query tree
      */
-    public QueryTree analyze(final IStatement statement) throws AnalyzerException {
+    private QueryTree analyzeDeleteStatement(DeleteStatement deleteStatement) throws AnalyzerException {
+        Table table = catalog.getTable(deleteStatement.table);
+        return new QueryTree(analyzeWhere(table, deleteStatement.whereClause));
+    }
 
-        if(statement.isSelect()){
-            return analyzeSelectStatement( statement.getAsSelectStatement() );
-        } else if(statement.isUpdate()){
-            final UpdateStatement update = statement.getAsUpdateStatement();
-            // TODO FINISH
-            throw new AnalyzerException("Unknown statement type.");
-        } else {
-            // TODO FINISH
-            throw new AnalyzerException("Unknown statement type.");
-        }
-
+    private QueryTree analyzeUpdateStatement(UpdateStatement updateStatement) throws AnalyzerException {
+        Table table = catalog.getTable(updateStatement.table);
+        return new QueryTree(analyzeWhere(table, updateStatement.whereClause));
     }
 
     private ColumnReference findColumnReference(String columnStr, Map<String,Table> tables) throws AnalyzerException {

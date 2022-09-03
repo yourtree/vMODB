@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.common.interfaces.application;
+package dk.ku.di.dms.vms.modb.common.interfaces;
 
 import java.io.Serializable;
 

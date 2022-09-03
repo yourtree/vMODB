@@ -32,10 +32,10 @@ public class QueryTree {
     // TODO order by predicate
     public List<OrderByPredicate> orderByPredicates;
 
-    /**
-     * No explicit return type. Must be used for testing-purpose solely,
-     * since this DBMS is an application-focused DBMS
-     */
+    public QueryTree(List<WherePredicate> wherePredicates){
+        this.wherePredicates = wherePredicates;
+    }
+
     public QueryTree() {
         this.projections = new ArrayList<>();
         this.tables = new HashMap<>();
@@ -101,7 +101,7 @@ public class QueryTree {
      * Simple select if no joins, grouping, and sort are present
      * @return
      */
-    public boolean isSimpleSelect(){
+    public boolean isSimpleScan(){
         return joinPredicates.isEmpty() && groupByPredicates.isEmpty() && orderByPredicates.isEmpty();
     }
 

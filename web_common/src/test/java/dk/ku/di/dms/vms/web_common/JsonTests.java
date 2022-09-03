@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.web_common;
 
 import com.google.gson.*;
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.web_common.modb.VmsDataSchema;
 import org.junit.Test;
 

@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.sdk.embed;
 
 import dk.ku.di.dms.vms.modb.definition.Catalog;
-import dk.ku.di.dms.vms.modb.common.interfaces.application.IEntity;
+import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.event.IVmsApplicationEvent;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;

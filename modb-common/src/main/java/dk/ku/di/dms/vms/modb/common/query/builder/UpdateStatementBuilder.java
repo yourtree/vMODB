@@ -13,10 +13,12 @@ public class UpdateStatementBuilder extends AbstractStatementBuilder  {
 
     public SetClause update(String param) {
         this.statement.table = param;
-        return new SetClause( this.statement );
+        return new SetClause(this.statement);
     }
 
-    public class SetClause {
+    // test whether need to maintain state or not.
+    // ie., not having a static class and referencing the statement all the way along the chain of calls
+    public static class SetClause {
 
         private final UpdateStatement statement;
 
@@ -24,10 +26,10 @@ public class UpdateStatementBuilder extends AbstractStatementBuilder  {
             this.statement = selectStatement;
         }
 
-        public JoinWhereClauseBridge<UpdateStatement> set(String param, Object value) {
+        public WhereClauseBridge<UpdateStatement> set(String param, Object value) {
             SetClauseElement setClauseElement = new SetClauseElement( param, value );
             this.statement.setClause.add(setClauseElement);
-            return new JoinWhereClauseBridge<>(statement); // return where or join
+            return new WhereClauseBridge<>(statement); // return where or join
         }
 
     }

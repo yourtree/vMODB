@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.eshop.entity;
 
-import dk.ku.di.dms.vms.modb.common.interfaces.application.IEntity;
+import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
 import dk.ku.di.dms.vms.sdk.core.annotations.VmsIndex;
 import dk.ku.di.dms.vms.sdk.core.annotations.VmsTable;
 

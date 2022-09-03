@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.modb.definition;
 
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
-import dk.ku.di.dms.vms.modb.common.meta.Constants;
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
+import dk.ku.di.dms.vms.modb.common.type.Constants;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 
 import java.util.HashMap;
 import java.util.Map;

@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.web_common.modb;
 
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 
 /**

@@ -5,8 +5,8 @@ import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
+import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,32 +18,15 @@ import java.util.Random;
  *
  * So plans can be reused safely across different executions
  */
-public class OperatorExecution {
+public final class OperatorExecution {
 
     // used to uniquely identify this execution
-    public final int id;
-
-    public final IKey[] inputKeys;
-
-    public final FilterContext filterContext;
-
-    public final AbstractOperator operator;
+    public int id;
 
     public static final Random random = new Random();
 
-    // open for tests? maybe
-    public OperatorExecution(int id,
-                             FilterContext filterContext,
-                             AbstractOperator operator,
-                             IKey... inputKeys) {
-        this.id = id;
-        this.inputKeys = inputKeys;
-        this.filterContext = filterContext;
-        this.operator = operator;
-    }
-
-    public static OperatorExecution build(List<WherePredicate> wherePredicates,
-                                          IndexScanWithProjection operator){
+    public static MemoryRefNode run(List<WherePredicate> wherePredicates,
+                                    IndexScanWithProjection operator){
         // build input
 
         List<Object> keyList = new ArrayList<>(operator.index.getColumns().length);
@@ -62,10 +45,10 @@ public class OperatorExecution {
 
         FilterContext filterContext = FilterContextBuilder.build(wherePredicatesNoIndex);
 
-        return new OperatorExecution(
-                random.nextInt(), filterContext, operator, inputKey );
-
+//        return new OperatorExecution(random.nextInt(), filterContext, operator, inputKey );
+        return operator.run( filterContext, inputKey );
     }
+
 
 
 }

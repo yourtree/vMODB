@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.definition.key;
 
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
-import dk.ku.di.dms.vms.modb.common.meta.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 
 public class KeyUtils {

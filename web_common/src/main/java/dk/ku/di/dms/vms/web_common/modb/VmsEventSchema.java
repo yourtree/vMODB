@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.web_common.modb;
 
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 
 /**
  * The <code>VmsEventSchema</code> record describes the schema of Transactional Events.

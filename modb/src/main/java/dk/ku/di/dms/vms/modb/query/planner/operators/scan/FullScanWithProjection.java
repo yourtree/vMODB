@@ -2,28 +2,17 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.scan;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordIterator;
 import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
 
-public class ScanWithProjection extends AbstractOperator {
+public class FullScanWithProjection extends AbstractScan {
 
-    private final AbstractIndex<IKey> index;
-
-    // index of the columns
-    private final int[] projectionColumns;
-
-    private final int[] projectionColumnSize;
-
-    public ScanWithProjection(AbstractIndex<IKey> index,
-                                   int[] projectionColumns,
-                                   int[] projectionColumnSize, // in bytes
-                                   int entrySize) {
-        super(entrySize);
-        this.projectionColumns = projectionColumns;
-        this.projectionColumnSize = projectionColumnSize;
-        this.index = index;
+    public FullScanWithProjection(AbstractIndex<IKey> index,
+                                  int[] projectionColumns,
+                                  int[] projectionColumnSize, // in bytes
+                                  int entrySize) {
+        super(entrySize, index, projectionColumns, projectionColumnSize);
     }
 
     public MemoryRefNode run(FilterContext filterContext){
@@ -41,6 +30,16 @@ public class ScanWithProjection extends AbstractOperator {
 
         }
         return memoryRefNode;
+    }
+
+    @Override
+    public boolean isFullScan() {
+        return true;
+    }
+
+    @Override
+    public FullScanWithProjection asFullScan() {
+        return this;
     }
 
 }
