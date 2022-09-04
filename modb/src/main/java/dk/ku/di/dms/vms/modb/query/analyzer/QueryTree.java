@@ -27,7 +27,9 @@ public class QueryTree {
     public List<WherePredicate> wherePredicates;
 
     // aggregate operations
-    public List<GroupByPredicate> groupByPredicates;
+    public List<GroupByPredicate> groupByProjections;
+
+    public List<ColumnReference> groupByColumns;
 
     // TODO order by predicate
     public List<OrderByPredicate> orderByPredicates;
@@ -37,11 +39,12 @@ public class QueryTree {
     }
 
     public QueryTree() {
-        this.projections = new ArrayList<>();
-        this.tables = new HashMap<>();
+        this.projections = new ArrayList<>(3);
+        this.tables = new HashMap<>(2);
         this.joinPredicates = new ArrayList<>();
-        this.wherePredicates = new ArrayList<>();
-        this.groupByPredicates = new ArrayList<>();
+        this.wherePredicates = new ArrayList<>(3);
+        this.groupByProjections = new ArrayList<>();
+        this.groupByColumns = new ArrayList<>();
     }
 
     /**
@@ -102,15 +105,19 @@ public class QueryTree {
      * @return
      */
     public boolean isSimpleScan(){
-        return joinPredicates.isEmpty() && groupByPredicates.isEmpty() && orderByPredicates.isEmpty();
+        return isSingleTable() && joinPredicates.isEmpty() && groupByProjections.isEmpty() && orderByPredicates.isEmpty();
     }
 
     public boolean isSimpleAggregate(){
-        return !groupByPredicates.isEmpty() && joinPredicates.isEmpty()  && orderByPredicates.isEmpty();
+        return isSingleTable() && groupByProjections.size() <= 1 && joinPredicates.isEmpty()  && orderByPredicates.isEmpty();
     }
 
     public boolean isSimpleJoin(){
-        return !joinPredicates.isEmpty() && groupByPredicates.isEmpty()  && orderByPredicates.isEmpty();
+        return !joinPredicates.isEmpty() && groupByProjections.isEmpty()  && orderByPredicates.isEmpty();
+    }
+
+    public boolean isSingleTable(){
+        return this.tables.size() == 1;
     }
 
 }

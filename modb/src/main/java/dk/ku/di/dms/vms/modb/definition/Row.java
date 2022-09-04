@@ -6,7 +6,7 @@ import java.io.Serializable;
  * Defines an abstract row.
  * Later a row will be specialized for each concurrency control protocol.
  */
-public class Row implements Serializable {
+public class Row {
 
     public final Object[] values;
 

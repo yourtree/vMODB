@@ -8,19 +8,11 @@ import java.util.List;
 public class GroupByPredicate {
 
     public final ColumnReference columnReference;
-    public final GroupByOperationEnum groupOperation;
-    public final List<ColumnReference> groupByColumnsReference;
+    public final GroupByOperationEnum groupByOperation;
 
-    public GroupByPredicate(ColumnReference columnReference, GroupByOperationEnum groupOperation) {
+    public GroupByPredicate(ColumnReference columnReference, GroupByOperationEnum groupByOperation) {
         this.columnReference = columnReference;
-        this.groupOperation = groupOperation;
-        this.groupByColumnsReference = null;
-    }
-
-    public GroupByPredicate(ColumnReference columnReference, GroupByOperationEnum groupOperation, List<ColumnReference> groupByColumnsReference) {
-        this.columnReference = columnReference;
-        this.groupOperation = groupOperation;
-        this.groupByColumnsReference = groupByColumnsReference;
+        this.groupByOperation = groupByOperation;
     }
 
 }

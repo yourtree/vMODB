@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.query;
 
+import dk.ku.di.dms.vms.modb.common.query.enums.GroupByOperationEnum;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
 import dk.ku.di.dms.vms.modb.common.query.builder.SelectStatementBuilder;
@@ -81,9 +82,10 @@ public class QueryTest {
 
         SelectStatementBuilder builder = QueryBuilderFactory.select();
         SelectStatement sql = builder //.select("AVG(item.i_price)")
-                .avg("item.i_price").having(GREATER_THAN, 10)
+                .avg("item.i_price")
                 .from("item")
-                //.groupBy("i_price")
+                .groupBy("i_price")
+                .having(GroupByOperationEnum.COUNT, "i_price", GREATER_THAN, 10)
                 //.where("col2", EQUALS, 2) // this should raise an error
                 .build();
 

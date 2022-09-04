@@ -149,7 +149,7 @@ public final class Analyzer {
                     columnReference = findColumnReference(column, queryTree.tables);
                 }
 
-                groupByColumnsReference.add(columnReference);
+                queryTree.groupByColumns.add(columnReference);
             }
         }
 
@@ -163,7 +163,8 @@ public final class Analyzer {
                 } else {
                     columnReference = findColumnReference(element.column(), queryTree.tables);
                 }
-                queryTree.groupByPredicates.add(new GroupByPredicate(columnReference, element.operation(), groupByColumnsReference));
+                // that means each aggregate final value must take into consideration the set of group by columns
+                queryTree.groupByProjections.add(new GroupByPredicate(columnReference, element.operation() ));
             }
         }
 

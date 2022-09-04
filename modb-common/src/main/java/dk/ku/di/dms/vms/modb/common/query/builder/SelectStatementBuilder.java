@@ -36,27 +36,54 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
         return this.entryPoint.avg(param);
     }
 
+    public NewProjectionOrFromClause sum(String param){
+        return this.entryPoint.sum(param);
+    }
+
+    public NewProjectionOrFromClause count(String param){
+        return this.entryPoint.count(param);
+    }
+
     protected class EntryPoint {
 
         private final SelectStatement statement;
         public EntryPoint(SelectStatement statement){
             this.statement = statement;
+            this.statement.selectClause = new ArrayList<>();
+            this.statement.groupBySelectClause = new ArrayList<>();
         }
 
         public NewProjectionOrFromClause select(String param) {
             String[] projection = param.replace(" ","").split(",");
-            this.statement.selectClause = new ArrayList<>(Arrays.asList(projection));
+            this.statement.selectClause.addAll( Arrays.asList(projection));
             this.statement.SQL.append(param);
             return new NewProjectionOrFromClause(this.statement,this);
         }
 
         public NewProjectionOrFromClause avg(String param){
             GroupBySelectElement element = new GroupBySelectElement( param, GroupByOperationEnum.AVG );
-            this.statement.groupBySelectClause = new ArrayList<>();
+            this.statement.SQL.append( GroupByOperationEnum.AVG.name() );
+            return this.agg(element);
+        }
+
+        public NewProjectionOrFromClause count(String param){
+            GroupBySelectElement element = new GroupBySelectElement( param, GroupByOperationEnum.COUNT );
+            this.statement.SQL.append( GroupByOperationEnum.COUNT.name() );
+            return this.agg(element);
+        }
+
+        public NewProjectionOrFromClause sum(String param){
+            GroupBySelectElement element = new GroupBySelectElement( param, GroupByOperationEnum.SUM );
+            this.statement.SQL.append( GroupByOperationEnum.SUM.name() );
+            return this.agg(element);
+        }
+
+        private NewProjectionOrFromClause agg(GroupBySelectElement element){
             this.statement.groupBySelectClause.add( element );
-            this.statement.SQL.append(param);
+            this.statement.SQL.append(element.column());
             return new NewProjectionOrFromClause(statement,this);
         }
+
     }
 
     public class NewProjectionOrFromClause {
@@ -75,14 +102,6 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
         public NewProjectionOrFromClause avg(String param){
             return this.entryPoint.avg(param);
-        }
-
-        public NewProjectionOrFromClause having(ExpressionTypeEnum expression, Number value){
-            if(this.statement.havingClause == null) {
-                this.statement.havingClause = new ArrayList<>();
-            }
-            this.statement.havingClause.add( new HavingClauseElement<>(expression,value));
-            return this;
         }
 
         public OrderByGroupByJoinWhereClauseBridge from(String param) {
@@ -205,14 +224,14 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
             this.statement = statement; // to avoid cast
         }
 
-        public OrderByClause groupBy(String... params) {
+        public OrderByHavingBridge groupBy(String... params) {
 
             for( int i = 0; i < params.length; i++ ) {
                 params[i] = params[i].replace(" ", "");
             }
             this.statement.groupByClause = new ArrayList<>(Arrays.asList(params));
             this.statement.SQL.append(params);
-            return new OrderByClause(this.statement);
+            return new OrderByHavingBridge(this.statement);
         }
 
         public OrderByClausePredicate orderBy(String... params){
@@ -230,7 +249,41 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
     }
 
-    public class OrderByClause implements IQueryBuilder<SelectStatement> {
+    public class OrderByHavingBridge implements IQueryBuilder<SelectStatement> {
+
+        private final SelectStatement statement;
+
+        protected OrderByHavingBridge(SelectStatement statement) {
+            this.statement = statement; // to avoid cast
+        }
+
+        // only allowing one having for now
+        public OrderByClause having(GroupByOperationEnum operation, String column, ExpressionTypeEnum expression, Number value){
+            if(this.statement.havingClause == null) {
+                this.statement.havingClause = new ArrayList<>();
+            }
+            this.statement.havingClause.add( new HavingClauseElement<>(operation, column, expression,value));
+            return new OrderByClause(statement);
+        }
+
+        public OrderByClausePredicate orderBy(String... params){
+
+            List<OrderByClauseElement> orderByClauseElements = new ArrayList<>();
+
+            for (String param : params) {
+                orderByClauseElements.add(new OrderByClauseElement(param.replace(" ", "")));
+            }
+            this.statement.orderByClause = orderByClauseElements;
+            this.statement.SQL.append(params);
+            return new OrderByClausePredicate(this.statement);
+        }
+
+        public SelectStatement build(){
+            return statement;
+        }
+    }
+
+    public static class OrderByClause implements IQueryBuilder<SelectStatement> {
 
         private final SelectStatement statement;
 

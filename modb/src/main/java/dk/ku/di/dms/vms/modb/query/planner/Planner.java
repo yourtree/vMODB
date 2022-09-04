@@ -1,17 +1,23 @@
 package dk.ku.di.dms.vms.modb.query.planner;
 
 import dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum;
+import dk.ku.di.dms.vms.modb.definition.ColumnReference;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
+import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
+import dk.ku.di.dms.vms.modb.query.planner.operators.count.IndexCount;
+import dk.ku.di.dms.vms.modb.query.planner.operators.count.IndexCountGroupBy;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.AbstractScan;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
+import dk.ku.di.dms.vms.modb.query.planner.operators.sum.IndexSum;
+import dk.ku.di.dms.vms.modb.query.planner.operators.sum.Sum;
 
 import java.util.List;
 
@@ -30,8 +36,67 @@ public class Planner {
             return planSimpleSelect(queryTree);
         }
 
+        if(queryTree.isSimpleAggregate()){
+            return planSimpleAggregate(queryTree);
+        }
+
         return null;
 
+    }
+
+    private AbstractOperator planSimpleAggregate(QueryTree queryTree) {
+
+        //
+        // Table tb = queryTree.groupByProjections.get(0).columnReference.table;
+
+        // get the operations
+        // groupby selecti
+        if(!queryTree.groupByProjections.isEmpty()){
+            // then just one since it is simple
+            switch (queryTree.groupByProjections.get(0).groupByOperation){
+                case SUM -> {
+                    // is there any index that applies?
+                    AbstractIndex<IKey> indexSelected = getOptimalHashIndex(
+                            queryTree.wherePredicates,
+                            queryTree.groupByProjections.get(0).columnReference.table);
+                    if(indexSelected == null){
+                        return new Sum(queryTree.groupByProjections.get(0).columnReference.dataType,
+                                queryTree.groupByProjections.get(0).columnReference.columnPosition,
+                                queryTree.groupByProjections.get(0).columnReference.table.primaryKeyIndex);
+                    }
+                    return new IndexSum(queryTree.groupByProjections.get(0).columnReference.dataType,
+                            queryTree.groupByProjections.get(0).columnReference.columnPosition,
+                            indexSelected);
+                }
+                case COUNT -> {
+                    Table tb = queryTree.groupByProjections.get(0).columnReference.table;
+                    AbstractIndex<IKey> indexSelected = getOptimalHashIndex(
+                            queryTree.wherePredicates,
+                            queryTree.groupByProjections.get(0).columnReference.table);
+                    if(queryTree.groupByColumns.isEmpty()){
+                        // then no group by
+
+                        // how the user can specify a distinct?
+
+                        return new IndexCount( indexSelected == null ? tb.primaryKeyIndex() : indexSelected );
+
+
+                    } else {
+                        int[] columns = queryTree.groupByColumns.stream()
+                                .mapToInt(ColumnReference::getColumnPosition ).toArray();
+                        return new IndexCountGroupBy( indexSelected == null ? tb.primaryKeyIndex() : indexSelected, columns );
+                    }
+
+                }
+            }
+        } else {
+            // just grouping of rows? tuples then may repeat for each group
+        }
+
+        // get the columns that must be considered for the aggregations
+
+        // GroupByPredicate predicate = queryTree.groupByProjections.get(0).
+        return null;
     }
 
     /**
@@ -46,11 +111,7 @@ public class Planner {
 
         // avoid one of the columns to have expression different from EQUALS
         // to be picked by unique and non unique index
-        int[] filterColumns = queryTree.wherePredicates.stream()
-                 .filter( wherePredicate -> wherePredicate.expression == ExpressionTypeEnum.EQUALS )
-                 .mapToInt( WherePredicate::getColumnPosition ).toArray();
-
-        AbstractIndex<IKey> indexSelected = pickIndex(tb, filterColumns);
+        AbstractIndex<IKey> indexSelected = getOptimalHashIndex(queryTree.wherePredicates, tb);
 
         // build projection
 
@@ -79,6 +140,15 @@ public class Planner {
 
     }
 
+    private AbstractIndex<IKey> getOptimalHashIndex(List<WherePredicate> wherePredicates, Table tb) {
+        int[] filterColumns = wherePredicates.stream()
+                 .filter( wherePredicate -> wherePredicate.expression == ExpressionTypeEnum.EQUALS )
+                 .mapToInt( WherePredicate::getColumnPosition ).toArray();
+
+        AbstractIndex<IKey> indexSelected = pickIndex(tb, filterColumns);
+        return indexSelected;
+    }
+
     private AbstractIndex<IKey> pickIndex(Table table, int[] filterColumns){
 
         IKey indexKey;
@@ -88,8 +158,8 @@ public class Planner {
             indexKey = CompositeKey.of(filterColumns);
         }
 
-        if (table.getPrimaryKeyIndex().hashCode() == indexKey.hashCode()) {
-            return table.getPrimaryKeyIndex();
+        if (table.primaryKeyIndex().hashCode() == indexKey.hashCode()) {
+            return table.primaryKeyIndex();
         }
 
         if(table.indexes.get(indexKey) != null){

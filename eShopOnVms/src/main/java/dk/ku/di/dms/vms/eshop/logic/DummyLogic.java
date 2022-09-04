@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
 import dk.ku.di.dms.vms.modb.common.query.builder.SelectStatementBuilder;
 import dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
+import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
 import dk.ku.di.dms.vms.sdk.core.annotations.Outbound;
 import dk.ku.di.dms.vms.sdk.core.annotations.Transactional;
@@ -49,12 +50,15 @@ public class DummyLogic {
         // TODO finish
 
         SelectStatementBuilder builder = QueryBuilderFactory.select();
-        IStatement sql = builder.select("c_discount, c_last, c_credit")//.into(CustomerInfoDTO.class)
+        SelectStatement sql = builder.select("c_discount, c_last, c_credit")//.into(CustomerInfoDTO.class)
                 .from("customer")
                 .where("c_w_id", ExpressionTypeEnum.EQUALS, 1)
                 .and("c_d_id", ExpressionTypeEnum.EQUALS, 1)
                 .and("c_id", ExpressionTypeEnum.EQUALS, 1L) // FIXME analyzer must check the type!!!!
                 .build();
+
+        SelectStatementBuilder testBuilder = QueryBuilderFactory.select();
+        testBuilder.sum("id").select("so").from("tb1").groupBy("col1","col2").build();
 
         //CustomerInfoDTO customerInfo = productRepository.<CustomerInfoDTO>fetch(sql, CustomerInfoDTO.class);
 

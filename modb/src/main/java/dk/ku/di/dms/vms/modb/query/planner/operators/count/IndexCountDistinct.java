@@ -22,8 +22,6 @@ public class IndexCountDistinct extends AbstractOperator {
 
     private final AbstractIndex<IKey> index;
 
-    private final FilterContext filterContext;
-
     private final IKey[] keys;
 
     private int count;
@@ -34,19 +32,17 @@ public class IndexCountDistinct extends AbstractOperator {
     private final int distinctColumnIndex;
 
     public IndexCountDistinct(int id, AbstractIndex<IKey> index,
-                      FilterContext filterContext,
                       int distinctColumnIndex, // today only support for one
                       IKey... keys) {
         super(Integer.BYTES);
         this.index = index;
-        this.filterContext = filterContext;
         this.keys = keys;
         this.count = 0;
         this.valuesSeen = new HashMap<int,int>();
         this.distinctColumnIndex = distinctColumnIndex;
     }
 
-    public MemoryRefNode run(){
+    public MemoryRefNode run(FilterContext filterContext){
 
         DataType dt = this.index.getTable().getSchema().getColumnDataType(distinctColumnIndex);
 

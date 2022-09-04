@@ -19,12 +19,11 @@ public class IndexSum extends Sum {
 
     public IndexSum(DataType dataType,
                     int columnIndex,
-                    AbstractIndex<IKey> index,
-                    FilterContext filterContext) {
-        super(dataType, columnIndex, index, filterContext);
+                    AbstractIndex<IKey> index) {
+        super(dataType, columnIndex, index);
     }
 
-    public MemoryRefNode run(IKey[] keys){
+    public MemoryRefNode run(FilterContext filterContext, IKey[] keys){
 
         int columnOffset = this.index.getTable().getSchema().getColumnOffset(columnIndex);
 

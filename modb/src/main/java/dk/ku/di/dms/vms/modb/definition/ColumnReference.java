@@ -27,4 +27,8 @@ public final class ColumnReference {
         this.table = table;
     }
 
+    public int getColumnPosition() {
+        return this.columnPosition;
+    }
+
 }

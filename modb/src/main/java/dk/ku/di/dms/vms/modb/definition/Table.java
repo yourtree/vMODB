@@ -66,7 +66,7 @@ public final class Table {
         return this.name;
     }
 
-    public AbstractIndex<IKey> getPrimaryKeyIndex(){
+    public AbstractIndex<IKey> primaryKeyIndex(){
         return primaryKeyIndex;
     }
 

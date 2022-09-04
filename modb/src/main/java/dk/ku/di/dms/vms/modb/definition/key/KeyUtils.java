@@ -8,25 +8,32 @@ public class KeyUtils {
 
     private KeyUtils(){}
 
-    public static IKey buildRecordKey(Schema schema, int[] columns, long recordAddress){
+    /**
+     * Build a key based on the columns
+     * @param schema schema
+     * @param columns the columns
+     * @param srcAddress the src address
+     * @return
+     */
+    public static IKey buildRecordKey(Schema schema, int[] columns, long srcAddress){
 
         IKey key;
 
         // 2 - build the pk
         if(columns.length == 1){
             DataType columnType = schema.getColumnDataType( columns[0] );
-            recordAddress += schema.columnOffset()[columns[0]];
-            key = new SimpleKey( DataTypeUtils.getValue(columnType, recordAddress) );
+            srcAddress += schema.columnOffset()[columns[0]];
+            key = new SimpleKey( DataTypeUtils.getValue(columnType, srcAddress) );
         } else {
 
             Object[] values = new Object[columns.length];
-            long currAddress = recordAddress;
+            long currAddress = srcAddress;
 
             for(int i = 0; i < columns.length; i++){
                 DataType columnType = schema.getColumnDataType( columns[i] );
                 currAddress += schema.columnOffset()[columns[i]];
                 values[i] = DataTypeUtils.getValue(columnType, currAddress);
-                currAddress = recordAddress;
+                currAddress = srcAddress;
             }
 
             key = new CompositeKey( values );

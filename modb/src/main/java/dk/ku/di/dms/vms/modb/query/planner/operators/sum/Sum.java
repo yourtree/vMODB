@@ -16,8 +16,6 @@ public class Sum extends AbstractOperator {
 
     protected final AbstractIndex<IKey> index;
 
-    protected final FilterContext filterContext;
-
     protected final int columnIndex;
 
     protected final DataType dataType;
@@ -27,12 +25,10 @@ public class Sum extends AbstractOperator {
     @SuppressWarnings("unchecked")
     public Sum(DataType dataType,
                     int columnIndex,
-                    AbstractIndex<IKey> index,
-                    FilterContext filterContext) {
+                    AbstractIndex<IKey> index) {
         super(dataType.value);
         this.dataType = dataType;
         this.index = index;
-        this.filterContext = filterContext;
         this.columnIndex = columnIndex;
         this.sumOperation = (SumOperation<Object>) buildOperation(dataType);
     }
@@ -105,7 +101,8 @@ public class Sum extends AbstractOperator {
         return null;
     }
 
-    public MemoryRefNode run(){
+    public MemoryRefNode run(
+            FilterContext filterContext){
 
         int columnOffset = this.index.getTable().getSchema().getColumnOffset(columnIndex);
 

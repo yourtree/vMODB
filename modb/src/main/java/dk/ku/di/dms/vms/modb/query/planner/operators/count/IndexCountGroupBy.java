@@ -1,32 +1,37 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.count;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
 import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
 /**
- * No projecting any other column for now
  *
- * Count is always integer. But can be indexed or not, like the scan
- * If DISTINCT, must maintain state.
- * 
  */
-public class IndexCount extends AbstractOperator {
+public class IndexCountGroupBy extends AbstractOperator {
 
     private final AbstractIndex<IKey> index;
 
-    private int count;
+    private final int[] indexColumns;
 
-    public IndexCount(AbstractIndex<IKey> index) {
+    private final Map<int,Integer> countMap;
+
+    public IndexCountGroupBy(AbstractIndex<IKey> index,
+                             int[] indexColumns) {
         super(Integer.BYTES);
         this.index = index;
-        this.count = 0;
+        this.indexColumns = indexColumns;
+        this.countMap = new HashMap<int,Integer>();
     }
 
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
@@ -38,11 +43,11 @@ public class IndexCount extends AbstractOperator {
             for(IKey key : keys){
                 address = cIndex.retrieve(key);
                 if(checkCondition(address, filterContext, index)){
-                    this.count++;
+                    compute(address);
                 }
             }
 
-            append(count);
+            // append(countMap);
             return memoryRefNode;
 
         }
@@ -57,15 +62,26 @@ public class IndexCount extends AbstractOperator {
                 address = iterator.next();
 
                 if(checkCondition(address, filterContext, index)){
-                    this.count++;
+                    compute(address);
                 }
 
             }
         }
 
-        append(count);
+        // append(countMap);
         return memoryRefNode;
 
+    }
+
+    private void compute(long address) {
+        // hash the groupby columns
+        int groupKey = KeyUtils.buildRecordKey(  this.index.getTable().getSchema(), indexColumns, address).hashCode();
+        if( countMap.get(groupKey) == null ){
+            countMap.put(groupKey, 1);
+        } else {
+            int newCount = countMap.get(groupKey) + 1;
+            countMap.put( groupKey, newCount );
+        }
     }
 
 }
