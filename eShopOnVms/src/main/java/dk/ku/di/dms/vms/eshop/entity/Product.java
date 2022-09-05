@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.eshop.entity;
 
-import dk.ku.di.dms.vms.modb.common.interfaces.IEntity;
-import dk.ku.di.dms.vms.sdk.core.annotations.VmsIndex;
-import dk.ku.di.dms.vms.sdk.core.annotations.VmsTable;
+import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
+import dk.ku.di.dms.vms.modb.api.annotations.VmsIndex;
+import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 
 import javax.persistence.*;
 import javax.validation.constraints.NotNull;

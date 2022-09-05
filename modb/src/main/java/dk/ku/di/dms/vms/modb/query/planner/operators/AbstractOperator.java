@@ -1,8 +1,7 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators;
 
-import dk.ku.di.dms.vms.modb.common.type.DataType;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
-import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.api.type.DataType;
+import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
 import dk.ku.di.dms.vms.modb.query.planner.operators.join.HashJoinWithProjection;
@@ -11,8 +10,9 @@ import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
 import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
 import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryManager;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 
 public abstract class AbstractOperator {
 
@@ -23,12 +23,29 @@ public abstract class AbstractOperator {
 
     protected final int entrySize;
 
+    private boolean transactionActive;
+
+    private TransactionFacade transactionFacade;
+
     public AbstractOperator(int entrySize) {
         this.entrySize = entrySize;
+        this.transactionActive = true;
     }
 
+    private void switchTransaction(){
+        this.transactionActive = !transactionActive;
+    }
+
+    /**
+     * This is the basic check condition. Does not take into consideration the
+     * versioned values.
+     * @param address src address of the record
+     * @param filterContext the filter to be applied
+     * @param schema to get the column data types
+     * @return
+     */
     @SuppressWarnings("unchecked")
-    protected boolean checkCondition(long address, FilterContext filterContext, AbstractIndex<IKey> index){
+    protected boolean checkCondition(long address, FilterContext filterContext, Schema schema){
 
         if(filterContext == null) return true;
 
@@ -48,8 +65,8 @@ public abstract class AbstractOperator {
             // no need to read active bit
 
             int columnIndex = filterContext.filterColumns.get(filterIdx);
-            int columnOffset = index.getTable().getSchema().getColumnOffset( columnIndex );
-            DataType dataType = index.getTable().getSchema().getColumnDataType( columnIndex );
+            int columnOffset = schema.getColumnOffset( columnIndex );
+            DataType dataType = schema.getColumnDataType( columnIndex );
 
             Object val = DataTypeUtils.getValue( dataType, address + columnOffset );
 

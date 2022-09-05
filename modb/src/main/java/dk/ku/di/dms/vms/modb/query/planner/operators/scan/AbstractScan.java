@@ -9,7 +9,7 @@ public abstract class AbstractScan extends AbstractOperator  {
     public final AbstractIndex<IKey> index;
 
     // index of the columns
-    protected final int[] projectionColumns;
+    public final int[] projectionColumns;
 
     protected final int[] projectionColumnSize;
 

@@ -109,7 +109,7 @@ public class QueryTree {
     }
 
     public boolean isSimpleAggregate(){
-        return isSingleTable() && groupByProjections.size() <= 1 && joinPredicates.isEmpty()  && orderByPredicates.isEmpty();
+        return isSingleTable() && groupByProjections.size() == 1 && projections.isEmpty() && joinPredicates.isEmpty()  && orderByPredicates.isEmpty();
     }
 
     public boolean isSimpleJoin(){

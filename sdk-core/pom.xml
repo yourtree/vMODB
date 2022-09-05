@@ -45,10 +45,17 @@
     </dependency>
 
     <dependency>
-        <groupId>dk.ku.di.dms.vms</groupId>
+        <groupId>dk.ku.di.dms.vms.modb</groupId>
         <artifactId>modb-common</artifactId>
         <version>1.0-SNAPSHOT</version>
         <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>dk.ku.di.dms.vms.modb</groupId>
+      <artifactId>modb-api</artifactId>
+      <version>1.0-SNAPSHOT</version>
+      <scope>compile</scope>
     </dependency>
 
     <dependency>

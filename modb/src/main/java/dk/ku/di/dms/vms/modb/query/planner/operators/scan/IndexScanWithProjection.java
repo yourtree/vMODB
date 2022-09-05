@@ -7,7 +7,7 @@ import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 
 /**
  * On-flight scanning, filtering, and projection in a single operator.
@@ -51,7 +51,7 @@ public final class IndexScanWithProjection extends AbstractScan {
             long address;
             for(IKey key : keys){
                 address = cIndex.retrieve(key);
-                if(checkCondition(address, filterContext, index)){
+                if(checkCondition(address, filterContext, index.getTable().getSchema())){
                     append(address, projectionColumns, index.getTable().getSchema().columnOffset(), projectionColumnSize);
                 }
             }
@@ -69,7 +69,7 @@ public final class IndexScanWithProjection extends AbstractScan {
 
                 address = iterator.next();
 
-                if(checkCondition(address, filterContext, index)){
+                if(checkCondition(address, filterContext, index.getTable().getSchema())){
                     append(address, projectionColumns, index.getTable().getSchema().columnOffset(), projectionColumnSize);
                 }
 

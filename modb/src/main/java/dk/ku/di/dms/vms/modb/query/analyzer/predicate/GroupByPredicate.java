@@ -1,9 +1,7 @@
 package dk.ku.di.dms.vms.modb.query.analyzer.predicate;
 
-import dk.ku.di.dms.vms.modb.common.query.enums.GroupByOperationEnum;
+import dk.ku.di.dms.vms.modb.api.query.enums.GroupByOperationEnum;
 import dk.ku.di.dms.vms.modb.definition.ColumnReference;
-
-import java.util.List;
 
 public class GroupByPredicate {
 

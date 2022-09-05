@@ -1,23 +1,22 @@
 package dk.ku.di.dms.vms.micro_tpcc.service;
 
 import dk.ku.di.dms.vms.micro_tpcc.events.StockNewOrderOut;
-import dk.ku.di.dms.vms.modb.common.interfaces.IDTO;
-import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
-import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
-import dk.ku.di.dms.vms.sdk.core.annotations.Microservice;
-import dk.ku.di.dms.vms.sdk.core.annotations.Outbound;
-import dk.ku.di.dms.vms.sdk.core.annotations.Transactional;
-import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
-import dk.ku.di.dms.vms.modb.common.query.builder.SelectStatementBuilder;
-import dk.ku.di.dms.vms.modb.common.query.builder.UpdateStatementBuilder;
-import dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum;
-import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
+import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.query.builder.QueryBuilderFactory;
+import dk.ku.di.dms.vms.modb.api.query.builder.SelectStatementBuilder;
+import dk.ku.di.dms.vms.modb.api.query.builder.UpdateStatementBuilder;
+import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
+import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
+import dk.ku.di.dms.vms.modb.api.interfaces.IDTO;
+import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.micro_tpcc.events.StockNewOrderIn;
 import dk.ku.di.dms.vms.micro_tpcc.repository.IStockRepository;
 
 import java.util.concurrent.CompletableFuture;
 
-import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.EQUALS;
+import static dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum.EQUALS;
 
 /**
  * https://stackoverflow.com/questions/1250643/how-to-wait-for-all-threads-to-finish-using-executorservice
@@ -49,8 +48,8 @@ public class StockService {
                 SelectStatementBuilder builder = QueryBuilderFactory.select();
                 SelectStatement sql = builder.select("s_quantity")
                         .from("stock")
-                        .where("s_i_id", ExpressionTypeEnum.EQUALS, in.itemsIds()[finalI])
-                        .and("s_w_id", ExpressionTypeEnum.EQUALS, in.supware()[finalI])
+                        .where("s_i_id", EQUALS, in.itemsIds()[finalI])
+                        .and("s_w_id", EQUALS, in.supware()[finalI])
                         .build();
 
                 int s_quantity = stockRepository.fetchOne(sql,Integer.class);
@@ -65,8 +64,8 @@ public class StockService {
                 UpdateStatementBuilder updateBuilder = QueryBuilderFactory.update();
                 IStatement update = updateBuilder.update("stock")
                         .set("s_quantity",s_quantity)
-                        .where("s_i_id", ExpressionTypeEnum.EQUALS, in.itemsIds()[finalI])
-                        .and("s_w_id", ExpressionTypeEnum.EQUALS, in.supware()[finalI])
+                        .where("s_i_id", EQUALS, in.itemsIds()[finalI])
+                        .and("s_w_id", EQUALS, in.supware()[finalI])
                         .build();
 
 

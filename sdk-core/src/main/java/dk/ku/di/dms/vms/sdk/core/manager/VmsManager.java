@@ -8,8 +8,8 @@ import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
-import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.web_common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.*;

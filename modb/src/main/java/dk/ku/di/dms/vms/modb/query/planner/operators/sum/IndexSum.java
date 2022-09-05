@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.sum;
 
-import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.api.type.DataType;
 import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
@@ -9,7 +9,7 @@ import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 
 /**
  *
@@ -33,7 +33,7 @@ public class IndexSum extends Sum {
             long address;
             for(IKey key : keys){
                 address = cIndex.retrieve(key);
-                if(checkCondition(address, filterContext, index)){
+                if(checkCondition(address, filterContext, index.getTable().getSchema())){
 
                     Object val = DataTypeUtils.getValue( dataType, address + columnOffset );
                     sumOperation.accept(val);
@@ -55,7 +55,7 @@ public class IndexSum extends Sum {
 
                 address = iterator.next();
 
-                if(checkCondition(address, filterContext, index)){
+                if(checkCondition(address, filterContext, index.getTable().getSchema())){
                     Object val = DataTypeUtils.getValue( dataType, address + columnOffset );
                     sumOperation.accept(val);
                 }

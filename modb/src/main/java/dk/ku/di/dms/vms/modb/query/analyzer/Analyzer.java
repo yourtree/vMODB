@@ -1,16 +1,19 @@
 package dk.ku.di.dms.vms.modb.query.analyzer;
 
-import dk.ku.di.dms.vms.modb.common.query.statement.*;
+import dk.ku.di.dms.vms.modb.api.query.clause.GroupBySelectElement;
+import dk.ku.di.dms.vms.modb.api.query.clause.JoinClauseElement;
+import dk.ku.di.dms.vms.modb.api.query.clause.WhereClauseElement;
+import dk.ku.di.dms.vms.modb.api.query.enums.JoinTypeEnum;
+import dk.ku.di.dms.vms.modb.api.query.statement.DeleteStatement;
+import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
+import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
+import dk.ku.di.dms.vms.modb.api.query.statement.UpdateStatement;
 import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.modb.common.query.clause.GroupBySelectElement;
-import dk.ku.di.dms.vms.modb.common.query.clause.JoinClauseElement;
-import dk.ku.di.dms.vms.modb.common.query.clause.WhereClauseElement;
-import dk.ku.di.dms.vms.modb.common.query.enums.JoinTypeEnum;
 import dk.ku.di.dms.vms.modb.definition.ColumnReference;
 import dk.ku.di.dms.vms.modb.definition.Table;
 

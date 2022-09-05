@@ -1,10 +1,10 @@
 package dk.ku.di.dms.vms.micro_tpcc.repository;
 
-import dk.ku.di.dms.vms.modb.common.interfaces.IRepository;
-import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
-import dk.ku.di.dms.vms.sdk.core.annotations.Outbound;
-import dk.ku.di.dms.vms.sdk.core.annotations.Query;
-import dk.ku.di.dms.vms.sdk.core.annotations.Repository;
+import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
+import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Query;
+import dk.ku.di.dms.vms.modb.api.annotations.Repository;
 import dk.ku.di.dms.vms.micro_tpcc.entity.History;
 
 import java.util.List;

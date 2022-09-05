@@ -3,7 +3,6 @@ package dk.ku.di.dms.vms.coordinator.server.coordinator;
 import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.BatchReplicationStrategy;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.transaction.BatchContext;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.transaction.TransactionManager;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.transaction.TransactionManagerContext;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;

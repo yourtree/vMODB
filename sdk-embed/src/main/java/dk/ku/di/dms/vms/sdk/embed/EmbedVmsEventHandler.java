@@ -6,16 +6,16 @@ import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
-import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.web_common.meta.VmsIdentifier;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchAbortRequest;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitRequest;
-import dk.ku.di.dms.vms.web_common.meta.schema.control.Presentation;
-import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionAbort;
-import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionEvent;
+import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
-import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -26,10 +26,10 @@ import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static dk.ku.di.dms.vms.web_common.meta.Constants.*;
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.CANNOT_CONNECT_TO_NODE;
-import static dk.ku.di.dms.vms.web_common.meta.schema.control.Presentation.SERVER_TYPE;
-import static dk.ku.di.dms.vms.web_common.meta.schema.control.Presentation.YES;
+import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.SERVER_TYPE;
+import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.YES;
 import static java.net.StandardSocketOptions.*;
 
 /**

@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.micro_tpcc.workload;
 
 import dk.ku.di.dms.vms.micro_tpcc.entity.*;
-import dk.ku.di.dms.vms.sdk.core.annotations.Microservice;
-import dk.ku.di.dms.vms.sdk.core.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 import dk.ku.di.dms.vms.micro_tpcc.repository.ICustomerRepository;
 import dk.ku.di.dms.vms.micro_tpcc.repository.IHistoryRepository;
 import dk.ku.di.dms.vms.micro_tpcc.repository.IItemRepository;

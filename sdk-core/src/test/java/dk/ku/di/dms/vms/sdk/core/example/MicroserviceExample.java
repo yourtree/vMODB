@@ -1,9 +1,9 @@
 package dk.ku.di.dms.vms.sdk.core.example;
 
-import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
-import dk.ku.di.dms.vms.sdk.core.annotations.Microservice;
-import dk.ku.di.dms.vms.sdk.core.annotations.Outbound;
-import dk.ku.di.dms.vms.sdk.core.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
 @Microservice("example")
 public class MicroserviceExample {

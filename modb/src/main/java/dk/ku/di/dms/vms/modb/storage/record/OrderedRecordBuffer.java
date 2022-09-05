@@ -2,8 +2,8 @@ package dk.ku.di.dms.vms.modb.storage.record;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.storage.memory.MemoryUtils;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryManager;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import sun.misc.Unsafe;
 
 import java.util.LinkedList;

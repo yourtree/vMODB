@@ -3,7 +3,6 @@ package dk.ku.di.dms.vms.modb.storage.memory;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import sun.misc.Unsafe;
 
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.function.Function;
 

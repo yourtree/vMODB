@@ -3,8 +3,6 @@ package dk.ku.di.dms.vms.web_common.network;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * Provides protocol-agnostic functionalities

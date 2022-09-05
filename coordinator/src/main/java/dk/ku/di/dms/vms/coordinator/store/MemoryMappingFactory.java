@@ -1,14 +1,10 @@
 package dk.ku.di.dms.vms.coordinator.store;
 
 import dk.ku.di.dms.vms.coordinator.store.metadata.ServerMetadata;
-import dk.ku.di.dms.vms.coordinator.store.metadata.MetadataAPI;
 import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.meta.VmsIdentifier;
-import dk.ku.di.dms.vms.web_common.modb.VmsDataSchema;
-import dk.ku.di.dms.vms.web_common.modb.VmsEventSchema;
 import sun.misc.Unsafe;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.reflect.Field;

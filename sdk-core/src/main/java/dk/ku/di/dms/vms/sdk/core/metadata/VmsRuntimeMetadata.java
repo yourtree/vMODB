@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.sdk.core.metadata;
 
-import dk.ku.di.dms.vms.web_common.modb.VmsDataSchema;
-import dk.ku.di.dms.vms.web_common.modb.VmsEventSchema;
-import dk.ku.di.dms.vms.modb.common.etc.IdentifiableNode;
+import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
+import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
+import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 
 import java.util.List;

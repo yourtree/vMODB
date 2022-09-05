@@ -8,7 +8,7 @@ import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 
 /**
  * No projecting any other column for now
@@ -37,7 +37,7 @@ public class IndexCount extends AbstractOperator {
             long address;
             for(IKey key : keys){
                 address = cIndex.retrieve(key);
-                if(checkCondition(address, filterContext, index)){
+                if(checkCondition(address, filterContext, index.getTable().getSchema())){
                     this.count++;
                 }
             }
@@ -56,7 +56,7 @@ public class IndexCount extends AbstractOperator {
 
                 address = iterator.next();
 
-                if(checkCondition(address, filterContext, index)){
+                if(checkCondition(address, filterContext, index.getTable().getSchema())){
                     this.count++;
                 }
 

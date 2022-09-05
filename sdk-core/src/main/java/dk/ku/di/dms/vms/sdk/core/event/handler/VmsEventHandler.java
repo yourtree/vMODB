@@ -6,7 +6,7 @@ import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
-import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;

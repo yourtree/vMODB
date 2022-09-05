@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.index;
 
 import dk.ku.di.dms.vms.modb.definition.Table;
-import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.api.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.Row;
 
 import java.util.*;

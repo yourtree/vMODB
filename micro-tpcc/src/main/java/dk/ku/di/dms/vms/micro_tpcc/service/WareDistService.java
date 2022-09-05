@@ -1,13 +1,13 @@
 package dk.ku.di.dms.vms.micro_tpcc.service;
 
 import dk.ku.di.dms.vms.micro_tpcc.dto.DistrictInfoDTO;
-import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
-import dk.ku.di.dms.vms.modb.common.query.builder.UpdateStatementBuilder;
-import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
-import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
-import dk.ku.di.dms.vms.sdk.core.annotations.Microservice;
-import dk.ku.di.dms.vms.sdk.core.annotations.Outbound;
-import dk.ku.di.dms.vms.sdk.core.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.query.builder.QueryBuilderFactory;
+import dk.ku.di.dms.vms.modb.api.query.builder.UpdateStatementBuilder;
+import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.micro_tpcc.events.WareDistNewOrderIn;
 import dk.ku.di.dms.vms.micro_tpcc.events.WareDistNewOrderOut;
 import dk.ku.di.dms.vms.micro_tpcc.repository.waredist.IDistrictRepository;
@@ -15,7 +15,7 @@ import dk.ku.di.dms.vms.micro_tpcc.repository.waredist.IWarehouseRepository;
 
 import java.util.concurrent.*;
 
-import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.EQUALS;
+import static dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum.EQUALS;
 
 @Microservice("warehouse")
 public class WareDistService {

@@ -2,9 +2,9 @@ package dk.ku.di.dms.vms.micro_tpcc.repository.waredist;
 
 import dk.ku.di.dms.vms.micro_tpcc.dto.DistrictInfoDTO;
 import dk.ku.di.dms.vms.micro_tpcc.entity.District;
-import dk.ku.di.dms.vms.modb.common.interfaces.IRepository;
-import dk.ku.di.dms.vms.sdk.core.annotations.Query;
-import dk.ku.di.dms.vms.sdk.core.annotations.Repository;
+import dk.ku.di.dms.vms.modb.api.annotations.Query;
+import dk.ku.di.dms.vms.modb.api.annotations.Repository;
+import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 
 @Repository
 public interface IDistrictRepository extends IRepository<District.DistrictId, District> {

@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordIterator;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 
 public class FullScanWithProjection extends AbstractScan {
 
@@ -23,8 +23,7 @@ public class FullScanWithProjection extends AbstractScan {
 
             address = iterator.next();
 
-            // if there is no condition, no reason to do scan
-            if(checkCondition(address, filterContext, index)){
+            if(checkCondition(address, filterContext, index.getTable().getSchema())){
                 append(address, projectionColumns, index.getTable().getSchema().columnOffset(), projectionColumnSize);
             }
 

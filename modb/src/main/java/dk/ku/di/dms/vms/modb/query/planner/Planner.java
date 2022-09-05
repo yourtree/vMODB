@@ -8,7 +8,6 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
-import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.query.planner.operators.count.IndexCount;
@@ -50,53 +49,52 @@ public class Planner {
         // Table tb = queryTree.groupByProjections.get(0).columnReference.table;
 
         // get the operations
-        // groupby selecti
-        if(!queryTree.groupByProjections.isEmpty()){
-            // then just one since it is simple
-            switch (queryTree.groupByProjections.get(0).groupByOperation){
-                case SUM -> {
-                    // is there any index that applies?
-                    AbstractIndex<IKey> indexSelected = getOptimalHashIndex(
-                            queryTree.wherePredicates,
-                            queryTree.groupByProjections.get(0).columnReference.table);
-                    if(indexSelected == null){
-                        return new Sum(queryTree.groupByProjections.get(0).columnReference.dataType,
-                                queryTree.groupByProjections.get(0).columnReference.columnPosition,
-                                queryTree.groupByProjections.get(0).columnReference.table.primaryKeyIndex);
-                    }
-                    return new IndexSum(queryTree.groupByProjections.get(0).columnReference.dataType,
+        // groupby selection
+
+        // then just one since it is simple
+        switch (queryTree.groupByProjections.get(0).groupByOperation){
+            case SUM -> {
+                // is there any index that applies?
+                AbstractIndex<IKey> indexSelected = getOptimalHashIndex(
+                        queryTree.wherePredicates,
+                        queryTree.groupByProjections.get(0).columnReference.table);
+                if(indexSelected == null){
+                    return new Sum(queryTree.groupByProjections.get(0).columnReference.dataType,
                             queryTree.groupByProjections.get(0).columnReference.columnPosition,
-                            indexSelected);
+                            queryTree.groupByProjections.get(0).columnReference.table.primaryKeyIndex);
                 }
-                case COUNT -> {
-                    Table tb = queryTree.groupByProjections.get(0).columnReference.table;
-                    AbstractIndex<IKey> indexSelected = getOptimalHashIndex(
-                            queryTree.wherePredicates,
-                            queryTree.groupByProjections.get(0).columnReference.table);
-                    if(queryTree.groupByColumns.isEmpty()){
-                        // then no group by
-
-                        // how the user can specify a distinct?
-
-                        return new IndexCount( indexSelected == null ? tb.primaryKeyIndex() : indexSelected );
-
-
-                    } else {
-                        int[] columns = queryTree.groupByColumns.stream()
-                                .mapToInt(ColumnReference::getColumnPosition ).toArray();
-                        return new IndexCountGroupBy( indexSelected == null ? tb.primaryKeyIndex() : indexSelected, columns );
-                    }
-
-                }
+                return new IndexSum(queryTree.groupByProjections.get(0).columnReference.dataType,
+                        queryTree.groupByProjections.get(0).columnReference.columnPosition,
+                        indexSelected);
             }
-        } else {
-            // just grouping of rows? tuples then may repeat for each group
+            case COUNT -> {
+                Table tb = queryTree.groupByProjections.get(0).columnReference.table;
+                AbstractIndex<IKey> indexSelected = getOptimalHashIndex(
+                        queryTree.wherePredicates,
+                        queryTree.groupByProjections.get(0).columnReference.table);
+                if(queryTree.groupByColumns.isEmpty()){
+                    // then no group by
+
+                    // how the user can specify a distinct?
+
+                    return new IndexCount( indexSelected == null ? tb.primaryKeyIndex() : indexSelected );
+
+
+                } else {
+                    int[] columns = queryTree.groupByColumns.stream()
+                            .mapToInt(ColumnReference::getColumnPosition ).toArray();
+                    return new IndexCountGroupBy( indexSelected == null ? tb.primaryKeyIndex() : indexSelected, columns );
+                }
+
+            }
+            default -> throw new IllegalStateException("Operator not yet implemented.");
         }
+
 
         // get the columns that must be considered for the aggregations
 
         // GroupByPredicate predicate = queryTree.groupByProjections.get(0).
-        return null;
+
     }
 
     /**

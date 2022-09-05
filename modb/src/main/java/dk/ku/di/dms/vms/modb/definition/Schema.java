@@ -47,7 +47,7 @@ public class Schema {
                 case INT -> acc += Integer.BYTES;
                 case FLOAT -> acc += Float.BYTES;
                 case DOUBLE -> acc += Double.BYTES;
-                case BYTE -> acc += Byte.BYTES;
+                // case BOOL -> acc += 1;
             }
             columnOffset[j] = acc;
         }

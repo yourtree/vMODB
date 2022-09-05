@@ -1,10 +1,10 @@
 package dk.ku.di.dms.vms.micro_tpcc.service;
 
 import dk.ku.di.dms.vms.micro_tpcc.events.*;
-import dk.ku.di.dms.vms.sdk.core.annotations.Inbound;
-import dk.ku.di.dms.vms.sdk.core.annotations.Microservice;
-import dk.ku.di.dms.vms.sdk.core.annotations.Terminal;
-import dk.ku.di.dms.vms.sdk.core.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.api.annotations.Terminal;
+import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 import dk.ku.di.dms.vms.micro_tpcc.entity.NewOrder;
 import dk.ku.di.dms.vms.micro_tpcc.entity.Order;
 import dk.ku.di.dms.vms.micro_tpcc.entity.OrderLine;

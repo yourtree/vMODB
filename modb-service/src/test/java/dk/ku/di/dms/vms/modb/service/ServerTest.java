@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.modb.service;
 
-import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.web_common.serdes.VmsSerdesProxyBuilder;
 import org.junit.Test;
 
 import java.io.IOException;

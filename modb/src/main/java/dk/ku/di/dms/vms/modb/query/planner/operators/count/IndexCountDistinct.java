@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.count;
 
-import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.api.type.DataType;
 import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
@@ -10,7 +10,7 @@ import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -53,7 +53,8 @@ public class IndexCountDistinct extends AbstractOperator {
             for(IKey key : keys){
                 address = cIndex.retrieve(key);
                 Object val = DataTypeUtils.getValue( dt, address );
-                if(checkCondition(address, filterContext, index) && !valuesSeen.containsKey(val.hashCode())){
+                if(checkCondition(address, filterContext, index.getTable().getSchema())
+                        && !valuesSeen.containsKey(val.hashCode())){
                     this.count++;
                     this.valuesSeen.put(val.hashCode(),1);
                 }
@@ -73,7 +74,7 @@ public class IndexCountDistinct extends AbstractOperator {
 
                 address = iterator.next();
                 Object val = DataTypeUtils.getValue( dt, address );
-                if(checkCondition(address, filterContext, index) && !valuesSeen.containsKey(val.hashCode())){
+                if(checkCondition(address, filterContext, index.getTable().getSchema()) && !valuesSeen.containsKey(val.hashCode())){
                     this.count++;
                     this.valuesSeen.put(val.hashCode(),1);
                 }

@@ -1,13 +1,13 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.sum;
 
-import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.api.type.DataType;
 import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordIterator;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -110,7 +110,7 @@ public class Sum extends AbstractOperator {
         long address;
         while(iterator.hasNext()){
             address = iterator.next();
-            if(checkCondition(address, filterContext, index)){
+            if(checkCondition(address, filterContext, index.getTable().getSchema())){
                 Object val = DataTypeUtils.getValue( dataType, address + columnOffset );
                 sumOperation.accept(val);
             }

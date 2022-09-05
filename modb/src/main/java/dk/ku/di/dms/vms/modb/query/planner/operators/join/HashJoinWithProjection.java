@@ -6,7 +6,7 @@ import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordIterator;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 
 public class HashJoinWithProjection extends AbstractOperator {
 
@@ -57,12 +57,12 @@ public class HashJoinWithProjection extends AbstractOperator {
 
             outerAddress = outerIndex.retrieve(key);
 
-            if(checkCondition(outerAddress, leftFilter, leftIndex)){
+            if(checkCondition(outerAddress, leftFilter, leftIndex.getTable().getSchema())){
 
                 innerAddress = innerIndex.retrieve(key);
                 if (innerIndex.exists(innerAddress)){
 
-                    if(checkCondition(innerAddress, rightFilter, rightIndex)) {
+                    if(checkCondition(innerAddress, rightFilter, rightIndex.getTable().getSchema())) {
 
                         append( outerAddress, leftProjectionColumns, this.leftIndex.getTable().getSchema().columnOffset(), leftProjectionColumnSize,
                                 innerAddress, rightProjectionColumns, this.rightIndex.getTable().getSchema().columnOffset(), rightProjectionColumnSize
@@ -91,13 +91,13 @@ public class HashJoinWithProjection extends AbstractOperator {
 
             outerAddress = outerIterator.next();
 
-            if(checkCondition(outerAddress, leftFilter, leftIndex)){
+            if(checkCondition(outerAddress, leftFilter, leftIndex.getTable().getSchema())){
 
                 int outerKey = outerIterator.key(outerAddress);
                 innerAddress = innerIndex.retrieve(outerKey);
                 if (innerIndex.exists(innerAddress)){
 
-                    if(checkCondition(innerAddress, rightFilter, rightIndex)) {
+                    if(checkCondition(innerAddress, rightFilter, rightIndex.getTable().getSchema())) {
 
                         append( outerAddress, leftProjectionColumns, this.leftIndex.getTable().getSchema().columnOffset(), leftProjectionColumnSize,
                                 innerAddress, rightProjectionColumns, this.rightIndex.getTable().getSchema().columnOffset(), rightProjectionColumnSize

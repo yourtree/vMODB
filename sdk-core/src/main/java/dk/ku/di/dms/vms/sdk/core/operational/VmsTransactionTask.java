@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
+import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 
 import java.lang.reflect.InvocationTargetException;
@@ -15,7 +16,7 @@ public class VmsTransactionTask implements Runnable {
     // this is the global tid
     private final long tid;
 
-    // the information
+    // the information necessary to run the method
     private final VmsTransactionSignature signature;
 
     // internal identification of this specific task in the scheduler
@@ -61,6 +62,12 @@ public class VmsTransactionTask implements Runnable {
     @Override
     public void run() {
 
+        // get thread id
+        long threadId = Thread.currentThread().getId();
+
+        // register in the transaction facade
+        TransactionMetadata.registerTransaction(threadId, tid);
+
         try {
 
             Object output = signature.method().invoke(signature.vmsInstance(), inputs);
@@ -77,14 +84,14 @@ public class VmsTransactionTask implements Runnable {
             }
 
             // push result to the scheduler instead of returning an object
-            resultQueue.add(new VmsTransactionTaskResult(tid, identifier, false));
+            resultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, false));
 
         } catch (IllegalAccessException | InvocationTargetException e) {
 
             // (i) whether to return to the scheduler or (ii) to push to the payload handler for forwarding it to the queue
             // we can only notify it because the scheduler does not need to know the events. the scheduler just needs to
             // know whether the processing of events has been completed can be directly sent to the microservice outside
-            resultQueue.add(new VmsTransactionTaskResult(tid, identifier, true));
+            resultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, true));
         }
 
     }

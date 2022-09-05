@@ -1,9 +1,5 @@
 package dk.ku.di.dms.vms.coordinator;
 
-
-import dk.ku.di.dms.vms.web_common.runnable.IVMsFutureCancellable;
-import dk.ku.di.dms.vms.web_common.runnable.VMSFutureTask;
-
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -29,7 +25,7 @@ public class DbmsDaemonThread extends MailBox {
     // starts with zero
     private long lastCommittedOffset = 0;
 
-    private VMSFutureTask<Boolean> checkpointRequest;
+//    private VMSFutureTask<Boolean> checkpointRequest;
 
     // these have been replicated in at least another dbms
     private List<Message> log;
@@ -46,23 +42,23 @@ public class DbmsDaemonThread extends MailBox {
      * @param message
      * @return
      */
-    public IVMsFutureCancellable<Boolean> checkpoint(Message message){
-        Thread currentThread = Thread.currentThread();
-        checkpointRequest = new VMSFutureTask<>(currentThread);
-
-//        if(eventsPendingReplication.size() > eventReplicationThresholdForCheckpointingCompleting
-//                || remainingEvents() ){
-//            Message msg = new Message( CHECKPOINT_COMPLETING, message.payload );
-//            message.serverThread.enqueue( msg );
-//        } else {
+//    public IVMsFutureCancellable<Boolean> checkpoint(Message message){
+//        Thread currentThread = Thread.currentThread();
+//        checkpointRequest = new VMSFutureTask<>(currentThread);
 //
-//            lastCommittedOffset++;
-//            log = new ArrayList<>(); // just believe we are storing it durably
-//        }
-
-        return checkpointRequest;
-
-    }
+////        if(eventsPendingReplication.size() > eventReplicationThresholdForCheckpointingCompleting
+////                || remainingEvents() ){
+////            Message msg = new Message( CHECKPOINT_COMPLETING, message.payload );
+////            message.serverThread.enqueue( msg );
+////        } else {
+////
+////            lastCommittedOffset++;
+////            log = new ArrayList<>(); // just believe we are storing it durably
+////        }
+//
+//        return checkpointRequest;
+//
+//    }
 
 //    private boolean receive(Message message) {
 //

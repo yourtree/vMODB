@@ -4,11 +4,11 @@ import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchAbortRequest;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitRequest;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchComplete;
-import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionAbort;
-import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionEvent;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
 import java.util.Map;
 import java.util.Queue;

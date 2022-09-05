@@ -1,11 +1,11 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
-import dk.ku.di.dms.vms.modb.common.etc.IdentifiableNode;
+import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
-import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionEvent;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;

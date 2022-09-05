@@ -8,14 +8,6 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
-import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.web_common.meta.VmsIdentifier;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchCommitRequest;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchComplete;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.follower.BatchReplication;
-import dk.ku.di.dms.vms.web_common.meta.schema.control.Heartbeat;
-import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionAbort;
-import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;

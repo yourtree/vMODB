@@ -1,12 +1,12 @@
 package dk.ku.di.dms.vms.modb.query;
 
-import dk.ku.di.dms.vms.modb.common.query.enums.GroupByOperationEnum;
+import dk.ku.di.dms.vms.modb.api.query.builder.QueryBuilderFactory;
+import dk.ku.di.dms.vms.modb.api.query.builder.SelectStatementBuilder;
+import dk.ku.di.dms.vms.modb.api.query.builder.UpdateStatementBuilder;
+import dk.ku.di.dms.vms.modb.api.query.enums.GroupByOperationEnum;
+import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
+import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
-import dk.ku.di.dms.vms.modb.common.query.builder.QueryBuilderFactory;
-import dk.ku.di.dms.vms.modb.common.query.builder.SelectStatementBuilder;
-import dk.ku.di.dms.vms.modb.common.query.builder.UpdateStatementBuilder;
-import dk.ku.di.dms.vms.modb.common.query.statement.IStatement;
-import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.definition.Row;
 import dk.ku.di.dms.vms.modb.definition.Schema;
@@ -19,8 +19,8 @@ import dk.ku.di.dms.vms.modb.query.planner.Planner;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.EQUALS;
-import static dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum.GREATER_THAN;
+import static dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum.EQUALS;
+import static dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum.GREATER_THAN;
 
 public class QueryTest {
 

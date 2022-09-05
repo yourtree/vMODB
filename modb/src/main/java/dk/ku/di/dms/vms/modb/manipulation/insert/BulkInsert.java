@@ -8,6 +8,8 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.*;
 
+import static dk.ku.di.dms.vms.modb.common.type.DataType.*;
+
 /**
  * I can keep all primary indexes in mapped byte buffer
  * Hash table representation
