@@ -5,32 +5,37 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.options.BatchReplicationS
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.transaction.TransactionManager;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.transaction.TransactionManagerContext;
-import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.meta.Issue;
-import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.web_common.meta.VmsIdentifier;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchComplete;
-import dk.ku.di.dms.vms.web_common.meta.schema.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
+import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
-import dk.ku.di.dms.vms.web_common.meta.schema.control.Presentation;
+import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.network.NetworkRunnable;
 import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.*;
-import java.util.*;
+import java.nio.channels.AsynchronousChannelGroup;
+import java.nio.channels.AsynchronousServerSocketChannel;
+import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.CompletionHandler;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
-import static dk.ku.di.dms.vms.web_common.meta.Constants.*;
-import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.SERVER;
-import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.VMS;
-import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.*;
+import static dk.ku.di.dms.vms.modb.common.schema.network.ConnectionMetadata.NodeType.SERVER;
+import static dk.ku.di.dms.vms.modb.common.schema.network.ConnectionMetadata.NodeType.VMS;
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
+import static dk.ku.di.dms.vms.modb.common.schema.network.Issue.Category.*;
 
 /**
  * Class that encapsulates all logic related to issuing of

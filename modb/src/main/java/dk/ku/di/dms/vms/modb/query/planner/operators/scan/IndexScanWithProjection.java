@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.scan;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
+import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
@@ -26,11 +27,10 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 public final class IndexScanWithProjection extends AbstractScan {
 
     public IndexScanWithProjection(
-                     AbstractIndex<IKey> index,
+                     ReadOnlyIndex<IKey> index,
                      int[] projectionColumns,
-                     int[] projectionColumnSize, // in bytes
                      int entrySize) {
-        super(entrySize, index, projectionColumns, projectionColumnSize);
+        super(entrySize, index, projectionColumns);
     }
 
     @Override
@@ -51,8 +51,8 @@ public final class IndexScanWithProjection extends AbstractScan {
             long address;
             for(IKey key : keys){
                 address = cIndex.retrieve(key);
-                if(checkCondition(address, filterContext, index.getTable().getSchema())){
-                    append(address, projectionColumns, index.getTable().getSchema().columnOffset(), projectionColumnSize);
+                if(cIndex.checkCondition(key, filterContext)){
+                    append(key, projectionColumns);
                 }
             }
 
@@ -67,11 +67,13 @@ public final class IndexScanWithProjection extends AbstractScan {
             RecordBucketIterator iterator = cIndex.iterator(key);
             while(iterator.hasNext()){
 
-                address = iterator.next();
-
-                if(checkCondition(address, filterContext, index.getTable().getSchema())){
-                    append(address, projectionColumns, index.getTable().getSchema().columnOffset(), projectionColumnSize);
+                if(cIndex.checkCondition(iterator, filterContext)){
+                    //address = iterator.current();
+                    append(iterator, projectionColumns);
                 }
+
+                // move the iterator
+                iterator.next();
 
             }
         }

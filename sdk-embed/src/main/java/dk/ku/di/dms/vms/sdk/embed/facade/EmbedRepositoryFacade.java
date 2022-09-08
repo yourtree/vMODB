@@ -84,7 +84,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
      * @throws AnalyzerException
      */
     @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws AnalyzerException, IllegalAccessException {
+    public Object invoke(Object proxy, Method method, Object[] args) throws IllegalAccessException {
 
         String methodName = method.getName();
 
@@ -163,7 +163,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
             // get only the where clause params
             try {
                 wherePredicates = analyzer.analyzeWhere(
-                        scanOperator.asScan().index.getTable(), selectStatement.whereClause);
+                        scanOperator.asScan().table, selectStatement.whereClause);
             } catch (AnalyzerException ignored) { return null; }
         }
 

@@ -1,50 +1,51 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.count;
 
-import dk.ku.di.dms.vms.modb.api.type.DataType;
-import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
+import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
  * No projecting any other column for now
+ *
+ * To make reusable, internal state must be made ephemeral
  */
-public class IndexCountDistinct extends AbstractOperator {
+public class IndexCountDistinct extends AbstractCount {
 
-    private final AbstractIndex<IKey> index;
+    private static class EphemeralState {
+        private int count;
+        // hashed by the values in the distinct clause
+        private final Map<int,int> valuesSeen;
 
-    private final IKey[] keys;
-
-    private int count;
-
-    // hashed by the values in the distinct clause
-    private final Map<int,int> valuesSeen;
+        private EphemeralState() {
+            this.count = 0;
+            this.valuesSeen = new HashMap<int,int>();
+        }
+    }
 
     private final int distinctColumnIndex;
 
-    public IndexCountDistinct(int id, AbstractIndex<IKey> index,
-                      int distinctColumnIndex, // today only support for one
-                      IKey... keys) {
-        super(Integer.BYTES);
-        this.index = index;
-        this.keys = keys;
-        this.count = 0;
-        this.valuesSeen = new HashMap<int,int>();
+    public IndexCountDistinct(ReadOnlyIndex<IKey> index,
+                      int distinctColumnIndex // today only support for one
+                               ) {
+        super(index, Integer.BYTES);
         this.distinctColumnIndex = distinctColumnIndex;
     }
 
-    public MemoryRefNode run(FilterContext filterContext){
+    public MemoryRefNode run(int distinctColumnIndex, FilterContext filterContext, IKey... keys){
 
-        DataType dt = this.index.getTable().getSchema().getColumnDataType(distinctColumnIndex);
+        EphemeralState state = new EphemeralState();
+
+        DataType dt = this.index.schema().getColumnDataType(distinctColumnIndex);
 
         if(index.getType() == IndexTypeEnum.UNIQUE){
 
@@ -53,14 +54,14 @@ public class IndexCountDistinct extends AbstractOperator {
             for(IKey key : keys){
                 address = cIndex.retrieve(key);
                 Object val = DataTypeUtils.getValue( dt, address );
-                if(checkCondition(address, filterContext, index.getTable().getSchema())
-                        && !valuesSeen.containsKey(val.hashCode())){
-                    this.count++;
-                    this.valuesSeen.put(val.hashCode(),1);
+                if(index.checkCondition(key, filterContext)
+                        && !state.valuesSeen.containsKey(val.hashCode())){
+                    state.count++;
+                    state.valuesSeen.put(val.hashCode(),1);
                 }
             }
 
-            append(count);
+            append(state.count);
             return memoryRefNode;
 
         }
@@ -74,15 +75,15 @@ public class IndexCountDistinct extends AbstractOperator {
 
                 address = iterator.next();
                 Object val = DataTypeUtils.getValue( dt, address );
-                if(checkCondition(address, filterContext, index.getTable().getSchema()) && !valuesSeen.containsKey(val.hashCode())){
-                    this.count++;
-                    this.valuesSeen.put(val.hashCode(),1);
+                if(index.checkCondition(iterator, filterContext) && !state.valuesSeen.containsKey(val.hashCode())){
+                    state.count++;
+                    state.valuesSeen.put(val.hashCode(),1);
                 }
 
             }
         }
 
-        append(count);
+        append(state.count);
         return memoryRefNode;
 
     }

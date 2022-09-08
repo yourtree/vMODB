@@ -3,13 +3,14 @@ package dk.ku.di.dms.vms.coordinator.server.follower;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
-import dk.ku.di.dms.vms.web_common.meta.Issue;
-import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
+import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplicationAck;
+import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.follower.BatchReplication;
-import dk.ku.di.dms.vms.web_common.meta.schema.batch.follower.BatchReplicationAck;
-import dk.ku.di.dms.vms.web_common.meta.schema.control.Presentation;
+import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
 import java.io.IOException;
@@ -23,8 +24,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.*;
 
-import static dk.ku.di.dms.vms.web_common.meta.Constants.BATCH_REPLICATION;
-import static dk.ku.di.dms.vms.web_common.meta.Constants.HEARTBEAT;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -207,7 +206,7 @@ public final class Follower extends SignalingStoppableRunnable {
 
             byte type = readBuffer.get();
 
-            if(type == HEARTBEAT){
+            if(type == Constants.HEARTBEAT){
 
                 // this is the only thread updating it
                 lastTimestamp = System.nanoTime();
@@ -217,7 +216,7 @@ public final class Follower extends SignalingStoppableRunnable {
                 connectionMetadata.channel.read( readBuffer, connectionMetadata, this );
 
 
-            } else if(type == BATCH_REPLICATION){
+            } else if(type == Constants.BATCH_REPLICATION){
 
                 BatchReplication.BatchReplicationPayload payload = BatchReplication.read( readBuffer );
 

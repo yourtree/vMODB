@@ -1,12 +1,11 @@
 package dk.ku.di.dms.vms.modb.api.query.builder;
 
 import dk.ku.di.dms.vms.modb.api.query.clause.*;
-import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
-import dk.ku.di.dms.vms.modb.common.query.clause.*;
 import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.modb.api.query.enums.GroupByOperationEnum;
 import dk.ku.di.dms.vms.modb.api.query.enums.JoinTypeEnum;
 import dk.ku.di.dms.vms.modb.api.query.enums.OrderBySortOrderEnum;
+import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 
 import java.util.ArrayList;
 import java.util.Arrays;

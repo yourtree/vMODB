@@ -1,25 +1,15 @@
 package dk.ku.di.dms.vms.web_common.network;
 
 import sun.misc.Unsafe;
-import sun.nio.ch.IOStatus;
-import sun.nio.ch.IOUtil;
-import sun.nio.ch.Net;
 
-import javax.xml.crypto.Data;
 import java.io.FileDescriptor;
 import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.DatagramSocket;
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
-
-import static java.util.concurrent.locks.LockSupport.park;
 
 /**
  * While not a better option line (https://openjdk.org/jeps/373)
@@ -96,9 +86,9 @@ public class SingleThreadDatagramChannelImpl {
 
     }
 
-    private boolean okayToRetry(int n){
-        return (n == IOStatus.UNAVAILABLE) || (n == IOStatus.INTERRUPTED);
-    }
+//    private boolean okayToRetry(int n){
+//        return (n == IOStatus.UNAVAILABLE) || (n == IOStatus.INTERRUPTED);
+//    }
 
     public int send(ByteBuffer src, SocketAddress target){
 
@@ -117,10 +107,10 @@ public class SingleThreadDatagramChannelImpl {
         for (;;) {
             int n = (int) receive.invoke(bb, false);
             if (blocking) {
-                while (okayToRetry(n) && baseChannel.isOpen()) {
-                    park(Net.POLLIN);
-                    n = (int) receive.invoke(bb, false);
-                }
+//                while (okayToRetry(n) && baseChannel.isOpen()) {
+//                    park(Net.POLLIN);
+//                    n = (int) receive.invoke(bb, false);
+//                }
             }
             // adjust bytebuffer position
         }

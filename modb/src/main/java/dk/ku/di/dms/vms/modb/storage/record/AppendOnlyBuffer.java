@@ -96,13 +96,19 @@ public class AppendOnlyBuffer {
      * there are subsequent columns
      * so they can be copied together
      */
-    public void append(long srcAddress, int[] projectionColumns, int[] columnOffset, int[] valueSizeInBytes) {
+//    public void append(long srcAddress, int[] projectionColumns, int[] columnOffset, int[] valueSizeInBytes) {
+//
+//        for(int i = 0; i < projectionColumns.length; i++){
+//            UNSAFE.copyMemory(null, srcAddress, null,
+//                    nextOffset + columnOffset[projectionColumns[i]], valueSizeInBytes[i]);
+//        }
+//
+//    }
 
-        for(int i = 0; i < projectionColumns.length; i++){
-            UNSAFE.copyMemory(null, srcAddress, null,
-                    nextOffset + columnOffset[projectionColumns[i]], valueSizeInBytes[i]);
-        }
-
+    public void copy(long srcAddress, long bytes){
+        UNSAFE.copyMemory(null, srcAddress, null,
+                nextOffset, bytes);
+        this.nextOffset += bytes;
     }
 
     public void append(long srcAddress, int columnOffset, int valueSizeInBytes) {

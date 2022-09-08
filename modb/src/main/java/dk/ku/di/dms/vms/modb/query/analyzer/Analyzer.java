@@ -125,7 +125,7 @@ public final class Analyzer {
             // cannot allow same column name without AS from multiple tables
             for (String columnRefStr : columns) {
                 if (columnRefStr.contains(".")) {
-                    String[] splitted = columnRefStr.split("\\."); // FIXME check if there are 2 indexes in array
+                    String[] splitted = columnRefStr.split("\\.");
                     ColumnReference columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
                     queryTree.projections.add(columnReference);
                 } else {
@@ -243,7 +243,7 @@ public final class Analyzer {
      * @param whereClause the passed where clause
      * @return the parsed predicates
      */
-    public List<WherePredicate> analyzeWhere(Table table, List<WhereClauseElement<?>> whereClause) throws AnalyzerException {
+    public List<WherePredicate> analyzeWhere(Schema schema, List<WhereClauseElement<?>> whereClause) throws AnalyzerException {
         List<WherePredicate> newList = new ArrayList<>(whereClause.size());
         // this assumes param is a value (number or char/string)
         for(WhereClauseElement<?> element : whereClause){

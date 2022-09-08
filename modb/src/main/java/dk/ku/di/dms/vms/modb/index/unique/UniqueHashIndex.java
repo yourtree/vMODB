@@ -1,23 +1,25 @@
 package dk.ku.di.dms.vms.modb.index.unique;
 
+import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
+import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordIterator;
-import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 
 import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
 
 /**
- * TODO deal with collisions by having a linked list
+ * This index does not support growing number of keys
+ * Could deal with collisions by having a linked list
  */
 public class UniqueHashIndex extends AbstractIndex<IKey> {
 
     private final RecordBufferContext recordBufferContext;
 
-    public UniqueHashIndex(RecordBufferContext recordBufferContext, Table table, int... columnsIndex){
-        super(table, columnsIndex);
+    public UniqueHashIndex(RecordBufferContext recordBufferContext, Schema schema, int... columnsIndex){
+        super(schema, columnsIndex);
         this.recordBufferContext = recordBufferContext;
     }
 
@@ -58,9 +60,9 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
         return getPosition(key.hashCode());
     }
 
-    public long retrieve(int key) {
-        return getPosition(key);
-    }
+//    public long retrieve(int key) {
+//        return getPosition(key);
+//    }
 
     /**
      * Check whether the record is active (if exists)
@@ -71,10 +73,10 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
         return UNSAFE.getBoolean(null, pos);
     }
 
-    public boolean exists(int key){
-        long pos = getPosition(key);
-        return UNSAFE.getBoolean(null, pos);
-    }
+//    public boolean exists(int key){
+//        long pos = getPosition(key);
+//        return UNSAFE.getBoolean(null, pos);
+//    }
 
     public boolean exists(long address){
         return UNSAFE.getBoolean(null, address);
@@ -85,8 +87,9 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
         return this.recordBufferContext.size;
     }
 
-    public RecordIterator iterator() {
-        return new RecordIterator(this.recordBufferContext.address, this.table.getSchema().getRecordSize(),
+    @Override
+    public IRecordIterator iterator() {
+        return new RecordIterator(this.recordBufferContext.address, schema.getRecordSize(),
                 this.recordBufferContext.capacity);
     }
 

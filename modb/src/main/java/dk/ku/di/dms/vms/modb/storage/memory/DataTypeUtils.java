@@ -42,7 +42,6 @@ public class DataTypeUtils {
                 return UNSAFE.getDouble(address);
             }
             default -> throw new IllegalStateException("Unknown data type");
-
         }
 
     }

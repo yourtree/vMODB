@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.count;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
+import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
@@ -17,19 +18,15 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
  * If DISTINCT, must maintain state.
  * 
  */
-public class IndexCount extends AbstractOperator {
+public class IndexCount extends AbstractCount {
 
-    private final AbstractIndex<IKey> index;
-
-    private int count;
-
-    public IndexCount(AbstractIndex<IKey> index) {
-        super(Integer.BYTES);
-        this.index = index;
-        this.count = 0;
+    public IndexCount(ReadOnlyIndex<IKey> index) {
+        super(index, Integer.BYTES);
     }
 
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
+
+        int count = 0;
 
         if(index.getType() == IndexTypeEnum.UNIQUE){
 
@@ -37,8 +34,8 @@ public class IndexCount extends AbstractOperator {
             long address;
             for(IKey key : keys){
                 address = cIndex.retrieve(key);
-                if(checkCondition(address, filterContext, index.getTable().getSchema())){
-                    this.count++;
+                if(cIndex.exists(address) && index.checkCondition(address, filterContext)){
+                    count++;
                 }
             }
 
@@ -51,13 +48,14 @@ public class IndexCount extends AbstractOperator {
         NonUniqueHashIndex cIndex = index.asNonUniqueHashIndex();
         long address;
         for(IKey key : keys){
+
             RecordBucketIterator iterator = cIndex.iterator(key);
             while(iterator.hasNext()){
 
                 address = iterator.next();
 
-                if(checkCondition(address, filterContext, index.getTable().getSchema())){
-                    this.count++;
+                if(cIndex.checkCondition(address, filterContext)){
+                    count++;
                 }
 
             }

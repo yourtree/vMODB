@@ -1,5 +1,7 @@
 package dk.ku.di.dms.vms.modb.storage.iterator;
 
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.storage.memory.MemoryUtils;
 import sun.misc.Unsafe;
 
@@ -11,15 +13,15 @@ import java.util.Iterator;
  *
  * Cannot be used for iterating over ordered record buffer
  */
-public class RecordIterator implements Iterator<long> {
+public class RecordIterator implements IRecordIterator {
 
-    private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
+    protected static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
-    private long address;
-    private final int recordSize;
+    protected long address;
+    protected final int recordSize;
     private final int capacity;
 
-    private int progress; // how many records have been iterated
+    protected int progress; // how many records have been iterated
 
     public RecordIterator(long address, int recordSize, int capacity){
         this.address = address;
@@ -53,16 +55,18 @@ public class RecordIterator implements Iterator<long> {
      * Return the key of the current record
      * @return key
      */
-    public int key(long address){
-        return UNSAFE.getInt(address + 1);
+    @Override
+    public IKey primaryKey(){
+        return SimpleKey.of(UNSAFE.getInt(address + 1));
+    }
+
+    @Override
+    public long current(){
+        return this.address;
     }
 
     public int size(){
         return this.capacity;
-    }
-
-    public int progress(){
-        return this.progress;
     }
 
 }

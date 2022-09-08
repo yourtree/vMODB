@@ -2,23 +2,24 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.join;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
-import dk.ku.di.dms.vms.modb.storage.iterator.RecordIterator;
+import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 
 public class HashJoinWithProjection extends AbstractOperator {
 
-    public final AbstractIndex<IKey> leftIndex;
-    protected final AbstractIndex<IKey> rightIndex;
+    public final ReadOnlyIndex<IKey> leftIndex;
+    public final ReadOnlyIndex<IKey> rightIndex;
 
     // index of the columns
     protected final int[] leftProjectionColumns;
-    protected final int[] leftProjectionColumnSize;
+    protected final int[] leftProjectionColumnsSize;
 
     protected final int[] rightProjectionColumns;
-    protected final int[] rightProjectionColumnSize;
+    protected final int[] rightProjectionColumnsSize;
 
     // left = 0, right = 1
     private final boolean[] projectionOrder;
@@ -27,18 +28,18 @@ public class HashJoinWithProjection extends AbstractOperator {
             AbstractIndex<IKey> leftIndex,
             AbstractIndex<IKey> rightIndex,
             int[] leftProjectionColumns,
-            int[] leftProjectionColumnSize,
+            int[] leftProjectionColumnsSize,
             int[] rightProjectionColumns,
-            int[] rightProjectionColumnSize,
+            int[] rightProjectionColumnsSize,
             boolean[] projectionOrder,
             int entrySize) {
         super(entrySize);
         this.leftIndex = leftIndex;
         this.rightIndex = rightIndex;
         this.leftProjectionColumns = leftProjectionColumns;
-        this.leftProjectionColumnSize = leftProjectionColumnSize;
+        this.leftProjectionColumnsSize = leftProjectionColumnsSize;
         this.rightProjectionColumns = rightProjectionColumns;
-        this.rightProjectionColumnSize = rightProjectionColumnSize;
+        this.rightProjectionColumnsSize = rightProjectionColumnsSize;
         this.projectionOrder = projectionOrder;
     }
 
@@ -57,18 +58,15 @@ public class HashJoinWithProjection extends AbstractOperator {
 
             outerAddress = outerIndex.retrieve(key);
 
-            if(checkCondition(outerAddress, leftFilter, leftIndex.getTable().getSchema())){
+            if(leftIndex.checkCondition(key, leftFilter)){
 
                 innerAddress = innerIndex.retrieve(key);
-                if (innerIndex.exists(innerAddress)){
 
-                    if(checkCondition(innerAddress, rightFilter, rightIndex.getTable().getSchema())) {
+                if(rightIndex.checkCondition(key, rightFilter)) {
 
-                        append( outerAddress, leftProjectionColumns, this.leftIndex.getTable().getSchema().columnOffset(), leftProjectionColumnSize,
-                                innerAddress, rightProjectionColumns, this.rightIndex.getTable().getSchema().columnOffset(), rightProjectionColumnSize
-                        );
-
-                    }
+                    append( outerAddress, leftProjectionColumns, this.leftIndex.schema().columnOffset(), leftProjectionColumnsSize,
+                            innerAddress, rightProjectionColumns, this.rightIndex.schema().columnOffset(), rightProjectionColumnsSize
+                    );
 
                 }
 
@@ -82,28 +80,24 @@ public class HashJoinWithProjection extends AbstractOperator {
 
     public MemoryRefNode run(FilterContext leftFilter, FilterContext rightFilter) {
 
-        RecordIterator outerIterator = leftIndex.asUniqueHashIndex().iterator();
+        IRecordIterator outerIterator = leftIndex.asUniqueHashIndex().iterator();
         UniqueHashIndex innerIndex = rightIndex.asUniqueHashIndex();
         long outerAddress;
         long innerAddress;
 
         while(outerIterator.hasNext()){
 
-            outerAddress = outerIterator.next();
+            if(leftIndex.checkCondition(outerIterator, leftFilter)){
 
-            if(checkCondition(outerAddress, leftFilter, leftIndex.getTable().getSchema())){
-
-                int outerKey = outerIterator.key(outerAddress);
+                outerAddress = outerIterator.current();
+                IKey outerKey = outerIterator.primaryKey();
                 innerAddress = innerIndex.retrieve(outerKey);
-                if (innerIndex.exists(innerAddress)){
 
-                    if(checkCondition(innerAddress, rightFilter, rightIndex.getTable().getSchema())) {
+                if(rightIndex.checkCondition(outerKey, rightFilter)) {
 
-                        append( outerAddress, leftProjectionColumns, this.leftIndex.getTable().getSchema().columnOffset(), leftProjectionColumnSize,
-                                innerAddress, rightProjectionColumns, this.rightIndex.getTable().getSchema().columnOffset(), rightProjectionColumnSize
-                                );
-
-                    }
+                    append( outerAddress, leftProjectionColumns, this.leftIndex.schema().columnOffset(), leftProjectionColumnsSize,
+                            innerAddress, rightProjectionColumns, this.rightIndex.schema().columnOffset(), rightProjectionColumnsSize
+                            );
 
                 }
 

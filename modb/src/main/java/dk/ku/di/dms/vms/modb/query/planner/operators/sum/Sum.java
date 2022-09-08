@@ -1,28 +1,26 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.sum;
 
-import dk.ku.di.dms.vms.modb.api.type.DataType;
-import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
-import dk.ku.di.dms.vms.modb.storage.iterator.RecordIterator;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class Sum extends AbstractOperator {
 
-    protected final AbstractIndex<IKey> index;
+    protected final ReadOnlyIndex<IKey> index;
 
     protected final int columnIndex;
 
     protected final DataType dataType;
 
-    protected final SumOperation<Object> sumOperation;
-
-    @SuppressWarnings("unchecked")
     public Sum(DataType dataType,
                     int columnIndex,
                     AbstractIndex<IKey> index) {
@@ -30,7 +28,6 @@ public class Sum extends AbstractOperator {
         this.dataType = dataType;
         this.index = index;
         this.columnIndex = columnIndex;
-        this.sumOperation = (SumOperation<Object>) buildOperation(dataType);
     }
 
     protected interface SumOperation<T> extends Consumer<T>, Supplier<T> {
@@ -101,27 +98,30 @@ public class Sum extends AbstractOperator {
         return null;
     }
 
+    @SuppressWarnings("unchecked, rawtypes")
     public MemoryRefNode run(
             FilterContext filterContext){
 
-        int columnOffset = this.index.getTable().getSchema().getColumnOffset(columnIndex);
+        SumOperation sumOperation = buildOperation(dataType);
 
-        RecordIterator iterator = index.asUniqueHashIndex().iterator();
+        int columnOffset = this.index.schema().getColumnOffset(columnIndex);
+
+        IRecordIterator iterator = index.asUniqueHashIndex().iterator();
         long address;
         while(iterator.hasNext()){
             address = iterator.next();
-            if(checkCondition(address, filterContext, index.getTable().getSchema())){
+            if(index.checkCondition(address, filterContext)){
                 Object val = DataTypeUtils.getValue( dataType, address + columnOffset );
                 sumOperation.accept(val);
             }
         }
 
-        appendResult();
+        appendResult(sumOperation);
         return memoryRefNode;
 
     }
 
-    protected void appendResult(){
+    protected void appendResult(SumOperation<?> sumOperation){
 
         switch (dataType){
             case INT -> this.currentBuffer.append( sumOperation.asInt() );

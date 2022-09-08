@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.DataItemVersion;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,13 +32,13 @@ public class TransactionFacade {
     private TransactionFacade(){}
 
     // key: tid
-    private static final Map<long, List<VersionNode>> writesPerTransaction;
+    private static final Map<long, List<DataItemVersion>> writesPerTransaction;
 
     // key: PK
-    private static final Map<IIndexKey, Map<IKey,List<VersionNode>>> writesPerIndexAndKey;
+    private static final Map<IIndexKey, Map<IKey,List<DataItemVersion>>> writesPerIndexAndKey;
 
     static {
-        writesPerTransaction = new ConcurrentHashMap<long,List<VersionNode>>();
+        writesPerTransaction = new ConcurrentHashMap<long,List<DataItemVersion>>();
         writesPerIndexAndKey = new ConcurrentHashMap<>();
     }
 
@@ -51,6 +52,7 @@ public class TransactionFacade {
 
         // i think a good idea is actually injecting information into the iterator or index
         // like a vaccine... so the iterator provides the correct info, not the operator
+        // ViewIndex -- a view over an index.. only some items can be seen. one per transaction
 
         List<Object> keyList = new ArrayList<>(operator.index.getColumns().length);
         List<WherePredicate> wherePredicatesNoIndex = new ArrayList<>(wherePredicates.size());

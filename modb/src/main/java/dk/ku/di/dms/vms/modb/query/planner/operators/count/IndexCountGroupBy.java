@@ -1,15 +1,14 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.count;
 
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
+import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,23 +16,19 @@ import java.util.Map;
 /**
  *
  */
-public class IndexCountGroupBy extends AbstractOperator {
-
-    private final AbstractIndex<IKey> index;
+public class IndexCountGroupBy extends AbstractCount {
 
     private final int[] indexColumns;
 
-    private final Map<int,Integer> countMap;
-
-    public IndexCountGroupBy(AbstractIndex<IKey> index,
+    public IndexCountGroupBy(ReadOnlyIndex<IKey> index,
                              int[] indexColumns) {
-        super(Integer.BYTES);
-        this.index = index;
+        super(index, Integer.BYTES);
         this.indexColumns = indexColumns;
-        this.countMap = new HashMap<int,Integer>();
     }
 
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
+
+        Map<int,Integer> countMap = new HashMap<int,Integer>();
 
         if(index.getType() == IndexTypeEnum.UNIQUE){
 
@@ -41,8 +36,8 @@ public class IndexCountGroupBy extends AbstractOperator {
             long address;
             for(IKey key : keys){
                 address = cIndex.retrieve(key);
-                if(checkCondition(address, filterContext, index.getTable().getSchema())){
-                    compute(address);
+                if(index.checkCondition(key, filterContext)){
+                    compute(address, countMap);
                 }
             }
 
@@ -58,10 +53,9 @@ public class IndexCountGroupBy extends AbstractOperator {
             RecordBucketIterator iterator = cIndex.iterator(key);
             while(iterator.hasNext()){
 
-                address = iterator.next();
-
-                if(checkCondition(address, filterContext, index.getTable().getSchema())){
-                    compute(address);
+                if(index.checkCondition(iterator, filterContext)){
+                    address = iterator.current();
+                    compute(address, countMap);
                 }
 
             }
@@ -72,9 +66,10 @@ public class IndexCountGroupBy extends AbstractOperator {
 
     }
 
-    private void compute(long address) {
+    private void compute(long address, Map<int,Integer> countMap) {
         // hash the groupby columns
-        int groupKey = KeyUtils.buildRecordKey(  this.index.getTable().getSchema(), indexColumns, address).hashCode();
+        // TODO this should be the index
+        int groupKey = KeyUtils.buildRecordKey(this.index.schema(), indexColumns, address).hashCode();
         if( countMap.get(groupKey) == null ){
             countMap.put(groupKey, 1);
         } else {

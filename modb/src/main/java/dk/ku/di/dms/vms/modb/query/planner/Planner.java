@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.query.planner;
 
-import dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum;
+import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.modb.definition.ColumnReference;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
@@ -116,23 +116,21 @@ public class Planner {
         // compute before creating this. compute in startup
         int nProj = queryTree.projections.size();
         int[] projectionColumns = new int[nProj];
-        int[] valueSizeInBytes = new int[nProj];
+        int valueSizeInBytes; // = new int[nProj];
         int entrySize = 0;
         for(int i = 0; i < nProj; i++){
             projectionColumns[i] = queryTree.projections.get(i).columnPosition;
-            valueSizeInBytes[i] = indexSelected
-                    .getTable().getSchema()
+            entrySize += indexSelected.schema()
                     .getColumnDataType( queryTree.projections.get(i).columnPosition ).value;
-            entrySize += valueSizeInBytes[i];
         }
 
         if(indexSelected != null) {
             // return the indexscanwithprojection
-            return new IndexScanWithProjection(indexSelected, projectionColumns, valueSizeInBytes, entrySize);
+            return new IndexScanWithProjection(indexSelected, projectionColumns, entrySize);
 
         } else {
             // then must get the PK index, ScanWithProjection
-            return new FullScanWithProjection( tb.primaryKeyIndex, projectionColumns, valueSizeInBytes, entrySize );
+            return new FullScanWithProjection( tb.primaryKeyIndex, projectionColumns, entrySize );
 
         }
 
@@ -143,8 +141,7 @@ public class Planner {
                  .filter( wherePredicate -> wherePredicate.expression == ExpressionTypeEnum.EQUALS )
                  .mapToInt( WherePredicate::getColumnPosition ).toArray();
 
-        AbstractIndex<IKey> indexSelected = pickIndex(tb, filterColumns);
-        return indexSelected;
+        return pickIndex(tb, filterColumns);
     }
 
     private AbstractIndex<IKey> pickIndex(Table table, int[] filterColumns){

@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.batch.follower;
 
-import java.nio.ByteBuffer;
+import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 
-import static dk.ku.di.dms.vms.web_common.meta.Constants.BATCH_REPLICATION_ACK;
+import java.nio.ByteBuffer;
 
 /**
  * A batch-commit replication request payload

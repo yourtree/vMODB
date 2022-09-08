@@ -8,5 +8,5 @@ public enum IndexTypeEnum {
 
     NON_UNIQUE, // non-unique hash-based column set identifies several table
 
-    // RANGE, FILTER
+    // RANGE, FILTER, BLOOM?
 }

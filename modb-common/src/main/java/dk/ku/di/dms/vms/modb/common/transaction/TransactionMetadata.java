@@ -6,7 +6,7 @@ import java.util.Map;
 /**
  * This class is used differently depending on the actual deployment
  *
- * If embed, only one instance of this class is used acorss modules
+ * If embed, only one instance of this class is used across modules
  *
  * If modb-service, then
  *

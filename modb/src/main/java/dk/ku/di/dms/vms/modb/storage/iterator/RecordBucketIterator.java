@@ -1,20 +1,20 @@
 package dk.ku.di.dms.vms.modb.storage.iterator;
 
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.storage.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 import sun.misc.Unsafe;
 
 import java.util.Iterator;
 
-public class RecordBucketIterator implements Iterator<long> {
+public class RecordBucketIterator implements IRecordIterator {
 
     private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
-    private final OrderedRecordBuffer buffer;
     private long currPosition;
 
     public RecordBucketIterator(OrderedRecordBuffer buffer) {
-        this.buffer = buffer;
         this.currPosition = buffer.getFirst();
     }
 
@@ -27,8 +27,13 @@ public class RecordBucketIterator implements Iterator<long> {
         return UNSAFE.getBoolean(null, currPosition);
     }
 
-    public int key(long address){
-        return UNSAFE.getInt(address + OrderedRecordBuffer.deltaKey);
+    public IKey primaryKey(){
+        return SimpleKey.of(UNSAFE.getInt(currPosition + OrderedRecordBuffer.deltaKey));
+    }
+
+    @Override
+    public long current() {
+        return currPosition;
     }
 
     public int srcAddress(long address){

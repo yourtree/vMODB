@@ -1,16 +1,16 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.control;
 
-import dk.ku.di.dms.vms.web_common.meta.*;
+import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
+import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
-import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-
-import static dk.ku.di.dms.vms.web_common.meta.Constants.PRESENTATION;
 
 /**
  * A presentation is a message that carries out the necessary info of a node
