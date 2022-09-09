@@ -32,15 +32,14 @@ public class IndexCountDistinct extends AbstractCount {
         }
     }
 
-    private final int distinctColumnIndex;
-
-    public IndexCountDistinct(ReadOnlyIndex<IKey> index,
-                      int distinctColumnIndex // today only support for one
+    public IndexCountDistinct(ReadOnlyIndex<IKey> index
                                ) {
         super(index, Integer.BYTES);
-        this.distinctColumnIndex = distinctColumnIndex;
     }
 
+    /**
+     * Can be reused across different distinct columns
+     */
     public MemoryRefNode run(int distinctColumnIndex, FilterContext filterContext, IKey... keys){
 
         EphemeralState state = new EphemeralState();
@@ -53,11 +52,15 @@ public class IndexCountDistinct extends AbstractCount {
             long address;
             for(IKey key : keys){
                 address = cIndex.retrieve(key);
-                Object val = DataTypeUtils.getValue( dt, address );
-                if(index.checkCondition(key, filterContext)
-                        && !state.valuesSeen.containsKey(val.hashCode())){
-                    state.count++;
-                    state.valuesSeen.put(val.hashCode(),1);
+
+                if(index.checkCondition(key, address, filterContext)){
+
+                    address = index.getColumnAddress(key, address, distinctColumnIndex);
+                    Object val = DataTypeUtils.getValue( dt, address );
+                    if( !state.valuesSeen.containsKey(val.hashCode())) {
+                        state.count++;
+                        state.valuesSeen.put(val.hashCode(), 1);
+                    }
                 }
             }
 
@@ -73,12 +76,16 @@ public class IndexCountDistinct extends AbstractCount {
             RecordBucketIterator iterator = cIndex.iterator(key);
             while(iterator.hasNext()){
 
-                address = iterator.next();
-                Object val = DataTypeUtils.getValue( dt, address );
-                if(index.checkCondition(iterator, filterContext) && !state.valuesSeen.containsKey(val.hashCode())){
-                    state.count++;
-                    state.valuesSeen.put(val.hashCode(),1);
+                if(index.checkCondition(iterator, filterContext)) {
+                    address = index.getColumnAddress(iterator, distinctColumnIndex);
+                    Object val = DataTypeUtils.getValue( dt, address );
+                    if( !state.valuesSeen.containsKey(val.hashCode())) {
+                        state.count++;
+                        state.valuesSeen.put(val.hashCode(), 1);
+                    }
                 }
+
+                iterator.next();
 
             }
         }

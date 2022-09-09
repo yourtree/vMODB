@@ -3,13 +3,17 @@ package dk.ku.di.dms.vms.modb.index;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
+import dk.ku.di.dms.vms.modb.storage.iterator.RecordIterator;
 import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
+
+import java.util.HashSet;
 
 /**
  * Base interface for operators that perform read-only queries
@@ -18,6 +22,11 @@ import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 public interface ReadOnlyIndex<K> {
 
     Schema schema();
+
+    // columns that form the key to each record entry
+    int[] columns();
+
+    HashSet<int> columnsHash();
 
     /** information used by the planner to decide for the appropriate operator */
     IndexTypeEnum getType();
@@ -31,6 +40,8 @@ public interface ReadOnlyIndex<K> {
     }
 
     boolean exists(K key);
+
+    boolean exists(long address);
 
     /**
      * This method may behave differently across indexes
@@ -53,8 +64,24 @@ public interface ReadOnlyIndex<K> {
         return checkCondition( iterator.current(), filterContext );
     }
 
-    default boolean checkCondition(K key, FilterContext filterContext){
-        return checkCondition( this.retrieve(key), filterContext );
+    default boolean checkCondition(K key, long address, FilterContext filterContext){
+        return checkCondition( address, filterContext );
+    }
+
+    default long getColumnAddress(IRecordIterator iterator, int columnIndex){
+        return iterator.current() + schema().getColumnOffset(columnIndex);
+    }
+
+    default long getColumnAddress(K key, long address, int columnIndex){
+        return address + schema().getColumnOffset(columnIndex);
+    }
+
+    default IKey hashAggregateGroup(K key, long address, int[] indexColumns){
+        return KeyUtils.buildRecordKey(schema(), indexColumns, address);
+    }
+
+    default IKey hashAggregateGroup(IRecordIterator iterator, int[] indexColumns){
+        return KeyUtils.buildRecordKey(schema(), indexColumns, iterator.current());
     }
 
     /**
@@ -65,8 +92,9 @@ public interface ReadOnlyIndex<K> {
      * @return
      */
     @SuppressWarnings("unchecked")
-    default boolean checkCondition(long address, FilterContext filterContext){
+    private boolean checkCondition(long address, FilterContext filterContext){
 
+        if(!exists(address)) return false;
         if(filterContext == null) return true;
 
         boolean conditionHolds = true;

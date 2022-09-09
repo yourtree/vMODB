@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.index.non_unique;
 
+import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
@@ -24,9 +25,9 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
     private OrderedRecordBuffer[] buffers;
 
     public NonUniqueHashIndex(OrderedRecordBuffer[] buffers,
-                              Table table,
+                              Schema schema,
                               int... columnsIndex){
-        super(table, columnsIndex);
+        super(schema, columnsIndex);
         this.buffers = buffers;
         // this.size = 0;
     }
@@ -83,14 +84,24 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
         return buffers[bucket].exists(key);
     }
 
-    public boolean isBucketEmpty(int key){
-        int bucket = getBucket(key);
-        return this.buffers[bucket].size() == 0;
+    @Override
+    public boolean exists(long address) {
+        // semantics is whether the bucket with this address exists...
+        for(var buf : buffers) {
+            if(buf.address() == address) return true;
+        }
+        return false;
     }
 
-    public BucketIterator iterator(){
-        return new BucketIterator(this.buffers);
+    @Override
+    public long retrieve(IKey key) {
+        int bucket = getBucket(key);
+        return this.buffers[bucket].address();
     }
+
+//    public BucketIterator iterator(){
+//        return new BucketIterator(this.buffers);
+//    }
 
     public RecordBucketIterator iterator(IKey key) {
         int bucket = getBucket(key);

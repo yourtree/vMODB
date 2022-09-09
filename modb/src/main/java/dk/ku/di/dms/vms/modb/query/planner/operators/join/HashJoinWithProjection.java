@@ -18,6 +18,7 @@ public class HashJoinWithProjection extends AbstractOperator {
     protected final int[] leftProjectionColumns;
     protected final int[] leftProjectionColumnsSize;
 
+    // this is unnecessary, since it can be get from the index directly
     protected final int[] rightProjectionColumns;
     protected final int[] rightProjectionColumnsSize;
 
@@ -58,14 +59,14 @@ public class HashJoinWithProjection extends AbstractOperator {
 
             outerAddress = outerIndex.retrieve(key);
 
-            if(leftIndex.checkCondition(key, leftFilter)){
+            if(leftIndex.checkCondition(key, outerAddress, leftFilter)){
 
                 innerAddress = innerIndex.retrieve(key);
 
-                if(rightIndex.checkCondition(key, rightFilter)) {
+                if(rightIndex.checkCondition(key, innerAddress, rightFilter)) {
 
-                    append( outerAddress, leftProjectionColumns, this.leftIndex.schema().columnOffset(), leftProjectionColumnsSize,
-                            innerAddress, rightProjectionColumns, this.rightIndex.schema().columnOffset(), rightProjectionColumnsSize
+                    append( key, outerAddress, leftProjectionColumns, leftProjectionColumnsSize,
+                            innerAddress, rightProjectionColumns, rightProjectionColumnsSize
                     );
 
                 }
@@ -93,10 +94,10 @@ public class HashJoinWithProjection extends AbstractOperator {
                 IKey outerKey = outerIterator.primaryKey();
                 innerAddress = innerIndex.retrieve(outerKey);
 
-                if(rightIndex.checkCondition(outerKey, rightFilter)) {
+                if(rightIndex.checkCondition(outerKey, outerAddress, rightFilter)) {
 
-                    append( outerAddress, leftProjectionColumns, this.leftIndex.schema().columnOffset(), leftProjectionColumnsSize,
-                            innerAddress, rightProjectionColumns, this.rightIndex.schema().columnOffset(), rightProjectionColumnsSize
+                    append( outerKey, outerAddress, leftProjectionColumns, leftProjectionColumnsSize,
+                            innerAddress, rightProjectionColumns, rightProjectionColumnsSize
                             );
 
                 }
@@ -114,28 +115,27 @@ public class HashJoinWithProjection extends AbstractOperator {
      * Easier to ensure (implicitly) that remote calls between modules remain consistent
      * just by following conventions
      */
-    private void append(long leftSrcAddress, int[] leftProjectionColumns, int[] leftColumnOffset, int[] leftValueSizeInBytes,
-                        long rightSrcAddress, int[] rightProjectionColumns, int[] rightColumnOffset, int[] rightValueSizeInBytes){
+    private void append(IKey key, long leftSrcAddress, int[] leftProjectionColumns, int[] leftValueSizeInBytes,
+                        long rightSrcAddress, int[] rightProjectionColumns, int[] rightValueSizeInBytes){
 
         int leftProjIdx = 0;
         int rightProjIdx = 0;
-
-        // get direct byte buffer
-//        ByteBuffer bb = MemoryManager.getTemporaryDirectBuffer(entrySize);
-//        long bbAddress = MemoryUtils.getByteBufferAddress(bb);
 
         for(int projOrdIdx = 0; projOrdIdx < projectionOrder.length; projOrdIdx++) {
 
             // left
             if(!projectionOrder[projOrdIdx]){
-                this.currentBuffer.append( leftSrcAddress,
-                        leftColumnOffset[leftProjectionColumns[leftProjIdx]],
+
+                this.currentBuffer.copy(
+                        this.leftIndex.getColumnAddress(key, leftSrcAddress, leftProjectionColumns[leftProjIdx]),
                         leftValueSizeInBytes[leftProjIdx]);
+
                 leftProjIdx++;
             } else {
-                this.currentBuffer.append( rightSrcAddress,
-                        rightColumnOffset[rightProjectionColumns[rightProjIdx]],
+
+                this.currentBuffer.copy( this.rightIndex.getColumnAddress(key, rightSrcAddress, rightProjectionColumns[rightProjIdx]),
                         rightValueSizeInBytes[rightProjIdx]);
+
                 rightProjIdx++;
             }
 

@@ -28,32 +28,22 @@ public abstract class AbstractScan extends AbstractOperator  {
         return this;
     }
 
+    protected void append(IKey key, long srcAddress, int[] projectionColumns) {
+        ensureMemoryCapacity();
+        for (int projectionColumn : projectionColumns) {
+            long address = index.getColumnAddress(key, srcAddress, projectionColumn);
+            int size = index.schema().getColumnDataType(projectionColumn).value;
+            this.currentBuffer.copy(address, size);
+        }
+    }
+
     protected void append(IRecordIterator iterator, int[] projectionColumns) {
         ensureMemoryCapacity();
-
-        long address = iterator.current();
-        IKey key = iterator.primaryKey();
-
-        //this.currentBuffer.append(address, projectionColumns, columnOffset, valueSizeInBytes);
-
-        for(int i = 0; i < projectionColumns.length; i++){
-
-            // so the idea is getting the address from the index. the index has the correct value
-            // since the value may differ from the original record address because of updates
-            // the version node has the address
-            // maybe the iterator dont need to be passed since it is "given" by the consistentview
-
-            // the operator don't know what version, so better to give the index to do it
-            long addr = index.getColumnAddress(iterator);
-            int size = index.schema().getColumnDataType(projectionColumns[i]).value;
-                    // long or object... better to make everything direct address
-
-            this.currentBuffer.copy(addr, size);
-
+        for (int projectionColumn : projectionColumns) {
+            long address = index.getColumnAddress(iterator, projectionColumn);
+            int size = index.schema().getColumnDataType(projectionColumn).value;
+            this.currentBuffer.copy(address, size);
         }
-
-        // move the offset pointer
-        this.currentBuffer.reserve(entrySize);
     }
 
 }

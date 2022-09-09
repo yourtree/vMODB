@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.modb.definition.key;
 
-import dk.ku.di.dms.vms.modb.api.type.DataType;
-import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.Schema;
+import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 
 public class KeyUtils {
 
@@ -23,7 +23,7 @@ public class KeyUtils {
         if(columns.length == 1){
             DataType columnType = schema.getColumnDataType( columns[0] );
             srcAddress += schema.columnOffset()[columns[0]];
-            key = new SimpleKey( DataTypeUtils.getValue(columnType, srcAddress) );
+            key = SimpleKey.of( DataTypeUtils.getValue(columnType, srcAddress) );
         } else {
 
             Object[] values = new Object[columns.length];
@@ -36,7 +36,7 @@ public class KeyUtils {
                 currAddress = srcAddress;
             }
 
-            key = new CompositeKey( values );
+            key = CompositeKey.of( values );
 
         }
 

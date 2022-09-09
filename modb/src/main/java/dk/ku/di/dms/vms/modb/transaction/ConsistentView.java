@@ -36,14 +36,18 @@ import java.util.Map;
  */
 public class ConsistentView implements ReadOnlyIndex<IKey> {
 
-    private AbstractIndex<IKey> index;
+    private final AbstractIndex<IKey> index;
 
     /**
      * Since the previous checkpointed state, multiple updates may have been applied
      *
      */
-    private Map<IKey, OperationNode> keyVersionMap;
+    private final Map<IKey, OperationNode> keyVersionMap;
 
+    public ConsistentView(AbstractIndex<IKey> index, Map<IKey, OperationNode> keyVersionMap) {
+        this.index = index;
+        this.keyVersionMap = keyVersionMap;
+    }
 
     @Override
     public Schema schema() {
@@ -77,6 +81,11 @@ public class ConsistentView implements ReadOnlyIndex<IKey> {
     }
 
     @Override
+    public boolean exists(long address) {
+        return index.exists(address);
+    }
+
+    @Override
     public long retrieve(IKey key) {
         return index.retrieve(key);
     }
@@ -99,13 +108,49 @@ public class ConsistentView implements ReadOnlyIndex<IKey> {
     public boolean checkCondition(IRecordIterator iterator, FilterContext filterContext) {
         IKey pk = iterator.primaryKey();
         if(!this.exists(pk)) return false;
-        return checkConditionVersioned(pk, filterContext);
+        return checkConditionVersioned(pk, iterator.current(), filterContext);
     }
 
     @Override
-    public boolean checkCondition(IKey key, FilterContext filterContext) {
+    public boolean checkCondition(IKey key, long address, FilterContext filterContext) {
         if(!this.exists(key)) return false;
-        return checkConditionVersioned(key, filterContext);
+        return checkConditionVersioned(key, address, filterContext);
+    }
+
+    @Override
+    public long getColumnAddress(IRecordIterator iterator, int columnIndex){
+        return this.getColumnAddress(iterator.primaryKey(), iterator.current(), columnIndex);
+    }
+
+    /**
+     * The columns iterated can be cached since many keys may require this same method.
+     */
+    @Override
+    public long getColumnAddress(IKey key, long address, int columnIndex){
+
+        OperationNode currNode = keyVersionMap.get(key);
+        if (currNode == null) {
+            return address + schema().getColumnOffset(columnIndex);
+        }
+
+        if(currNode.operation.operation() == Operation.INSERT){
+            int columnOffset = schema().getColumnOffset(columnIndex);
+            return currNode.operation.asInsert().bufferAddress + columnOffset;
+        } else {
+
+            while(currNode.operation.asUpdate().columnIndex < columnIndex){
+                currNode = currNode.next;
+                if(currNode == null) break;
+            }
+
+            if(currNode != null && currNode.operation.asUpdate().columnIndex == columnIndex){
+                return currNode.operation.asUpdate().address;
+            } else {
+                return address + schema().getColumnOffset(columnIndex);
+            }
+
+        }
+
     }
 
     /**
@@ -116,11 +161,9 @@ public class ConsistentView implements ReadOnlyIndex<IKey> {
      * @return
      */
     @SuppressWarnings("unchecked")
-    boolean checkConditionVersioned(IKey key, FilterContext filterContext){
+    boolean checkConditionVersioned(IKey key, long srcAddress, FilterContext filterContext){
 
         if(filterContext == null) return true;
-
-        long srcAddress = index.retrieve(key);
 
         boolean conditionHolds = true;
 

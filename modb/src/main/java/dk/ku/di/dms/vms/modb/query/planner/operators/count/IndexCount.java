@@ -34,7 +34,7 @@ public class IndexCount extends AbstractCount {
             long address;
             for(IKey key : keys){
                 address = cIndex.retrieve(key);
-                if(cIndex.exists(address) && index.checkCondition(address, filterContext)){
+                if(index.checkCondition(key, address, filterContext)){
                     count++;
                 }
             }
@@ -46,18 +46,14 @@ public class IndexCount extends AbstractCount {
 
         // non unique
         NonUniqueHashIndex cIndex = index.asNonUniqueHashIndex();
-        long address;
         for(IKey key : keys){
 
             RecordBucketIterator iterator = cIndex.iterator(key);
             while(iterator.hasNext()){
-
-                address = iterator.next();
-
-                if(cIndex.checkCondition(address, filterContext)){
+                if(cIndex.checkCondition(iterator, filterContext)){
                     count++;
                 }
-
+                iterator.next();
             }
         }
 

@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.scan;
 
+import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
@@ -27,10 +28,11 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 public final class IndexScanWithProjection extends AbstractScan {
 
     public IndexScanWithProjection(
+                     Table table,
                      ReadOnlyIndex<IKey> index,
                      int[] projectionColumns,
                      int entrySize) {
-        super(entrySize, index, projectionColumns);
+        super(table, entrySize, index, projectionColumns);
     }
 
     @Override
@@ -46,13 +48,12 @@ public final class IndexScanWithProjection extends AbstractScan {
     public MemoryRefNode run(FilterContext filterContext, IKey... keys) {
 
         if(index.getType() == IndexTypeEnum.UNIQUE){
-
-            UniqueHashIndex cIndex = index.asUniqueHashIndex();
             long address;
+            UniqueHashIndex cIndex = index.asUniqueHashIndex();
             for(IKey key : keys){
-                address = cIndex.retrieve(key);
-                if(cIndex.checkCondition(key, filterContext)){
-                    append(key, projectionColumns);
+                address = index.retrieve(key);
+                if(cIndex.checkCondition(key, address, filterContext)){
+                    append(key, address, projectionColumns);
                 }
             }
 
@@ -62,19 +63,14 @@ public final class IndexScanWithProjection extends AbstractScan {
 
         // non unique
         NonUniqueHashIndex cIndex = index.asNonUniqueHashIndex();
-        long address;
         for(IKey key : keys){
             RecordBucketIterator iterator = cIndex.iterator(key);
             while(iterator.hasNext()){
-
                 if(cIndex.checkCondition(iterator, filterContext)){
-                    //address = iterator.current();
                     append(iterator, projectionColumns);
                 }
-
                 // move the iterator
                 iterator.next();
-
             }
         }
 

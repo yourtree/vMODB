@@ -27,18 +27,18 @@ public class IndexSum extends Sum {
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
 
         SumOperation sumOperation = buildOperation(dataType);
-
+        long address;
         int columnOffset = this.index.schema().getColumnOffset(columnIndex);
 
         if(index.getType() == IndexTypeEnum.UNIQUE){
 
             UniqueHashIndex cIndex = index.asUniqueHashIndex();
-            long address;
+
             for(IKey key : keys){
                 address = cIndex.retrieve(key);
-                if(index.checkCondition(address, filterContext)){
-
-                    Object val = DataTypeUtils.getValue( dataType, address + columnOffset );
+                if(index.checkCondition(key, address, filterContext)){
+                    address = index.getColumnAddress(key, address, columnIndex);
+                    Object val = DataTypeUtils.getValue( dataType, address );
                     sumOperation.accept(val);
 
                 }
@@ -51,18 +51,15 @@ public class IndexSum extends Sum {
 
         // non unique
         NonUniqueHashIndex cIndex = index.asNonUniqueHashIndex();
-        long address;
         for(IKey key : keys){
             RecordBucketIterator iterator = cIndex.iterator(key);
             while(iterator.hasNext()){
-
-                address = iterator.next();
-
-                if(index.checkCondition(address, filterContext)){
-                    Object val = DataTypeUtils.getValue( dataType, address + columnOffset );
+                if(index.checkCondition(iterator, filterContext)){
+                    address = index.getColumnAddress(iterator, columnIndex);
+                    Object val = DataTypeUtils.getValue( dataType, address );
                     sumOperation.accept(val);
                 }
-
+                iterator.next();
             }
         }
 

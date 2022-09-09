@@ -1,16 +1,8 @@
 package dk.ku.di.dms.vms.modb.index;
 
-import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.Schema;
-import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
-import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.storage.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.definition.Table;
 import sun.misc.Unsafe;
 
 import java.util.*;
@@ -29,7 +21,7 @@ public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
     protected final int[] columns;
 
     // to speed up queries, so the filters can be build on flight
-    public final HashSet<int> columnHash;
+    protected final HashSet<int> columnsHash;
 
     private final int hashCode;
 
@@ -44,8 +36,8 @@ public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
         } else {
             this.hashCode = Arrays.hashCode(columnsIndex);
         }
-        columnHash = new HashSet<int>(columns.length);
-        for(int i : columnsIndex) columnHash.add(i);
+        this.columnsHash = new HashSet<int>(columns.length);
+        for(int i : columnsIndex) this.columnsHash.add(i);
     }
 
     // use bitwise comparison to find whether a given index exists for such columns
@@ -54,14 +46,18 @@ public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
         return this.hashCode;
     }
 
-    public int[] getColumns(){
+    public int[] columns(){
         return this.columns;
+    }
+
+    public HashSet<int> columnsHash() {
+        return columnsHash;
     }
 
     public abstract int size();
 
     public Schema schema(){
-        return schema;
+        return this.schema;
     }
 
 }

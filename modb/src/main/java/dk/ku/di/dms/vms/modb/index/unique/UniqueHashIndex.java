@@ -73,11 +73,7 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
         return UNSAFE.getBoolean(null, pos);
     }
 
-//    public boolean exists(int key){
-//        long pos = getPosition(key);
-//        return UNSAFE.getBoolean(null, pos);
-//    }
-
+    @Override
     public boolean exists(long address){
         return UNSAFE.getBoolean(null, address);
     }

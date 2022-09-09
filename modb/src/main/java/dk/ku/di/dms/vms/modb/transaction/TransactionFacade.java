@@ -54,12 +54,12 @@ public class TransactionFacade {
         // like a vaccine... so the iterator provides the correct info, not the operator
         // ViewIndex -- a view over an index.. only some items can be seen. one per transaction
 
-        List<Object> keyList = new ArrayList<>(operator.index.getColumns().length);
+        List<Object> keyList = new ArrayList<>(operator.index.columns().length);
         List<WherePredicate> wherePredicatesNoIndex = new ArrayList<>(wherePredicates.size());
         // build filters for only those columns not in selected index
         for (WherePredicate wherePredicate : wherePredicates) {
             // not found, then build filter
-            if(operator.index.columnHash.contains( wherePredicate.columnReference.columnPosition )){
+            if(operator.index.columnsHash().contains( wherePredicate.columnReference.columnPosition )){
                 keyList.add( wherePredicate.value );
             } else {
                 wherePredicatesNoIndex.add(wherePredicate);

@@ -6,8 +6,6 @@ import dk.ku.di.dms.vms.modb.storage.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 import sun.misc.Unsafe;
 
-import java.util.Iterator;
-
 public class RecordBucketIterator implements IRecordIterator {
 
     private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
@@ -34,10 +32,6 @@ public class RecordBucketIterator implements IRecordIterator {
     @Override
     public long current() {
         return currPosition;
-    }
-
-    public int srcAddress(long address){
-        return UNSAFE.getInt(address + OrderedRecordBuffer.deltaOffset);
     }
 
     /**

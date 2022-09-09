@@ -45,6 +45,26 @@ public abstract class AbstractOperator {
 
     }
 
+    /**
+     * For operators that don't know the amount of records from start
+     * @param size
+     */
+    protected void ensureMemoryCapacity(int size){
+
+        if(currentBuffer.capacity() - currentBuffer.address() > size){
+            return;
+        }
+
+        // else, get a new memory segment
+        MemoryRefNode claimed = MemoryManager.claim(size);
+
+        claimed.next = memoryRefNode;
+        memoryRefNode = claimed;
+
+        this.currentBuffer = new AppendOnlyBuffer(claimed.address(), claimed.bytes());
+
+    }
+
     // must be overridden by the concrete operators
     public boolean isFullScan(){
         return false;

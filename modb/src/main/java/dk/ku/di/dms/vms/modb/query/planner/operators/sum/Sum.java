@@ -104,16 +104,17 @@ public class Sum extends AbstractOperator {
 
         SumOperation sumOperation = buildOperation(dataType);
 
-        int columnOffset = this.index.schema().getColumnOffset(columnIndex);
+
 
         IRecordIterator iterator = index.asUniqueHashIndex().iterator();
         long address;
         while(iterator.hasNext()){
-            address = iterator.next();
-            if(index.checkCondition(address, filterContext)){
-                Object val = DataTypeUtils.getValue( dataType, address + columnOffset );
+            if(index.checkCondition(iterator, filterContext)){
+                address = index.getColumnAddress(iterator, columnIndex);
+                Object val = DataTypeUtils.getValue( dataType, address );
                 sumOperation.accept(val);
             }
+            iterator.next();
         }
 
         appendResult(sumOperation);

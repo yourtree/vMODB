@@ -126,11 +126,11 @@ public class Planner {
 
         if(indexSelected != null) {
             // return the indexscanwithprojection
-            return new IndexScanWithProjection(indexSelected, projectionColumns, entrySize);
+            return new IndexScanWithProjection(tb, indexSelected, projectionColumns, entrySize);
 
         } else {
             // then must get the PK index, ScanWithProjection
-            return new FullScanWithProjection( tb.primaryKeyIndex, projectionColumns, entrySize );
+            return new FullScanWithProjection( tb, tb.primaryKeyIndex, projectionColumns, entrySize );
 
         }
 
