@@ -10,7 +10,6 @@ import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
-import dk.ku.di.dms.vms.modb.storage.iterator.RecordIterator;
 import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 
 import java.util.HashSet;
@@ -20,6 +19,8 @@ import java.util.HashSet;
  * @param <K>
  */
 public interface ReadOnlyIndex<K> {
+
+    IIndexKey key();
 
     Schema schema();
 

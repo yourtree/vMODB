@@ -1,12 +1,11 @@
 package dk.ku.di.dms.vms.modb.storage.iterator;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryUtils;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 import sun.misc.Unsafe;
 
-public class RecordBucketIterator implements IRecordIterator {
+public class RecordBucketIterator extends CachingKeyIterator implements IRecordIterator {
 
     private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
@@ -18,7 +17,7 @@ public class RecordBucketIterator implements IRecordIterator {
 
     /**
      * Follows the linked list
-     * @return
+     * @return whether there is a next element
      */
     @Override
     public boolean hasNext() {
@@ -26,7 +25,7 @@ public class RecordBucketIterator implements IRecordIterator {
     }
 
     public IKey primaryKey(){
-        return SimpleKey.of(UNSAFE.getInt(currPosition + OrderedRecordBuffer.deltaKey));
+        return this.keyOf(UNSAFE.getInt(currPosition + OrderedRecordBuffer.deltaKey));
     }
 
     @Override
@@ -36,7 +35,7 @@ public class RecordBucketIterator implements IRecordIterator {
 
     /**
      * Return the srcAddress of the record
-     * @return
+     * @return the next address
      */
     @Override
     public long next() {

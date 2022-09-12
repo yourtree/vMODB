@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.storage.record;
 
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryUtils;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import sun.misc.Unsafe;
 
 /**

@@ -1,7 +1,8 @@
 package dk.ku.di.dms.vms.modb.index;
 
 import dk.ku.di.dms.vms.modb.definition.Schema;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryUtils;
+import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import sun.misc.Unsafe;
 
@@ -23,6 +24,8 @@ public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
     // to speed up queries, so the filters can be build on flight
     protected final HashSet<int> columnsHash;
 
+    private final IIndexKey key;
+
     private final int hashCode;
 
     // respective table of this index
@@ -36,6 +39,7 @@ public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
         } else {
             this.hashCode = Arrays.hashCode(columnsIndex);
         }
+        this.key = SimpleKey.of(this.hashCode);
         this.columnsHash = new HashSet<int>(columns.length);
         for(int i : columnsIndex) this.columnsHash.add(i);
     }
@@ -52,6 +56,11 @@ public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
 
     public HashSet<int> columnsHash() {
         return columnsHash;
+    }
+
+    @Override
+    public IIndexKey key(){
+        return this.key;
     }
 
     public abstract int size();

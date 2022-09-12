@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.storage.memory;
 
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import sun.misc.Unsafe;
 

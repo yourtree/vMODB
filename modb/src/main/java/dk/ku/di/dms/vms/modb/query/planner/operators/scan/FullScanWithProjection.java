@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
@@ -16,6 +17,10 @@ public class FullScanWithProjection extends AbstractScan {
     }
 
     public MemoryRefNode run(FilterContext filterContext){
+        return this.run(this.index, filterContext);
+    }
+
+    public MemoryRefNode run(ReadOnlyIndex<IKey> index, FilterContext filterContext){
 
         IRecordIterator iterator = index.asUniqueHashIndex().iterator();
         while(iterator.hasNext()){

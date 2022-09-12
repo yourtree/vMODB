@@ -1,11 +1,8 @@
 package dk.ku.di.dms.vms.modb.storage.iterator;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryUtils;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import sun.misc.Unsafe;
-
-import java.util.Iterator;
 
 /**
  * Iterator tamed for verification of records
@@ -13,7 +10,7 @@ import java.util.Iterator;
  *
  * Cannot be used for iterating over ordered record buffer
  */
-public class RecordIterator implements IRecordIterator {
+public class RecordIterator extends CachingKeyIterator implements IRecordIterator {
 
     protected static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
@@ -46,9 +43,9 @@ public class RecordIterator implements IRecordIterator {
             this.progress++;
             this.address += recordSize;
         }
-        long addrToRet = address;
+        long addressToRet = address;
         this.address += recordSize;
-        return addrToRet;
+        return addressToRet;
     }
 
     /**
@@ -57,7 +54,7 @@ public class RecordIterator implements IRecordIterator {
      */
     @Override
     public IKey primaryKey(){
-        return SimpleKey.of(UNSAFE.getInt(address + 1));
+        return this.keyOf(UNSAFE.getInt(address + 1));
     }
 
     @Override

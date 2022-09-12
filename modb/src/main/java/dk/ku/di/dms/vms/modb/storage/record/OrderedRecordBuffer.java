@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.storage.record;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.storage.memory.MemoryUtils;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import sun.misc.Unsafe;

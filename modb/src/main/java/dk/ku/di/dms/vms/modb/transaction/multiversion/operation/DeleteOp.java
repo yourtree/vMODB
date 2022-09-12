@@ -6,13 +6,4 @@ public class DeleteOp extends DataItemVersion {
         super(tid);
     }
 
-    @Override
-    public Operation operation() {
-        return Operation.DELETE;
-    }
-
-    @Override
-    public DeleteOp asDelete() {
-        return this;
-    }
 }

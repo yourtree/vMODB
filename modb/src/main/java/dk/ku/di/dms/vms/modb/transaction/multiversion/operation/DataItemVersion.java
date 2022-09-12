@@ -10,13 +10,17 @@ package dk.ku.di.dms.vms.modb.transaction.multiversion.operation;
  * Should be a facade, a interface? so references are not stored in memory for nothing..?
  *
  */
-public abstract class DataItemVersion implements IDataItemVersion {
+public abstract class DataItemVersion {
 
     // transaction id that modified the item
-    protected final long tid;
+    protected long tid;
 
     protected DataItemVersion(long tid) {
         this.tid = tid;
+    }
+
+    public long tid(){
+        return this.tid;
     }
 
     public static DataItemVersion update(long tid, int columnIndex, long address){

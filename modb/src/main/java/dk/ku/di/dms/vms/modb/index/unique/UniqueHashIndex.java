@@ -60,10 +60,6 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
         return getPosition(key.hashCode());
     }
 
-//    public long retrieve(int key) {
-//        return getPosition(key);
-//    }
-
     /**
      * Check whether the record is active (if exists)
      */

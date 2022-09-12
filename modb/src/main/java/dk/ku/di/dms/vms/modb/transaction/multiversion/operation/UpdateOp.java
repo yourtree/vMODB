@@ -16,9 +16,4 @@ public class UpdateOp extends DataItemVersion {
         this.address = address;
     }
 
-    @Override
-    public Operation operation() {
-        return Operation.UPDATE;
-    }
-
 }

@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.transaction;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
@@ -13,9 +13,11 @@ import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
 import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.OperationNode;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.Operation;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.OperationSet;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.UpdateOp;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,22 +38,40 @@ import java.util.Map;
  */
 public class ConsistentView implements ReadOnlyIndex<IKey> {
 
-    private final AbstractIndex<IKey> index;
+    private ReadOnlyIndex<IKey> index;
 
     /**
      * Since the previous checkpointed state, multiple updates may have been applied
      *
      */
-    private final Map<IKey, OperationNode> keyVersionMap;
+    private Map<IKey, OperationSet> keyVersionMap;
 
-    public ConsistentView(AbstractIndex<IKey> index, Map<IKey, OperationNode> keyVersionMap) {
+    private long tid;
+
+    public ConsistentView(ReadOnlyIndex<IKey> index, Map<IKey, OperationSet> keyVersionMap, long tid) {
         this.index = index;
         this.keyVersionMap = keyVersionMap;
+        this.tid = tid;
+    }
+
+    @Override
+    public IIndexKey key() {
+        return index.key();
     }
 
     @Override
     public Schema schema() {
         return index.schema();
+    }
+
+    @Override
+    public int[] columns() {
+        return index.columns();
+    }
+
+    @Override
+    public HashSet<int> columnsHash() {
+        return index.columnsHash();
     }
 
     @Override
@@ -76,7 +96,9 @@ public class ConsistentView implements ReadOnlyIndex<IKey> {
         if(keyVersionMap.get(key) == null) return index.exists(key);
         // delete always come first, if not delete, then it is insert.
         // if there is no delete and insert, then set of updates ordered by column index
-        return keyVersionMap.get(key).operation.operation() != Operation.DELETE;
+        OperationSet opSet = keyVersionMap.get(key);
+        // then it has been previously deleted (even by this same transaction)
+        return opSet.deleteOp != null && opSet.deleteOp.tid() <= this.tid;
         // then it is update or insert
     }
 
@@ -128,29 +150,49 @@ public class ConsistentView implements ReadOnlyIndex<IKey> {
     @Override
     public long getColumnAddress(IKey key, long address, int columnIndex){
 
-        OperationNode currNode = keyVersionMap.get(key);
-        if (currNode == null) {
+        OperationSet operationSet = keyVersionMap.get(key);
+        if (operationSet == null) {
             return address + schema().getColumnOffset(columnIndex);
         }
 
-        if(currNode.operation.operation() == Operation.INSERT){
-            int columnOffset = schema().getColumnOffset(columnIndex);
-            return currNode.operation.asInsert().bufferAddress + columnOffset;
-        } else {
+        if(operationSet.insertOp != null && operationSet.insertOp.tid() <= tid){
 
-            while(currNode.operation.asUpdate().columnIndex < columnIndex){
-                currNode = currNode.next;
-                if(currNode == null) break;
-            }
-
-            if(currNode != null && currNode.operation.asUpdate().columnIndex == columnIndex){
-                return currNode.operation.asUpdate().address;
+            // besides, do we have a column update?
+            if(operationSet.updateOps == null){
+                int columnOffset = schema().getColumnOffset(columnIndex);
+                return operationSet.insertOp.bufferAddress + columnOffset;
             } else {
-                return address + schema().getColumnOffset(columnIndex);
+                return getUpdatedColumnIfPossible(columnIndex, operationSet);
             }
 
+        } else {
+            return getUpdatedColumnIfPossible(columnIndex, operationSet);
         }
 
+    }
+
+    private long getUpdatedColumnIfPossible(int columnIndex, OperationSet operationSet) {
+        // do we have a column update on this column index?
+        List<UpdateOp> updateOpList = operationSet.updateOps.get(columnIndex);
+
+        if(updateOpList == null || updateOpList.size() == 0){
+            int columnOffset = schema().getColumnOffset(columnIndex);
+            return operationSet.insertOp.bufferAddress + columnOffset;
+        }
+
+        // try to find the latest tid
+        int index = updateOpList.size() - 1;
+        while(index > 0 && updateOpList.get(index).tid() > tid){
+            index--;
+        }
+
+        if(updateOpList.get(index).tid() <= tid){
+            return updateOpList.get(index).address;
+        }
+
+        // in case even the last checked version does not apply to the current tid
+        int columnOffset = schema().getColumnOffset(columnIndex);
+        return operationSet.insertOp.bufferAddress + columnOffset;
     }
 
     /**
@@ -158,7 +200,7 @@ public class ConsistentView implements ReadOnlyIndex<IKey> {
      * versioned values.
      * @param key record key
      * @param filterContext the filter to be applied
-     * @return
+     * @return the correct data item version
      */
     @SuppressWarnings("unchecked")
     boolean checkConditionVersioned(IKey key, long srcAddress, FilterContext filterContext){
@@ -202,35 +244,8 @@ public class ConsistentView implements ReadOnlyIndex<IKey> {
     }
 
     private Object getDataItemColumnValue(IKey key, long srcAddress, int columnIndex, DataType dataType) {
-        Object val;
-        int columnOffset;
-        OperationNode currNode = keyVersionMap.get(key);
-        if (currNode == null) {
-            columnOffset = schema().getColumnOffset(columnIndex);
-            val = DataTypeUtils.getValue(dataType, srcAddress + columnOffset );
-        } else {
-            if(keyVersionMap.get(key).operation.operation() == Operation.INSERT){
-                columnOffset = schema().getColumnOffset(columnIndex);
-                val = DataTypeUtils.getValue(dataType, currNode.operation.asInsert().bufferAddress + columnOffset );
-            } else {
-
-                // find the column, if possible
-                while(currNode.operation.asUpdate().columnIndex < columnIndex){
-                    currNode = currNode.next;
-                    if(currNode == null) break;
-                }
-
-                if(currNode != null && currNode.operation.asUpdate().columnIndex == columnIndex){
-                    val = DataTypeUtils.getValue(dataType, currNode.operation.asUpdate().address );
-                } else {
-                    columnOffset = schema().getColumnOffset(columnIndex);
-                    val = DataTypeUtils.getValue(dataType, srcAddress + columnOffset );
-                }
-
-            }
-
-        }
-        return val;
+        long address = getColumnAddress(key, srcAddress, columnIndex);
+        return DataTypeUtils.getValue(dataType, address );
     }
 
 }

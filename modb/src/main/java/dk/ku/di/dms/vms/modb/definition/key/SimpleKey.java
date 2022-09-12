@@ -14,7 +14,7 @@ public class SimpleKey implements IKey, IIndexKey {
         this.value = value;
     }
 
-    public static IKey of(Object value) {
+    public static SimpleKey of(Object value) {
         return new SimpleKey(value);
     }
 
@@ -24,8 +24,8 @@ public class SimpleKey implements IKey, IIndexKey {
     }
 
     @Override
-    public boolean equals(Object key){
-        return this.hashCode() == key.hashCode();
+    public boolean equals(Object object){
+        return this.value == ((SimpleKey)object).value;
     }
 
 }

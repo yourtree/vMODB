@@ -13,11 +13,6 @@ public class InsertOp extends DataItemVersion {
         this.bufferAddress = bufferAddress;
     }
 
-    @Override
-    public Operation operation() {
-        return Operation.INSERT;
-    }
-
     public InsertOp asInsert(){
         return this;
     }

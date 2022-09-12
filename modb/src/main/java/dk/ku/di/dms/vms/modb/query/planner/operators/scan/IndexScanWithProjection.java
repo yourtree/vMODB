@@ -45,7 +45,13 @@ public final class IndexScanWithProjection extends AbstractScan {
         return this;
     }
 
+    // default call
     public MemoryRefNode run(FilterContext filterContext, IKey... keys) {
+        return this.run(this.index, filterContext, keys);
+    }
+
+    // transactional call
+    public MemoryRefNode run(ReadOnlyIndex<IKey> index, FilterContext filterContext, IKey... keys) {
 
         if(index.getType() == IndexTypeEnum.UNIQUE){
             long address;
