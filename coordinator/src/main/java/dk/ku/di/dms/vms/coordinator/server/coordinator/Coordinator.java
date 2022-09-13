@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
+import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.network.NetworkRunnable;
@@ -31,11 +32,13 @@ import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
+//import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.ConnectionMetadata.NodeType.SERVER;
 import static dk.ku.di.dms.vms.modb.common.schema.network.ConnectionMetadata.NodeType.VMS;
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.Issue.Category.*;
+import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.VMS;
 
 /**
  * Class that encapsulates all logic related to issuing of
@@ -409,7 +412,7 @@ public final class Coordinator extends NetworkRunnable {
                 if(VMSs.get( newVms.hashCode() ) != null){
                     // vms reconnecting
 
-                    VmsConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( newVms.hashCode() );
+                    ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( newVms.hashCode() );
 
                     // lock to refrain other threads from using old metadata
                     connectionMetadata.writeLock.lock();

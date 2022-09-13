@@ -1,12 +1,10 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.batch;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
-import dk.ku.di.dms.vms.web_common.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-
-import static dk.ku.di.dms.vms.web_common.meta.Constants.BATCH_COMPLETE;
 
 /**
  * A prepare request payload

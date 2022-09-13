@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.coordinator.store.metadata;
 
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.web_common.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 
 import java.io.RandomAccessFile;
 import java.util.Map;

@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.web_common.runnable;
 
 import dk.ku.di.dms.vms.web_common.meta.Issue;
-import dk.ku.di.dms.vms.web_common.network.NetworkNode;
 
+import java.net.InetSocketAddress;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -48,7 +48,7 @@ public abstract class SignalingStoppableRunnable extends StoppableRunnable {
      * Callback to log error
      * x The exception. maybe we should get some information from that....
      */
-    protected void defaultLogError(Issue.Category category, NetworkNode node) {
+    protected void defaultLogError(Issue.Category category, int node) {
         issueQueue.add( new Issue( category, node ) );
     }
 

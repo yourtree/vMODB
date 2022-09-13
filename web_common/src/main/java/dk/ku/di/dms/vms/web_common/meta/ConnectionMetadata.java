@@ -32,19 +32,20 @@ public class ConnectionMetadata {
      * The coordinator is responsible for keeping the connections up to date
      * The transaction manager just needs a read lock for the given connection
      */
-    public final ReadWriteLock lock;
+    public final ReentrantLock writeLock;
 
-    public ConnectionMetadata(int key, NodeType nodeType,
+    public ConnectionMetadata(int key,
+                              NodeType nodeType,
                               ByteBuffer readBuffer,
                               ByteBuffer writeBuffer,
                               AsynchronousSocketChannel channel,
-                              ReadWriteLock lock) {
+                              ReentrantLock writeLock) {
         this.key = key;
         this.nodeType = nodeType;
         this.readBuffer = readBuffer;
         this.writeBuffer = writeBuffer;
         this.channel = channel;
-        this.lock = lock;
+        this.writeLock = writeLock;
     }
 
 }

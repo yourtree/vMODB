@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.modb.common.schema.network;
 
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
-import dk.ku.di.dms.vms.web_common.network.NetworkNode;
 
 import java.util.Map;
 

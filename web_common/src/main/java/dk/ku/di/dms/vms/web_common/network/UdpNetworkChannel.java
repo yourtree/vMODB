@@ -40,11 +40,11 @@ public class UdpNetworkChannel extends BaseNetworkChannel {
     * - recv and send buffer
     * - network interface
     */
-   public UdpNetworkChannel(NetworkNode node, Map<Integer, NetworkNode> servers, INetworkListener listener) throws IOException {
+   public UdpNetworkChannel(SocketAddress node, Map<Integer, SocketAddress> servers, INetworkListener listener) throws IOException {
 
       super(node, servers, listener);
 
-      InetSocketAddress addr = new InetSocketAddress(node.host, node.port);
+      InetSocketAddress addr = null; // new InetSocketAddress(node.host, node.port);
 
       this.multicastAddress = new InetSocketAddress(DEFAULT_MULTICAST_ADDRESS, DEFAULT_MULTICAST_PORT);
 
@@ -127,7 +127,7 @@ public class UdpNetworkChannel extends BaseNetworkChannel {
    }
 
    private record WriteContext(
-           NetworkNode node, ByteBuffer message
+           SocketAddress node, ByteBuffer message
    ){}
 
    private void processWrite(){
@@ -159,7 +159,7 @@ public class UdpNetworkChannel extends BaseNetworkChannel {
    }
 
    @Override
-   public void send(NetworkNode node, ByteBuffer message) {
+   public void send(SocketAddress node, ByteBuffer message) {
       pendingWrites.add(new WriteContext(node,message));
    }
 

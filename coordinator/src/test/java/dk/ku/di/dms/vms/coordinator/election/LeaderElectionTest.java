@@ -1,11 +1,6 @@
 package dk.ku.di.dms.vms.coordinator.election;
 
-import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
-import static dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable.FINISHED;
-import static dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable.NO_RESULT;
-import static java.lang.Thread.sleep;
-
-import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
 import org.junit.Test;
 
@@ -18,6 +13,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
+
+import static dk.ku.di.dms.vms.coordinator.election.Constants.LEADER_REQUEST;
+import static dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable.FINISHED;
+import static dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable.NO_RESULT;
+import static java.lang.Thread.sleep;
 
 /**
  * Unit test for simple App.
@@ -60,7 +60,7 @@ public class LeaderElectionTest
         servers1.put( serverEm2.hashCode(), serverEm2 );
         servers1.put( serverEm3.hashCode(), serverEm3 );
 
-        Map<Integer,ServerIdentifier> servers2 = new HashMap<>();
+        Map<Integer, ServerIdentifier> servers2 = new HashMap<>();
         servers2.put( serverEm1.hashCode(), serverEm1 );
         servers2.put( serverEm3.hashCode(), serverEm3 );
 

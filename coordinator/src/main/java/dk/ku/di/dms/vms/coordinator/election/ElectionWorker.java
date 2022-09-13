@@ -1,9 +1,11 @@
 package dk.ku.di.dms.vms.coordinator.election;
 
-import dk.ku.di.dms.vms.coordinator.election.schema.*;
+import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
+import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
+import dk.ku.di.dms.vms.coordinator.election.schema.VoteResponse;
+import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.network.NetworkRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
@@ -14,7 +16,8 @@ import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
-import java.util.*;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -62,7 +65,6 @@ public final class ElectionWorker extends NetworkRunnable {
     // even though we can start with a known number of servers, their payload may have changed after a crash
     private final Map<Integer, ServerIdentifier> servers;
 
-    private final Map<Integer, ReentrantLock> lockConnectionMetadata = new ConcurrentHashMap<>();
     private final Map<Integer, ConnectionMetadata> connectionMetadataMap;
 
     // a bounded time in which a leader election must occur, otherwise it should restart. in milliseconds
@@ -195,15 +197,11 @@ public final class ElectionWorker extends NetworkRunnable {
 
     private void initialize() {
 
-        for(ServerIdentifier server : servers.values()) {
-            lockConnectionMetadata.put(server.hashCode(), new ReentrantLock());
-        }
-
         // being single thread makes it easier to avoid data races
         serverSocket.accept( null, new AcceptCompletionHandler() );
 
-        // connect to all nodes first
-        connectToAllServers();
+//        // connect to all nodes first (only if I am the lowest identifier)
+//        if(lowestIdentifier()) connectToAllServers();
 
         // then start the broadcaster and vote response threads
         taskExecutor.submit( new Broadcaster() );
@@ -213,64 +211,54 @@ public final class ElectionWorker extends NetworkRunnable {
 
     }
 
-    private void connectToAllServers(){
+    private ConnectionMetadata connectToServer(ServerIdentifier server){
 
-        for(ServerIdentifier server : servers.values()){
+        ConnectionMetadata connectionMetadata = null;
 
-            // lock first so accept operations do not race with this one
-            lockConnectionMetadata.get( server.hashCode() ).lock();
+        try {
 
-            // check whether accept thread has already handled this connection
-            if(connectionMetadataMap.get( server.hashCode() ) != null){
-                lockConnectionMetadata.get( server.hashCode() ).unlock();
-                continue;
-            }
+            InetSocketAddress address = new InetSocketAddress(server.host, server.port);
+            AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
+            withDefaultSocketOptions(channel);
 
-            ConnectionMetadata connectionMetadata = null;
+            connectionMetadata = new ConnectionMetadata(
+                    server.hashCode(),
+                    ConnectionMetadata.NodeType.SERVER,
+                    BufferManager.loanByteBuffer(),
+                    BufferManager.loanByteBuffer(),
+                    channel,
+                    new ReentrantLock()
+                    );
 
-            try {
+            channel.connect(address).get();
 
-                InetSocketAddress address = new InetSocketAddress(server.host, server.port);
-                AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
-                withDefaultSocketOptions(channel);
+            connectionMetadataMap.put(server.hashCode(), connectionMetadata);
 
-                connectionMetadata = new ConnectionMetadata(
-                        server.hashCode(),
-                        ConnectionMetadata.NodeType.SERVER,
-                        BufferManager.loanByteBuffer(),
-                        BufferManager.loanByteBuffer(),
-                        channel,
-                        new ReentrantLock()
-                        );
+            return connectionMetadata;
 
-                channel.connect(address).get(); //, connectionMetadata, new ConnectCompletionHandler());
+        } catch(InterruptedException | IOException | ExecutionException ignored){
 
-                connectionMetadataMap.put(connectionMetadata.key, connectionMetadata);
+            if(connectionMetadata != null) {
+                BufferManager.returnByteBuffer(connectionMetadata.readBuffer);
+                BufferManager.returnByteBuffer(connectionMetadata.writeBuffer);
 
-            } catch(InterruptedException | IOException | ExecutionException ignored){
-
-                if(connectionMetadata != null) {
-                    BufferManager.returnByteBuffer(connectionMetadata.readBuffer);
-                    BufferManager.returnByteBuffer(connectionMetadata.writeBuffer);
-
-                    if(connectionMetadata.channel.isOpen()){
-                        try {
-                            connectionMetadata.channel.close();
-                        } catch (IOException ignored1) { }
-                        finally {
-                            if(connectionMetadataMap.get(connectionMetadata.key) != null ){
-                                connectionMetadataMap.remove( connectionMetadata.key );
-                            }
+                if(connectionMetadata.channel.isOpen()){
+                    try {
+                        connectionMetadata.channel.close();
+                    } catch (IOException ignored1) { }
+                    finally {
+                        if(connectionMetadataMap.get(connectionMetadata.key) != null ){
+                            connectionMetadataMap.remove( connectionMetadata.key );
                         }
                     }
-
                 }
 
             }
 
-            lockConnectionMetadata.get( server.hashCode() ).unlock();
-
         }
+
+        return null;
+
     }
 
     private void resetVoteResponses(){
@@ -298,9 +286,6 @@ public final class ElectionWorker extends NetworkRunnable {
                 // is in the list of known servers?
                 if (servers.get( key ) != null) {
 
-                    // is reconnecting after failure?
-                    lockConnectionMetadata.get(key).lock();
-
                     ConnectionMetadata connMeta = connectionMetadataMap.get(key);
                     if (connMeta == null) {
 
@@ -316,14 +301,18 @@ public final class ElectionWorker extends NetworkRunnable {
                         connectionMetadataMap.put(key, connMeta);
 
                     } else {
-                        // update channel
-                        if(!servers.get( key ).isActive()) {
+                        // update channel if not active
+                        if(!connMeta.channel.isOpen()) {
                             connMeta.channel = channel;
                             servers.get( key ).on();
+                        } else {
+
+                            // disconnect because it was a concurrent connection made
+                            channel.close();
+
                         }
                     }
 
-                    lockConnectionMetadata.get(key).unlock();
                     channel.read(connMeta.readBuffer, connMeta, new ReadCompletionHandler());
 
                 } else {
@@ -535,7 +524,7 @@ public final class ElectionWorker extends NetworkRunnable {
 
                     for(ServerIdentifier server : servers.values()){
 
-                        ConnectionMetadata connMeta = connectionMetadataMap.get( server.hashCode() );
+                        ConnectionMetadata connMeta = getConnection( server );
 
                         connMeta.writeLock.lock();
 
@@ -550,7 +539,7 @@ public final class ElectionWorker extends NetworkRunnable {
 
                     for(ServerIdentifier server : servers.values()){
 
-                        ConnectionMetadata connMeta = connectionMetadataMap.get( server.hashCode() );
+                        ConnectionMetadata connMeta = getConnection( server );
 
                         connMeta.writeLock.lock();
 
@@ -573,6 +562,17 @@ public final class ElectionWorker extends NetworkRunnable {
     }
 
     /**
+     * Get connection. Connect if there is not previous established connection
+     */
+    private ConnectionMetadata getConnection(ServerIdentifier server){
+        ConnectionMetadata connMeta = connectionMetadataMap.get( server.hashCode() );
+        if(connMeta == null){
+            return connectToServer(server);
+        }
+        return connMeta;
+    }
+
+    /**
      * Send individual messages to a particular node
      */
     private class SimpleSender extends StoppableRunnable {
@@ -585,26 +585,23 @@ public final class ElectionWorker extends NetworkRunnable {
                 try {
                     VoteMessageContext msgContext = voteMessagesToSend.take();
 
-                    if(msgContext.type == VOTE_RESPONSE){
-
-                        ConnectionMetadata connMeta = connectionMetadataMap.get( msgContext.target.hashCode() );
-
-                        connMeta.writeLock.lock();
-
-                        VoteResponse.write(connMeta.writeBuffer, me, msgContext.response);
-
-                        connMeta.channel.write( connMeta.writeBuffer, connMeta, new WriteCompletionHandler() );
-
-                    } else if (msgContext.type == VOTE_REQUEST){
-
-                        ConnectionMetadata connMeta = connectionMetadataMap.get( msgContext.target.hashCode() );
+                    ConnectionMetadata connMeta = getConnection( msgContext.target );
+                    if(connMeta != null) {
 
                         connMeta.writeLock.lock();
 
-                        VoteRequest.write(connMeta.writeBuffer, me);
+                        if(msgContext.type == VOTE_RESPONSE) {
+                            VoteResponse.write(connMeta.writeBuffer, me, msgContext.response);
+                        } else if(msgContext.type == VOTE_REQUEST) {
+                            VoteRequest.write(connMeta.writeBuffer, me);
+                        }
 
-                        connMeta.channel.write( connMeta.writeBuffer, connMeta, new WriteCompletionHandler() );
+                        connMeta.channel.write(connMeta.writeBuffer, connMeta, new WriteCompletionHandler());
 
+
+                    } else {
+                        logger.warning("Could not connect to server: "+
+                                msgContext.target.host+":"+msgContext.target.port);
                     }
 
                 } catch (InterruptedException ignored) { }

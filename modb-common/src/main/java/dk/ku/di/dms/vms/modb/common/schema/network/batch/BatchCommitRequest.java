@@ -4,8 +4,6 @@ import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 
 import java.nio.ByteBuffer;
 
-import static dk.ku.di.dms.vms.web_common.meta.Constants.BATCH_COMMIT_REQUEST;
-
 /**
  * A batch-commit request payload
  */

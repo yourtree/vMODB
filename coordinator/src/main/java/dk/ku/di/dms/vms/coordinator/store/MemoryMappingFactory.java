@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.coordinator.store;
 
 import dk.ku.di.dms.vms.coordinator.store.metadata.ServerMetadata;
-import dk.ku.di.dms.vms.web_common.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.web_common.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import sun.misc.Unsafe;
 
 import java.io.IOException;

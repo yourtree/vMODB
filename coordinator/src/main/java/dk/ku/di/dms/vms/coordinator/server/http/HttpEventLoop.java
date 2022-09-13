@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.coordinator.server.http;
 
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
-import dk.ku.di.dms.vms.web_common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;

@@ -210,7 +210,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
                 channel.read(connMetadata.readBuffer, connMetadata, new VmsReadCompletionHandler() );
 
             } catch (IOException | ExecutionException | InterruptedException e) {
-                issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, vms) );
+                issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, vms.hashCode()) );
             }
 
         }

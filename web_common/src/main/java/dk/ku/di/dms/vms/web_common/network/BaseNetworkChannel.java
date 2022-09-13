@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.web_common.network;
 
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
+import java.net.SocketAddress;
 import java.util.Map;
 
 /**
@@ -22,14 +23,14 @@ import java.util.Map;
  */
 public abstract class BaseNetworkChannel extends SignalingStoppableRunnable implements INetworkProducer {
 
-    protected NetworkNode me;
+    protected SocketAddress me;
 
     // hash key is the hash of host and port
-    protected Map<Integer, NetworkNode> servers;
+    protected Map<Integer, SocketAddress> servers;
 
     protected INetworkListener listener;
 
-    public BaseNetworkChannel(NetworkNode me, Map<Integer, NetworkNode> servers, INetworkListener listener) {
+    public BaseNetworkChannel(SocketAddress me, Map<Integer, SocketAddress> servers, INetworkListener listener) {
         this.me = me;
         this.servers = servers;
         this.listener = listener;

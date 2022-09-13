@@ -5,6 +5,13 @@ import dk.ku.di.dms.vms.coordinator.server.infra.VmsConnectionMetadata;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
+import dk.ku.di.dms.vms.modb.common.schema.network.control.Heartbeat;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
@@ -22,6 +29,7 @@ import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import static dk.ku.di.dms.vms.coordinator.server.coordinator.options.BatchReplicationStrategy.*;
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_COMPLETE;
 import static dk.ku.di.dms.vms.web_common.meta.Constants.BATCH_COMPLETE;
 import static dk.ku.di.dms.vms.web_common.meta.Constants.TX_ABORT;
 import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.*;
@@ -49,7 +57,7 @@ public class TransactionManager extends StoppableRunnable {
     // the internal events must be sent by the other VMSs in case this VMS is in the center of a DAG
     private Map<Long, List<TransactionEvent.Payload>> transactionEventsPerBatch;
 
-    private TransactionManagerContext context;
+    private TransactionManagerContext txManagerCtx;
 
     public TransactionManager(TransactionManagerContext context){
         this.context = context;
@@ -148,7 +156,7 @@ public class TransactionManager extends StoppableRunnable {
 
         for(VmsIdentifier vms : VMSs.values()){
 
-            VmsConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.hashCode() );
+            ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.hashCode() );
 
             // must lock first before writing to write buffer
             connectionMetadata.writeLock.lock();

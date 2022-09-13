@@ -1,10 +1,11 @@
 package dk.ku.di.dms.vms.web_common.network;
 
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 
 public interface INetworkProducer {
 
-    void send(NetworkNode node, ByteBuffer message);
+    void send(SocketAddress node, ByteBuffer message);
 
     /**
      * Broadcast is waste of resources
