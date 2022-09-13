@@ -2,7 +2,9 @@ package dk.ku.di.dms.vms.modb.common.schema.network;
 
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -23,6 +25,8 @@ public class VmsIdentifier extends NetworkNode {
     // to avoid vms to process transactions from the
     // next batch while the current has not finished yet
     public long lastBatch;
+
+    public Map<Long, List<TransactionEvent.Payload>> transactionEventsPerBatch;
 
     // data model
      public Map<String, VmsDataSchema> dataSchema;

@@ -16,10 +16,10 @@ public class NetworkNode {
     public String host;
     public int port;
 
-    private final int hashCode;
+    private final transient int hashCode;
 
     // whether this node is active
-    private volatile boolean active;
+    private volatile transient boolean active;
 
     public NetworkNode(String host, int port) {
         this.host = host;

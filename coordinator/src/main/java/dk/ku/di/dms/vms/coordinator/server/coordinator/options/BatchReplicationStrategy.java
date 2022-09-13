@@ -11,7 +11,7 @@ public enum BatchReplicationStrategy {
     // one safe, just the leader.
 
     // two safe, it requires at least one replica to acknowledge reception of message
-    ONE, // like kafka, at least one replica acknowledge and asynchronously I continue replicating to others. it frees the serves as soon as possbile
+    AT_LEAST_ONE, // like kafka, at least one replica acknowledge and asynchronously I continue replicating to others. it frees the serves as soon as possbile
 
     MAJORITY, //
     ALL // all replicas acknowledge, sending in parallel

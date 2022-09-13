@@ -97,7 +97,7 @@ public class ServerThread extends MailBox {
                     msg.serverThread = this;
 
                     // IVMsFutureCancellable<Boolean> fut =
-                    dbmsDaemonThread.checkpoint( msg );
+                    // dbmsDaemonThread.checkpoint( msg );
 
                 }
 

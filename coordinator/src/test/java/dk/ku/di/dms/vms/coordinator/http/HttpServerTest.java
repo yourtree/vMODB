@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.coordinator.http;
 import dk.ku.di.dms.vms.coordinator.server.http.HttpEventLoop;
 import dk.ku.di.dms.vms.coordinator.server.http.Options;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
-import dk.ku.di.dms.vms.web_common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;

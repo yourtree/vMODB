@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.web_common.runnable;
 
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 
-import java.net.InetSocketAddress;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;

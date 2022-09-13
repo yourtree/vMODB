@@ -6,7 +6,7 @@ import dk.ku.di.dms.vms.coordinator.election.schema.VoteResponse;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.network.NetworkRunnable;
+import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
@@ -21,9 +21,10 @@ import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantLock;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
+import static java.net.StandardSocketOptions.SO_KEEPALIVE;
+import static java.net.StandardSocketOptions.TCP_NODELAY;
 
 /**
  * An election task is a thread that encapsulates all subtasks (i.e., threads)
@@ -40,7 +41,7 @@ import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
  * On the other hand, the UDP allows multicast, which is good for leader election (sending messages to all nodes
  * by design instead of iterating over the nodes to send individual messages)
  */
-public final class ElectionWorker extends NetworkRunnable {
+public final class ElectionWorker extends SignalingStoppableRunnable {
 
     private volatile int state;
     public static final int NEW          = 0;
@@ -85,7 +86,7 @@ public final class ElectionWorker extends NetworkRunnable {
     private final ElectionOptions options;
 
     // for broadcaster
-    private final BlockingQueue<byte> actionQueue;
+    private final BlockingQueue<Byte> actionQueue;
 
     // for simple sender
     private final BlockingQueue<VoteMessageContext> voteMessagesToSend;
@@ -131,7 +132,7 @@ public final class ElectionWorker extends NetworkRunnable {
         this.responses = new ConcurrentHashMap<>();
 
         this.options = options;
-        this.actionQueue = new LinkedBlockingQueue<byte>();
+        this.actionQueue = new LinkedBlockingQueue<>();
         this.voteMessagesToSend = new LinkedBlockingQueue<>();
     }
 
@@ -174,38 +175,50 @@ public final class ElectionWorker extends NetworkRunnable {
 
         logger.info("Initializing election round. I am "+me.host+":"+me.port);
 
-        initialize();
+        Broadcaster broadcaster = new Broadcaster();
+        SimpleSender simpleSender = new SimpleSender();
+
+        initialize(broadcaster, simpleSender);
 
         long timeout_;
 
-        while(isRunning() && state == CANDIDATE){
+        while(isRunning()){
 
             // the round is an abstraction to avoid a vote given from holding forever (e.g., the requesting node may have crashed)
             runRound();
 
-            // define a new delta since defining a leader is taking too long
-            // increment since nothing has been defined
-            timeout_ = timeout; // avoid two reads from memory
-            timeout = (long) (timeout_ + (timeout_ * options.getRoundDeltaIncrease()));
+            if(state == CANDIDATE) {
+                // define a new delta since defining a leader is taking too long
+                // increment since nothing has been defined
+                timeout_ = timeout; // avoid two reads from memory
+                timeout = (long) (timeout_ + (timeout_ * options.getRoundDeltaIncrease()));
+            } else {
+                // election process is over
+                break;
+            }
 
         }
 
-        // signal the server
-        signal.add(FINISHED);
+        finish(broadcaster, simpleSender);
 
     }
 
-    private void initialize() {
+    private void finish(Broadcaster broadcaster, SimpleSender simpleSender){
+        simpleSender.stop();
+        broadcaster.stop();
+
+        // signal the server
+        signal.add(FINISHED);
+    }
+
+    private void initialize(Broadcaster broadcaster, SimpleSender simpleSender) {
 
         // being single thread makes it easier to avoid data races
         serverSocket.accept( null, new AcceptCompletionHandler() );
 
-//        // connect to all nodes first (only if I am the lowest identifier)
-//        if(lowestIdentifier()) connectToAllServers();
-
         // then start the broadcaster and vote response threads
-        taskExecutor.submit( new Broadcaster() );
-        taskExecutor.submit( new SimpleSender() );
+        taskExecutor.submit( broadcaster );
+        taskExecutor.submit( simpleSender );
 
         timeout = options.getInitRoundTimeout();
 
@@ -219,24 +232,38 @@ public final class ElectionWorker extends NetworkRunnable {
 
             InetSocketAddress address = new InetSocketAddress(server.host, server.port);
             AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
-            withDefaultSocketOptions(channel);
+
+            channel.setOption( TCP_NODELAY, Boolean.TRUE );
+            channel.setOption( SO_KEEPALIVE, Boolean.TRUE );
 
             connectionMetadata = new ConnectionMetadata(
                     server.hashCode(),
                     ConnectionMetadata.NodeType.SERVER,
-                    BufferManager.loanByteBuffer(),
-                    BufferManager.loanByteBuffer(),
+                    ByteBuffer.allocate(128),
+                    ByteBuffer.allocate(128),
                     channel,
-                    new ReentrantLock()
+                    new Semaphore(1)
                     );
 
             channel.connect(address).get();
 
+            logger.info("Connected to node "+
+                    server.host+":"+server.port);
+
+            connectionMetadata.writeBuffer.clear();
+            connectionMetadata.readBuffer.clear();
+
             connectionMetadataMap.put(server.hashCode(), connectionMetadata);
+
+            // setup read handler
+            channel.read( connectionMetadata.readBuffer, connectionMetadata, new ReadCompletionHandler());
 
             return connectionMetadata;
 
         } catch(InterruptedException | IOException | ExecutionException ignored){
+
+            logger.warning("It was not possible to connect to node "+
+                    server.host+":"+server.port);
 
             if(connectionMetadata != null) {
                 BufferManager.returnByteBuffer(connectionMetadata.readBuffer);
@@ -292,10 +319,10 @@ public final class ElectionWorker extends NetworkRunnable {
                         connMeta = new ConnectionMetadata(
                                 key,
                                 ConnectionMetadata.NodeType.SERVER,
-                                BufferManager.loanByteBuffer(),
-                                BufferManager.loanByteBuffer(),
+                                ByteBuffer.allocate(128),
+                                ByteBuffer.allocate(128),
                                 channel,
-                                new ReentrantLock()
+                                new Semaphore(1)
                         );
 
                         connectionMetadataMap.put(key, connMeta);
@@ -327,14 +354,14 @@ public final class ElectionWorker extends NetworkRunnable {
                     ConnectionMetadata connMeta = new ConnectionMetadata(
                             key,
                             ConnectionMetadata.NodeType.SERVER,
-                            BufferManager.loanByteBuffer(),
-                            BufferManager.loanByteBuffer(),
+                            ByteBuffer.allocate(128),
+                            ByteBuffer.allocate(128),
                             channel,
-                            new ReentrantLock()
+                            new Semaphore(1)
                     );
 
                     // not necessary for new connections, since this thread won't try to connect to this node
-                    // lockConnectionMetadata.put(key, new ReentrantLock());
+                    // lockConnectionMetadata.put(key, new Semaphore(1));
                     connectionMetadataMap.put(key, connMeta);
 
                     channel.read( connMeta.readBuffer, connMeta, new ReadCompletionHandler() );
@@ -366,6 +393,7 @@ public final class ElectionWorker extends NetworkRunnable {
         public void completed(Integer result, ConnectionMetadata connectionMetadata) {
 
             ByteBuffer readBuffer = connectionMetadata.readBuffer;
+            readBuffer.position(0);
 
             byte messageIdentifier = readBuffer.get();
 
@@ -397,7 +425,6 @@ public final class ElectionWorker extends NetworkRunnable {
                                 leader = me; // only this thread is writing
 
                                 actionQueue.add(LEADER_REQUEST);
-
                                 state = LEADER;
                             }
 
@@ -466,6 +493,8 @@ public final class ElectionWorker extends NetworkRunnable {
                     leader = servers.get(leaderRequest.hashCode());
                     state = FOLLOWER;
                 }
+
+                default -> logger.warning("Message identifier is unknown.");
             }
 
             readBuffer.clear();
@@ -499,8 +528,8 @@ public final class ElectionWorker extends NetworkRunnable {
         }
 
         private void unlockSafely(ConnectionMetadata connectionMetadata){
-            connectionMetadata.writeBuffer.clear();
-            connectionMetadata.writeLock.unlock();
+            connectionMetadata.writeBuffer.rewind();
+            connectionMetadata.writeLock.release();
         }
 
     }
@@ -515,46 +544,50 @@ public final class ElectionWorker extends NetworkRunnable {
         @Override
         public void run() {
 
-            try {
+            while (isRunning()) {
 
-                byte messageType = actionQueue.take();
+                try {
 
-                // now send the request
-                if(messageType == VOTE_REQUEST) {
+                    byte messageType = actionQueue.take();
 
-                    for(ServerIdentifier server : servers.values()){
+                    // now send the request
+                    if (messageType == VOTE_REQUEST) {
 
-                        ConnectionMetadata connMeta = getConnection( server );
+                        for (ServerIdentifier server : servers.values()) {
 
-                        connMeta.writeLock.lock();
+                            ConnectionMetadata connMeta = getConnection(server);
 
-                        VoteRequest.write(connMeta.writeBuffer, me);
+                            if (connMeta != null) {
+                                connMeta.writeLock.acquire();
+                                VoteRequest.write(connMeta.writeBuffer, me);
+                                connMeta.writeBuffer.position(0);
+                                connMeta.channel.write(connMeta.writeBuffer, connMeta, new WriteCompletionHandler());
+                            }
 
-                        connMeta.channel.write( connMeta.writeBuffer, connMeta, new WriteCompletionHandler() );
+                        }
 
+                    } else if (messageType == LEADER_REQUEST) {
+
+                        for (ServerIdentifier server : servers.values()) {
+
+                            ConnectionMetadata connMeta = getConnection(server);
+                            if (connMeta != null) {
+                                connMeta.writeLock.acquire();
+                                LeaderRequest.write(connMeta.writeBuffer, me);
+                                connMeta.writeBuffer.position(0);
+                                connMeta.channel.write(connMeta.writeBuffer, connMeta, new WriteCompletionHandler());
+                            }
+
+                        }
+
+                    } else {
+                        logger.warning("Unknown message Type");
                     }
 
-
-                } else if( messageType == LEADER_REQUEST ){
-
-                    for(ServerIdentifier server : servers.values()){
-
-                        ConnectionMetadata connMeta = getConnection( server );
-
-                        connMeta.writeLock.lock();
-
-                        LeaderRequest.write( connMeta.writeBuffer, me);
-
-                        connMeta.channel.write( connMeta.writeBuffer, connMeta, new WriteCompletionHandler() );
-
-                    }
-
-                } else {
-                    logger.warning("Error on write. I am "+ me.host+":"+me.port+" message type is "+messageType);
+                } catch (Exception ignored) {
+                    logger.warning("Error on write. I am " + me.host + ":" + me.port + " message type is ...");
                 }
 
-            } catch(Exception ignored){
-                logger.warning("Error on write. I am "+ me.host+":"+me.port+" message type is ...");
             }
 
         }
@@ -586,9 +619,10 @@ public final class ElectionWorker extends NetworkRunnable {
                     VoteMessageContext msgContext = voteMessagesToSend.take();
 
                     ConnectionMetadata connMeta = getConnection( msgContext.target );
+
                     if(connMeta != null) {
 
-                        connMeta.writeLock.lock();
+                        connMeta.writeLock.acquire();
 
                         if(msgContext.type == VOTE_RESPONSE) {
                             VoteResponse.write(connMeta.writeBuffer, me, msgContext.response);
@@ -596,8 +630,8 @@ public final class ElectionWorker extends NetworkRunnable {
                             VoteRequest.write(connMeta.writeBuffer, me);
                         }
 
+                        connMeta.writeBuffer.position(0);
                         connMeta.channel.write(connMeta.writeBuffer, connMeta, new WriteCompletionHandler());
-
 
                     } else {
                         logger.warning("Could not connect to server: "+

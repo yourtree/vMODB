@@ -27,8 +27,6 @@ public abstract class NetworkRunnable extends SignalingStoppableRunnable {
 
     protected final long batchBufferSize;
 
-    // protected Deque
-
     public NetworkRunnable(){
         super();
         this.batchSendTimeout = DEFAULT_BATCH_SEND_TIMEOUT;
