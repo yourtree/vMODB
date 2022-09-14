@@ -81,7 +81,7 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
     }
 
     @Override
-    public BlockingQueue<BatchComplete.Payload> batchCompleteQueue() {
+    public BlockingQueue<BatchComplete.Payload> batchCompleteOutputQueue() {
         return null;
     }
 

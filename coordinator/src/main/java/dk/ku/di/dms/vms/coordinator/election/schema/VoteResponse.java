@@ -33,7 +33,17 @@ public class VoteResponse {
 
         int size = buffer.getInt();
 
-        String host = new String(buffer.array(), headerSize, size, StandardCharsets.UTF_8 );
+        String host;
+        if(buffer.isDirect()){
+            byte[] byteArray = new byte[size];
+            for(int i = 0; i < size; i++){
+                byteArray[i] = buffer.get();
+            }
+            host = new String(byteArray, 0, size, StandardCharsets.UTF_8);
+        } else {
+            // 1 + 8 + 4 = 8 + 4 =
+            host = new String(buffer.array(), headerSize, size, StandardCharsets.UTF_8);
+        }
 
         return new Payload(host, port, response);
     }

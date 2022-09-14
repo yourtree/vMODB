@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
-import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
+
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 
@@ -25,7 +25,7 @@ import static java.net.StandardSocketOptions.*;
 /**
  * Rate of consumption of events and data are different, as well as their payload
  */
-public final class VmsEventHandler extends SignalingStoppableRunnable implements IVmsEventHandler {
+public final class VmsEventHandler extends SignalingStoppableRunnable {
 
     /** EXECUTOR SERVICE (for socket channels) **/
     private final ExecutorService executorService;
@@ -62,11 +62,11 @@ public final class VmsEventHandler extends SignalingStoppableRunnable implements
         this.vmsMetadata = vmsMetadata;
 
         // event
-        this.eventReadBuffer = BufferManager.loanByteBuffer();
-        this.eventWriteBuffer = BufferManager.loanByteBuffer();
+        this.eventReadBuffer = null; //BufferManager.loanByteBuffer();
+        this.eventWriteBuffer = null; //BufferManager.loanByteBuffer();
 
         // data
-        this.dataSocketBuffer = BufferManager.loanByteBuffer();
+        this.dataSocketBuffer = null; //BufferManager.loanByteBuffer();
 
         this.serdes = serdes;
 

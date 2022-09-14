@@ -243,7 +243,7 @@ public final class Analyzer {
      * @param whereClause the passed where clause
      * @return the parsed predicates
      */
-    public List<WherePredicate> analyzeWhere(Schema schema, List<WhereClauseElement<?>> whereClause) throws AnalyzerException {
+    public List<WherePredicate> analyzeWhere(Table table, List<WhereClauseElement<?>> whereClause) throws AnalyzerException {
         List<WherePredicate> newList = new ArrayList<>(whereClause.size());
         // this assumes param is a value (number or char/string)
         for(WhereClauseElement<?> element : whereClause){

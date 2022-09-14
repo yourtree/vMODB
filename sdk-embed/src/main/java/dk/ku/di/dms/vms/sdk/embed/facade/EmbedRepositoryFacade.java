@@ -6,20 +6,21 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.definition.Row;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
+import dk.ku.di.dms.vms.modb.query.planner.Planner;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
-import dk.ku.di.dms.vms.sdk.embed.VmsMetadataEmbed;
-import dk.ku.di.dms.vms.modb.query.planner.Planner;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 
 import java.lang.reflect.*;
 import java.nio.ByteBuffer;
@@ -41,7 +42,8 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
     private final Class<? extends IEntity<?>> entityClazz;
 
     // DBMS components
-    private VmsMetadataEmbed vmsMetadata;
+    private VmsRuntimeMetadata vmsMetadata;
+    private Catalog catalog;
     private Analyzer analyzer;
     private Planner planner;
 
@@ -71,7 +73,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         this.planner = planner;
     }
 
-    public void setVmsMetadata(VmsMetadataEmbed vmsMetadata) {
+    public void setVmsMetadata(VmsRuntimeMetadata vmsMetadata) {
         this.vmsMetadata = vmsMetadata;
     }
 
@@ -97,7 +99,9 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
             case "insert": {
 
-                Table table = this.vmsMetadata.getTableByEntityClazz( entityClazz );
+                String tableName = this.vmsMetadata.entityToTableNameMap().get( entityClazz );
+
+                Table table = catalog.getTable(tableName);
 
                 int recordSize = table.getSchema().getRecordSize();
 
@@ -119,7 +123,9 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
                 // acts as a single transaction, so all constraints, of every single row must be present
 
-                Table tableForInsertion = this.vmsMetadata.getTableByEntityClazz( entityClazz );
+                String tableName = this.vmsMetadata.entityToTableNameMap().get( entityClazz );
+
+                Table table = catalog.getTable(tableName);
 
 //                PlanNode node = planner.planBulkInsert(tableForInsertion, (List<? extends IEntity<?>>) args[0]); //(args[0]);
 //
@@ -185,7 +191,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
         // then it is a primitive, just return the value
         int projectionColumnIndex = scanOperator.asScan().projectionColumns[0];
-        DataType dataType = scanOperator.asScan().index.getTable().getSchema().getColumnDataType(projectionColumnIndex);
+        DataType dataType = scanOperator.asScan().index.schema().getColumnDataType(projectionColumnIndex);
         return DataTypeUtils.getValue(dataType, memRes.address);
 
     }

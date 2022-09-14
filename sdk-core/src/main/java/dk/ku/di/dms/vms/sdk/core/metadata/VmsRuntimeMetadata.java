@@ -17,5 +17,6 @@ public record VmsRuntimeMetadata(
         Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToVmsTransactionMap,
         Map<String, Class<?>> queueToEventMap, // input
         Map<Class<?>,String> eventToQueueMap, // output
-        Map<String, Object> loadedVmsInstances
+        Map<String, Object> loadedVmsInstances,
+        Map<Class<?>,String> entityToTableNameMap
 ){}

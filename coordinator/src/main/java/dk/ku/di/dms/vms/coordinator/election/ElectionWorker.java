@@ -3,8 +3,8 @@ package dk.ku.di.dms.vms.coordinator.election;
 import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
 import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
 import dk.ku.di.dms.vms.coordinator.election.schema.VoteResponse;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
-import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
@@ -239,8 +239,8 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
             connectionMetadata = new ConnectionMetadata(
                     server.hashCode(),
                     ConnectionMetadata.NodeType.SERVER,
-                    ByteBuffer.allocate(128),
-                    ByteBuffer.allocate(128),
+                    MemoryManager.getTemporaryDirectBuffer(128),
+                    MemoryManager.getTemporaryDirectBuffer(128),
                     channel,
                     new Semaphore(1)
                     );
@@ -266,8 +266,8 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                     server.host+":"+server.port);
 
             if(connectionMetadata != null) {
-                BufferManager.returnByteBuffer(connectionMetadata.readBuffer);
-                BufferManager.returnByteBuffer(connectionMetadata.writeBuffer);
+                MemoryManager.releaseTemporaryDirectBuffer(connectionMetadata.readBuffer);
+                MemoryManager.releaseTemporaryDirectBuffer(connectionMetadata.writeBuffer);
 
                 if(connectionMetadata.channel.isOpen()){
                     try {
@@ -319,8 +319,8 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                         connMeta = new ConnectionMetadata(
                                 key,
                                 ConnectionMetadata.NodeType.SERVER,
-                                ByteBuffer.allocate(128),
-                                ByteBuffer.allocate(128),
+                                MemoryManager.getTemporaryDirectBuffer(128),
+                                MemoryManager.getTemporaryDirectBuffer(128),
                                 channel,
                                 new Semaphore(1)
                         );
@@ -354,14 +354,12 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                     ConnectionMetadata connMeta = new ConnectionMetadata(
                             key,
                             ConnectionMetadata.NodeType.SERVER,
-                            ByteBuffer.allocate(128),
-                            ByteBuffer.allocate(128),
+                            MemoryManager.getTemporaryDirectBuffer(128),
+                            MemoryManager.getTemporaryDirectBuffer(128),
                             channel,
                             new Semaphore(1)
                     );
 
-                    // not necessary for new connections, since this thread won't try to connect to this node
-                    // lockConnectionMetadata.put(key, new Semaphore(1));
                     connectionMetadataMap.put(key, connMeta);
 
                     channel.read( connMeta.readBuffer, connMeta, new ReadCompletionHandler() );

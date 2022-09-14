@@ -8,6 +8,7 @@ package dk.ku.di.dms.vms.coordinator.server.coordinator.options;
  */
 public enum BatchReplicationStrategy {
 
+    NONE,
     // one safe, just the leader.
 
     // two safe, it requires at least one replica to acknowledge reception of message

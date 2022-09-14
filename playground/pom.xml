@@ -4,16 +4,18 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
+  <groupId>dk.ku.di.dms.vms.playground</groupId>
+  <artifactId>playground</artifactId>
+  <version>1.0-SNAPSHOT</version>
+
+  <name>playground</name>
+  <url>http://www.example.com</url>
+
   <parent>
     <groupId>dk.ku.di.dms.vms</groupId>
     <artifactId>vms-runtime-java</artifactId>
     <version>1.0-SNAPSHOT</version>
   </parent>
-
-  <artifactId>sdk-embed</artifactId>
-  <version>1.0-SNAPSHOT</version>
-
-  <name>sdk-embed</name>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -23,19 +25,16 @@
 
   <dependencies>
 
-    <!-- modb -->
     <dependency>
-      <groupId>dk.di.ku.dms.vms</groupId>
-      <artifactId>modb</artifactId>
+      <groupId>dk.ku.di.dms.vms</groupId>
+      <artifactId>coordinator</artifactId>
       <version>1.0-SNAPSHOT</version>
-      <scope>compile</scope>
     </dependency>
 
-    <!-- sdk-core -->
     <dependency>
-        <groupId>dk.ku.di.dms.vms</groupId>
-        <artifactId>sdk-core</artifactId>
-        <version>1.0-SNAPSHOT</version>
+      <groupId>dk.ku.di.dms.vms</groupId>
+      <artifactId>sdk-embed</artifactId>
+      <version>1.0-SNAPSHOT</version>
     </dependency>
 
   </dependencies>

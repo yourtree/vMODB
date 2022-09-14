@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.infra;
+package dk.ku.di.dms.vms.modb.common.data_structure;
 
 import java.util.Collection;
 

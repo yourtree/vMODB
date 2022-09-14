@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.infra;
+package dk.ku.di.dms.vms.modb.common.data_structure;
 
 import java.util.Collection;
 
@@ -20,6 +20,14 @@ public class OneProducerOneConsumerQueue<T> implements SimpleQueue<T> {
             this.tail = 0;
             this.next = null;
         }
+
+        @SuppressWarnings("unchecked")
+        public ElementBucket(int size){
+            this.elementData = (T[]) new Object[size];
+            this.tail = 0;
+            this.next = null;
+        }
+
     }
 
     private ElementBucket<T> currentReadBucket;
@@ -43,6 +51,12 @@ public class OneProducerOneConsumerQueue<T> implements SimpleQueue<T> {
         this.currentWriteBucket = this.currentReadBucket;
     }
 
+    public OneProducerOneConsumerQueue(int size){
+        this.head = 0;
+        this.currentReadBucket = new ElementBucket<>(size);
+        this.currentWriteBucket = this.currentReadBucket;
+    }
+
     // how to never block the reader even in cases where we need to grow the array?
     // let the reader consume the entire old array
 
@@ -50,7 +64,7 @@ public class OneProducerOneConsumerQueue<T> implements SimpleQueue<T> {
         // consumer has consumed everything up to now
         if( // currentReadBucket == currentWriteBucket &&
                 head == currentReadBucket.tail
-                && currentReadBucket.tail < DEFAULT_CAPACITY-1 // at least one to add
+                && currentReadBucket.tail < currentReadBucket.elementData.length-1 // at least one to add
         ) {
             // reader must wait for writer
             return null;
@@ -59,7 +73,7 @@ public class OneProducerOneConsumerQueue<T> implements SimpleQueue<T> {
         // write bucket is ahead and reader has finished reading the current bucket
         // assuming capacity never changes...
         // if the capacity changes for each bucket, must have the capacity in the element bucket DT
-        if(head == DEFAULT_CAPACITY){
+        if(head == currentReadBucket.elementData.length){
             if(currentReadBucket.next != null) {
                 currentReadBucket = currentReadBucket.next;
                 head = 0;
@@ -84,8 +98,10 @@ public class OneProducerOneConsumerQueue<T> implements SimpleQueue<T> {
      */
     public void add(T element){
 
-        if(currentWriteBucket.tail == DEFAULT_CAPACITY){
-            currentWriteBucket.next = new ElementBucket<>();
+        int size = currentWriteBucket.elementData.length;
+        if(currentWriteBucket.tail == size){
+            // double the size of the next bucket
+            currentWriteBucket.next = new ElementBucket<>( size * 2 );
             currentWriteBucket = currentWriteBucket.next;
         }
 
@@ -95,7 +111,12 @@ public class OneProducerOneConsumerQueue<T> implements SimpleQueue<T> {
     }
 
     public void drainTo(Collection<T> list){
-        // while there is bucket to read, do it
+        // TODO optimize it
+
+        //  while there is bucket to read, do it
+        while(!isEmpty()){
+            list.add(remove());
+        }
     }
 
     // approximate
@@ -121,7 +142,7 @@ public class OneProducerOneConsumerQueue<T> implements SimpleQueue<T> {
         if(currentReadBucket != currentWriteBucket){
             // ok, writer is ahead
             // but is there elements in the next bucket?
-            return currentReadBucket.next.tail > 0; // next always reference something. look the if above
+            return currentReadBucket.next != null && currentReadBucket.next.tail > 0; // next always reference something. look the if above
         }
 
         // currentReadBucket == currentWriteBucket

@@ -21,7 +21,8 @@ public abstract class NetworkRunnable extends SignalingStoppableRunnable {
     // https://stackoverflow.com/questions/4508798/how-to-get-maximum-tcp-receive-send-window-in-mac-os-x
     private static final int DEFAULT_BUFFER_SIZE = 16384;
 
-    private static final int DEFAULT_BATCH_SEND_TIMEOUT = 16384;
+    // every 30 seconds a new batch is delivered or when a batch fulfills the entire buffer
+    private static final int DEFAULT_BATCH_SEND_TIMEOUT = 30000;
 
     protected final long batchSendTimeout;
 

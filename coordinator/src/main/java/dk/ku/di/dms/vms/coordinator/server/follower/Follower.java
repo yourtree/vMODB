@@ -3,12 +3,13 @@ package dk.ku.di.dms.vms.coordinator.server.follower;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplicationAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
-import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
+
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
@@ -50,6 +51,8 @@ public final class Follower extends SignalingStoppableRunnable {
     private final ServerIdentifier me;
 
     private final ServerIdentifier leader;
+
+    private ConnectionMetadata leaderConnectionMetadata;
 
     // are we using this?
     // private final Map<Long, BatchContext> batchContextMap;
@@ -116,12 +119,11 @@ public final class Follower extends SignalingStoppableRunnable {
 
             try {
                 Issue issue = issueQueue.take();
-
-
-
             } catch (InterruptedException ignored) { }
 
         }
+
+        heartbeatTask.cancel(true);
 
     }
 
@@ -133,7 +135,15 @@ public final class Follower extends SignalingStoppableRunnable {
         // setup accept handler, since new servers may enter the system. besides
         // long timeout = options.getHeartbeatTimeout();
 
-        if (System.nanoTime() - lastTimestamp >= options.getHeartbeatTimeout()){
+//        if (System.nanoTime() - lastTimestamp >= options.getHeartbeatTimeout()){
+//            stop();
+//            this.signal.add( NO_RESULT );
+//        }
+
+        // check whether leader has already connected
+        if(leaderConnectionMetadata == null) return;
+
+        if(!leaderConnectionMetadata.channel.isOpen()){
             stop();
             this.signal.add( NO_RESULT );
         }
@@ -142,8 +152,8 @@ public final class Follower extends SignalingStoppableRunnable {
 
     private boolean connectToLeader(){
 
-        ByteBuffer readBuffer = BufferManager.loanByteBuffer();
-        ByteBuffer writeBuffer = BufferManager.loanByteBuffer();
+        ByteBuffer readBuffer = MemoryManager.getTemporaryDirectBuffer();
+        ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer();
 
         // should try three times connection to leader, otherwise starts a new election...
         int maxAttempts = options.getMaximumLeaderConnectionAttempt();
@@ -246,8 +256,8 @@ public final class Follower extends SignalingStoppableRunnable {
                             connectionMetadata.channel.close();
                         } catch (IOException ignored) {}
                     }
-                    BufferManager.returnByteBuffer(connectionMetadata.writeBuffer);
-                    BufferManager.returnByteBuffer(connectionMetadata.readBuffer);
+                    MemoryManager.releaseTemporaryDirectBuffer(connectionMetadata.writeBuffer);
+                    MemoryManager.releaseTemporaryDirectBuffer(connectionMetadata.readBuffer);
                 }
 
             }
@@ -282,15 +292,15 @@ public final class Follower extends SignalingStoppableRunnable {
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
 
-            ByteBuffer readBuffer = BufferManager.loanByteBuffer();
-            ByteBuffer writeBuffer = BufferManager.loanByteBuffer();
+            ByteBuffer readBuffer = MemoryManager.getTemporaryDirectBuffer();
+            ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer();
 
             // if it is a VMS, need to forward to the leader ? better to let the vms know
             try{
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, false);
 
-                ConnectionMetadata connectionMetadata = new ConnectionMetadata(
+                leaderConnectionMetadata = new ConnectionMetadata(
                         leader.hashCode(),
                         ConnectionMetadata.NodeType.SERVER,
                         readBuffer,
@@ -299,12 +309,12 @@ public final class Follower extends SignalingStoppableRunnable {
                         null // no need to lock, only one thread writing
                 );
 
-                channel.read( readBuffer, connectionMetadata, new ReadCompletionHandler() );
+                channel.read( readBuffer, leaderConnectionMetadata, new ReadCompletionHandler() );
 
             } catch(Exception e){
                 if(channel != null && !channel.isOpen()){
-                    BufferManager.returnByteBuffer(readBuffer);
-                    BufferManager.returnByteBuffer(writeBuffer);
+                    MemoryManager.releaseTemporaryDirectBuffer(readBuffer);
+                    MemoryManager.releaseTemporaryDirectBuffer(writeBuffer);
                 }
             }
 

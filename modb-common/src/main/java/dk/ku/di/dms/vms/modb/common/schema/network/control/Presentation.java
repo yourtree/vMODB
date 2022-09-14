@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.control;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
+import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -75,7 +76,7 @@ public final class Presentation {
 
     public record PayloadFromServer(
             ServerIdentifier serverIdentifier,
-            List<VmsIdentifier> consumers
+            List<NetworkNode> consumers
     ){}
 
     public static void writeServer(ByteBuffer buffer, ServerIdentifier serverIdentifier, String listOfVMSsToConnect){
@@ -99,7 +100,7 @@ public final class Presentation {
 
         String consumerVmsSetJSON = new String( buffer.array(), newOffset, consumerSetSize, StandardCharsets.UTF_8 );
 
-        List<VmsIdentifier> consumerSet = serdesProxy.deserializeList( consumerVmsSetJSON );
+        List<NetworkNode> consumerSet = serdesProxy.deserializeList( consumerVmsSetJSON );
 
         return new PayloadFromServer( new ServerIdentifier( host, port, offset ), consumerSet );
 

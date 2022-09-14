@@ -1,5 +1,8 @@
 package dk.ku.di.dms.vms.modb.common.schema.network;
 
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
+
 public final class Constants {
 
     /**
@@ -30,14 +33,14 @@ public final class Constants {
     /**
      * all terminal VMSs that have participated in a batch must send this event
      * to coordinator in order to complete a batch
-     * {@link dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchComplete}
+     * {@link BatchComplete}
     */
     public static final byte BATCH_COMPLETE = 7;
 
     /**
      * all terminal VMSs that have participated in a batch must send this event to
      * coordinator in order to complete a batch
-     * {@link dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchAbortRequest}
+     * {@link BatchAbortRequest}
      */
     public static final byte BATCH_REPLICATION = 8;
 
@@ -57,7 +60,7 @@ public final class Constants {
     /**
      *  This message is sent by a new elected leader to roll back all
      *  changes previously made by the previous ongoing batch
-     *  {@link dk.ku.di.dms.vms.web_common.meta.schema.batch.BatchAbortRequest}
+     *  {@link BatchAbortRequest}
      */
     public static final byte BATCH_ABORT_REQUEST = 11;
 

@@ -30,8 +30,8 @@ public class ApplicationTest
 
         try {
 
-            IVmsInternalChannels internalPubSub = VmsInternalChannels.getInstance();
-            vmsMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example", internalPubSub);
+//            IVmsInternalChannels internalPubSub = VmsInternalChannels.getInstance();
+//            vmsMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example", internalPubSub);
 
             GsonBuilder builder = new GsonBuilder();
 //            builder.registerTypeAdapter( TransactionEvent.class, new TransactionEventAdapter( vmsMetadata.queueToEventMap() ) );
@@ -101,9 +101,9 @@ public class ApplicationTest
     @Test
     public void testDataLoader() throws Exception {
 
-        IVmsInternalChannels internalPubSub = VmsInternalChannels.getInstance();
-
-        VmsRuntimeMetadata metadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.tpcc", internalPubSub);
+//        IVmsInternalChannels internalPubSub = VmsInternalChannels.getInstance();
+//
+//        VmsRuntimeMetadata metadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.tpcc", internalPubSub);
 
 //        SyntheticDataLoader dataLoader = metadata.loadedVmsInstances().get(SyntheticDataLoader.class);
 //

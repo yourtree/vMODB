@@ -21,11 +21,8 @@ public interface INetworkListener {
     // when a new node connects, this function is called
     void onConnection(InetSocketAddress node);
 
-    // on joining a multicast group
-    // void onJoin();
-
     /**
-     * The byte buffers eceived must be read and then discarded.
+     * The byte buffers received must be read and then discarded.
      * Must not be reused by the caller.
      */
     CompletionStage<Void> onMessage(ByteBuffer message);

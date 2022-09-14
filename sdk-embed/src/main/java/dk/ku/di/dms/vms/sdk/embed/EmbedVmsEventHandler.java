@@ -1,11 +1,10 @@
 package dk.ku.di.dms.vms.sdk.embed;
 
-import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
-import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
-import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
-import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.meta.Issue;
+import dk.ku.di.dms.vms.modb.common.data_structure.KeyValueEntry;
+import dk.ku.di.dms.vms.modb.common.data_structure.OneProducerOneConsumerQueue;
+import dk.ku.di.dms.vms.modb.common.data_structure.SimpleQueue;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
+import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
@@ -13,24 +12,33 @@ import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
-import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
-import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
+import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
+import dk.ku.di.dms.vms.web_common.meta.Issue;
+import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.*;
+import java.nio.channels.AsynchronousChannelGroup;
+import java.nio.channels.AsynchronousServerSocketChannel;
+import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.CompletionHandler;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Semaphore;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
+import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.*;
 import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.CANNOT_CONNECT_TO_NODE;
-import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.SERVER_TYPE;
-import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.YES;
-import static java.net.StandardSocketOptions.*;
+import static java.net.StandardSocketOptions.SO_KEEPALIVE;
+import static java.net.StandardSocketOptions.TCP_NODELAY;
 
 /**
  * This default event handler connects direct to the coordinator
@@ -42,7 +50,7 @@ import static java.net.StandardSocketOptions.*;
  * Could also try to adapt to JNI:
  * https://nachtimwald.com/2017/06/17/calling-java-from-c/
  */
-public final class EmbedVmsEventHandler extends SignalingStoppableRunnable implements IVmsEventHandler {
+public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
     /** EXECUTOR SERVICE (for socket channels) **/
     private final ExecutorService taskExecutor;
@@ -61,8 +69,11 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
     private final VmsRuntimeMetadata vmsMetadata;
 
     /** EXTERNAL VMSs **/
-    private List<VmsIdentifier> consumerVms;
+    private List<NetworkNode> consumerVms;
     private Map<Integer, ConnectionMetadata> vmsConnectionMetadataMap;
+
+    /** UNKNOWN NODES **/
+    private Map<Integer, KeyValueEntry<AsynchronousSocketChannel,ByteBuffer>> unknownNodeChannel;
 
     /** SERIALIZATION **/
     private final IVmsSerdesProxy serdesProxy;
@@ -75,13 +86,15 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
     private long currentTid;
     private long currentBatchOffset;
 
+    /** Presentation messages to be processed **/
+    private SimpleQueue<KeyValueEntry<AsynchronousSocketChannel, ByteBuffer>> presentationMessages;
+
     public EmbedVmsEventHandler(IVmsInternalChannels vmsInternalChannels, // for communicating with other components
                                 VmsIdentifier me, // to identify which vms this is
                                 VmsRuntimeMetadata vmsMetadata, // metadata about this vms
                                 IVmsSerdesProxy serdesProxy, // ser/des of objects
-                                ExecutorService executorService, // for recurrent and continuous tasks
-                                AsynchronousServerSocketChannel serverSocket,
-                                AsynchronousChannelGroup group) {
+                                ExecutorService executorService // for recurrent and continuous tasks
+    ) throws IOException {
         super();
 
         this.vmsInternalChannels = vmsInternalChannels;
@@ -91,10 +104,26 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
         this.serdesProxy = serdesProxy;
         this.taskExecutor = executorService;
 
-        this.serverSocket = serverSocket;
-        this.group = group;
+        this.group = AsynchronousChannelGroup.withThreadPool(executorService);
+        this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+        SocketAddress address = new InetSocketAddress(me.host, me.port);
+        serverSocket.bind(address);
+
+        this.unknownNodeChannel = new HashMap<>(10);
+        this.presentationMessages =
+                new OneProducerOneConsumerQueue<>(10);
     }
 
+
+    /**
+     * A thread that basically writes events to other VMSs and the Leader
+     * Retrieves data from all output queues
+     *
+     * All output queues must be read in order to send their data
+     *
+     * A batch strategy for sending would involve sleeping until the next timeout for batch,
+     * send and set up the next. Do that iteratively
+     */
     @Override
     public void run() {
 
@@ -109,64 +138,33 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
 
             //  write events to leader and VMSs...
 
+
             try {
 
-                issueQueue.take();
+                if(!vmsInternalChannels.batchCompleteOutputQueue().isEmpty()){
+                    // handle
 
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
-        }
-
-    }
-
-    /**
-     * A thread that basically writes events to other VMSs and the Leader
-     * Retrieves data from all output queues
-     *
-     * All output queues must be read in order to send their data
-     *
-     * A batch strategy for sending would involve sleeping until the next timeout for batch,
-     * send and set up the next. Do that iteratively
-     */
-    private class WriterThread extends StoppableRunnable {
-
-        @Override
-        public void run() {
-
-            BlockingQueue<byte> actionQueue = vmsInternalChannels.actionQueue();
-
-            while (isRunning()){
-
-                try {
-                    byte action = actionQueue.take();
-
-                    switch (action){
-
-                        case BATCH_COMPLETE -> {
-                            // batchCompleteQueue
-                        }
-
-                        case TX_ABORT -> {
-                            // transactionAbortOutputQueue
-                        }
-
-                        case EVENT -> {
-                            // transactionOutputQueue
-                        }
-
-                    }
-
-
-
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
                 }
 
-            }
+                if(!vmsInternalChannels.transactionAbortOutputQueue().isEmpty()){
+                    // handle
+
+                }
+
+                if(!vmsInternalChannels.transactionOutputQueue().isEmpty()){
+                    // handle
+
+                }
+
+                if(!presentationMessages.isEmpty()){
+                    var presentationMessage = presentationMessages.remove();
+                    processPresentationMessage( presentationMessage.getKey(), presentationMessage.getValue() );
+                }
+
+            } catch (Exception ignored) { }
 
         }
+
     }
 
     /**
@@ -183,29 +181,34 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
      */
     private void connectToConsumerVMSs() {
 
-        for(VmsIdentifier vms : consumerVms) {
+        String dataSchema = serdesProxy.serializeDataSchema( this.me.dataSchema );
+        String eventSchema = serdesProxy.serializeEventSchema( this.me.eventSchema );
+
+        for(NetworkNode vms : this.consumerVms) {
 
             try {
 
                 InetSocketAddress address = new InetSocketAddress(vms.host, vms.port);
                 AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
-                // withDefaultSocketOptions( channel );
+
+                channel.setOption(TCP_NODELAY, true);
+                channel.setOption(SO_KEEPALIVE, true);
 
                 channel.connect(address).get();
 
-                ConnectionMetadata connMetadata = new ConnectionMetadata(vms.hashCode(),
+                ConnectionMetadata connMetadata = new ConnectionMetadata(
+                        vms.hashCode(),
                         ConnectionMetadata.NodeType.VMS,
-                        BufferManager.loanByteBuffer(),
-                        BufferManager.loanByteBuffer(), channel, new ReentrantLock());
+                        MemoryManager.getTemporaryDirectBuffer(),
+                        MemoryManager.getTemporaryDirectBuffer(), 
+                        channel, 
+                        new Semaphore(1));
 
                 vmsConnectionMetadataMap.put(vms.hashCode(), connMetadata);
 
-                String dataSchema = serdesProxy.serializeDataSchema( this.me.dataSchema );
-                String eventSchema = serdesProxy.serializeEventSchema( this.me.eventSchema );
-
                 Presentation.writeVms( connMetadata.writeBuffer, me, dataSchema, eventSchema );
 
-                channel.write( connMetadata.writeBuffer );
+                channel.write( connMetadata.writeBuffer ).get();
 
                 channel.read(connMetadata.readBuffer, connMetadata, new VmsReadCompletionHandler() );
 
@@ -221,19 +224,18 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
         @Override
         public void completed(Integer result, ConnectionMetadata connectionMetadata) {
 
-            // can only be event
+            // can only be event, skip reading the message type
             connectionMetadata.readBuffer.position(1);
 
             // data dependence or input event
             TransactionEvent.Payload transactionEventPayload = TransactionEvent.read(connectionMetadata.readBuffer);
-
-            connectionMetadata.readBuffer.clear();
 
             // send to scheduler
             if(vmsMetadata.queueToEventMap().get( transactionEventPayload.event() ) != null) {
                 vmsInternalChannels.transactionInputQueue().add(transactionEventPayload);
             }
 
+            connectionMetadata.readBuffer.clear();
             connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
 
         }
@@ -246,26 +248,52 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
         }
     }
 
+    /**
+     * On an connection attempt, it is unknow what is the type of node
+     * attempting the connection. We find out after the first read.
+     */
+    private class UnknownNodeReadCompletionHandler implements CompletionHandler<Integer, Integer> {
+
+        @Override
+        public void completed(Integer result, Integer channelIdentifier) {
+            // send to main thread. the main thread handles writes and internal tasks
+            KeyValueEntry<AsynchronousSocketChannel,ByteBuffer> kvEntry = unknownNodeChannel.remove(channelIdentifier);
+            if(kvEntry != null) presentationMessages.add( kvEntry );
+        }
+
+        @Override
+        public void failed(Throwable exc, Integer channelIdentifier) {
+            // release the buffer, nothing else to do
+            KeyValueEntry<AsynchronousSocketChannel,ByteBuffer> kvEntry = unknownNodeChannel.remove(channelIdentifier);
+            if(kvEntry != null) MemoryManager.releaseTemporaryDirectBuffer(kvEntry.getValue());
+        }
+
+    }
+
+    /**
+     * Class is iteratively called by the socket pool threads.
+     */
     private class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, Void> {
 
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
 
-            final ByteBuffer buffer = BufferManager.loanByteBuffer();
+            final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
 
             try {
 
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, true);
 
+                KeyValueEntry<AsynchronousSocketChannel,ByteBuffer> kvEntry = new KeyValueEntry<>(channel, buffer);
+                unknownNodeChannel.put( channel.getRemoteAddress().hashCode(), kvEntry );
+
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
-                Future<Integer> readFuture = channel.read( buffer );
-                readFuture.get();
+                channel.read( buffer, channel.getRemoteAddress().hashCode(), new UnknownNodeReadCompletionHandler() );
 
-                // release the socket thread pool
-                taskExecutor.submit( () -> processAcceptConnection(channel, buffer));
+            } catch(Exception ignored){
 
-            } catch(Exception ignored){ } finally {
+            } finally {
                 // continue listening
                 if (serverSocket.isOpen()){
                     serverSocket.accept(null, this);
@@ -283,12 +311,11 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
 
     }
 
-    private void processAcceptConnection(AsynchronousSocketChannel channel, ByteBuffer readBuffer) {
+    private void processPresentationMessage(AsynchronousSocketChannel channel, ByteBuffer readBuffer) {
 
         // message identifier
-        byte messageIdentifier = readBuffer.get(0);
+        byte messageIdentifier = readBuffer.get(1);
 
-        // for now let's consider only the leader connects to the vms
         if(messageIdentifier == SERVER_TYPE){
 
             boolean includeMetadata = readBuffer.get() == YES;
@@ -301,8 +328,8 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
             if(leader == null || !leader.isActive()) {
                 connectToVMSs = true;
                 this.consumerVms = payloadFromServer.consumers();
-
-                ByteBuffer writeBuffer = BufferManager.loanByteBuffer();
+                
+                ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer();
 
                 readBuffer.clear();
 
@@ -312,6 +339,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
                     Presentation.writeVms(writeBuffer, me, vmsDataSchemaStr, vmsEventSchemaStr);
 
                     try {
+                        // the protocol requires the leader to wait for the metadata in order to start sending messages
                         channel.write( writeBuffer ).get();
                         writeBuffer.clear();
                     } catch (InterruptedException | ExecutionException ignored) {
@@ -320,8 +348,8 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
                             leader.off();
 
                             // return buffers
-                            BufferManager.returnByteBuffer(readBuffer);
-                            BufferManager.returnByteBuffer(writeBuffer);
+                            MemoryManager.releaseTemporaryDirectBuffer(readBuffer);
+                            MemoryManager.releaseTemporaryDirectBuffer(writeBuffer);
 
                             return;
                         }
@@ -338,12 +366,13 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
                         readBuffer,
                         writeBuffer,
                         channel,
-                        new ReentrantLock()
+                        new Semaphore(1)
                 );
 
             } else {
                 this.leader = payloadFromServer.serverIdentifier(); // this will set on again
                 leaderConnectionMetadata.channel = channel; // update channel
+                this.leader.on();
             }
 
             channel.read(readBuffer, leaderConnectionMetadata, new LeaderReadCompletionHandler() );
@@ -351,7 +380,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
             if(connectToVMSs)
                 connectToConsumerVMSs();
 
-        } else {
+        } else if(messageIdentifier == VMS_TYPE) {
             // then it is a vms intending to connect due to a data/event
             // that should be delivered to this vms
 
@@ -359,7 +388,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
 
             readBuffer.clear();
 
-            ByteBuffer writeBuffer = BufferManager.loanByteBuffer();
+            ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer();
 
             ConnectionMetadata connMetadata = new ConnectionMetadata(
                     leader.hashCode(),
@@ -367,7 +396,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
                     readBuffer,
                     writeBuffer,
                     channel,
-                    new ReentrantLock()
+                    new Semaphore(1)
             );
 
             vmsConnectionMetadataMap.put( newVms.hashCode(), connMetadata );
@@ -375,6 +404,8 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable imple
             // setup event receiving for this vms
             channel.read(readBuffer, connMetadata, new VmsReadCompletionHandler() );
 
+        } else {
+            logger.warning("Presentation message from unknown source:"+messageIdentifier);
         }
 
     }

@@ -56,7 +56,7 @@ public interface IVmsInternalChannels {
      */
 
     // this should be sent by terminal vms
-    BlockingQueue<BatchComplete.Payload> batchCompleteQueue();
+    BlockingQueue<BatchComplete.Payload> batchCompleteOutputQueue();
 
     // abort a specific transaction from the batch and restart state from there
     // should maintain a MV scheme to avoid rolling back to the last committed state
@@ -81,7 +81,7 @@ public interface IVmsInternalChannels {
      */
 
     /** Writer action **/
-    BlockingQueue<byte> actionQueue();
+    // BlockingQueue<Byte> actionQueue();
 
     /**
      * It represents the queue holding the results of the submitted tasks

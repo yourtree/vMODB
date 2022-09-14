@@ -66,19 +66,6 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     }
 
-    private TransactionEvent.Payload take(){
-        if(vmsChannels.transactionInputQueue().size() > 0) return vmsChannels.transactionInputQueue().poll();
-        return null;
-    }
-
-    private void initializeOffset(){
-        currentOffset = new OffsetTracker(0, 1);
-        currentOffset.signalReady();
-        currentOffset.signalFinished();
-        offsetMap.put(0L, currentOffset);
-        logger.info("Offset initialized");
-    }
-
     /**
      * Another way to implement this is make this a fine-grained task.
      * that is, a pool of available tasks for receiving and processing the
@@ -109,8 +96,23 @@ public class VmsTransactionScheduler extends StoppableRunnable {
             // we cannot position the offset to the actual next, because we may not have received the next payload yet
             moveOffsetPointerIfNecessary();
 
+            // TODO process batch and abort
+
         }
 
+    }
+
+    private TransactionEvent.Payload take(){
+        if(vmsChannels.transactionInputQueue().size() > 0) return vmsChannels.transactionInputQueue().poll();
+        return null;
+    }
+
+    private void initializeOffset(){
+        currentOffset = new OffsetTracker(0, 1);
+        currentOffset.signalReady();
+        currentOffset.signalFinished();
+        offsetMap.put(0L, currentOffset);
+        logger.info("Offset initialized");
     }
 
     /**
@@ -233,7 +235,6 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         }
 
     }
-
 
     private void dispatchReadyTasksForExecution() {
 

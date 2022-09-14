@@ -84,14 +84,25 @@ public final class MemoryManager {
 
     }
 
+
+
+    public static ByteBuffer getTemporaryDirectBuffer() {
+
+        ByteBuffer bb = bufferCache.get(1024);
+        if(bb == null){
+            return ByteBuffer.allocateDirect(1024);
+        }
+        return bb;
+
+    }
+
     public static void releaseTemporaryDirectBuffer(ByteBuffer buf) {
         long address = MemoryUtils.getByteBufferAddress(buf);
         assignedBuffers.remove(address);
         bufferCache.offer(buf);
     }
 
-    private static final int DEFAULT_KB = 2000; // 4KB -> 4000 bytes
-
+    private static final int DEFAULT_KB = 2048; // 4KB -> 4000 bytes
 
     public static MemoryRefNode claim(){
         ByteBuffer buf = bufferCache.get(DEFAULT_KB);

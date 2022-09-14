@@ -1,39 +1,38 @@
 package dk.ku.di.dms.vms.sdk.core.metadata;
 
+import dk.ku.di.dms.vms.modb.api.annotations.*;
+import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
-import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
-import dk.ku.di.dms.vms.modb.api.type.*;
 import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
-import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
-import dk.ku.di.dms.vms.sdk.core.metadata.exception.UnsupportedConstraint;
-import dk.ku.di.dms.vms.modb.api.annotations.*;
-import dk.ku.di.dms.vms.sdk.core.client.VmsRepositoryFacade;
-import dk.ku.di.dms.vms.sdk.core.metadata.exception.QueueMappingException;
-import dk.ku.di.dms.vms.sdk.core.metadata.exception.NotAcceptableTypeException;
-import dk.ku.di.dms.vms.sdk.core.metadata.exception.NoPrimaryKeyFoundException;
-import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.sdk.core.facade.DefaultRepositoryFacade;
+import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
+import dk.ku.di.dms.vms.sdk.core.metadata.exception.NoPrimaryKeyFoundException;
+import dk.ku.di.dms.vms.sdk.core.metadata.exception.NotAcceptableTypeException;
+import dk.ku.di.dms.vms.sdk.core.metadata.exception.QueueMappingException;
+import dk.ku.di.dms.vms.sdk.core.metadata.exception.UnsupportedConstraint;
+import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 import org.reflections.Configuration;
 import org.reflections.Reflections;
-
-import org.reflections.scanners.*;
+import org.reflections.scanners.Scanners;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
 
+import javax.persistence.Column;
+import javax.persistence.Id;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Null;
+import javax.validation.constraints.Positive;
+import javax.validation.constraints.PositiveOrZero;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-
-import javax.persistence.*;
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Null;
-import javax.validation.constraints.Positive;
-import javax.validation.constraints.PositiveOrZero;
 
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
 import static java.util.logging.Logger.getLogger;
@@ -44,19 +43,19 @@ public class VmsMetadataLoader {
 
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
-    public static VmsRuntimeMetadata load(String packageName, IVmsInternalChannels vmsInternalPubSubService) throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    public static VmsRuntimeMetadata load(String packageName, Constructor<?> facadeConstructor) throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
         Reflections reflections = configureReflections(packageName);
 
-        Map<Class<?>,String> vmsTableNames = loadVmsTableNames(reflections);
+        Map<Class<?>,String> entityToTableNameMap = loadVmsTableNames(reflections);
 
         Set<Class<?>> vmsClasses = reflections.getTypesAnnotatedWith(Microservice.class);
 
         Map<Class<? extends IEntity<?>>,String> entityToVirtualMicroservice = mapEntitiesToVirtualMicroservice(vmsClasses);
 
-        Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, vmsTableNames);
+        Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, entityToTableNameMap);
 
-        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, vmsDataSchemas, vmsInternalPubSubService);
+        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, facadeConstructor);
 
         // necessary remaining data structures to store a vms metadata
         Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToVmsTransactionMap = new HashMap<>();
@@ -74,7 +73,14 @@ public class VmsMetadataLoader {
          *   SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
          */
 
-        return new VmsRuntimeMetadata(vmsDataSchemas, vmsEventSchemas, eventToVmsTransactionMap, queueToEventMap, eventToQueueMap, loadedVmsInstances );
+        return new VmsRuntimeMetadata(
+                vmsDataSchemas,
+                vmsEventSchemas,
+                eventToVmsTransactionMap,
+                queueToEventMap,
+                eventToQueueMap,
+                loadedVmsInstances,
+                entityToTableNameMap);
 
     }
 
@@ -355,7 +361,8 @@ public class VmsMetadataLoader {
     }
 
     @SuppressWarnings({"unchecked","rawtypes"})
-    protected static Map<String,Object> loadMicroserviceClasses(Set<Class<?>> vmsClasses, Map<String, VmsDataSchema> vmsDataSchemas, IVmsInternalChannels vmsInternalPubSubService)
+    protected static Map<String,Object> loadMicroserviceClasses(Set<Class<?>> vmsClasses, Constructor<?> facadeConstructor)
+                                                                // Map<String, VmsDataSchema> vmsDataSchemas)
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
         Map<String,Object> loadedMicroserviceInstances = new HashMap<>();
@@ -364,7 +371,7 @@ public class VmsMetadataLoader {
 
             String clazzName = clazz.getCanonicalName();
 
-            VmsDataSchema dataSchema = vmsDataSchemas.get(clazzName);
+            //VmsDataSchema dataSchema = vmsDataSchemas.get(clazzName);
 
             Class<?> cls = Class.forName(clazzName);
             Constructor<?>[] constructors = cls.getDeclaredConstructors();
@@ -374,7 +381,7 @@ public class VmsMetadataLoader {
 
             for (Class parameterType : constructor.getParameterTypes()) {
 
-                VmsRepositoryFacade facade = new VmsRepositoryFacade(parameterType, vmsInternalPubSubService.dataRequestQueue(), vmsInternalPubSubService.dataResponseMap(), dataSchema);
+                InvocationHandler facade = (InvocationHandler) facadeConstructor.newInstance(parameterType);
 
                 Object proxyInstance = Proxy.newProxyInstance(
                         VmsMetadataLoader.class.getClassLoader(),

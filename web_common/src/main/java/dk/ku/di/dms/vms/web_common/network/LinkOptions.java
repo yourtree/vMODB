@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.web_common.network;
 
-import dk.ku.di.dms.vms.web_common.buffer.BufferManager;
+
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -20,7 +20,7 @@ public class LinkOptions {
 
     private ConcurrentLinkedQueue<byte[]> buffer;
 
-    private ByteBuffer offHeapBuffer = BufferManager.loanByteBuffer(32000);
+    private ByteBuffer offHeapBuffer = null; //BufferManager.loanByteBuffer(32000);
 
     // header to send... is only the size of used buffer.
     // the consumer knows when the consumption is over by iterating over the objects

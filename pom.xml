@@ -31,6 +31,7 @@
 
     <!-- operations -->
     <module>coordinator</module>
+      <module>playground</module>
 
 
   </modules>

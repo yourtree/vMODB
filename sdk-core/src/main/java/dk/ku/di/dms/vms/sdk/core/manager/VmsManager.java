@@ -1,7 +1,9 @@
 package dk.ku.di.dms.vms.sdk.core.manager;
 
+import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.event.handler.VmsEventHandler;
+import dk.ku.di.dms.vms.sdk.core.facade.DefaultRepositoryFacade;
 import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
@@ -11,6 +13,7 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.*;
 
@@ -55,9 +58,11 @@ public final class VmsManager {
         // this.metadata.executorService = executorService;
         IVmsInternalChannels vmsInternalPubSubService = VmsInternalChannels.getInstance();
 
+        Constructor<?> constructor = DefaultRepositoryFacade.class.getConstructors()[0];
+
         VmsRuntimeMetadata vmsMetadata;
         try {
-            vmsMetadata = VmsMetadataLoader.load(null, vmsInternalPubSubService);
+            vmsMetadata = VmsMetadataLoader.load(null, constructor);
         } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
             throw new RuntimeException("Cannot start VMs, error loading metadata.");
         }
