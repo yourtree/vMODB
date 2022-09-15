@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.sdk.core.manager;
 
-import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.event.handler.VmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.facade.DefaultRepositoryFacade;
@@ -78,7 +77,7 @@ public final class VmsManager {
         ExecutorService vmsAppLogicTaskPool = Executors.newSingleThreadExecutor();
 
         // scheduler
-        this.metadata.scheduler = new VmsTransactionScheduler(vmsAppLogicTaskPool, vmsInternalPubSubService, vmsMetadata.eventToVmsTransactionMap());
+        this.metadata.scheduler = new VmsTransactionScheduler(vmsAppLogicTaskPool, vmsInternalPubSubService, vmsMetadata.queueToVmsTransactionMap(), null, null);
 
         // executor
         // this.metadata.executor = new VmsTransactionExecutor(this.metadata.internalPubSub);

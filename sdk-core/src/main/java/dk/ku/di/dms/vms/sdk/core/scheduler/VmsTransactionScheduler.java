@@ -1,15 +1,17 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
 import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
+import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
-import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 import static java.util.logging.Logger.getLogger;
@@ -23,8 +25,6 @@ import static java.util.logging.Logger.getLogger;
 public class VmsTransactionScheduler extends StoppableRunnable {
 
     private static final Logger logger = getLogger("VmsTransactionScheduler");
-
-    private final Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap;
 
     // payload that cannot execute because some dependence need to be fulfilled
     // payload A < B < C < D
@@ -46,24 +46,28 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     private final IVmsInternalChannels vmsChannels;
 
+    // mapping
+    private final Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap;
+
+    private final Map<String, Class<?>> queueToEventMap;
+
+    private final IVmsSerdesProxy serdes;
+
     public VmsTransactionScheduler(ExecutorService vmsAppLogicTaskPool,
                                    IVmsInternalChannels vmsChannels,
-                                   Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap){
+                                   Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap,
+                                   Map<String, Class<?>> queueToEventMap,
+                                   IVmsSerdesProxy serdes){
 
         super();
-
         this.vmsTransactionTaskPool = vmsAppLogicTaskPool;
-
         this.eventToTransactionMap = eventToTransactionMap;
-
         this.waitingTasksPerTidMap = new HashMap<>();
-
         this.readyTasksPerTidMap = new TreeMap<>();
-
         this.offsetMap = new TreeMap<>();
-
         this.vmsChannels = vmsChannels;
-
+        this.queueToEventMap = queueToEventMap;
+        this.serdes = serdes;
     }
 
     /**
@@ -80,21 +84,23 @@ public class VmsTransactionScheduler extends StoppableRunnable {
     @Override
     public void run() {
 
+        logger.info("Scheduler has started.");
+
         initializeOffset();
 
         while(isRunning()) {
 
             processNewEvent();
 
-            // let's dispatch all the events ready
-            dispatchReadyTasksForExecution();
-
-            processTaskResult();
-
             // why do we have another move offset here?
             // in case we start (or restart the VM service), we need to move the pointer only when it is safe
             // we cannot position the offset to the actual next, because we may not have received the next payload yet
             moveOffsetPointerIfNecessary();
+
+            // let's dispatch all the events ready
+            dispatchReadyTasksForExecution();
+
+            processTaskResult();
 
             // TODO process batch and abort
 
@@ -160,7 +166,12 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     private void processNewEvent(){
 
-        TransactionEvent.Payload transactionalEvent = take();
+        TransactionEvent.Payload transactionalEvent = null; // take();
+        try {
+            transactionalEvent = vmsChannels.transactionInputQueue().poll(15000, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            return;
+        }
 
         // in case there is a new payload to process
         if(transactionalEvent == null) {
@@ -183,7 +194,12 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
                 task = notReadyTasks.get(i);
                 // if here means the exact parameter position
-                task.putEventInput( signatures.get(i).id(), transactionalEvent.payload() );
+
+                Class<?> clazz = this.queueToEventMap.get(transactionalEvent.event());
+
+                Object input = this.serdes.deserialize(transactionalEvent.payload(), clazz);
+
+                task.putEventInput( signatures.get(i).id(), input );
 
                 // check if the input is completed
                 if( task.isReady() ){
@@ -223,7 +239,11 @@ public class VmsTransactionScheduler extends StoppableRunnable {
                         vmsChannels
                         );
 
-                task.putEventInput(vmsTransactionSignatureIdentifiableNode.id(), transactionalEvent.payload());
+                Class<?> clazz = this.queueToEventMap.get(transactionalEvent.event());
+
+                Object input = this.serdes.deserialize(transactionalEvent.payload(), clazz);
+
+                task.putEventInput(vmsTransactionSignatureIdentifiableNode.id(), input);
 
                 // in case only one payload
                 if (task.isReady()) {

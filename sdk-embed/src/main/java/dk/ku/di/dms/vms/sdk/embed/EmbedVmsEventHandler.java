@@ -153,15 +153,20 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
                 if(!vmsInternalChannels.transactionOutputQueue().isEmpty()){
                     // handle
-
+                    logger.info("New transaction output in event handler!!!");
                 }
 
                 if(!presentationMessages.isEmpty()){
+
+                    logger.info("New presentation message for processing!");
+
                     var presentationMessage = presentationMessages.remove();
                     processPresentationMessage( presentationMessage.getKey(), presentationMessage.getValue() );
                 }
 
-            } catch (Exception ignored) { }
+            } catch (Exception e) {
+                logger.warning("Problem on handling event on event handler.");
+            }
 
         }
 
@@ -256,9 +261,17 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
         @Override
         public void completed(Integer result, Integer channelIdentifier) {
+
             // send to main thread. the main thread handles writes and internal tasks
             KeyValueEntry<AsynchronousSocketChannel,ByteBuffer> kvEntry = unknownNodeChannel.remove(channelIdentifier);
+
             if(kvEntry != null) presentationMessages.add( kvEntry );
+
+            try {
+                //logger.info("A read has been completed for "+kvEntry.getKey().getRemoteAddress());
+                logger.info("Presentation message for "+ kvEntry.getKey().getRemoteAddress() +" has been queued for processing");
+            } catch (IOException ignored) { }
+
         }
 
         @Override
@@ -278,9 +291,13 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
 
+
+
             final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
 
             try {
+
+                logger.info("An unknown host has started a connection attempt. Remote address: "+channel.getRemoteAddress());
 
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, true);
@@ -290,6 +307,8 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 channel.read( buffer, channel.getRemoteAddress().hashCode(), new UnknownNodeReadCompletionHandler() );
+
+                logger.info("Read handler for unknown host has been setup: "+channel.getRemoteAddress());
 
             } catch(Exception ignored){
 
@@ -313,8 +332,11 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
     private void processPresentationMessage(AsynchronousSocketChannel channel, ByteBuffer readBuffer) {
 
+        logger.info("Starting process for processing presentation message.");
+
         // message identifier
         byte messageIdentifier = readBuffer.get(1);
+        readBuffer.position(2);
 
         if(messageIdentifier == SERVER_TYPE){
 
@@ -326,6 +348,10 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             // only connects to all VMSs on first leader connection
             boolean connectToVMSs = false;
             if(leader == null || !leader.isActive()) {
+
+                this.leader = payloadFromServer.serverIdentifier();
+                this.leader.on();
+
                 connectToVMSs = true;
                 this.consumerVms = payloadFromServer.consumers();
                 
@@ -334,9 +360,12 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 readBuffer.clear();
 
                 if(includeMetadata) {
+                    writeBuffer.clear();
                     String vmsDataSchemaStr = serdesProxy.serializeDataSchema(me.dataSchema);
                     String vmsEventSchemaStr = serdesProxy.serializeEventSchema(me.eventSchema);
+
                     Presentation.writeVms(writeBuffer, me, vmsDataSchemaStr, vmsEventSchemaStr);
+                    writeBuffer.clear();
 
                     try {
                         // the protocol requires the leader to wait for the metadata in order to start sending messages
@@ -377,8 +406,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
             channel.read(readBuffer, leaderConnectionMetadata, new LeaderReadCompletionHandler() );
 
-            if(connectToVMSs)
-                connectToConsumerVMSs();
+            if(connectToVMSs && !payloadFromServer.consumers().isEmpty()) connectToConsumerVMSs();
 
         } else if(messageIdentifier == VMS_TYPE) {
             // then it is a vms intending to connect due to a data/event
@@ -415,6 +443,9 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         @Override
         public void completed(Integer result, ConnectionMetadata connectionMetadata) {
 
+            logger.info("Leader has entered in contact. Let's check what the leader wants.");
+
+            connectionMetadata.readBuffer.position(0);
             byte messageType = connectionMetadata.readBuffer.get();
 
             // receive input events

@@ -3,7 +3,6 @@ package dk.ku.di.dms.vms.sdk.core.operational;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 
-import java.lang.reflect.InvocationTargetException;
 import java.util.Queue;
 
 /**
@@ -86,7 +85,7 @@ public class VmsTransactionTask implements Runnable {
             // push result to the scheduler instead of returning an object
             resultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, false));
 
-        } catch (IllegalAccessException | InvocationTargetException e) {
+        } catch (Exception e) {
 
             // (i) whether to return to the scheduler or (ii) to push to the payload handler for forwarding it to the queue
             // we can only notify it because the scheduler does not need to know the events. the scheduler just needs to

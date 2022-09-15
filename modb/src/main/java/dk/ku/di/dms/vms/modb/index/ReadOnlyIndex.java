@@ -27,7 +27,7 @@ public interface ReadOnlyIndex<K> {
     // columns that form the key to each record entry
     int[] columns();
 
-    HashSet<int> columnsHash();
+    HashSet<Integer> columnsHash();
 
     /** information used by the planner to decide for the appropriate operator */
     IndexTypeEnum getType();

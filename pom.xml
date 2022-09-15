@@ -22,7 +22,7 @@
     <module>sdk-embed</module>
     <module>sdk-core</module>
 
-    <!-- benchmarked applications -->
+    <!-- benchmark applications -->
     <module>micro-tpcc</module>
     <module>eShopOnVms</module>
 
@@ -31,7 +31,9 @@
 
     <!-- operations -->
     <module>coordinator</module>
-      <module>playground</module>
+
+    <!-- for tests -->
+    <module>playground</module>
 
 
   </modules>
@@ -66,14 +68,7 @@
       <artifactId>slf4j-api</artifactId>
       <version>${slf4j.version}</version>
       <!--      <scope>compile</scope>-->
-      <scope>test</scope>
     </dependency>
-
-<!--    <dependency>-->
-<!--      <groupId>org.slf4j</groupId>-->
-<!--      <artifactId>slf4j-simple</artifactId>-->
-<!--      <version>${slf4j.version}</version>-->
-<!--    </dependency>-->
 
   </dependencies>
 

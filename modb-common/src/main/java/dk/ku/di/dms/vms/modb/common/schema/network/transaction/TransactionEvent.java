@@ -59,11 +59,13 @@ public final class TransactionEvent {
 
         int eventSize = buffer.getInt();
 
-        String eventName = new String( buffer.array(), header, eventSize, StandardCharsets.UTF_8 );
+        String eventName = extractStringFromByteBuffer( buffer, eventSize );
 
         int payloadSize = buffer.getInt();
 
-        String payload = new String( buffer.array(), header + Integer.BYTES + eventSize, payloadSize, StandardCharsets.UTF_8 );
+        String payload = extractStringFromByteBuffer( buffer, payloadSize );
+
+        // String payload = new String( buffer.array(), header + Integer.BYTES + eventSize, payloadSize, StandardCharsets.UTF_8 );
 
         return new Payload( tid, lastTid, batch, eventName, payload );
     }
@@ -75,5 +77,17 @@ public final class TransactionEvent {
     public static record Payload(
             long tid, long lastTid, long batch, String event, String payload
     ){}
+
+    private static String extractStringFromByteBuffer(ByteBuffer buffer, int size){
+        if(buffer.isDirect()){
+            byte[] byteArray = new byte[size];
+            for(int i = 0; i < size; i++){
+                byteArray[i] = buffer.get();
+            }
+            return new String(byteArray, 0, size, StandardCharsets.UTF_8);
+        } else {
+            return new String(buffer.array(), buffer.position(), size, StandardCharsets.UTF_8);
+        }
+    }
 
 }

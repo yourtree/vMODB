@@ -11,6 +11,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
@@ -28,28 +29,70 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.logging.Logger;
 
 /**
- * Hello world!
- *
+ * "Unix-based systems declare ports below 1024 as privileged"
+ * https://stackoverflow.com/questions/25544849/java-net-bindexception-permission-denied-when-creating-a-serversocket-on-mac-os
  */
 public class App 
 {
 
+    protected static final Logger logger = Logger.getLogger("App");
 
-    public static void main( String[] args )
-    {
+    // input transactions
+    private static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
+    public static void main( String[] args ) throws IOException {
 
+        loadMicroservice();
 
+        loadCoordinator(parsedTransactionRequests);
 
+        Thread producerThread = new Thread(new Producer());
+        producerThread.start();
 
     }
 
-    private void loadCoordinator() throws IOException {
+    private static class Producer implements Runnable {
 
-        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 81 );
-        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 82 );
+        @Override
+        public void run() {
+
+            IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
+
+            int val = 1;
+
+            while(true) {
+
+                EventExample eventExample = new EventExample(val);
+
+                String payload = serdes.serialize(eventExample, EventExample.class);
+
+                TransactionInput.Event eventPayload = new TransactionInput.Event("in", payload);
+
+                TransactionInput txInput = new TransactionInput("example", eventPayload);
+
+                logger.info("Adding "+val);
+
+                parsedTransactionRequests.add(txInput);
+
+                try {
+                    logger.info("Producer going to bed... ");
+                    Thread.sleep(120000);
+                    logger.info("Producer woke up! Time to insert one more ");
+                } catch (InterruptedException ignored) { }
+
+                val++;
+
+            }
+        }
+    }
+
+    private static void loadCoordinator(BlockingQueue<TransactionInput> parsedTransactionRequests) throws IOException {
+
+        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 1081 );
+        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 1082 );
 
         Map<Integer, ServerIdentifier> serverMap = new HashMap<>(2);
         serverMap.put(serverEm1.hashCode(), serverEm1);
@@ -57,7 +100,7 @@ public class App
 
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        NetworkNode vms = new NetworkNode("localhost", 80);
+        NetworkNode vms = new NetworkNode("localhost", 1080);
 
         Map<Integer,NetworkNode> VMSs = new HashMap<>(1);
         VMSs.put(vms.hashCode(), vms);
@@ -70,8 +113,6 @@ public class App
         Map<String, TransactionDAG> transactionMap = new HashMap<>(1);
         transactionMap.put("example", dag);
 
-        BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
-
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
         Coordinator coordinator = new Coordinator(
@@ -83,21 +124,22 @@ public class App
                 new HashMap<>(),
                 serverEm1,
                 new CoordinatorOptions(),
-                1,
-                1,
+                0,
+                0,
                 BatchReplicationStrategy.NONE,
                 parsedTransactionRequests,
                 serdes
         );
 
-        // setup input of transaction
+        Thread coordThread = new Thread(coordinator);
+        coordThread.start();
 
     }
 
     /**
      * Load one microservice at first and perform several transactions and batch commit
      */
-    private void loadMicroservice() {
+    private static void loadMicroservice() {
 
         IVmsInternalChannels vmsInternalPubSubService = VmsInternalChannels.getInstance();
 
@@ -105,7 +147,7 @@ public class App
 
         VmsRuntimeMetadata vmsMetadata;
         try {
-            vmsMetadata = VmsMetadataLoader.load(null, constructor);
+            vmsMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.playground.app", constructor);
         } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
             throw new RuntimeException("Cannot start VMs, error loading metadata.");
         }
@@ -115,10 +157,10 @@ public class App
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
         VmsTransactionScheduler scheduler =
-                new VmsTransactionScheduler(vmsAppLogicTaskPool, vmsInternalPubSubService, vmsMetadata.eventToVmsTransactionMap());
+                new VmsTransactionScheduler(vmsAppLogicTaskPool, vmsInternalPubSubService, vmsMetadata.queueToVmsTransactionMap(), vmsMetadata.queueToEventMap(), serdes);
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
-                "localhost", 80, "example",
+                "localhost", 1080, "example",
                 0, 0,
                 vmsMetadata.vmsDataSchema(), vmsMetadata.vmsEventSchema());
 
@@ -130,10 +172,14 @@ public class App
             eventHandler = new EmbedVmsEventHandler(
                     vmsInternalPubSubService, vmsIdentifier, vmsMetadata, serdes, socketPool );
         } catch (IOException e) {
-            throw new RuntimeException("Cannot start VMs, error loading metadata.");
+            throw new RuntimeException("Cannot start event handler, error loading the socket?");
         }
 
+        Thread eventHandlerThread = new Thread(eventHandler);
+        eventHandlerThread.start();
 
+        Thread schedulerThread = new Thread(scheduler);
+        schedulerThread.start();
 
     }
 

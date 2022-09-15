@@ -9,7 +9,7 @@ public class FilterContext {
 
     public List<FilterType> filterTypes;
 
-    public List<int> filterColumns; // allow querying the schema to get the corresponding data type
+    public List<Integer> filterColumns; // allow querying the schema to get the corresponding data type
 
     @SuppressWarnings("rawtypes")
     public List<TypedBiPredicate> biPredicates;

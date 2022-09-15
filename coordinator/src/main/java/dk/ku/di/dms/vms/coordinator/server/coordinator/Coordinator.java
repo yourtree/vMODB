@@ -72,9 +72,12 @@ public final class Coordinator extends SignalingStoppableRunnable {
     private final Map<Integer, ConnectionMetadata> serverConnectionMetadataMap;
 
     /** VMS data structures **/
-    private final Map<Integer, NetworkNode> VMSs;
 
-    private final Map<Integer, VmsIdentifier> vmsMetadata;
+    // received from program start
+    private final Map<Integer, NetworkNode> startersVMSs;
+
+    // receive from program start + those that joined later
+    private final Map<String, VmsIdentifier> vmsMetadata;
 
     private final Map<Integer, List<NetworkNode>> vmsConsumerSet;
 
@@ -120,7 +123,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                        Map<Integer, ServerIdentifier> servers,
                        Map<Integer, ConnectionMetadata> serverConnectionMetadataMap,
 
-                       Map<Integer, NetworkNode> VMSs,
+                       Map<Integer, NetworkNode> startersVMSs,
                        Map<String, TransactionDAG> transactionMap,
                        Map<Integer, List<NetworkNode>> vmsDependenceSet, // built from the transactionMap
 
@@ -146,7 +149,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         // should come filled from election process
         this.servers = servers == null ? new ConcurrentHashMap<>() : servers;
-        this.VMSs = VMSs;
+        this.startersVMSs = startersVMSs;
         this.vmsMetadata = new HashMap<>(10);
         this.batchCommitLock = new Object();
 
@@ -193,9 +196,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
     @Override
     public void run() {
 
-        // connect to all virtual microservices
-        connectToVMSs();
-
         // setup asynchronous listener for new connections
         serverSocket.accept( null, new AcceptCompletionHandler());
 
@@ -217,9 +217,12 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // ScheduledFuture<?> heartbeatTask = scheduledExecutorService.scheduleAtFixedRate(this::sendHeartbeats, 0L, options.getHeartbeatTimeout() - options.getHeartbeatSlack(), TimeUnit.MILLISECONDS);
 
         ScheduledFuture<?> batchCommitTask = scheduledExecutorService.scheduleAtFixedRate(
-                this::spawnBatchCommit, 0L, options.getBatchWindow(), TimeUnit.MILLISECONDS);
+                this::spawnBatchCommitFake, 0L, options.getBatchWindow(), TimeUnit.MILLISECONDS);
 
         // if the transaction manager thread blocks (e.g., waiting for a queue), the thread is not delivered back to the pool
+
+        // connect to all virtual microservices
+        connectToVMSs();
 
         while(isRunning()){
 
@@ -249,7 +252,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
      */
     private void connectToVMSs(){
 
-        for(NetworkNode vms : VMSs.values()){
+        for(NetworkNode vms : startersVMSs.values()){
 
             try {
 
@@ -261,15 +264,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 channel.connect(address).get();
 
-                ConnectionMetadata connMetadata = new ConnectionMetadata(
-                        vms.hashCode(), 
-                        VMS,
-                        MemoryManager.getTemporaryDirectBuffer(128),
-                        MemoryManager.getTemporaryDirectBuffer(128),
-                        channel, 
-                        new Semaphore(1));
-                
-                vmsConnectionMetadataMap.put(vms.hashCode(), connMetadata);
+                ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer(1024);
+                ByteBuffer readBuffer = MemoryManager.getTemporaryDirectBuffer(1024);
 
                 // get dependence set of given VMS
                 List<NetworkNode> consumerSet = vmsConsumerSet.get( vms.hashCode() );
@@ -281,16 +277,30 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     consumerSetJson = "";
                 }
 
+                // writeBuffer.clear();
                 // write presentation
-                Presentation.writeServer( connMetadata.writeBuffer, this.me, consumerSetJson );
+                Presentation.writeServer( writeBuffer, this.me, consumerSetJson );
+                writeBuffer.clear();
 
-                connMetadata.writeBuffer.clear();
-                connMetadata.channel.write( connMetadata.writeBuffer ).get();
-                connMetadata.writeBuffer.clear();
+                channel.write( writeBuffer ).get();
+                writeBuffer.clear();
 
-                channel.read(connMetadata.readBuffer, connMetadata, new ReadCompletionHandler());
 
-            } catch(ExecutionException | InterruptedException| IOException ignored){ }
+                // and now read the metadata
+                // any failure should be tracked so we can continue the protocol later
+
+                readBuffer.clear();
+                channel.read(readBuffer).get();
+                // need here otherwise the channel read handler is lost
+
+                MemoryManager.releaseTemporaryDirectBuffer(writeBuffer);
+
+                // always a vms
+                processVmsPresentationMessage(channel, readBuffer);
+
+            } catch(ExecutionException | InterruptedException| IOException e){
+                logger.warning("Failed to connect to a known VMS");
+            }
 
         }
 
@@ -324,29 +334,34 @@ public final class Coordinator extends SignalingStoppableRunnable {
         public void completed(Integer result, ConnectionMetadata connectionMetadata) {
 
             // decode message by getting the first byte
-            byte type = connectionMetadata.readBuffer.get();
+            byte type = connectionMetadata.readBuffer.get(0);
+            connectionMetadata.readBuffer.position(1);
 
-            // from all terminal VMSs involved in the last batch
-            if(type == BATCH_COMPLETE){
+            switch (type) {
 
-                // don't actually need the host and port in the payload since we have the attachment to this read operation...
-                BatchComplete.Payload response = BatchComplete.read( connectionMetadata.readBuffer );
-                txManagerCtx.batchCompleteEvents().add( response );
-                txManagerCtx.actionQueue.add(BATCH_COMPLETE); // must have a context, i.e., what batch, the last?
+                // from all terminal VMSs involved in the last batch
+                case(BATCH_COMPLETE) -> {
 
-                // if one abort, no need to keep receiving
-                // actually it is unclear in which circumstances a vms would respond no... probably in case it has not received an ack from an aborted commit response?
-                // because only the aborted transaction will be rolled back
+                    // don't actually need the host and port in the payload since we have the attachment to this read operation...
+                    BatchComplete.Payload response = BatchComplete.read(connectionMetadata.readBuffer);
+                    txManagerCtx.batchCompleteEvents().add(response);
+                    txManagerCtx.actionQueue.add(BATCH_COMPLETE); // must have a context, i.e., what batch, the last?
 
-            } else if (type == TX_ABORT){
+                    // if one abort, no need to keep receiving
+                    // actually it is unclear in which circumstances a vms would respond no... probably in case it has not received an ack from an aborted commit response?
+                    // because only the aborted transaction will be rolled back
+                }
+                case(TX_ABORT) -> {
 
-                // get information of what
-                TransactionAbort.Payload response = TransactionAbort.read(connectionMetadata.readBuffer);
-                txManagerCtx.transactionAbortEvents().add( response );
-                txManagerCtx.actionQueue.add(TX_ABORT);
+                    // get information of what
+                    TransactionAbort.Payload response = TransactionAbort.read(connectionMetadata.readBuffer);
+                    txManagerCtx.transactionAbortEvents().add(response);
+                    txManagerCtx.actionQueue.add(TX_ABORT);
 
-            } else {
-                logger.warning("Unknown message received.");
+                }
+                default ->
+                    logger.warning("Unknown message received.");
+
             }
 
             connectionMetadata.readBuffer.clear();
@@ -363,7 +378,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 // modify status
                 if(connectionMetadata.nodeType == VMS){
-                    VMSs.get(connectionMetadata.key).off();
+                    startersVMSs.get(connectionMetadata.key).off();
                 } else {
                     servers.get(connectionMetadata.key).off();
                 }
@@ -395,7 +410,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 // right now I cannot discern whether it is a VMS or follower. perhaps I can keep alive channels from leader election?
 
-                buffer = MemoryManager.getTemporaryDirectBuffer(128);
+                buffer = MemoryManager.getTemporaryDirectBuffer(1024);
 
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 Future<Integer> readFuture = channel.read( buffer );
@@ -473,93 +488,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
             byte type = buffer.get();
             if(type == SERVER_TYPE){
-                // server
-                // ....
-                ServerIdentifier newServer = Presentation.readServer(buffer);
-
-                // check whether this server is known... maybe it has crashed... then we only need to update the respective channel
-                if(servers.get(newServer.hashCode()) != null){
-
-                    ConnectionMetadata connectionMetadata = serverConnectionMetadataMap.get( newServer.hashCode() );
-
-                    // lock to refrain other threads from using old metadata
-                    connectionMetadata.writeLock.acquireUninterruptibly();
-
-                    // update metadata of this node
-                    servers.put( newServer.hashCode(), newServer );
-
-                    connectionMetadata.channel = channel;
-
-                    connectionMetadata.writeLock.release();
-
-                } else { // no need for locking here
-
-                    servers.put( newServer.hashCode(), newServer );
-
-                    ConnectionMetadata connectionMetadata = new ConnectionMetadata(
-                            newServer.hashCode(), SERVER, 
-                            buffer, 
-                            MemoryManager.getTemporaryDirectBuffer(128),
-                            channel,
-                            new Semaphore(1) );
-                    
-                    serverConnectionMetadataMap.put( newServer.hashCode(), connectionMetadata );
-                    // create a read handler for this connection
-                    // attach buffer, so it can be read upon completion
-                    channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
-
-                }
+                processServerPresentationMessage(channel, buffer);
             } else if(type == VMS_TYPE){ // vms
-
-                VmsIdentifier newVms = Presentation.readVms(buffer, serdesProxy);
-
-                if(VMSs.get( newVms.hashCode() ) != null){
-
-                    // vms reconnecting
-                    newVms = vmsMetadata.get( newVms.hashCode() );
-
-                    ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( newVms.hashCode() );
-
-                    // lock to refrain other threads from using old metadata
-                    connectionMetadata.writeLock.acquireUninterruptibly();
-
-                    // update metadata of this node
-                    VMSs.put( newVms.hashCode(), newVms );
-
-                    // update channel and possibly the address
-                    connectionMetadata.channel = channel;
-                    connectionMetadata.key = newVms.hashCode();
-
-                    connectionMetadata.writeLock.release();
-
-                    // let's vms is back online from crash or is simply a new vms.
-                    // we need to send batch info or simply the vms assume...
-                    // if a vms crashed, it has lost all the events since the last batch commit, so need to resend it now
-
-                    List<TransactionEvent.Payload> list = newVms.transactionEventsPerBatch.get( newVms.lastBatch + 1 );
-                    if(list != null) {// avoiding creating a task for nothing
-                        KeyValueEntry<VmsIdentifier, Long> resendTask = new KeyValueEntry<>(newVms, newVms.lastBatch + 1);
-                        transactionInputsToResend.add(resendTask);
-                    }
-
-                    channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
-
-                } else {
-
-                    VMSs.put( newVms.hashCode(), newVms );
-                    ConnectionMetadata connectionMetadata = new ConnectionMetadata(
-                            newVms.hashCode(), 
-                            VMS, 
-                            buffer, 
-                            MemoryManager.getTemporaryDirectBuffer(128), 
-                            channel, 
-                            new Semaphore(1) );
-                    
-                    vmsConnectionMetadataMap.put( newVms.hashCode(), connectionMetadata );
-                    
-                    channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
-                }
-
+                processVmsPresentationMessage(channel, buffer);
             } else {
                 // simply unknown... probably a bug?
                 try{
@@ -574,6 +505,115 @@ public final class Coordinator extends SignalingStoppableRunnable {
             return true;
         }
 
+    }
+
+    private void processServerPresentationMessage(AsynchronousSocketChannel channel, ByteBuffer buffer) {
+        // server
+        // ....
+        ServerIdentifier newServer = Presentation.readServer(buffer);
+
+        // check whether this server is known... maybe it has crashed... then we only need to update the respective channel
+        if(servers.get(newServer.hashCode()) != null){
+
+            ConnectionMetadata connectionMetadata = serverConnectionMetadataMap.get( newServer.hashCode() );
+
+            // lock to refrain other threads from using old metadata
+            connectionMetadata.writeLock.acquireUninterruptibly();
+
+            // update metadata of this node
+            servers.put( newServer.hashCode(), newServer );
+
+            connectionMetadata.channel = channel;
+
+            connectionMetadata.writeLock.release();
+
+        } else { // no need for locking here
+
+            servers.put( newServer.hashCode(), newServer );
+
+            ConnectionMetadata connectionMetadata = new ConnectionMetadata(
+                    newServer.hashCode(), SERVER,
+                    buffer,
+                    MemoryManager.getTemporaryDirectBuffer(1024),
+                    channel,
+                    new Semaphore(1) );
+
+            serverConnectionMetadataMap.put( newServer.hashCode(), connectionMetadata );
+            // create a read handler for this connection
+            // attach buffer, so it can be read upon completion
+            channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
+
+        }
+    }
+
+    private void processVmsPresentationMessage(AsynchronousSocketChannel channel, ByteBuffer buffer) {
+
+        buffer.position(2);
+        VmsIdentifier newVms = Presentation.readVms(buffer, serdesProxy);
+
+        // is a default vms?
+        if(startersVMSs.get( newVms.hashCode() ) != null){
+
+            // vms reconnecting
+            // newVms = vmsMetadata.get( newVms.hashCode() );
+
+            ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( newVms.hashCode() );
+
+            // known VMS but not yet finished the protocol
+            if(connectionMetadata == null){
+                connectionMetadata = new ConnectionMetadata(
+                        newVms.hashCode(),
+                        VMS,
+                        buffer,
+                        MemoryManager.getTemporaryDirectBuffer(1024),
+                        channel,
+                        new Semaphore(1));
+
+                vmsConnectionMetadataMap.put(newVms.hashCode(), connectionMetadata);
+
+            }
+
+            // update metadata of this node
+            vmsMetadata.put( newVms.getIdentifier(), newVms );
+
+            // lock to refrain other threads from using old metadata
+            connectionMetadata.writeLock.acquireUninterruptibly();
+
+            // update channel and possibly the address
+            connectionMetadata.channel = channel;
+            connectionMetadata.key = newVms.hashCode();
+
+            connectionMetadata.writeLock.release();
+
+            // let's vms is back online from crash or is simply a new vms.
+            // we need to send batch info or simply the vms assume...
+            // if a vms crashed, it has lost all the events since the last batch commit, so need to resend it now
+
+            List<TransactionEvent.Payload> list = newVms.transactionEventsPerBatch.get( newVms.lastBatch + 1 );
+            if(list != null) {// avoiding creating a task for nothing
+                KeyValueEntry<VmsIdentifier, Long> resendTask = new KeyValueEntry<>(newVms, newVms.lastBatch + 1);
+                transactionInputsToResend.add(resendTask);
+            }
+
+            channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
+
+        } else {
+
+            // startersVMSs.put( newVms.hashCode(), newVms );
+            ConnectionMetadata connectionMetadata = new ConnectionMetadata(
+                    newVms.hashCode(),
+                    VMS,
+                    buffer,
+                    MemoryManager.getTemporaryDirectBuffer(1024),
+                    channel,
+                    new Semaphore(1) );
+
+            vmsConnectionMetadataMap.put( newVms.hashCode(), connectionMetadata );
+
+            vmsMetadata.put( newVms.getIdentifier(), newVms );
+
+            channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
+        }
     }
 
     /**
@@ -607,7 +647,15 @@ public final class Coordinator extends SignalingStoppableRunnable {
      *
      * TODO store the transactions in disk before sending
      */
+    private void spawnBatchCommitFake() {
+
+        logger.info("Batch commit spawned.");
+    }
+
+
     private void spawnBatchCommit(){
+
+        logger.info("Batch commit spawned.");
 
         // we need a cut. all vms must be aligned in terms of tid
         // because the other thread might still be sending intersecting TIDs
@@ -683,7 +731,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     channel.setOption( SO_KEEPALIVE, false );
                     channel.connect(address).get();
 
-                    ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(128);
+                    ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024);
                     BatchReplication.write( buffer, currBatch, lastTidOfBatchPerVmsJson );
                     channel.write( buffer ).get();
 
@@ -818,18 +866,22 @@ public final class Coordinator extends SignalingStoppableRunnable {
      */
     private void processTransactionInputEvents(){
 
+        logger.info("processTransactionInputEvents spawned.");
+
+        if(vmsMetadata.isEmpty()){
+            logger.info("No VMS metadata received so far. Transaction input events will not be processed yet.");
+            return;
+        }
+
         int size = parsedTransactionRequests.size();
         if( parsedTransactionRequests.size() == 0 ){
             return;
         }
 
-        Collection<TransactionInput> transactionRequests = new ArrayList<>(size + 50); // threshold, for concurrent appends
+        Collection<TransactionInput> transactionRequests = new ArrayList<>(size); // threshold, for concurrent appends
         parsedTransactionRequests.drainTo( transactionRequests );
 
         for(TransactionInput transactionInput : transactionRequests){
-
-            // this is the only thread updating this value, so it is by design an atomic operation
-            long tid_ = ++tid;
 
             TransactionDAG transactionDAG = transactionMap.get( transactionInput.name );
 
@@ -845,6 +897,23 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 batch_ = batchOffset;
             }
 
+            boolean allKnown = true;
+            for (TransactionInput.Event inputEvent : transactionInput.events) {
+                // look for the event in the topology
+                EventIdentifier event = transactionDAG.topology.get(inputEvent.name);
+                VmsIdentifier vms = vmsMetadata.get(event.vms);
+                if(vms == null) {
+                    logger.info("A transaction is dropped because there is no metadata about one participating vms: "+ event.vms);
+                    allKnown = false;
+                    break;
+                }
+            }
+
+            if(!allKnown) continue;
+
+            // this is the only thread updating this value, so it is by design an atomic operation
+            long tid_ = ++tid;
+
             // for each input event, send the event to the proper vms
             // assuming the input is correct, i.e., all events are present
             for (TransactionInput.Event inputEvent : transactionInput.events) {
@@ -853,7 +922,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 EventIdentifier event = transactionDAG.topology.get(inputEvent.name);
 
                 // get the vms
-                VmsIdentifier vms = vmsMetadata.get(event.vms.hashCode());
+                VmsIdentifier vms = vmsMetadata.get(event.vms);
 
                 // get the connection metadata
                 ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.hashCode() );
@@ -871,18 +940,16 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 TransactionEvent.Payload txEvent = TransactionEvent.write(connectionMetadata.writeBuffer, tid_, vms.lastTid, batch_, inputEvent.name, inputEvent.payload);
 
                 connectionMetadata.writeBuffer.clear();
-                connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata, new WriteCompletionHandler());
-                // always assuming the buffer capacity is able to sustain the next write...
-//                if(connectionMetadata.writeBuffer.position() > batchBufferSize){
-//                    int overflowPos = connectionMetadata.writeBuffer.position();
-//
-//                    // return to marked position, so the overflow content is not written
-//                    connectionMetadata.writeBuffer.reset();
-//
-//                    connectionMetadata.channel.write(connectionMetadata.writeBuffer,
-//                            connectionMetadata, new WriteCompletionHandler0(overflowPos));
-//
-//                }
+                try {
+                    connectionMetadata.channel.write(connectionMetadata.writeBuffer).get(); //, connectionMetadata, new WriteCompletionHandler());
+                } catch (InterruptedException | ExecutionException e) {
+                    // queue for later sending
+                    vms.off();
+                    vms.pendingWrites.add(txEvent);
+                } finally {
+                    connectionMetadata.writeBuffer.clear();
+                    connectionMetadata.writeLock.release();
+                }
 
                 // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
                 List<TransactionEvent.Payload> list = vms.transactionEventsPerBatch.get(batch_);
@@ -982,7 +1049,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                                 ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.hashCode() );
 
-                                ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(128);
+                                ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024);
 
                                 TransactionAbort.write(buffer, msg);
 

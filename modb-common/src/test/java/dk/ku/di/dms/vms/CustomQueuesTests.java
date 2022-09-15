@@ -7,12 +7,12 @@ import java.util.logging.Logger;
 
 public class CustomQueuesTests {
 
-    protected final Logger logger = Logger.getLogger(this.getClass().getName());
+    protected static final Logger logger = Logger.getLogger("CustomQueuesTests");
 
     private static final OneProducerOneConsumerQueue<Integer> queue =
             new OneProducerOneConsumerQueue<>(1);
 
-    private class Producer implements Runnable {
+    private static class Producer implements Runnable {
 
         @Override
         public void run() {
@@ -30,7 +30,7 @@ public class CustomQueuesTests {
         }
     }
 
-    private class Consumer implements Runnable {
+    private static class Consumer implements Runnable {
 
         private volatile Integer val;
 

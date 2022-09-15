@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.sdk.core.enums;
+package dk.ku.di.dms.vms.modb.api.enums;
 
 public enum TransactionTypeEnum {
     R,

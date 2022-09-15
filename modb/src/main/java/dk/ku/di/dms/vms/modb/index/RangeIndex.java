@@ -1,10 +1,12 @@
 package dk.ku.di.dms.vms.modb.index;
 
-import dk.ku.di.dms.vms.modb.definition.Table;
-import dk.ku.di.dms.vms.modb.api.type.DataType;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.Row;
+import dk.ku.di.dms.vms.modb.definition.Table;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 /**
  * Basic implementation of a range index

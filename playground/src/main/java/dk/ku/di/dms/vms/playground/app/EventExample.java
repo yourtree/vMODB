@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.playground;
+package dk.ku.di.dms.vms.playground.app;
 
 import dk.ku.di.dms.vms.modb.api.annotations.Event;
 

@@ -4,6 +4,12 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
+  <parent>
+    <groupId>dk.ku.di.dms.vms</groupId>
+    <artifactId>vms-runtime-java</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+
   <groupId>dk.ku.di.dms.vms.modb</groupId>
   <artifactId>modb-api</artifactId>
   <version>1.0-SNAPSHOT</version>
@@ -18,6 +24,20 @@
   </properties>
 
   <dependencies>
+
+    <dependency>
+      <groupId>javax.validation</groupId>
+      <artifactId>validation-api</artifactId>
+      <version>2.0.1.Final</version>
+      <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>javax.persistence</groupId>
+      <artifactId>javax.persistence-api</artifactId>
+      <version>2.2</version>
+      <scope>compile</scope>
+    </dependency>
 
   </dependencies>
 

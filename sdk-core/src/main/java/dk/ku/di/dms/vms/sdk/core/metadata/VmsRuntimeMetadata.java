@@ -14,7 +14,7 @@ import java.util.Map;
 public record VmsRuntimeMetadata(
         Map<String, VmsDataSchema> vmsDataSchema, // solo schema
         Map<String, VmsEventSchema> vmsEventSchema,
-        Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToVmsTransactionMap,
+        Map<String, List<IdentifiableNode<VmsTransactionSignature>>> queueToVmsTransactionMap,
         Map<String, Class<?>> queueToEventMap, // input
         Map<Class<?>,String> eventToQueueMap, // output
         Map<String, Object> loadedVmsInstances,

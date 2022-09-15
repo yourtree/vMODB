@@ -29,7 +29,7 @@ public class IndexCountGroupBy extends AbstractCount {
 
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
 
-        Map<int,Integer> countMap = new HashMap<int,Integer>();
+        Map<Integer,Integer> countMap = new HashMap<Integer,Integer>();
 
         if(index.getType() == IndexTypeEnum.UNIQUE){
 
@@ -67,7 +67,7 @@ public class IndexCountGroupBy extends AbstractCount {
 
     }
 
-    private void append(Map<int, Integer> countMap) {
+    private void append(Map<Integer, Integer> countMap) {
         ensureMemoryCapacity(this.entrySize * countMap.size());
 
         // number of "rows"
@@ -80,7 +80,7 @@ public class IndexCountGroupBy extends AbstractCount {
 
     }
 
-    private void compute(IKey key, long address, Map<int,Integer> countMap) {
+    private void compute(IKey key, long address, Map<Integer,Integer> countMap) {
         int groupKey = index.hashAggregateGroup(key, address, indexColumns).hashCode();
 
         if( countMap.get(groupKey) == null ){
@@ -91,7 +91,7 @@ public class IndexCountGroupBy extends AbstractCount {
         }
     }
 
-    private void compute(IRecordIterator iterator, Map<int,Integer> countMap) {
+    private void compute(IRecordIterator iterator, Map<Integer,Integer> countMap) {
 
         // hash the groupby columns
         int groupKey = index.hashAggregateGroup(iterator, indexColumns).hashCode();

@@ -47,74 +47,86 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
 
     private static final VmsInternalChannels INSTANCE;
 
-    private static final BlockingQueue<TransactionEvent.Payload> inputChannel;
+    private static final BlockingQueue<TransactionEvent.Payload> transactionInputQueue;
 
-    private static final BlockingQueue<OutboundEventResult> outputChannel;
+    private static final BlockingQueue<OutboundEventResult> transactionOutputQueue;
 
-    private static final Queue<VmsTransactionTaskResult> resultQueue;
+    private static final BlockingQueue<BatchComplete.Payload> batchCompleteOutputQueue;
+
+    private static final BlockingQueue<TransactionAbort.Payload> transactionAbortInputQueue;
+
+    private static final BlockingQueue<TransactionAbort.Payload> transactionAbortOutputQueue;
+
+    private static final BlockingQueue<BatchCommitRequest.Payload> batchCommitQueue;
+
+    private static final BlockingQueue<BatchAbortRequest.Payload> batchAbortQueue;
+
+    private static final Queue<VmsTransactionTaskResult> transactionResultQueue;
 
     private static final Queue<DataRequestEvent> requestQueue;
 
     private static final Map<Long, DataResponseEvent> responseMap;
 
-    private static final BlockingQueue<byte> actionQueue;
-
     static {
         INSTANCE = new VmsInternalChannels();
-        inputChannel = new LinkedBlockingQueue<>();
-        outputChannel = new LinkedBlockingQueue<>();
-        resultQueue = new ConcurrentLinkedQueue<>();
+
+        /** transaction **/
+        transactionInputQueue = new LinkedBlockingQueue<>();
+        transactionOutputQueue = new LinkedBlockingQueue<>();
+        transactionResultQueue = new ConcurrentLinkedQueue<>();
+
+        /** abort **/
+        transactionAbortInputQueue = new LinkedBlockingQueue<>();
+        transactionAbortOutputQueue = new LinkedBlockingQueue<>();
+
+        /** batch **/
+        batchCommitQueue = new LinkedBlockingQueue<>();
+        batchCompleteOutputQueue = new LinkedBlockingQueue<>();
+        batchAbortQueue = new LinkedBlockingQueue<>();
+
         requestQueue = new ConcurrentLinkedQueue<>();
         responseMap = new ConcurrentHashMap<>();
-
-        actionQueue = new LinkedBlockingQueue<byte>();
     }
 
     @Override
     public BlockingQueue<TransactionEvent.Payload> transactionInputQueue() {
-        return inputChannel;
+        return transactionInputQueue;
     }
 
     @Override
     public BlockingQueue<OutboundEventResult> transactionOutputQueue() {
-        return outputChannel;
+        return transactionOutputQueue;
     }
 
     @Override
     public BlockingQueue<BatchComplete.Payload> batchCompleteOutputQueue() {
-        return null;
+        return batchCompleteOutputQueue;
     }
 
     @Override
     public BlockingQueue<TransactionAbort.Payload> transactionAbortInputQueue() {
-        return null;
+        return transactionAbortInputQueue;
     }
 
     @Override
     public BlockingQueue<TransactionAbort.Payload> transactionAbortOutputQueue() {
-        return null;
+        return transactionAbortOutputQueue;
     }
 
 
     @Override
     public BlockingQueue<BatchCommitRequest.Payload> batchCommitQueue() {
-        return null;
+        return batchCommitQueue;
     }
 
     @Override
     public BlockingQueue<BatchAbortRequest.Payload> batchAbortQueue() {
-        return null;
+        return batchAbortQueue;
     }
-
-    @Override
-    public BlockingQueue<byte> actionQueue() {
-        return actionQueue;
-    }
-
 
     @Override
     public Queue<VmsTransactionTaskResult> transactionResultQueue() {
-        return resultQueue;
+        return transactionResultQueue;
     }
 
     @Override

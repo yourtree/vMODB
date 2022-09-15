@@ -31,7 +31,7 @@ public class NetworkNode {
     // mutable since the VMS can crash
     @Override
     public int hashCode() {
-        return hashCode;
+        return this.hashCode;
     }
 
     @Override

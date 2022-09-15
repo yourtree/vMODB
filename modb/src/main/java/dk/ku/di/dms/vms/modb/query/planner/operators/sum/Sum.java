@@ -39,17 +39,17 @@ public class Sum extends AbstractOperator {
         }
     }
 
-    private static class IntSumOp implements SumOperation<int> {
+    private static class IntSumOp implements SumOperation<Integer> {
 
         int sum = 0;
 
         @Override
-        public void accept(int i) {
+        public void accept(Integer i) {
             sum += i;
         }
 
         @Override
-        public int get() {
+        public Integer get() {
             return sum;
         }
 
@@ -59,17 +59,17 @@ public class Sum extends AbstractOperator {
         }
     }
 
-    private static class FloatSumOp implements SumOperation<float> {
+    private static class FloatSumOp implements SumOperation<Float> {
 
         float sum = 0;
 
         @Override
-        public void accept(float i) {
+        public void accept(Float i) {
             sum += i;
         }
 
         @Override
-        public float get() {
+        public Float get() {
             return sum;
         }
 

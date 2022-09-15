@@ -38,7 +38,7 @@ public class RecordBucketIterator extends CachingKeyIterator implements IRecordI
      * @return the next address
      */
     @Override
-    public long next() {
+    public Long next() {
         // src address
         long auxCurrPosition = currPosition;
         currPosition = UNSAFE.getLong(currPosition + OrderedRecordBuffer.deltaNext);

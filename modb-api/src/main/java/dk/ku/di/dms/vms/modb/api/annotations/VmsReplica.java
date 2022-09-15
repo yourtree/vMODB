@@ -8,12 +8,10 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 @Target({FIELD})
 @Retention(RUNTIME)
-public @interface VmsExternalForeignKey {
+public @interface VmsReplica {
 
-    String vmsName();
+    String vms();
 
     String table();
-
-    String column();
 
 }

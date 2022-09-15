@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.sdk.core.enums;
+package dk.ku.di.dms.vms.modb.api.enums;
 
 // Based on https://www.baeldung.com/spring-transactional-propagation-isolation
 

@@ -4,6 +4,8 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +36,8 @@ public class VmsIdentifier extends NetworkNode {
     // event data model
     public Map<String, VmsEventSchema> eventSchema;
 
+    public List<TransactionEvent.Payload> pendingWrites;
+
     public VmsIdentifier(String host, int port, String vmsIdentifier, long lastTid, long lastBatch,
                          Map<String, VmsDataSchema> dataSchema, Map<String, VmsEventSchema> eventSchema) {
         super(host,port);
@@ -42,6 +46,8 @@ public class VmsIdentifier extends NetworkNode {
         this.lastBatch = lastBatch;
         this.dataSchema = dataSchema;
         this.eventSchema = eventSchema;
+        this.pendingWrites = new ArrayList<>(10);
+        this.transactionEventsPerBatch = new HashMap<>();
     }
 
     public String getIdentifier(){

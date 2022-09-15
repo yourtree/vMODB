@@ -24,11 +24,11 @@ public class IndexCountDistinct extends AbstractCount {
     private static class EphemeralState {
         private int count;
         // hashed by the values in the distinct clause
-        private final Map<int,int> valuesSeen;
+        private final Map<Integer,Integer> valuesSeen;
 
         private EphemeralState() {
             this.count = 0;
-            this.valuesSeen = new HashMap<int,int>();
+            this.valuesSeen = new HashMap<Integer,Integer>();
         }
     }
 

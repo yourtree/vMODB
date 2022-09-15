@@ -12,7 +12,7 @@ public class ConsistentRecordIterator extends RecordIterator {
     }
 
     @Override
-    public long next() {
+    public Long next() {
         // check for bit active
         while(!UNSAFE.getBoolean(null, address)){
             this.progress++;

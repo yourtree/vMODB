@@ -17,14 +17,14 @@ public class BasicBloomFilterImpl implements IBloomFilter {
     // that means n = 160
     // tpcc has 100000 items... if contention is 0.1% that is 1000
     // this is not enough, we need one more hash function
-    private List<ToIntBiFunction<int,int>> hashFunctions;
+    private List<ToIntBiFunction<Integer,Integer>> hashFunctions;
 
-    private static final ToIntBiFunction<int,int> hash0 = (value, size) -> value % size;
+    private static final ToIntBiFunction<Integer,Integer> hash0 = (value, size) -> value % size;
 
     /*
      * extracted from here: https://www.geeksforgeeks.org/bloom-filters-introduction-and-python-implementation/
      */
-    private static final ToIntBiFunction<int,int> hash1 = (value, size) -> {
+    private static final ToIntBiFunction<Integer,Integer> hash1 = (value, size) -> {
         int hash = 0;
         for (int i = 0; i < size; i++)
         {

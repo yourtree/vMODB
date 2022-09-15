@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.modb.api.annotations;
 
-import dk.ku.di.dms.vms.sdk.core.enums.IsolationLevelEnum;
-import dk.ku.di.dms.vms.sdk.core.enums.TransactionPropagationEnum;
-import dk.ku.di.dms.vms.sdk.core.enums.TransactionTypeEnum;
+import dk.ku.di.dms.vms.modb.api.enums.IsolationLevelEnum;
+import dk.ku.di.dms.vms.modb.api.enums.TransactionPropagationEnum;
+import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

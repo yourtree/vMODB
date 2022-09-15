@@ -22,7 +22,7 @@ public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
     protected final int[] columns;
 
     // to speed up queries, so the filters can be build on flight
-    protected final HashSet<int> columnsHash;
+    protected final HashSet<Integer> columnsHash;
 
     private final IIndexKey key;
 
@@ -40,7 +40,7 @@ public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
             this.hashCode = Arrays.hashCode(columnsIndex);
         }
         this.key = SimpleKey.of(this.hashCode);
-        this.columnsHash = new HashSet<int>(columns.length);
+        this.columnsHash = new HashSet<>(columns.length);
         for(int i : columnsIndex) this.columnsHash.add(i);
     }
 
@@ -54,7 +54,7 @@ public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
         return this.columns;
     }
 
-    public HashSet<int> columnsHash() {
+    public HashSet<Integer> columnsHash() {
         return columnsHash;
     }
 

@@ -13,8 +13,8 @@ import dk.ku.di.dms.vms.modb.common.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
-import dk.ku.di.dms.vms.sdk.core.enums.IsolationLevelEnum;
-import dk.ku.di.dms.vms.sdk.core.enums.TransactionTypeEnum;
+import dk.ku.di.dms.vms.modb.api.enums.IsolationLevelEnum;
+import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

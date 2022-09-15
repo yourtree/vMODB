@@ -9,8 +9,6 @@ import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
-import dk.ku.di.dms.vms.sdk.core.facade.DefaultRepositoryFacade;
-import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NoPrimaryKeyFoundException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NotAcceptableTypeException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.QueueMappingException;
@@ -30,6 +28,7 @@ import javax.validation.constraints.Positive;
 import javax.validation.constraints.PositiveOrZero;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
+import java.net.URL;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -58,11 +57,11 @@ public class VmsMetadataLoader {
         Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, facadeConstructor);
 
         // necessary remaining data structures to store a vms metadata
-        Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToVmsTransactionMap = new HashMap<>();
+        Map<String, List<IdentifiableNode<VmsTransactionSignature>>> queueToVmsTransactionMap = new HashMap<>();
         Map<String, Class<?>> queueToEventMap = new HashMap<>();
         Map<Class<?>,String> eventToQueueMap = new HashMap<>();
 
-        mapVmsTransactionInputOutput(reflections, loadedVmsInstances, queueToEventMap, eventToQueueMap, eventToVmsTransactionMap);
+        mapVmsTransactionInputOutput(reflections, loadedVmsInstances, queueToEventMap, eventToQueueMap, queueToVmsTransactionMap);
 
         Map<String, VmsEventSchema> vmsEventSchemas = buildEventSchema( reflections, eventToQueueMap );
 
@@ -76,7 +75,7 @@ public class VmsMetadataLoader {
         return new VmsRuntimeMetadata(
                 vmsDataSchemas,
                 vmsEventSchemas,
-                eventToVmsTransactionMap,
+                queueToVmsTransactionMap,
                 queueToEventMap,
                 eventToQueueMap,
                 loadedVmsInstances,
@@ -88,8 +87,11 @@ public class VmsMetadataLoader {
         if(packageName == null) {
             packageName = "dk.ku.di.dms.vms";
         }
+
+        Collection<URL> urls = ClasspathHelper.forPackage(packageName);
+
         Configuration reflectionsConfig = new ConfigurationBuilder()
-                .setUrls(ClasspathHelper.forPackage(packageName))
+                .setUrls(urls)
                 .setScanners(
                         Scanners.SubTypes,
                         Scanners.TypesAnnotated,
@@ -123,7 +125,7 @@ public class VmsMetadataLoader {
      * Building virtual microservice event schemas
      */
     protected static Map<String, VmsEventSchema> buildEventSchema(
-            Reflections reflections, Map<Class<?>, String> eventToQueueMap) {
+            Reflections reflections, Map<Class<?>, String> eventToQueueMap ) {
 
         Map<String, VmsEventSchema> schemaMap = new HashMap<>();
 
@@ -146,6 +148,10 @@ public class VmsMetadataLoader {
 
             // get queue name
             String queue = eventToQueueMap.get( eventClazz );
+
+            if(queue == null){
+                throw new IllegalStateException("Event type not defined as @Event");
+            }
 
             schemaMap.put( queue, new VmsEventSchema( queue, columnNames, columnDataTypes ) );
 
@@ -412,7 +418,7 @@ public class VmsMetadataLoader {
                                                        Map<Class<?>, String> eventToQueueMap,
                                                        Map<String,
                                                                List<IdentifiableNode<VmsTransactionSignature>>>
-                                                               eventToVmsTransactionMap) {
+                                                               queueToVmsTransactionMap) {
 
         Set<Method> transactionalMethods = reflections.getMethodsAnnotatedWith(Transactional.class);
 
@@ -427,6 +433,11 @@ public class VmsMetadataLoader {
                 outputType = method.getReturnType();
             } catch(Exception e) {
                 throw new QueueMappingException("All output events must implement IEvent interface.");
+            }
+
+            // output type cannot be String or primitive
+            if(outputType.isPrimitive() || outputType.isArray() || outputType.isAnnotation() || outputType.isInstance(String.class)){
+                throw new IllegalStateException(" output type cannot be String, array, annotation, or primitive");
             }
 
             List<Class<?>> inputTypes = new ArrayList<>();
@@ -475,15 +486,18 @@ public class VmsMetadataLoader {
 
                 if (queueToEventMap.get(inputQueues[i]) == null) {
                     queueToEventMap.put(inputQueues[i], inputTypes.get(i));
+
+                    // in order to build the event schema
+                    eventToQueueMap.put(inputTypes.get(i), inputQueues[i]);
                 } else if (queueToEventMap.get(inputQueues[i]) != inputTypes.get(i)) {
                     throw new QueueMappingException("Error mapping. An input queue cannot be mapped to two or more payload types.");
                 }
 
-                List<IdentifiableNode<VmsTransactionSignature>> list = eventToVmsTransactionMap.get(inputQueues[i]);
+                List<IdentifiableNode<VmsTransactionSignature>> list = queueToVmsTransactionMap.get(inputQueues[i]);
                 if (list == null) {
                     list = new ArrayList<>();
                     list.add( new IdentifiableNode<>(i, vmsTransactionSignature) );
-                    eventToVmsTransactionMap.put(inputQueues[i], list);
+                    queueToVmsTransactionMap.put(inputQueues[i], list);
                 } else {
                     list.add(new IdentifiableNode<>(i, vmsTransactionSignature));
                 }

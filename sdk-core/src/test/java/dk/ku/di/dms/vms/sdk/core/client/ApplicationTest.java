@@ -31,7 +31,7 @@ public class ApplicationTest
         try {
 
 //            IVmsInternalChannels internalPubSub = VmsInternalChannels.getInstance();
-//            vmsMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example", internalPubSub);
+            vmsMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example", null);
 
             GsonBuilder builder = new GsonBuilder();
 //            builder.registerTypeAdapter( TransactionEvent.class, new TransactionEventAdapter( vmsMetadata.queueToEventMap() ) );
@@ -72,7 +72,7 @@ public class ApplicationTest
         VmsTransactionScheduler scheduler = new VmsTransactionScheduler(
                 Executors.newFixedThreadPool(1),
                 internalPubSub,
-                vmsMetadata.eventToVmsTransactionMap()
+                vmsMetadata.queueToVmsTransactionMap(), null, null
         );
 
         Thread t0 = new Thread( scheduler );

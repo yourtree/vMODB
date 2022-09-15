@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.sdk.core.bytebuffer;
 
-import dk.ku.di.dms.vms.modb.common.event.TransactionalEvent;
-import dk.ku.di.dms.vms.sdk.core.example.EventExample;
 import org.junit.Test;
 
 import java.io.File;
@@ -25,7 +23,7 @@ public class TestByteBuffer {
             ByteBuffer eventStoreByteBuffer = eventChannel.map( FileChannel.MapMode.READ_WRITE, 0, 1024 );
 
             // payload packet
-            TransactionalEvent transactionalEvent = new TransactionalEvent( 1, "in", new EventExample(1) );
+//            TransactionEvent transactionalEvent = new TransactionalEvent( 1, "in", new EventExample(1) );
 
 
         } catch (IOException e) {

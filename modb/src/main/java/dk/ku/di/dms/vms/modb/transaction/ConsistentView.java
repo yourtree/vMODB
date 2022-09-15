@@ -70,7 +70,7 @@ public class ConsistentView implements ReadOnlyIndex<IKey> {
     }
 
     @Override
-    public HashSet<int> columnsHash() {
+    public HashSet<Integer> columnsHash() {
         return index.columnsHash();
     }
 

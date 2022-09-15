@@ -33,13 +33,13 @@ public class TransactionFacade {
     private TransactionFacade(){}
 
     // key: tid
-    private static final Map<long, List<DataItemVersion>> writesPerTransaction;
+    private static final Map<Long, List<DataItemVersion>> writesPerTransaction;
 
     // key: PK
     private static final Map<IIndexKey, Map<IKey, OperationSet>> writesPerIndexAndKey;
 
     static {
-        writesPerTransaction = new ConcurrentHashMap<long,List<DataItemVersion>>();
+        writesPerTransaction = new ConcurrentHashMap<>();
         writesPerIndexAndKey = new ConcurrentHashMap<>();
     }
 
