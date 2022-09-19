@@ -26,8 +26,8 @@ public class ByteUtils {
             extracted = new String(byteArray, 0, size, StandardCharsets.UTF_8);
         } else {
             extracted = new String(buffer.array(), buffer.position(), size, StandardCharsets.UTF_8);
+            buffer.position(buffer.position() + size);
         }
-        buffer.position(buffer.position() + size);
         return extracted;
     }
 

@@ -55,7 +55,7 @@ public class ApplicationTest
 
         //TransactionalEvent transactionalEvent = new TransactionalEvent( 1, "in", new EventExample(1) );
 
-        String json = new Gson().toJson( vmsMetadata.vmsEventSchema() );
+        String json = new Gson().toJson( vmsMetadata.inputEventSchema() );
 
         //String json = gson.toJson( transactionalEvent );
 

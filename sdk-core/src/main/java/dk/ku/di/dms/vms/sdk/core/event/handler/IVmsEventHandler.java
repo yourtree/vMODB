@@ -5,15 +5,8 @@ import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
-import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
-
-import java.net.InetSocketAddress;
-import java.net.http.WebSocket;
-import java.nio.ByteBuffer;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 
 /**
  *
@@ -46,9 +39,9 @@ public interface IVmsEventHandler {
 
     /**
      * Receives a presentation payload from the leader
-     * @param payload presentation
+     * @param node presentation
      */
-    void onLeaderConnection(Presentation.PayloadFromServer payload);
+    void onLeaderConnection(NetworkNode node);
 
     /**
      * Receives a presentation payload from a (producer) VMS

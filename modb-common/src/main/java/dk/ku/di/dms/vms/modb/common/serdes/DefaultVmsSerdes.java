@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.modb.common.serdes;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
@@ -94,7 +93,7 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
     }
 
     @Override
-    public <T> String serialize(T value, Class<T> clazz) {
+    public String serialize(Object value, Class<?> clazz) {
         return gson.toJson( value, clazz );
     }
 

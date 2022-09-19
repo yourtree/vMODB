@@ -21,29 +21,11 @@ public final class ConsumerSet {
 
     public static Map<String, NetworkNode> read(ByteBuffer buffer, IVmsSerdesProxy proxy){
         int size = buffer.getInt();
-        String consumerSet = ByteUtils.extractStringFromByteBuffer(buffer, size);
-        return proxy.deserializeMap(consumerSet);
+        if(size > 0) {
+            String consumerSet = ByteUtils.extractStringFromByteBuffer(buffer, size);
+            return proxy.deserializeMap(consumerSet);
+        }
+        return null;
     }
-
-//        int consumerSetSize = buffer.getInt();
-//        List<NetworkNode> consumerSet;
-//        if(consumerSetSize > 0) {
-//
-//            String consumerVmsSetJSON;
-//            if(buffer.isDirect()) {
-//                byte[] byteArray = new byte[consumerSetSize];
-//                for(int i = 0; i < consumerSetSize; i++){
-//                    byteArray[i] = buffer.get();
-//                }
-//                consumerVmsSetJSON = new String(byteArray, 0, consumerSetSize, StandardCharsets.UTF_8);
-//            }
-//            else {
-//                consumerVmsSetJSON = new String(buffer.array(), newOffset, consumerSetSize, StandardCharsets.UTF_8);
-//            }
-//            consumerSet = serdesProxy.deserializeList(consumerVmsSetJSON);
-//
-//        } else {
-//            consumerSet = Collections.emptyList();
-//        }
 
 }

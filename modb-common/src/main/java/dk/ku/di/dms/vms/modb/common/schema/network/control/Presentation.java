@@ -69,10 +69,6 @@ public final class Presentation {
         buffer.putInt( host.length );
         buffer.put( host );
 
-        // send the list of nodes this  VMS needs to connect to
-//        byte[] list = listOfVMSsToConnect.getBytes(StandardCharsets.UTF_8);
-//        buffer.putInt( list.length );
-//        buffer.put(list);
     }
 
     // to be read by a VMS

@@ -1,16 +1,13 @@
 package dk.ku.di.dms.vms.micro_tpcc.service;
 
 import dk.ku.di.dms.vms.micro_tpcc.events.StockNewOrderOut;
-import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.annotations.*;
 import dk.ku.di.dms.vms.modb.api.query.builder.QueryBuilderFactory;
 import dk.ku.di.dms.vms.modb.api.query.builder.SelectStatementBuilder;
 import dk.ku.di.dms.vms.modb.api.query.builder.UpdateStatementBuilder;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.api.interfaces.IDTO;
-import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.micro_tpcc.events.StockNewOrderIn;
 import dk.ku.di.dms.vms.micro_tpcc.repository.IStockRepository;
 
@@ -43,8 +40,11 @@ public class StockService {
         for(int i = 0; i < n; i++){
 
             final int finalI = i;
-            futures[finalI] = CompletableFuture.runAsync(() -> {
 
+            futures[finalI] = CompletableFuture.runAsync( new @Disjoint Runnable() {
+
+              @Override
+              public void run() {
                 SelectStatementBuilder builder = QueryBuilderFactory.select();
                 SelectStatement sql = builder.select("s_quantity")
                         .from("stock")
@@ -63,13 +63,14 @@ public class StockService {
 
                 UpdateStatementBuilder updateBuilder = QueryBuilderFactory.update();
                 IStatement update = updateBuilder.update("stock")
-                        .set("s_quantity",s_quantity)
+                        .set("s_quantity", s_quantity)
                         .where("s_i_id", EQUALS, in.itemsIds()[finalI])
                         .and("s_w_id", EQUALS, in.supware()[finalI])
                         .build();
 
 
                 stockRepository.issue(update);
+              }
             });
 
         }
@@ -91,8 +92,6 @@ public class StockService {
         int size = in.ol_cnt();
         int[] itemIds = new int[size];
         String[] itemsDistInfo = new String[size];
-
-
 
         for(int i = 0; i < size; i++) {
 

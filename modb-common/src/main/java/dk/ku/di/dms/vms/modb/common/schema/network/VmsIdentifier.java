@@ -67,4 +67,8 @@ public class VmsIdentifier extends NetworkNode {
         return lastTid;
     }
 
+    public NetworkNode asNetworkNode(){
+        return new NetworkNode(this.host, this.port);
+    }
+
 }

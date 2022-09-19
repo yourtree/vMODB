@@ -81,8 +81,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
     // receive from program start + those that joined later
     private final Map<String, VmsIdentifier> vmsMetadata;
 
-    // private final Map<Integer, Map<String, NetworkNode>> vmsConsumerSet;
-
     private final Map<String, TransactionDAG> transactionMap;
 
     private final Map<Integer, ConnectionMetadata> vmsConnectionMetadataMap;
@@ -359,7 +357,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
             @Override
             public void completed(Integer result, ConnectToVmsProtocol attachment) {
                 attachment.state = State.CONSUMER_SET_SENT;
-
                 attachment.buffer.clear();
                 MemoryManager.releaseTemporaryDirectBuffer(attachment.buffer);
             }
@@ -375,7 +372,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
      * After a leader election, it makes more sense that
      * the leader connects to all known virtual microservices.
      */
-    private void connectToVMSs(){
+    private void connectToVMSs() {
 
         // should start the protocol only if vmsMetadata is missing
         // otherwise should just connect to them
@@ -424,7 +421,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
             // for each output event
             for(VmsEventSchema eventSchema : vms.outputEventSchema.values()){
                 NetworkNode node = findConsumerVms( eventSchema.eventName );
-                map.put(eventSchema.eventName, node);
+                if(node != null)
+                    map.put(eventSchema.eventName, node);
             }
 
         }
@@ -441,12 +439,21 @@ public final class Coordinator extends SignalingStoppableRunnable {
             protocol.buffer.clear();
 
             Map<String, NetworkNode> map = vmsConsumerSet.get(vms.hashCode());
-            String mapStr = serdesProxy.serializeMap(map);
 
+            String mapStr = "";
+            if(!map.isEmpty()){
+                mapStr = serdesProxy.serializeMap(map);
+            }
             ConsumerSet.write(protocol.buffer, mapStr);
             protocol.buffer.flip();
 
+            // only the channel is shared. the buffer no
+            vmsConnectionMetadataMap.get(vms.hashCode()).writeLock.acquireUninterruptibly();
+
             protocol.channel.write( protocol.buffer, protocol, protocol.new ConsumerSetReady(protocol) );
+
+            vmsConnectionMetadataMap.get(vms.hashCode()).writeLock.release();
+
         }
 
         // new barrier? maybe not. just assume all VMSs received. otherwise they can request
@@ -457,15 +464,14 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         // can be the leader or a vms
         for( VmsIdentifier vms : vmsMetadata.values() ){
-
             if(vms.inputEventSchema.get(outputEvent) != null){
                 return vms;
             }
-
         }
 
         // assumed to be terminal? maybe yes.
-        return me;
+        // vms is already connected to leader, no need to return coordinator
+        return null;
 
     }
 
@@ -488,7 +494,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
      *
      * This thread must be set free as soon as possible
      */
-    private class ReadCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
+    private class VmsReadCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
 
         // is it an abort, a commit response?
         // it cannot be replication because have opened another channel for that
@@ -519,6 +525,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     TransactionAbort.Payload response = TransactionAbort.read(connectionMetadata.readBuffer);
                     txManagerCtx.transactionAbortEvents().add(response);
 
+                }
+                case(EVENT) -> {
+                    logger.info("New event received from VMS");
                 }
                 default ->
                     logger.warning("Unknown message received.");
@@ -702,7 +711,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
             serverConnectionMetadataMap.put( newServer.hashCode(), connectionMetadata );
             // create a read handler for this connection
             // attach buffer, so it can be read upon completion
-            channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
+            channel.read(buffer, connectionMetadata, new VmsReadCompletionHandler());
 
         }
     }
@@ -725,7 +734,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 connectionMetadata = new ConnectionMetadata(
                         newVms.hashCode(),
                         VMS,
-                        buffer,
+                        MemoryManager.getTemporaryDirectBuffer(1024),
                         MemoryManager.getTemporaryDirectBuffer(1024),
                         channel,
                         new Semaphore(1));
@@ -756,7 +765,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 transactionInputsToResend.add(resendTask);
             }
 
-            channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
+            channel.read(connectionMetadata.readBuffer, connectionMetadata, new VmsReadCompletionHandler());
 
         } else {
 
@@ -764,7 +773,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
             ConnectionMetadata connectionMetadata = new ConnectionMetadata(
                     newVms.hashCode(),
                     VMS,
-                    buffer,
+                    MemoryManager.getTemporaryDirectBuffer(1024),
                     MemoryManager.getTemporaryDirectBuffer(1024),
                     channel,
                     new Semaphore(1) );
@@ -773,7 +782,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
             vmsMetadata.put( newVms.getIdentifier(), newVms );
 
-            channel.read(buffer, connectionMetadata, new ReadCompletionHandler());
+            channel.read(connectionMetadata.readBuffer, connectionMetadata, new VmsReadCompletionHandler());
         }
     }
 
@@ -1218,6 +1227,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                             ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024);
 
                             TransactionAbort.write(buffer, msg);
+                            buffer.flip();
 
                             // must lock first before writing to write buffer
                             connectionMetadata.writeLock.acquireUninterruptibly();
