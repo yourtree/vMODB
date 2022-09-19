@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -53,6 +54,17 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     private final IVmsSerdesProxy serdes;
 
+    /**
+     * It represents the queue holding the results of the submitted tasks
+     *
+     * What is the difference between the resultQueue and outputQueue?
+     * The output queue represents the result of the function executed
+     * whereas the result queue is the metadata regarding the output (TID and more)
+     *
+     * FIXME Should not be here...
+     */
+    private final Queue<VmsTransactionTaskResult> transactionResultQueue;
+
     public VmsTransactionScheduler(ExecutorService vmsAppLogicTaskPool,
                                    IVmsInternalChannels vmsChannels,
                                    Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap,
@@ -68,6 +80,8 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         this.vmsChannels = vmsChannels;
         this.queueToEventMap = queueToEventMap;
         this.serdes = serdes;
+
+        this.transactionResultQueue = new ConcurrentLinkedQueue<>();
     }
 
     /**
@@ -104,6 +118,10 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
             // TODO process batch and abort
 
+            //vmsChannels.batchCompleteOutputQueue()
+
+            //vmsChannels.batchCommitQueue()
+
         }
 
     }
@@ -127,9 +145,9 @@ public class VmsTransactionScheduler extends StoppableRunnable {
      */
     private void processTaskResult() {
 
-        while(!vmsChannels.transactionResultQueue().isEmpty()){
+        while(!transactionResultQueue.isEmpty()){
 
-            VmsTransactionTaskResult res = vmsChannels.transactionResultQueue().poll();
+            VmsTransactionTaskResult res = transactionResultQueue.poll();
 
             if(res != null && !res.failed()){
 
@@ -166,7 +184,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     private void processNewEvent(){
 
-        TransactionEvent.Payload transactionalEvent = null; // take();
+        TransactionEvent.Payload transactionalEvent; // take();
         try {
             transactionalEvent = vmsChannels.transactionInputQueue().poll(15000, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
@@ -236,7 +254,8 @@ public class VmsTransactionScheduler extends StoppableRunnable {
                         transactionalEvent.tid(),
                         vmsTransactionSignatureIdentifiableNode.object(),
                         signature.inputQueues().length,
-                        vmsChannels
+                        vmsChannels.transactionOutputQueue(),
+                        transactionResultQueue
                         );
 
                 Class<?> clazz = this.queueToEventMap.get(transactionalEvent.event());

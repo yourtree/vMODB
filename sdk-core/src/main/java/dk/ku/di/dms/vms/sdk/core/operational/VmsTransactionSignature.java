@@ -14,6 +14,7 @@ import java.lang.reflect.Method;
 public record VmsTransactionSignature (
     Object vmsInstance, // a class annotated with @Microservice
     // https://stackoverflow.com/questions/4685563/how-to-pass-a-function-as-a-parameter-in-java
+    boolean terminal,
     Method method,
     String[] inputQueues,
     String outputQueue){}

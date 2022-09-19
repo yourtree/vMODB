@@ -117,6 +117,8 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
                     values[fieldIdx] = entityFields.get(fieldIdx).get( args[0] );
                 }
 
+                // TODO store tuple in the primary index
+
                 break;
             }
             case "insertAll": {

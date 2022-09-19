@@ -28,24 +28,33 @@ public class VmsIdentifier extends NetworkNode {
     // next batch while the current has not finished yet
     public long lastBatch;
 
-    public Map<Long, List<TransactionEvent.Payload>> transactionEventsPerBatch;
-
     // data model
-     public Map<String, VmsDataSchema> dataSchema;
+     public final Map<String, VmsDataSchema> dataSchema;
 
     // event data model
-    public Map<String, VmsEventSchema> eventSchema;
+    public final Map<String, VmsEventSchema> inputEventSchema;
 
-    public List<TransactionEvent.Payload> pendingWrites;
+    public final Map<String, VmsEventSchema> outputEventSchema;
+
+    /** Attributes below do not form an identification of the VMS, but rather
+     * make it easier to manage metadata about each
+     */
+
+    public final Map<Long, List<TransactionEvent.Payload>> transactionEventsPerBatch;
+
+    public final List<TransactionEvent.Payload> pendingWrites;
 
     public VmsIdentifier(String host, int port, String vmsIdentifier, long lastTid, long lastBatch,
-                         Map<String, VmsDataSchema> dataSchema, Map<String, VmsEventSchema> eventSchema) {
-        super(host,port);
+                         Map<String, VmsDataSchema> dataSchema,
+                         Map<String, VmsEventSchema> inputEventSchema,
+                         Map<String, VmsEventSchema> outputEventSchema) {
+        super(host, port);
         this.vmsIdentifier = vmsIdentifier;
         this.lastTid = lastTid;
         this.lastBatch = lastBatch;
         this.dataSchema = dataSchema;
-        this.eventSchema = eventSchema;
+        this.inputEventSchema = inputEventSchema;
+        this.outputEventSchema = outputEventSchema;
         this.pendingWrites = new ArrayList<>(10);
         this.transactionEventsPerBatch = new HashMap<>();
     }

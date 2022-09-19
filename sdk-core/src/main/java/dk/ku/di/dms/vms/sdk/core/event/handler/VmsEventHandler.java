@@ -227,11 +227,11 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         // PHASE 2- send schemas, this is compared to a handshake in a WebSocket protocol
 
         // send event schema
-        String eventSchemaStr = serdes.serializeEventSchema( vmsMetadata.vmsEventSchema() );
+        String eventSchemaStr = serdes.serializeEventSchema( vmsMetadata.inputEventSchema() );
         eventChannel.write( ByteBuffer.wrap(eventSchemaStr.getBytes(StandardCharsets.UTF_8)) );
 
         // send data schema
-        String dataSchemaStr = serdes.serializeDataSchema( vmsMetadata.vmsDataSchema() );
+        String dataSchemaStr = serdes.serializeDataSchema( vmsMetadata.dataSchema() );
         dataChannel.write( ByteBuffer.wrap(dataSchemaStr.getBytes(StandardCharsets.UTF_8)) );
 
         // PHASE 3 -  get confirmation whether the schemas are fine
@@ -308,7 +308,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
                 // FIXME send vmsmetada as part of the connection
 
-                String eventSchemaStr = serdes.serializeEventSchema( vmsMetadata.vmsEventSchema() );
+                String eventSchemaStr = serdes.serializeEventSchema( vmsMetadata.inputEventSchema() );
 //                eventChannel.write( ByteBuffer.wrap(eventSchemaBytes) );
                 eventWriteBuffer.put( eventSchemaStr.getBytes(StandardCharsets.UTF_8) );
                 // TODO send only one vms schema, later we figure out how to deal with many... these are the case to explore many-core architectures...

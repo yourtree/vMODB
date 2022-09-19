@@ -10,13 +10,21 @@ import java.util.Map;
 
 /**
  * A data class that stores the mappings between events, queues, and transactions
+ *
+ * Why data schema is a map?
+ * Potentially a server could hold two (or more) VMSs. But for now only one.
  */
 public record VmsRuntimeMetadata(
-        Map<String, VmsDataSchema> vmsDataSchema, // solo schema
-        Map<String, VmsEventSchema> vmsEventSchema,
+
+        Map<String, VmsDataSchema> dataSchema,
+        Map<String, VmsEventSchema> inputEventSchema,
+        Map<String, VmsEventSchema> outputEventSchema,
+
         Map<String, List<IdentifiableNode<VmsTransactionSignature>>> queueToVmsTransactionMap,
-        Map<String, Class<?>> queueToEventMap, // input
-        Map<Class<?>,String> eventToQueueMap, // output
+        Map<String, Class<?>> queueToEventMap,
+        Map<Class<?>, String> eventToQueueMap,
+
         Map<String, Object> loadedVmsInstances,
         Map<Class<?>,String> entityToTableNameMap
+
 ){}

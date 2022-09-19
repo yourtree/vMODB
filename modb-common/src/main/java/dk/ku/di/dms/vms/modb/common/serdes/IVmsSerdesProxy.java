@@ -32,7 +32,8 @@ public interface IVmsSerdesProxy {
     <V> String serializeList( List<V> map );
     <V> List<V> deserializeList(String listStr);
 
-    <T> String serialize( T value, Class<T> clazz );
+    // <T> String serialize( T value, Class<T> clazz );
     <T> T deserialize( String valueStr, Class<T> clazz );
 
+    String serialize(Object output, Class<?> clazz);
 }

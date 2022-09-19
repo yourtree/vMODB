@@ -1,4 +1,7 @@
-package dk.ku.di.dms.vms.web_common.utils;
+package dk.ku.di.dms.vms.modb.common;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 
 public class ByteUtils {
 
@@ -12,6 +15,21 @@ public class ByteUtils {
 //                (byte)(value >>> 8),
 //                (byte)value};
 //    }
+
+    public static String extractStringFromByteBuffer(ByteBuffer buffer, int size){
+        String extracted;
+        if(buffer.isDirect()){
+            byte[] byteArray = new byte[size];
+            for(int i = 0; i < size; i++){
+                byteArray[i] = buffer.get();
+            }
+            extracted = new String(byteArray, 0, size, StandardCharsets.UTF_8);
+        } else {
+            extracted = new String(buffer.array(), buffer.position(), size, StandardCharsets.UTF_8);
+        }
+        buffer.position(buffer.position() + size);
+        return extracted;
+    }
 
     public static byte[] fromIntegerToByteArray( int data ) {
         byte[] result = new byte[4];

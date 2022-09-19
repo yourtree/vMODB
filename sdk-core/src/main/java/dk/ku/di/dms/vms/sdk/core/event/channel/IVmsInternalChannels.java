@@ -3,7 +3,6 @@ package dk.ku.di.dms.vms.sdk.core.event.channel;
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
-import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
@@ -62,6 +61,7 @@ public interface IVmsInternalChannels {
     // should maintain a MV scheme to avoid rolling back to the last committed state
     BlockingQueue<TransactionAbort.Payload> transactionAbortInputQueue();
 
+    //
     BlockingQueue<TransactionAbort.Payload> transactionAbortOutputQueue();
 
     /**
@@ -75,22 +75,6 @@ public interface IVmsInternalChannels {
     // no response, al vms will definitely commit. if there is crash, they rerun the events
     // methods must be deterministic if developers want to maintain the same state as run before the crash
 //    BlockingQueue<BatchCommitResponse.Payload> batchCommitResponseQueue();
-
-    /*
-     * ACTION
-     */
-
-    /** Writer action **/
-    // BlockingQueue<Byte> actionQueue();
-
-    /**
-     * It represents the queue holding the results of the submitted tasks
-     *
-     * What is the difference between the resultQueue and outputQueue?
-     * The output queue represents the result of the function executed
-     * whereas the result queue is the metadata regarding the output (TID and more)
-     */
-    Queue<VmsTransactionTaskResult> transactionResultQueue();
 
     /*
      * DATA --> only for dbms-service

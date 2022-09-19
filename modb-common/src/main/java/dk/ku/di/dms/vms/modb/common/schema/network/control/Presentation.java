@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.control;
 
+import dk.ku.di.dms.vms.modb.common.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
@@ -53,7 +54,6 @@ public final class Presentation {
     // for VMS consumption
     public static void writeServer(ByteBuffer buffer,
                                    ServerIdentifier serverIdentifier,
-                                   String listOfVMSsToConnect,
                                    boolean includeMetadataOnAck
                                    ){
         buffer.put( Constants.PRESENTATION );
@@ -70,22 +70,13 @@ public final class Presentation {
         buffer.put( host );
 
         // send the list of nodes this  VMS needs to connect to
-        byte[] list = listOfVMSsToConnect.getBytes(StandardCharsets.UTF_8);
-        buffer.putInt( list.length );
-        buffer.put(list);
-    }
-
-    public record PayloadFromServer(
-            ServerIdentifier serverIdentifier,
-            List<NetworkNode> consumers
-    ){}
-
-    public static void writeServer(ByteBuffer buffer, ServerIdentifier serverIdentifier, String listOfVMSsToConnect){
-        writeServer(buffer,serverIdentifier, listOfVMSsToConnect, true);
+//        byte[] list = listOfVMSsToConnect.getBytes(StandardCharsets.UTF_8);
+//        buffer.putInt( list.length );
+//        buffer.put(list);
     }
 
     // to be read by a VMS
-    public static PayloadFromServer readServer(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){
+    public static ServerIdentifier readServer(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){
 
         long offset = buffer.getLong();
 
@@ -104,31 +95,7 @@ public final class Presentation {
             host = new String(buffer.array(), serverHeader, hostSize, StandardCharsets.UTF_8);
         }
 
-        int newOffset = serverHeader + hostSize;
-
-        int consumerSetSize = buffer.getInt();
-        List<NetworkNode> consumerSet;
-        if(consumerSetSize > 0) {
-
-            String consumerVmsSetJSON;
-            if(buffer.isDirect()) {
-                byte[] byteArray = new byte[consumerSetSize];
-                for(int i = 0; i < consumerSetSize; i++){
-                    byteArray[i] = buffer.get();
-                }
-                consumerVmsSetJSON = new String(byteArray, 0, consumerSetSize, StandardCharsets.UTF_8);
-            }
-            else {
-                consumerVmsSetJSON = new String(buffer.array(), newOffset, consumerSetSize, StandardCharsets.UTF_8);
-            }
-            consumerSet = serdesProxy.deserializeList(consumerVmsSetJSON);
-
-        } else {
-            consumerSet = Collections.emptyList();
-        }
-
-
-        return new PayloadFromServer( new ServerIdentifier( host, port, offset ), consumerSet );
+        return new ServerIdentifier( host, port, offset );
 
     }
 
@@ -148,9 +115,30 @@ public final class Presentation {
     }
 
     public static void writeVms(ByteBuffer buffer,
+                                VmsIdentifier vms) {
+
+        buffer.put(Constants.PRESENTATION);
+        buffer.put(VMS_TYPE);
+
+        byte[] name = vms.getIdentifier().getBytes(StandardCharsets.UTF_8);
+        buffer.putInt(name.length);
+        buffer.put(name);
+
+        buffer.putLong(vms.lastTid);
+        buffer.putLong(vms.lastBatch);
+
+        buffer.putInt(vms.port);
+
+        byte[] host = vms.host.getBytes(StandardCharsets.UTF_8);
+        buffer.putInt(host.length);
+        buffer.put(host);
+    }
+
+    public static void writeVms(ByteBuffer buffer,
                                 VmsIdentifier vms,
                                 String dataSchema,
-                                String eventSchema){
+                                String inputEventSchema,
+                                String outputEventSchema){
 
         buffer.put( Constants.PRESENTATION );
         buffer.put( VMS_TYPE );
@@ -170,18 +158,21 @@ public final class Presentation {
 
         byte[] dataSchemaBytes = dataSchema.getBytes(StandardCharsets.UTF_8);
         buffer.putInt( dataSchemaBytes.length );
-
-        byte[] eventSchemaBytes = eventSchema.getBytes(StandardCharsets.UTF_8);
-        buffer.putInt( eventSchemaBytes.length );
-
         buffer.put( dataSchemaBytes );
-        buffer.put( eventSchemaBytes );
+
+        byte[] inputEventSchemaBytes = inputEventSchema.getBytes(StandardCharsets.UTF_8);
+        buffer.putInt( inputEventSchemaBytes.length );
+        buffer.put( inputEventSchemaBytes );
+
+        byte[] outputEventSchemaBytes = outputEventSchema.getBytes(StandardCharsets.UTF_8);
+        buffer.putInt( outputEventSchemaBytes.length );
+        buffer.put( outputEventSchemaBytes );
     }
 
     public static VmsIdentifier readVms(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){
 
         int sizeName = buffer.getInt();
-        String vmsIdentifier = extractStringFromByteBuffer( buffer, sizeName );
+        String vmsIdentifier = ByteUtils.extractStringFromByteBuffer( buffer, sizeName );
 
         long lastTid = buffer.getLong();
         long lastBatch = buffer.getLong();
@@ -190,43 +181,29 @@ public final class Presentation {
 
         int sizeHost = buffer.getInt();
 
-        String host;
-        if(buffer.isDirect()){
-            byte[] byteArray = new byte[sizeHost];
-            for(int i = 0; i < sizeHost; i++){
-                byteArray[i] = buffer.get();
-            }
-            host = new String(byteArray, 0, sizeHost, StandardCharsets.UTF_8);
-        } else {
-            host = new String(buffer.array(), buffer.position(), sizeHost, StandardCharsets.UTF_8);
-        }
+        String host = ByteUtils.extractStringFromByteBuffer(buffer, sizeHost);
 
         // now read the rest
         int sizeDataSchema = buffer.getInt();
-        int sizeEventSchema = buffer.getInt();
 
-        String dataSchemaStr = extractStringFromByteBuffer(buffer, sizeDataSchema);
+        String dataSchemaStr = ByteUtils.extractStringFromByteBuffer(buffer, sizeDataSchema);
 
-        Map<String,VmsDataSchema> dataSchema = serdesProxy.deserializeDataSchema( dataSchemaStr );
+        Map<String, VmsDataSchema> dataSchema = serdesProxy.deserializeDataSchema( dataSchemaStr );
 
-        String eventSchemaStr = extractStringFromByteBuffer(buffer, sizeEventSchema);
+        int sizeInputEventSchema = buffer.getInt();
 
-        Map<String, VmsEventSchema> eventSchema = serdesProxy.deserializeEventSchema( eventSchemaStr );
+        String inputEventSchemaStr = ByteUtils.extractStringFromByteBuffer(buffer, sizeInputEventSchema);
 
-        return new VmsIdentifier( host, port, vmsIdentifier, lastTid, lastBatch, dataSchema, eventSchema );
+        Map<String, VmsEventSchema> inputEventSchema = serdesProxy.deserializeEventSchema( inputEventSchemaStr );
 
-    }
+        int sizeOutputEventSchema = buffer.getInt();
 
-    private static String extractStringFromByteBuffer(ByteBuffer buffer, int size){
-        if(buffer.isDirect()){
-            byte[] byteArray = new byte[size];
-            for(int i = 0; i < size; i++){
-                byteArray[i] = buffer.get();
-            }
-            return new String(byteArray, 0, size, StandardCharsets.UTF_8);
-        } else {
-            return new String(buffer.array(), buffer.position(), size, StandardCharsets.UTF_8);
-        }
+        String outputEventSchemaStr = ByteUtils.extractStringFromByteBuffer(buffer, sizeOutputEventSchema);
+
+        Map<String, VmsEventSchema> outputEventSchema = serdesProxy.deserializeEventSchema( outputEventSchemaStr );
+
+        return new VmsIdentifier( host, port, vmsIdentifier, lastTid, lastBatch, dataSchema, inputEventSchema, outputEventSchema );
+
     }
 
 }

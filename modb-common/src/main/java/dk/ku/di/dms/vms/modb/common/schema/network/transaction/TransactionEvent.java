@@ -1,9 +1,9 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.transaction;
 
+import dk.ku.di.dms.vms.modb.common.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 
 /**
  *  The actual payload of what is sent to the VMSs
@@ -59,11 +59,11 @@ public final class TransactionEvent {
 
         int eventSize = buffer.getInt();
 
-        String eventName = extractStringFromByteBuffer( buffer, eventSize );
+        String eventName = ByteUtils.extractStringFromByteBuffer( buffer, eventSize );
 
         int payloadSize = buffer.getInt();
 
-        String payload = extractStringFromByteBuffer( buffer, payloadSize );
+        String payload = ByteUtils.extractStringFromByteBuffer( buffer, payloadSize );
 
         // String payload = new String( buffer.array(), header + Integer.BYTES + eventSize, payloadSize, StandardCharsets.UTF_8 );
 
@@ -77,17 +77,5 @@ public final class TransactionEvent {
     public static record Payload(
             long tid, long lastTid, long batch, String event, String payload
     ){}
-
-    private static String extractStringFromByteBuffer(ByteBuffer buffer, int size){
-        if(buffer.isDirect()){
-            byte[] byteArray = new byte[size];
-            for(int i = 0; i < size; i++){
-                byteArray[i] = buffer.get();
-            }
-            return new String(byteArray, 0, size, StandardCharsets.UTF_8);
-        } else {
-            return new String(buffer.array(), buffer.position(), size, StandardCharsets.UTF_8);
-        }
-    }
 
 }

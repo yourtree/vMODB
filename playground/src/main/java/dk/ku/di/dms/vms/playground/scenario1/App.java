@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.playground;
+package dk.ku.di.dms.vms.playground.scenario1;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.Coordinator;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.BatchReplicationStrategy;
@@ -32,8 +32,13 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.logging.Logger;
 
 /**
+ *
+ * Scenario 1: One VMS and a coordinator. One transaction, running in the vms
+ *
  * "Unix-based systems declare ports below 1024 as privileged"
  * https://stackoverflow.com/questions/25544849/java-net-bindexception-permission-denied-when-creating-a-serversocket-on-mac-os
+ *
+ *
  */
 public class App 
 {
@@ -47,7 +52,7 @@ public class App
 
         loadMicroservice();
 
-        loadCoordinator(parsedTransactionRequests);
+        loadCoordinator();
 
         Thread producerThread = new Thread(new Producer());
         producerThread.start();
@@ -89,7 +94,7 @@ public class App
         }
     }
 
-    private static void loadCoordinator(BlockingQueue<TransactionInput> parsedTransactionRequests) throws IOException {
+    private static void loadCoordinator() throws IOException {
 
         ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 1081 );
         ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 1082 );
@@ -121,13 +126,12 @@ public class App
                 null,
                 VMSs,
                 transactionMap,
-                new HashMap<>(),
                 serverEm1,
                 new CoordinatorOptions(),
                 0,
                 0,
                 BatchReplicationStrategy.NONE,
-                parsedTransactionRequests,
+                App.parsedTransactionRequests,
                 serdes
         );
 
@@ -139,7 +143,7 @@ public class App
     /**
      * Load one microservice at first and perform several transactions and batch commit
      */
-    private static void loadMicroservice() {
+    private static void loadMicroservice() throws IOException {
 
         IVmsInternalChannels vmsInternalPubSubService = VmsInternalChannels.getInstance();
 
@@ -162,18 +166,13 @@ public class App
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
                 "localhost", 1080, "example",
                 0, 0,
-                vmsMetadata.vmsDataSchema(), vmsMetadata.vmsEventSchema());
+                vmsMetadata.dataSchema(),
+                vmsMetadata.inputEventSchema(), vmsMetadata.outputEventSchema());
 
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        EmbedVmsEventHandler eventHandler;
-
-        try{
-            eventHandler = new EmbedVmsEventHandler(
+        EmbedVmsEventHandler eventHandler = new EmbedVmsEventHandler(
                     vmsInternalPubSubService, vmsIdentifier, vmsMetadata, serdes, socketPool );
-        } catch (IOException e) {
-            throw new RuntimeException("Cannot start event handler, error loading the socket?");
-        }
 
         Thread eventHandlerThread = new Thread(eventHandler);
         eventHandlerThread.start();

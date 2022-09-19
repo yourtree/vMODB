@@ -28,17 +28,18 @@ public class VmsTransactionTask implements Runnable {
 
     private final Queue<OutboundEventResult> outputQueue;
 
-    private final Queue<VmsTransactionTaskResult> resultQueue;
+    private final Queue<VmsTransactionTaskResult> taskResultQueue;
 
     public VmsTransactionTask (long tid, VmsTransactionSignature signature, int inputSize,
-                               IVmsInternalChannels vmsInternalChannels){
+                               Queue<OutboundEventResult> outputQueue,
+                               Queue<VmsTransactionTaskResult> taskResultQueue){
         this.tid = tid;
         this.signature = signature;
         this.inputs = new Object[inputSize];
         this.remainingTasks = inputSize;
 
-        this.outputQueue = vmsInternalChannels.transactionOutputQueue();
-        this.resultQueue = vmsInternalChannels.transactionResultQueue();
+        this.outputQueue = outputQueue;
+        this.taskResultQueue = taskResultQueue;
     }
 
     public void putEventInput(int index, Object event){
@@ -72,9 +73,11 @@ public class VmsTransactionTask implements Runnable {
             Object output = signature.method().invoke(signature.vmsInstance(), inputs);
 
             // can be null, given we have terminal events (void method)
+            // could also be terminal and generate event.. maybe an external system wants to consume
+            // then send to the leader...
             if (output != null) {
 
-                OutboundEventResult eventOutput = new OutboundEventResult(tid, signature.outputQueue(), output);
+                OutboundEventResult eventOutput = new OutboundEventResult(tid, signature.outputQueue(), output, signature.terminal());
 
                 // push to subscriber ---> this should not be sent to external
                 // world if one of the correlated task has failed
@@ -83,14 +86,14 @@ public class VmsTransactionTask implements Runnable {
             }
 
             // push result to the scheduler instead of returning an object
-            resultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, false));
+            taskResultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, false));
 
         } catch (Exception e) {
 
             // (i) whether to return to the scheduler or (ii) to push to the payload handler for forwarding it to the queue
             // we can only notify it because the scheduler does not need to know the events. the scheduler just needs to
             // know whether the processing of events has been completed can be directly sent to the microservice outside
-            resultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, true));
+            taskResultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, true));
         }
 
     }

@@ -3,13 +3,12 @@ package dk.ku.di.dms.vms.modb.common.schema;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 
 /**
- * The <code>VmsEventSchema</code> record describes the schema of Transactional Events.
+ * The class record describes the schema of Transactional Events.
+ *
+ *
  *
  */
 public class VmsEventSchema {
-
-    // FIXME the producer
-//    public String virtualMicroservice;
 
     public String eventName; // the respective queue name
 

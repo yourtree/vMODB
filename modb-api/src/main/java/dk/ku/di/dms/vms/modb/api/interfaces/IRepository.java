@@ -11,7 +11,7 @@ import java.util.List;
  * @param <PK> The primary key of the entity
  * @param <T> The entity type
  */
-public interface IRepository<PK extends Serializable,T extends IEntity<PK>> {
+public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
 
     void insert(T object);
     T insertAndGet(T object);

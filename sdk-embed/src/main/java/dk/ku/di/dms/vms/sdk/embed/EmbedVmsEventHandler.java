@@ -1,20 +1,19 @@
 package dk.ku.di.dms.vms.sdk.embed;
 
-import dk.ku.di.dms.vms.modb.common.data_structure.KeyValueEntry;
-import dk.ku.di.dms.vms.modb.common.data_structure.OneProducerOneConsumerQueue;
-import dk.ku.di.dms.vms.modb.common.data_structure.SimpleQueue;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
+import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
@@ -27,10 +26,7 @@ import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
 
@@ -69,11 +65,8 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     private final VmsRuntimeMetadata vmsMetadata;
 
     /** EXTERNAL VMSs **/
-    private List<NetworkNode> consumerVms;
+    private Map<String, NetworkNode> consumerVms; // sent by coordinator
     private Map<Integer, ConnectionMetadata> vmsConnectionMetadataMap;
-
-    /** UNKNOWN NODES **/
-    private Map<Integer, KeyValueEntry<AsynchronousSocketChannel,ByteBuffer>> unknownNodeChannel;
 
     /** SERIALIZATION **/
     private final IVmsSerdesProxy serdesProxy;
@@ -87,7 +80,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     private long currentBatchOffset;
 
     /** Presentation messages to be processed **/
-    private SimpleQueue<KeyValueEntry<AsynchronousSocketChannel, ByteBuffer>> presentationMessages;
+    // private SimpleQueue<KeyValueEntry<AsynchronousSocketChannel, ByteBuffer>> presentationMessages;
 
     public EmbedVmsEventHandler(IVmsInternalChannels vmsInternalChannels, // for communicating with other components
                                 VmsIdentifier me, // to identify which vms this is
@@ -109,9 +102,9 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         SocketAddress address = new InetSocketAddress(me.host, me.port);
         serverSocket.bind(address);
 
-        this.unknownNodeChannel = new HashMap<>(10);
-        this.presentationMessages =
-                new OneProducerOneConsumerQueue<>(10);
+//        this.unknownNodeChannel = new HashMap<>(10);
+//        this.presentationMessages =
+//                new OneProducerOneConsumerQueue<>(10);
     }
 
 
@@ -132,6 +125,8 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
         // setup accept since we need to accept connections from the coordinator and other VMSs
         serverSocket.accept( null, new AcceptCompletionHandler());
+
+        // must wait for the consumer set before starting receiving transactions
 
         // while not stopped
         while(isRunning()){
@@ -154,14 +149,50 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 if(!vmsInternalChannels.transactionOutputQueue().isEmpty()){
                     // handle
                     logger.info("New transaction output in event handler!!!");
-                }
 
-                if(!presentationMessages.isEmpty()){
+                    OutboundEventResult outputEvent = vmsInternalChannels.transactionOutputQueue().take();
 
-                    logger.info("New presentation message for processing!");
+                    // send to a vms
+                    if(!outputEvent.terminal()){
 
-                    var presentationMessage = presentationMessages.remove();
-                    processPresentationMessage( presentationMessage.getKey(), presentationMessage.getValue() );
+                        NetworkNode vms = consumerVms.get(outputEvent.outputQueue());
+
+                        ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get(vms.hashCode());
+
+                        // connectionMetadata.readBuffer.flip()
+                    } else {
+                        // send to leader
+
+                        leaderConnectionMetadata.writeLock.acquire();
+                        leaderConnectionMetadata.writeBuffer.clear();
+
+                        Class<?> clazz = vmsMetadata.queueToEventMap().get(outputEvent.outputQueue());
+
+                        String objStr = serdesProxy.serialize(outputEvent.output(), clazz);
+
+                        TransactionEvent.Payload payload = new TransactionEvent.Payload(
+                                outputEvent.tid(), 0, 0, outputEvent.outputQueue(), objStr);
+
+                        TransactionEvent.write( leaderConnectionMetadata.writeBuffer, payload );
+                        leaderConnectionMetadata.writeBuffer.flip();
+
+                        leaderConnectionMetadata.channel.write(leaderConnectionMetadata.writeBuffer, null,
+                                new CompletionHandler<Integer, Object>() {
+
+                                    @Override
+                                    public void completed(Integer result, Object attachment) {
+
+                                    }
+
+                                    @Override
+                                    public void failed(Throwable exc, Object attachment) {
+
+                                    }
+                                }
+                        );
+
+                    }
+
                 }
 
             } catch (Exception e) {
@@ -180,16 +211,88 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         this.currentBatchOffset = 0;
     }
 
+    private class ConnectToExternalVmsProtocol {
+
+        private State state;
+        private final AsynchronousSocketChannel channel;
+        private final ByteBuffer buffer;
+        public final CompletionHandler<Void, ConnectToExternalVmsProtocol> connectCompletionHandler;
+        private final NetworkNode node;
+
+        public ConnectToExternalVmsProtocol(AsynchronousSocketChannel channel, NetworkNode node) {
+            this.state = State.NEW;
+            this.channel = channel;
+            this.connectCompletionHandler = new ConnectToVmsCH();
+            this.buffer = MemoryManager.getTemporaryDirectBuffer(1024);
+            this.node = node;
+        }
+
+        private enum State {
+            NEW,
+            CONNECTED,
+            PRESENTATION_SENT
+        }
+
+        private class ConnectToVmsCH implements CompletionHandler<Void, ConnectToExternalVmsProtocol> {
+
+            @Override
+            public void completed(Void result, ConnectToExternalVmsProtocol attachment) {
+
+                attachment.state = State.CONNECTED;
+
+                ConnectionMetadata connMetadata = new ConnectionMetadata(
+                        node.hashCode(),
+                        ConnectionMetadata.NodeType.VMS,
+                        MemoryManager.getTemporaryDirectBuffer(),
+                        MemoryManager.getTemporaryDirectBuffer(),
+                        channel,
+                        new Semaphore(1));
+
+                vmsConnectionMetadataMap.put(node.hashCode(), connMetadata);
+
+                String dataSchema = serdesProxy.serializeDataSchema( me.dataSchema );
+                String inputEventSchema = serdesProxy.serializeEventSchema( me.inputEventSchema);
+                String outputEventSchema = serdesProxy.serializeEventSchema( me.outputEventSchema);
+
+                attachment.buffer.clear();
+                Presentation.writeVms( attachment.buffer, me, dataSchema, inputEventSchema, outputEventSchema );
+                attachment.buffer.flip();
+
+                attachment.channel.write(attachment.buffer, attachment, new CompletionHandler<>() {
+                    @Override
+                    public void completed(Integer result, ConnectToExternalVmsProtocol attachment) {
+                        attachment.state = State.PRESENTATION_SENT;
+                        attachment.buffer.clear();
+                        MemoryManager.releaseTemporaryDirectBuffer(attachment.buffer);
+                    }
+
+                    @Override
+                    public void failed(Throwable exc, ConnectToExternalVmsProtocol attachment) {
+                        // check if connection is still online. if so, try again
+                        // otherwise, retry connection in a few minutes
+                    }
+                });
+
+                channel.read(connMetadata.readBuffer, connMetadata, new VmsReadCompletionHandler() );
+
+            }
+
+            @Override
+            public void failed(Throwable exc, ConnectToExternalVmsProtocol attachment) {
+                // queue for later attempt
+                // perhaps can use scheduled task
+            }
+        }
+
+    }
+
     /**
      * The leader will let each VMS aware of their dependencies,
      * to which VMSs they have to connect to
      */
     private void connectToConsumerVMSs() {
 
-        String dataSchema = serdesProxy.serializeDataSchema( this.me.dataSchema );
-        String eventSchema = serdesProxy.serializeEventSchema( this.me.eventSchema );
-
-        for(NetworkNode vms : this.consumerVms) {
+        for(NetworkNode vms : this.consumerVms.values()) {
 
             try {
 
@@ -199,25 +302,11 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, true);
 
-                channel.connect(address).get();
+                ConnectToExternalVmsProtocol protocol = new ConnectToExternalVmsProtocol(channel, vms);
 
-                ConnectionMetadata connMetadata = new ConnectionMetadata(
-                        vms.hashCode(),
-                        ConnectionMetadata.NodeType.VMS,
-                        MemoryManager.getTemporaryDirectBuffer(),
-                        MemoryManager.getTemporaryDirectBuffer(), 
-                        channel, 
-                        new Semaphore(1));
+                channel.connect(address, protocol, protocol.connectCompletionHandler);
 
-                vmsConnectionMetadataMap.put(vms.hashCode(), connMetadata);
-
-                Presentation.writeVms( connMetadata.writeBuffer, me, dataSchema, eventSchema );
-
-                channel.write( connMetadata.writeBuffer ).get();
-
-                channel.read(connMetadata.readBuffer, connMetadata, new VmsReadCompletionHandler() );
-
-            } catch (IOException | ExecutionException | InterruptedException e) {
+            } catch (IOException ignored) {
                 issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, vms.hashCode()) );
             }
 
@@ -229,19 +318,32 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         @Override
         public void completed(Integer result, ConnectionMetadata connectionMetadata) {
 
-            // can only be event, skip reading the message type
-            connectionMetadata.readBuffer.position(1);
+            byte message = connectionMetadata.readBuffer.get(0);
 
-            // data dependence or input event
-            TransactionEvent.Payload transactionEventPayload = TransactionEvent.read(connectionMetadata.readBuffer);
+            if (message == EVENT){
 
-            // send to scheduler
-            if(vmsMetadata.queueToEventMap().get( transactionEventPayload.event() ) != null) {
-                vmsInternalChannels.transactionInputQueue().add(transactionEventPayload);
+                // can only be event, skip reading the message type
+                connectionMetadata.readBuffer.position(1);
+
+                // data dependence or input event
+                TransactionEvent.Payload transactionEventPayload = TransactionEvent.read(connectionMetadata.readBuffer);
+
+                // send to scheduler
+                if (vmsMetadata.queueToEventMap().get(transactionEventPayload.event()) != null) {
+                    vmsInternalChannels.transactionInputQueue().add(transactionEventPayload);
+                }
+
+                connectionMetadata.readBuffer.clear();
+                connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
+
+            } else if(message == CONSUMER_SET){
+
+                // TODO read consumer set and set read handler again
+
+                connectionMetadata.readBuffer.clear();
+                connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
+
             }
-
-            connectionMetadata.readBuffer.clear();
-            connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
 
         }
 
@@ -254,31 +356,76 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     }
 
     /**
-     * On an connection attempt, it is unknow what is the type of node
+     * On an connection attempt, it is unknown what is the type of node
      * attempting the connection. We find out after the first read.
      */
-    private class UnknownNodeReadCompletionHandler implements CompletionHandler<Integer, Integer> {
+    private class UnknownNodeReadCompletionHandler implements CompletionHandler<Integer, Void> {
 
-        @Override
-        public void completed(Integer result, Integer channelIdentifier) {
+        private final AsynchronousSocketChannel channel;
+        private final ByteBuffer buffer;
 
-            // send to main thread. the main thread handles writes and internal tasks
-            KeyValueEntry<AsynchronousSocketChannel,ByteBuffer> kvEntry = unknownNodeChannel.remove(channelIdentifier);
-
-            if(kvEntry != null) presentationMessages.add( kvEntry );
-
-            try {
-                //logger.info("A read has been completed for "+kvEntry.getKey().getRemoteAddress());
-                logger.info("Presentation message for "+ kvEntry.getKey().getRemoteAddress() +" has been queued for processing");
-            } catch (IOException ignored) { }
-
+        public UnknownNodeReadCompletionHandler(AsynchronousSocketChannel channel, ByteBuffer buffer) {
+            this.channel = channel;
+            this.buffer = buffer;
         }
 
         @Override
-        public void failed(Throwable exc, Integer channelIdentifier) {
-            // release the buffer, nothing else to do
-            KeyValueEntry<AsynchronousSocketChannel,ByteBuffer> kvEntry = unknownNodeChannel.remove(channelIdentifier);
-            if(kvEntry != null) MemoryManager.releaseTemporaryDirectBuffer(kvEntry.getValue());
+        public void completed(Integer result, Void void_) {
+
+            logger.info("Starting process for processing presentation message.");
+
+            // message identifier
+            byte messageIdentifier = this.buffer.get(0);
+            if(messageIdentifier != PRESENTATION){
+                logger.warning("A node is trying to connect without a presentation message");
+                this.buffer.clear();
+                MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
+                try { channel.close(); } catch (IOException ignored) {}
+                return;
+            }
+
+            byte nodeTypeIdentifier = this.buffer.get(1);
+            this.buffer.position(2);
+
+            if(nodeTypeIdentifier == SERVER_TYPE){
+                ConnectionFromLeaderProtocol connectionFromLeader = new ConnectionFromLeaderProtocol(channel, this.buffer);
+                // could be a virtual thread
+                connectionFromLeader.processLeaderPresentation();
+            } else if(nodeTypeIdentifier == VMS_TYPE) {
+                // then it is a vms intending to connect due to a data/event
+                // that should be delivered to this vms
+
+                this.buffer.clear();
+                VmsIdentifier producerVms = Presentation.readVms(this.buffer, serdesProxy);
+                this.buffer.clear();
+
+                ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer();
+
+                ConnectionMetadata connMetadata = new ConnectionMetadata(
+                        producerVms.hashCode(),
+                        ConnectionMetadata.NodeType.VMS,
+                        this.buffer,
+                        writeBuffer,
+                        channel,
+                        new Semaphore(1)
+                );
+
+                vmsConnectionMetadataMap.put( producerVms.hashCode(), connMetadata );
+
+                // setup event receiving for this vms
+                channel.read(this.buffer, connMetadata, new VmsReadCompletionHandler() );
+
+            } else {
+                logger.warning("Presentation message from unknown source:"+nodeTypeIdentifier);
+                this.buffer.clear();
+                MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
+                try { channel.close(); } catch (IOException ignored) { }
+            }
+        }
+
+        @Override
+        public void failed(Throwable exc, Void void_) {
+            // do nothing
         }
 
     }
@@ -291,9 +438,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
 
-
-
-            final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
+            final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024);
 
             try {
 
@@ -302,21 +447,17 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, true);
 
-                KeyValueEntry<AsynchronousSocketChannel,ByteBuffer> kvEntry = new KeyValueEntry<>(channel, buffer);
-                unknownNodeChannel.put( channel.getRemoteAddress().hashCode(), kvEntry );
-
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
-                channel.read( buffer, channel.getRemoteAddress().hashCode(), new UnknownNodeReadCompletionHandler() );
+                channel.read( buffer, null,
+                        new UnknownNodeReadCompletionHandler(channel, buffer) );
 
-                logger.info("Read handler for unknown host has been setup: "+channel.getRemoteAddress());
+                logger.info("Read handler for unknown node has been setup: "+channel.getRemoteAddress());
 
             } catch(Exception ignored){
-
+                MemoryManager.releaseTemporaryDirectBuffer(buffer);
             } finally {
                 // continue listening
-                if (serverSocket.isOpen()){
-                    serverSocket.accept(null, this);
-                }
+                serverSocket.accept(null, this);
             }
 
         }
@@ -330,110 +471,93 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
     }
 
-    private void processPresentationMessage(AsynchronousSocketChannel channel, ByteBuffer readBuffer) {
+    private class ConnectionFromLeaderProtocol {
 
-        logger.info("Starting process for processing presentation message.");
+        private State state;
+        private final AsynchronousSocketChannel channel;
+        private final ByteBuffer buffer;
+        public final CompletionHandler<Integer, Void> writeCompletionHandler;
 
-        // message identifier
-        byte messageIdentifier = readBuffer.get(1);
-        readBuffer.position(2);
+        public ConnectionFromLeaderProtocol(AsynchronousSocketChannel channel, ByteBuffer buffer) {
+            this.state = State.PRESENTATION_RECEIVED;
+            this.channel = channel;
+            this.writeCompletionHandler = new WriteCompletionHandler();
+            this.buffer = buffer;
+        }
 
-        if(messageIdentifier == SERVER_TYPE){
+        private enum State {
+            PRESENTATION_RECEIVED,
+            PRESENTATION_PROCESSED,
+            PRESENTATION_SENT
+        }
 
-            boolean includeMetadata = readBuffer.get() == YES;
+        /**
+         * Should be void or ConnectionFromLeaderProtocol??? only testing to know...
+         */
+        private class WriteCompletionHandler implements CompletionHandler<Integer,Void> {
+
+            @Override
+            public void completed(Integer result, Void attachment) {
+                state = State.PRESENTATION_SENT;
+                channel.read(buffer, leaderConnectionMetadata, new LeaderReadCompletionHandler() );
+            }
+
+            @Override
+            public void failed(Throwable exc, Void attachment) {
+                if(!channel.isOpen()) {
+                    leader.off();
+                }
+                // else what to do try again?
+            }
+        }
+
+        public void processLeaderPresentation() {
+
+            boolean includeMetadata = this.buffer.get() == YES;
 
             // leader has disconnected, or new leader
-            Presentation.PayloadFromServer payloadFromServer = Presentation.readServer(readBuffer, serdesProxy);
+            leader = Presentation.readServer(this.buffer, serdesProxy);
 
             // only connects to all VMSs on first leader connection
-            boolean connectToVMSs = false;
-            if(leader == null || !leader.isActive()) {
 
-                this.leader = payloadFromServer.serverIdentifier();
-                this.leader.on();
-
-                connectToVMSs = true;
-                this.consumerVms = payloadFromServer.consumers();
-                
-                ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer();
-
-                readBuffer.clear();
-
-                if(includeMetadata) {
-                    writeBuffer.clear();
-                    String vmsDataSchemaStr = serdesProxy.serializeDataSchema(me.dataSchema);
-                    String vmsEventSchemaStr = serdesProxy.serializeEventSchema(me.eventSchema);
-
-                    Presentation.writeVms(writeBuffer, me, vmsDataSchemaStr, vmsEventSchemaStr);
-                    writeBuffer.clear();
-
-                    try {
-                        // the protocol requires the leader to wait for the metadata in order to start sending messages
-                        channel.write( writeBuffer ).get();
-                        writeBuffer.clear();
-                    } catch (InterruptedException | ExecutionException ignored) {
-
-                        if(!channel.isOpen()) {
-                            leader.off();
-
-                            // return buffers
-                            MemoryManager.releaseTemporaryDirectBuffer(readBuffer);
-                            MemoryManager.releaseTemporaryDirectBuffer(writeBuffer);
-
-                            return;
-                        }
-                        // else what to do try again?
-
-                    }
-
-                }
+            if(leaderConnectionMetadata == null) {
 
                 // then setup connection metadata and read completion handler
                 leaderConnectionMetadata = new ConnectionMetadata(
                         leader.hashCode(),
                         ConnectionMetadata.NodeType.SERVER,
-                        readBuffer,
-                        writeBuffer,
+                        buffer,
+                        MemoryManager.getTemporaryDirectBuffer(),
                         channel,
                         new Semaphore(1)
                 );
 
             } else {
-                this.leader = payloadFromServer.serverIdentifier(); // this will set on again
+                // considering the leader has replicated the metadata before failing
+                // so no need to send metadata again. but it may be necessary...
+                // what if the tid and batch id is necessary. the replica may not be
+                // sync with last leader...
                 leaderConnectionMetadata.channel = channel; // update channel
-                this.leader.on();
+            }
+            leader.on();
+
+            this.buffer.clear();
+
+            if(includeMetadata) {
+                String vmsDataSchemaStr = serdesProxy.serializeDataSchema(me.dataSchema);
+                String vmsInputEventSchemaStr = serdesProxy.serializeEventSchema(me.inputEventSchema);
+                String vmsOutputEventSchemaStr = serdesProxy.serializeEventSchema(me.inputEventSchema);
+
+                Presentation.writeVms(this.buffer, me, vmsDataSchemaStr, vmsInputEventSchemaStr, vmsOutputEventSchemaStr);
+                // the protocol requires the leader to wait for the metadata in order to start sending messages
+            } else {
+                Presentation.writeVms(this.buffer, me);
             }
 
-            channel.read(readBuffer, leaderConnectionMetadata, new LeaderReadCompletionHandler() );
+            this.buffer.flip();
+            this.state = State.PRESENTATION_PROCESSED;
+            this.channel.write( this.buffer, null, this.writeCompletionHandler );
 
-            if(connectToVMSs && !payloadFromServer.consumers().isEmpty()) connectToConsumerVMSs();
-
-        } else if(messageIdentifier == VMS_TYPE) {
-            // then it is a vms intending to connect due to a data/event
-            // that should be delivered to this vms
-
-            VmsIdentifier newVms = Presentation.readVms(readBuffer, serdesProxy);
-
-            readBuffer.clear();
-
-            ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer();
-
-            ConnectionMetadata connMetadata = new ConnectionMetadata(
-                    leader.hashCode(),
-                    ConnectionMetadata.NodeType.SERVER,
-                    readBuffer,
-                    writeBuffer,
-                    channel,
-                    new Semaphore(1)
-            );
-
-            vmsConnectionMetadataMap.put( newVms.hashCode(), connMetadata );
-
-            // setup event receiving for this vms
-            channel.read(readBuffer, connMetadata, new VmsReadCompletionHandler() );
-
-        } else {
-            logger.warning("Presentation message from unknown source:"+messageIdentifier);
         }
 
     }
@@ -469,6 +593,14 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 // some new leader request to rollback to last batch commit
                 BatchAbortRequest.Payload batchAbortReq = BatchAbortRequest.read( connectionMetadata.readBuffer );
                 vmsInternalChannels.batchAbortQueue().add(batchAbortReq);
+            } else if( messageType == CONSUMER_SET){
+
+                // read
+                consumerVms = ConsumerSet.read(connectionMetadata.readBuffer, serdesProxy);
+
+                // connect later
+                connectToConsumerVMSs();
+
             }
 
             connectionMetadata.readBuffer.clear();

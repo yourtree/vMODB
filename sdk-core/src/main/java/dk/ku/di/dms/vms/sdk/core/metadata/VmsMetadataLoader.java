@@ -58,12 +58,23 @@ public class VmsMetadataLoader {
 
         // necessary remaining data structures to store a vms metadata
         Map<String, List<IdentifiableNode<VmsTransactionSignature>>> queueToVmsTransactionMap = new HashMap<>();
+
+        // event to type
         Map<String, Class<?>> queueToEventMap = new HashMap<>();
+
+        // type to event
         Map<Class<?>,String> eventToQueueMap = new HashMap<>();
 
-        mapVmsTransactionInputOutput(reflections, loadedVmsInstances, queueToEventMap, eventToQueueMap, queueToVmsTransactionMap);
+        // distinction between input and output events
+        // key: queue name; value: (input),(output)
+        Map<String, String> inputOutputEventDistinction = new HashMap<>();
 
-        Map<String, VmsEventSchema> vmsEventSchemas = buildEventSchema( reflections, eventToQueueMap );
+        mapVmsTransactionInputOutput(reflections, loadedVmsInstances, queueToEventMap, eventToQueueMap, inputOutputEventDistinction, queueToVmsTransactionMap);
+
+        Map<String, VmsEventSchema> inputEventSchemaMap = new HashMap<>();
+        Map<String, VmsEventSchema> outputEventSchemaMap = new HashMap<>();
+
+        buildEventSchema( reflections, eventToQueueMap, inputOutputEventDistinction, inputEventSchemaMap, outputEventSchemaMap );
 
         /*
          *   TODO look at this. we should provide this implementation
@@ -74,7 +85,8 @@ public class VmsMetadataLoader {
 
         return new VmsRuntimeMetadata(
                 vmsDataSchemas,
-                vmsEventSchemas,
+                inputEventSchemaMap,
+                outputEventSchemaMap,
                 queueToVmsTransactionMap,
                 queueToEventMap,
                 eventToQueueMap,
@@ -124,10 +136,12 @@ public class VmsMetadataLoader {
     /**
      * Building virtual microservice event schemas
      */
-    protected static Map<String, VmsEventSchema> buildEventSchema(
-            Reflections reflections, Map<Class<?>, String> eventToQueueMap ) {
-
-        Map<String, VmsEventSchema> schemaMap = new HashMap<>();
+    protected static void buildEventSchema(
+            Reflections reflections,
+            Map<Class<?>, String> eventToQueueMap,
+            Map<String, String> inputOutputEventDistinction,
+            Map<String, VmsEventSchema> inputEventSchemaMap,
+            Map<String, VmsEventSchema> outputEventSchemaMap) {
 
         Set<Class<?>> eventsClazz = reflections.getTypesAnnotatedWith( Event.class );
 
@@ -148,16 +162,21 @@ public class VmsMetadataLoader {
 
             // get queue name
             String queue = eventToQueueMap.get( eventClazz );
-
             if(queue == null){
                 throw new IllegalStateException("Event type not defined as @Event");
             }
 
-            schemaMap.put( queue, new VmsEventSchema( queue, columnNames, columnDataTypes ) );
+            // is input?
+            String category = inputOutputEventDistinction.get(queue);
+            if(category.equalsIgnoreCase("input")){
+                inputEventSchemaMap.put( queue, new VmsEventSchema( queue, columnNames, columnDataTypes ) );
+            } else if(category.equalsIgnoreCase("output")) {
+                outputEventSchemaMap.put( queue, new VmsEventSchema( queue, columnNames, columnDataTypes ) );
+            } else {
+                throw new IllegalStateException("Queue cannot be distinguished between input or output.");
+            }
 
         }
-
-        return schemaMap;
 
     }
 
@@ -416,6 +435,7 @@ public class VmsMetadataLoader {
                                                        Map<String, Object> loadedMicroserviceInstances,
                                                        Map<String, Class<?>> queueToEventMap,
                                                        Map<Class<?>, String> eventToQueueMap,
+                                                       Map<String, String> inputOutputEventDistinction,
                                                        Map<String,
                                                                List<IdentifiableNode<VmsTransactionSignature>>>
                                                                queueToVmsTransactionMap) {
@@ -437,7 +457,7 @@ public class VmsMetadataLoader {
 
             // output type cannot be String or primitive
             if(outputType.isPrimitive() || outputType.isArray() || outputType.isAnnotation() || outputType.isInstance(String.class)){
-                throw new IllegalStateException(" output type cannot be String, array, annotation, or primitive");
+                throw new IllegalStateException("Output type cannot be String, array, annotation, or primitive");
             }
 
             List<Class<?>> inputTypes = new ArrayList<>();
@@ -477,9 +497,28 @@ public class VmsMetadataLoader {
 
             if (eventToQueueMap.get(outputType) == null) {
                 eventToQueueMap.put(outputType, outputQueue);
-                vmsTransactionSignature = new VmsTransactionSignature(obj, method, inputQueues, outputQueue);
+
+                // not sure why I need this now... just doing it for completeness
+                if(queueToEventMap.get(outputQueue) == null){
+                    queueToEventMap.put(outputQueue, outputType);
+                } else {
+                    throw new QueueMappingException(
+                            "Error mapping: An output queue cannot be mapped to two (or more) types.");
+                }
+
+                inputOutputEventDistinction.put(outputQueue,"output");
+
             } else {
-                throw new QueueMappingException("Error mapping. An payload type cannot be mapped to two or more output queues.");
+                throw new QueueMappingException(
+                        "Error mapping: A payload type cannot be mapped to two (or more) output queues.");
+            }
+
+            Optional<Annotation> optionalTerminal = Arrays.stream(annotations).filter(p -> p.annotationType() == Terminal.class ).findFirst();
+
+            if(optionalTerminal.isPresent()){
+                vmsTransactionSignature = new VmsTransactionSignature(obj, true, method, inputQueues, outputQueue);
+            } else {
+                vmsTransactionSignature = new VmsTransactionSignature(obj, false, method, inputQueues, outputQueue);
             }
 
             for (int i = 0; i < inputQueues.length; i++) {
@@ -489,8 +528,11 @@ public class VmsMetadataLoader {
 
                     // in order to build the event schema
                     eventToQueueMap.put(inputTypes.get(i), inputQueues[i]);
+
+                    inputOutputEventDistinction.put(inputQueues[i],"input");
+
                 } else if (queueToEventMap.get(inputQueues[i]) != inputTypes.get(i)) {
-                    throw new QueueMappingException("Error mapping. An input queue cannot be mapped to two or more payload types.");
+                    throw new QueueMappingException("Error mapping: An input queue cannot be mapped to two or more payload types.");
                 }
 
                 List<IdentifiableNode<VmsTransactionSignature>> list = queueToVmsTransactionMap.get(inputQueues[i]);

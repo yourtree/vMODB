@@ -10,12 +10,14 @@ import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.data_structure.KeyValueEntry;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
+import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
+import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Heartbeat;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
@@ -74,12 +76,12 @@ public final class Coordinator extends SignalingStoppableRunnable {
     /** VMS data structures **/
 
     // received from program start
-    private final Map<Integer, NetworkNode> startersVMSs;
+    private final Map<Integer, NetworkNode> starterVMSs;
 
     // receive from program start + those that joined later
     private final Map<String, VmsIdentifier> vmsMetadata;
 
-    private final Map<Integer, List<NetworkNode>> vmsConsumerSet;
+    // private final Map<Integer, Map<String, NetworkNode>> vmsConsumerSet;
 
     private final Map<String, TransactionDAG> transactionMap;
 
@@ -117,6 +119,10 @@ public final class Coordinator extends SignalingStoppableRunnable {
     // value is the batch
     BlockingQueue<KeyValueEntry<VmsIdentifier, Long>> transactionInputsToResend;
 
+    private final Map<Integer, ConnectToVmsProtocol> connectToVmsProtocolMap;
+
+    private final CountDownLatch connectVmsBarrier;
+
     public Coordinator(
                        ExecutorService taskExecutor,
 
@@ -125,7 +131,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                        Map<Integer, NetworkNode> startersVMSs,
                        Map<String, TransactionDAG> transactionMap,
-                       Map<Integer, List<NetworkNode>> vmsDependenceSet, // built from the transactionMap
+                       // Map<Integer, Map<String, NetworkNode>> vmsConsumerSet, // built from the transactionMap
 
                        ServerIdentifier me,
                        CoordinatorOptions options,
@@ -149,9 +155,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         // should come filled from election process
         this.servers = servers == null ? new ConcurrentHashMap<>() : servers;
-        this.startersVMSs = startersVMSs;
+        this.starterVMSs = startersVMSs;
         this.vmsMetadata = new HashMap<>(10);
         this.batchCommitLock = new Object();
+
+        // connection to VMSs
+        this.connectToVmsProtocolMap = new HashMap<>(10);
+        this.connectVmsBarrier = new CountDownLatch(starterVMSs.size());
 
         // might come filled from election process
         this.serverConnectionMetadataMap = serverConnectionMetadataMap == null ? new HashMap<>() : serverConnectionMetadataMap;
@@ -168,7 +178,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         this.tid = startingTid;
         this.parsedTransactionRequests = parsedTransactionRequests; // shared data structure
         this.transactionMap = Objects.requireNonNull(transactionMap); // in production, it requires receiving new transaction definitions
-        this.vmsConsumerSet = vmsDependenceSet;
+        // this.vmsConsumerSet = vmsConsumerSet;
         this.txManagerCtx = new TransactionManagerContext(
                 new LinkedBlockingQueue<>(),
                 new ConcurrentLinkedQueue<>(),
@@ -217,7 +227,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // ScheduledFuture<?> heartbeatTask = scheduledExecutorService.scheduleAtFixedRate(this::sendHeartbeats, 0L, options.getHeartbeatTimeout() - options.getHeartbeatSlack(), TimeUnit.MILLISECONDS);
 
         ScheduledFuture<?> batchCommitTask = scheduledExecutorService.scheduleAtFixedRate(
-                this::spawnBatchCommitFake, 0L, options.getBatchWindow(), TimeUnit.MILLISECONDS);
+                this::spawnBatchCommitFake, 10000, options.getBatchWindow(), TimeUnit.MILLISECONDS);
 
         // if the transaction manager thread blocks (e.g., waiting for a queue), the thread is not delivered back to the pool
 
@@ -227,8 +237,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         while(isRunning()){
 
             try {
-                // issueQueue.poll(5, TimeUnit.MINUTES); // blocking, this thread should only act when necessary
-                // issueQueue.take();
+
                 txManager.doAction();
 
                 // handle other events
@@ -246,13 +255,132 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     }
 
+    private class ConnectToVmsProtocol {
+
+        private State state;
+        private final AsynchronousSocketChannel channel;
+        private final ByteBuffer buffer;
+        public final CompletionHandler<Void, ConnectToVmsProtocol> connectCompletionHandler;
+
+        public ConnectToVmsProtocol(AsynchronousSocketChannel channel){
+            this.state = State.NEW;
+            this.channel = channel;
+            this.connectCompletionHandler = new ConnectToVmsCH();
+            this.buffer = MemoryManager.getTemporaryDirectBuffer(1024);
+        }
+
+        private enum State {
+            NEW,
+            CONNECTED,
+            PRESENTATION_SENT,
+            PRESENTATION_RECEIVED,
+            PRESENTATION_PROCESSED,
+            CONSUMER_SET_READY,
+            CONSUMER_SET_SENT
+        }
+
+        /**
+         * Maybe passing the object as parameter is not necessary. it is non-static subclass,
+         * so can have access to attributes...
+         */
+        private class ConnectToVmsCH implements CompletionHandler<Void, ConnectToVmsProtocol> {
+
+            @Override
+            public void completed(Void result, ConnectToVmsProtocol attachment) {
+
+                attachment.state = State.CONNECTED;
+
+                attachment.buffer.clear();
+                // write presentation
+                Presentation.writeServer( attachment.buffer, me, true );
+                attachment.buffer.flip();
+
+                attachment.channel.write(attachment.buffer, attachment, new CompletionHandler<>() {
+                    @Override
+                    public void completed(Integer result, ConnectToVmsProtocol attachment) {
+
+                        attachment.state = State.PRESENTATION_SENT;
+
+                        // read it
+                        attachment.buffer.clear();
+                        attachment.channel.read(attachment.buffer, attachment, new ReadFromVmsCH());
+
+                    }
+
+                    @Override
+                    public void failed(Throwable exc, ConnectToVmsProtocol attachment) {
+                        // check if connection is still online. if so, try again
+                        // otherwise, retry connection in a few minutes
+                    }
+                });
+
+            }
+
+            @Override
+            public void failed(Throwable exc, ConnectToVmsProtocol attachment) {
+                // queue for later attempt
+                // perhaps can use scheduled task
+            }
+        }
+
+        private class ReadFromVmsCH implements CompletionHandler<Integer, ConnectToVmsProtocol> {
+
+            @Override
+            public void completed(Integer result, ConnectToVmsProtocol attachment) {
+                // and now read the metadata
+                // any failure should be tracked so we can continue the protocol later
+
+                attachment.buffer.clear();
+                // need here otherwise the channel read handler is lost
+
+                attachment.state = State.PRESENTATION_RECEIVED;
+
+                // always a vms
+                processVmsPresentationMessage(attachment.channel, attachment.buffer);
+
+                attachment.state = State.PRESENTATION_PROCESSED;
+
+                connectVmsBarrier.countDown();
+
+            }
+
+            @Override
+            public void failed(Throwable exc, ConnectToVmsProtocol attachment) {
+
+            }
+        }
+
+        private class ConsumerSetReady implements CompletionHandler<Integer, ConnectToVmsProtocol> {
+
+            public ConsumerSetReady(ConnectToVmsProtocol protocol){
+                protocol.state = State.CONSUMER_SET_READY;
+            }
+
+            @Override
+            public void completed(Integer result, ConnectToVmsProtocol attachment) {
+                attachment.state = State.CONSUMER_SET_SENT;
+
+                attachment.buffer.clear();
+                MemoryManager.releaseTemporaryDirectBuffer(attachment.buffer);
+            }
+
+            @Override
+            public void failed(Throwable exc, ConnectToVmsProtocol attachment) {
+
+            }
+        }
+    }
+
     /**
      * After a leader election, it makes more sense that
      * the leader connects to all known virtual microservices.
      */
     private void connectToVMSs(){
 
-        for(NetworkNode vms : startersVMSs.values()){
+        // should start the protocol only if vmsMetadata is missing
+        // otherwise should just connect to them
+
+        for(NetworkNode vms : starterVMSs.values()){
 
             try {
 
@@ -262,47 +390,82 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, true);
 
-                channel.connect(address).get();
+                ConnectToVmsProtocol protocol = new ConnectToVmsProtocol(channel);
 
-                ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer(1024);
-                ByteBuffer readBuffer = MemoryManager.getTemporaryDirectBuffer(1024);
+                channel.connect(address, protocol, protocol.connectCompletionHandler);
 
-                // get dependence set of given VMS
-                List<NetworkNode> consumerSet = vmsConsumerSet.get( vms.hashCode() );
+                connectToVmsProtocolMap.put(vms.hashCode(), protocol);
 
-                String consumerSetJson;
-                if(consumerSet != null) {
-                    consumerSetJson = serdesProxy.serializeList(consumerSet);
-                } else {
-                    consumerSetJson = "";
-                }
-
-                // writeBuffer.clear();
-                // write presentation
-                Presentation.writeServer( writeBuffer, this.me, consumerSetJson );
-                writeBuffer.clear();
-
-                channel.write( writeBuffer ).get();
-                writeBuffer.clear();
-
-
-                // and now read the metadata
-                // any failure should be tracked so we can continue the protocol later
-
-                readBuffer.clear();
-                channel.read(readBuffer).get();
-                // need here otherwise the channel read handler is lost
-
-                MemoryManager.releaseTemporaryDirectBuffer(writeBuffer);
-
-                // always a vms
-                processVmsPresentationMessage(channel, readBuffer);
-
-            } catch(ExecutionException | InterruptedException| IOException e){
+            } catch(IOException e){
                 logger.warning("Failed to connect to a known VMS");
             }
 
         }
+
+        // wait until all VMSs are online
+        try {
+            connectVmsBarrier.await();
+        } catch (InterruptedException ignored) {
+            // throw new IllegalStateException("It was not possible to start the coordinator since one or more VMSs are not operational.");
+        }
+
+        // algorithm. build consumer set dynamically
+        // for each event in the transaction DAG, find the generator and receiver
+        Map<Integer, Map<String, NetworkNode>> vmsConsumerSet = new HashMap<>();
+
+        // now we can build the consumer set for each vms
+        // for each internal event, find the vms who is supposed to generate and the vms
+        // that receives it
+        for(VmsIdentifier vms : vmsMetadata.values()){
+
+            Map<String, NetworkNode> map = new HashMap<>(10);
+            vmsConsumerSet.put(vms.hashCode(), map);
+
+            // for each output event
+            for(VmsEventSchema eventSchema : vms.outputEventSchema.values()){
+                NetworkNode node = findConsumerVms( eventSchema.eventName );
+                map.put(eventSchema.eventName, node);
+            }
+
+        }
+
+        // we need to receive the metadata from vms in order to make sure everything is correct, so we provide safety
+        // the types also need to match, but the algorithm is not checking this now...
+
+        // match output of an vms with the input of another
+        // for each vms input event (not generated by the coordinator), find the vms that generated the output
+
+        // now send the consumer set to all VMSs
+        for(VmsIdentifier vms : vmsMetadata.values()){
+            ConnectToVmsProtocol protocol = connectToVmsProtocolMap.get(vms.hashCode());
+            protocol.buffer.clear();
+
+            Map<String, NetworkNode> map = vmsConsumerSet.get(vms.hashCode());
+            String mapStr = serdesProxy.serializeMap(map);
+
+            ConsumerSet.write(protocol.buffer, mapStr);
+            protocol.buffer.flip();
+
+            protocol.channel.write( protocol.buffer, protocol, protocol.new ConsumerSetReady(protocol) );
+        }
+
+        // new barrier? maybe not. just assume all VMSs received. otherwise they can request
+
+    }
+
+    private NetworkNode findConsumerVms(String outputEvent){
+
+        // can be the leader or a vms
+        for( VmsIdentifier vms : vmsMetadata.values() ){
+
+            if(vms.inputEventSchema.get(outputEvent) != null){
+                return vms;
+            }
+
+        }
+
+        // assumed to be terminal? maybe yes.
+        return me;
 
     }
 
@@ -344,8 +507,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                     // don't actually need the host and port in the payload since we have the attachment to this read operation...
                     BatchComplete.Payload response = BatchComplete.read(connectionMetadata.readBuffer);
-                    txManagerCtx.batchCompleteEvents().add(response);
-                    txManagerCtx.actionQueue.add(BATCH_COMPLETE); // must have a context, i.e., what batch, the last?
+                    txManagerCtx.batchCompleteEvents().add(response); // must have a context, i.e., what batch, the last?
 
                     // if one abort, no need to keep receiving
                     // actually it is unclear in which circumstances a vms would respond no... probably in case it has not received an ack from an aborted commit response?
@@ -356,7 +518,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     // get information of what
                     TransactionAbort.Payload response = TransactionAbort.read(connectionMetadata.readBuffer);
                     txManagerCtx.transactionAbortEvents().add(response);
-                    txManagerCtx.actionQueue.add(TX_ABORT);
 
                 }
                 default ->
@@ -378,7 +539,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 // modify status
                 if(connectionMetadata.nodeType == VMS){
-                    startersVMSs.get(connectionMetadata.key).off();
+                    starterVMSs.get(connectionMetadata.key).off();
                 } else {
                     servers.get(connectionMetadata.key).off();
                 }
@@ -552,7 +713,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         VmsIdentifier newVms = Presentation.readVms(buffer, serdesProxy);
 
         // is a default vms?
-        if(startersVMSs.get( newVms.hashCode() ) != null){
+        if(starterVMSs.get( newVms.hashCode() ) != null){
 
             // vms reconnecting
             // newVms = vmsMetadata.get( newVms.hashCode() );
@@ -617,6 +778,10 @@ public final class Coordinator extends SignalingStoppableRunnable {
     }
 
     /**
+     *
+     * TODO make it a batch of events. crate another message type
+     * 15 | number of events | for each event { size in bytes and payload }
+     *
      * A thread will execute this piece of code to liberate the "Accept" thread handler
      * This only works for input events. In case of internal events, the VMS needs to get that from the precedence VMS.
      */
@@ -939,7 +1104,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 // write. think about failures/atomicity later
                 TransactionEvent.Payload txEvent = TransactionEvent.write(connectionMetadata.writeBuffer, tid_, vms.lastTid, batch_, inputEvent.name, inputEvent.payload);
 
-                connectionMetadata.writeBuffer.clear();
+                connectionMetadata.writeBuffer.flip();
                 try {
                     connectionMetadata.channel.write(connectionMetadata.writeBuffer).get(); //, connectionMetadata, new WriteCompletionHandler());
                 } catch (InterruptedException | ExecutionException e) {
@@ -994,84 +1159,90 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         public void doAction() {
 
-                try {
-                    // https://web.mit.edu/6.005/www/fa14/classes/20-queues-locks/message-passing/
-                    byte action = txManagerCtx.actionQueue().take();
+            try {
+                // https://web.mit.edu/6.005/www/fa14/classes/20-queues-locks/message-passing/
+                byte action = !txManagerCtx.batchCompleteEvents.isEmpty() ? BATCH_COMPLETE : 0;
+                action = action == 0 ? (!txManagerCtx.transactionAbortEvents.isEmpty() ? TX_ABORT : action) : action;
 
-                    // do we have any transaction-related event?
-                    switch(action){
-                        case BATCH_COMPLETE -> {
+                // do we have any transaction-related event?
+                switch(action){
+                    case BATCH_COMPLETE -> {
 
-                            // what if ACKs from VMSs take too long? or never arrive?
-                            // need to deal with intersecting batches? actually just continue emitting for higher throughput
+                        // what if ACKs from VMSs take too long? or never arrive?
+                        // need to deal with intersecting batches? actually just continue emitting for higher throughput
 
-                            BatchComplete.Payload msg = txManagerCtx.batchCompleteEvents.remove();
+                        BatchComplete.Payload msg = txManagerCtx.batchCompleteEvents.remove();
 
-                            BatchContext batchContext = batchContextMap.get( msg.batch() );
+                        BatchContext batchContext = batchContextMap.get( msg.batch() );
 
-                            // only if it is not a duplicate vote
-                            if( batchContext.missingVotes.remove( msg.vms() ) ){
+                        // only if it is not a duplicate vote
+                        if( batchContext.missingVotes.remove( msg.vms() ) ){
 
-                                // making this implement order-independent, so not assuming batch commit are received in order, although they are necessarily applied in order both here and in the VMSs
-                                // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes, it must check the batch context match to see whether it is completed
-                                if( batchContext.batchOffset == batchOffsetPendingCommit && batchContext.missingVotes.size() == 0 ){
+                            // making this implement order-independent, so not assuming batch commit are received in order, although they are necessarily applied in order both here and in the VMSs
+                            // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes, it must check the batch context match to see whether it is completed
+                            if( batchContext.batchOffset == batchOffsetPendingCommit && batchContext.missingVotes.size() == 0 ){
 
+                                sendCommitRequestToVMSs(batchContext);
+
+                                // is the next batch completed already?
+                                batchContext = batchContextMap.get( ++batchOffsetPendingCommit );
+                                while(batchContext.missingVotes.size() == 0){
                                     sendCommitRequestToVMSs(batchContext);
-
-                                    // is the next batch completed already?
                                     batchContext = batchContextMap.get( ++batchOffsetPendingCommit );
-                                    while(batchContext.missingVotes.size() == 0){
-                                        sendCommitRequestToVMSs(batchContext);
-                                        batchContext = batchContextMap.get( ++batchOffsetPendingCommit );
-                                    }
-
                                 }
 
                             }
 
-
                         }
-                        case TX_ABORT -> {
-
-                            // send abort to all VMSs...
-                            // later we can optimize the number of messages since some VMSs may not need to receive this abort
-
-                            // cannot commit the batch unless the VMS is sure there will be no aborts...
-                            // this is guaranteed by design, since the batch complete won't arrive unless all events of the batch arrive at the terminal VMSs
-
-                            TransactionAbort.Payload msg = txManagerCtx.transactionAbortEvents.remove();
-
-                            // can reuse the same buffer since the message does not change across VMSs like the commit request
-                            for(VmsIdentifier vms : vmsMetadata.values()){
-
-                                // don't need to send to the vms that aborted
-                                if(vms.getIdentifier().equalsIgnoreCase( msg.vms() )) continue;
-
-                                ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.hashCode() );
-
-                                ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024);
-
-                                TransactionAbort.write(buffer, msg);
-
-                                // must lock first before writing to write buffer
-                                connectionMetadata.writeLock.acquireUninterruptibly();
-
-                                try { connectionMetadata.channel.write(buffer).get(); } catch (ExecutionException ignored) {}
-
-                                connectionMetadata.writeLock.release();
-
-                                buffer.clear();
-
-                                MemoryManager.releaseTemporaryDirectBuffer(buffer);
-
-                            }
 
 
-                        }
                     }
-                } catch (InterruptedException e) {
-                    issueQueue.add( new Issue( TRANSACTION_MANAGER_STOPPED, me.hashCode() ) );
+                    case TX_ABORT -> {
+
+                        // send abort to all VMSs...
+                        // later we can optimize the number of messages since some VMSs may not need to receive this abort
+
+                        // cannot commit the batch unless the VMS is sure there will be no aborts...
+                        // this is guaranteed by design, since the batch complete won't arrive unless all events of the batch arrive at the terminal VMSs
+
+                        TransactionAbort.Payload msg = txManagerCtx.transactionAbortEvents.remove();
+
+                        // can reuse the same buffer since the message does not change across VMSs like the commit request
+                        for(VmsIdentifier vms : vmsMetadata.values()){
+
+                            // don't need to send to the vms that aborted
+                            if(vms.getIdentifier().equalsIgnoreCase( msg.vms() )) continue;
+
+                            ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.hashCode() );
+
+                            ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024);
+
+                            TransactionAbort.write(buffer, msg);
+
+                            // must lock first before writing to write buffer
+                            connectionMetadata.writeLock.acquireUninterruptibly();
+
+                            try { connectionMetadata.channel.write(buffer).get(); } catch (ExecutionException ignored) {}
+
+                            connectionMetadata.writeLock.release();
+
+                            buffer.clear();
+
+                            MemoryManager.releaseTemporaryDirectBuffer(buffer);
+
+                        }
+
+
+                    }
+
+                    default -> {
+                        // do nothing
+                    }
+
                 }
+            } catch (InterruptedException e) {
+                issueQueue.add( new Issue( TRANSACTION_MANAGER_STOPPED, me.hashCode() ) );
+            }
 
         }
 

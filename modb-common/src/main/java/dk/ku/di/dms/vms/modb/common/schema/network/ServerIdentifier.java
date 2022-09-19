@@ -10,6 +10,8 @@ public final class ServerIdentifier extends NetworkNode {
     // maybe volatile?
     public long lastOffset;
 
+    // maybe also last batch?
+
     public ServerIdentifier(String host, int port) {
         super(host, port);
         this.lastOffset = 0L;
