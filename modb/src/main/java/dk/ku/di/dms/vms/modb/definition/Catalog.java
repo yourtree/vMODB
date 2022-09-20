@@ -9,35 +9,28 @@ import java.util.Map;
  * In our case, the table already stores the columns
  * We don't have triggers nor stored procedures =)
  * For now, we don't have views, but we can implement the application-defined
- * queries as views and store hem here
+ * queries as views and store them here
  */
 public final class Catalog {
 
-    private Map<Integer, Table> tableMap_;
-    private Map<String, Table> tableMap;
+    private final Map<String, Table> tableMap;
 
     public Catalog() {
         this.tableMap = new HashMap<>();
-    }
-
-    public Table getTable(int tableId) {
-        return tableMap.get(tableId);
     }
 
     public Table getTable(String tableName) {
         return tableMap.getOrDefault(tableName,null);
     }
 
-    public boolean insertTable(Table table){
+    public void insertTable(Table table){
         tableMap.put(table.getName(),table);
-        return true;
     }
 
-    public boolean insertTables(Table... tables){
+    public void insertTables(Table... tables){
         for(Table table : tables) {
             tableMap.put(table.getName(), table);
         }
-        return true;
     }
 
 }

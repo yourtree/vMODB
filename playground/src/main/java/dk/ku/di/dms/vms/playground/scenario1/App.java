@@ -6,11 +6,15 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOption
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.definition.Schema;
+import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
@@ -19,6 +23,7 @@ import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.facade.EmbedRepositoryFacade;
+import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
@@ -147,14 +152,9 @@ public class App
 
         IVmsInternalChannels vmsInternalPubSubService = VmsInternalChannels.getInstance();
 
-        Constructor<?> constructor = EmbedRepositoryFacade.class.getConstructors()[0];
+        VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.load("dk.ku.di.dms.vms.playground.app");
 
-        VmsRuntimeMetadata vmsMetadata;
-        try {
-            vmsMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.playground.app", constructor);
-        } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
-            throw new RuntimeException("Cannot start VMs, error loading metadata.");
-        }
+        if(vmsMetadata == null) throw new IllegalStateException("Cannot start VMs, error loading metadata.");
 
         ExecutorService vmsAppLogicTaskPool = Executors.newSingleThreadExecutor();
 

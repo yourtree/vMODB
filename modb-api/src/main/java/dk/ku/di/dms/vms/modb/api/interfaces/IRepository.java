@@ -56,4 +56,6 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
     // maybe callbacks can be a good alternative for embedding statements inside repository
     // <DTO extends Record> List<DTO>  create(Consumer<UpdateStatementBuilder.SetClause> callback);
 
+    IVmsFuture<Void> submit(Runnable runnable);
+
 }

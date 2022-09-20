@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.modb.definition;
 
-import java.io.Serializable;
-
 /**
  * Defines an abstract row.
  * Later a row will be specialized for each concurrency control protocol.

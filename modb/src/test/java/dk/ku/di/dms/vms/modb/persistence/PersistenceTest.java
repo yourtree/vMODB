@@ -20,7 +20,7 @@ public class PersistenceTest {
     @BeforeClass
     public static void setUp(){
         unsafe = MemoryUtils.getUnsafe();
-        if(unsafe == null) { assert false; }
+        assert unsafe != null;
     }
 
     // private static final 10737418240

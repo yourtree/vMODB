@@ -27,7 +27,7 @@ public class MicroserviceExample {
 
         System.out.println("methodExample1");
 
-        // repository.insert(new EntityExample(in.id, in.id));
+        repository.insert(new EntityExample(in.id, in.id));
 
         return new OutEventExample2(in.id);
     }

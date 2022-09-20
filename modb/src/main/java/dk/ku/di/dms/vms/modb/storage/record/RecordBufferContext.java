@@ -2,6 +2,8 @@ package dk.ku.di.dms.vms.modb.storage.record;
 
 import jdk.incubator.foreign.MemorySegment;
 
+import java.nio.ByteBuffer;
+
 /**
  * This class maintains important information
  * regarding the managed {@link jdk.incubator.foreign.MemorySegment}.
@@ -38,11 +40,20 @@ public class RecordBufferContext {
      */
     // public ByteBuffer metadataBuffer;
 
-    public MemorySegment memorySegment;
+    MemorySegment memorySegment;
 
     public RecordBufferContext(MemorySegment memorySegment, int capacity, int recordSize) {
         this.memorySegment = memorySegment;
         this.address = this.memorySegment.address().toRawLongValue();
+        this.capacity = capacity;
+        this.recordSize = recordSize;
+    }
+
+    ByteBuffer byteBuffer;
+
+    public RecordBufferContext(ByteBuffer byteBuffer, long address, int capacity, int recordSize) {
+        this.byteBuffer = byteBuffer;
+        this.address = address;
         this.capacity = capacity;
         this.recordSize = recordSize;
     }

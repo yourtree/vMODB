@@ -8,19 +8,14 @@ import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
-import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.definition.Row;
 import dk.ku.di.dms.vms.modb.definition.Table;
-import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.modb.query.planner.Planner;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
-import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 
 import java.lang.reflect.*;
 import java.nio.ByteBuffer;
@@ -33,23 +28,23 @@ import java.util.logging.Logger;
  * The embed repository facade contains references to DBMS components
  * since the application is co-located with the MODB
  */
-public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, InvocationHandler {
+public final class EmbedRepositoryFacade implements IVmsRepositoryFacade {
 
-    private static Logger LOGGER = Logger.getLogger(EmbedRepositoryFacade.class.getName());
+    private static final Logger logger = Logger.getLogger(EmbedRepositoryFacade.class.getName());
 
-    private final Class<?> pkClazz;
+    // private final Class<?> pkClazz;
 
     private final Class<? extends IEntity<?>> entityClazz;
 
     // DBMS components
-    private VmsRuntimeMetadata vmsMetadata;
-    private Catalog catalog;
-    private Analyzer analyzer;
-    private Planner planner;
+//    private VmsRuntimeMetadata vmsRuntimeMetadata;
+//    private Catalog catalog;
+//    private Analyzer analyzer;
+//    private Planner planner;
+//    private TransactionFacade transactionFacade;
+    private ModbModules modbModules;
 
-    private TransactionFacade transactionFacade;
-
-    private Map<String, AbstractOperator> cachedPlans;
+    private final Map<String, AbstractOperator> cachedPlans;
 
     List<Field> entityFields;
 
@@ -59,31 +54,24 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         Type[] types = ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
 
         this.entityClazz = (Class<? extends IEntity<?>>) types[1];
-        this.pkClazz = (Class<?>) types[0];
+        // this.pkClazz = (Class<?>) types[0];
 
         // read-only transactions may put items here
         this.cachedPlans = new ConcurrentHashMap<>();
+
     }
 
-    public void setAnalyzer(final Analyzer analyzer){
-        this.analyzer = analyzer;
-    }
-
-    public void setPlanner(final Planner planner){
-        this.planner = planner;
-    }
-
-    public void setVmsMetadata(VmsRuntimeMetadata vmsMetadata) {
-        this.vmsMetadata = vmsMetadata;
+    public void setModbModules(ModbModules modbModules){
+        this.modbModules = modbModules;
     }
 
     /**
      * The actual facade for database operations called by the application-level code.
-     * @param proxy
-     * @param method
-     * @param args
+     * @param proxy the virtual microservice caller method (a subtransaction)
+     * @param method the repository method called
+     * @param args the function call parameters
      * @return A DTO (i.e., any class where attribute values are final), a row {@link Row}, or set of rows
-     * @throws AnalyzerException
+     * @throws AnalyzerException the query passed cannot be parsed
      */
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws IllegalAccessException {
@@ -99,9 +87,9 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
             case "insert": {
 
-                String tableName = this.vmsMetadata.entityToTableNameMap().get( entityClazz );
+                String tableName = this.modbModules.vmsRuntimeMetadata().entityToTableNameMap().get( entityClazz );
 
-                Table table = catalog.getTable(tableName);
+                Table table = this.modbModules.catalog().getTable(tableName);
 
                 int recordSize = table.getSchema().getRecordSize();
 
@@ -125,9 +113,9 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
                 // acts as a single transaction, so all constraints, of every single row must be present
 
-                String tableName = this.vmsMetadata.entityToTableNameMap().get( entityClazz );
+                String tableName = this.modbModules.vmsRuntimeMetadata().entityToTableNameMap().get( entityClazz );
 
-                Table table = catalog.getTable(tableName);
+                Table table = this.modbModules.catalog().getTable(tableName);
 
 //                PlanNode node = planner.planBulkInsert(tableForInsertion, (List<? extends IEntity<?>>) args[0]); //(args[0]);
 //
@@ -161,16 +149,16 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         if(scanOperator == null){
             QueryTree queryTree;
             try {
-                queryTree = analyzer.analyze(selectStatement);
+                queryTree = modbModules.analyzer().analyze(selectStatement);
                 wherePredicates = queryTree.wherePredicates;
-                scanOperator = planner.plan(queryTree);
+                scanOperator = modbModules.planner().plan(queryTree);
                 cachedPlans.put(sqlAsKey, scanOperator );
             } catch (AnalyzerException ignored) { return null; }
 
         } else {
             // get only the where clause params
             try {
-                wherePredicates = analyzer.analyzeWhere(
+                wherePredicates = modbModules.analyzer().analyzeWhere(
                         scanOperator.asScan().table, selectStatement.whereClause);
             } catch (AnalyzerException ignored) { return null; }
         }

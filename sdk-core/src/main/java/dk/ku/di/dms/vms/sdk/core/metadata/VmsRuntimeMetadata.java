@@ -1,8 +1,10 @@
 package dk.ku.di.dms.vms.sdk.core.metadata;
 
+import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
+import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 
 import java.util.List;
@@ -25,6 +27,7 @@ public record VmsRuntimeMetadata(
         Map<Class<?>, String> eventToQueueMap,
 
         Map<String, Object> loadedVmsInstances,
+        List<IVmsRepositoryFacade> repositoryFacades,
         Map<Class<?>,String> entityToTableNameMap
 
 ){}

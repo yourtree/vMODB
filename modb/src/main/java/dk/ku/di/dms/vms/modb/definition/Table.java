@@ -35,7 +35,7 @@ public final class Table {
     // just a cached list of the indexes map to avoid using iterators from the map when deciding for an index
     public List<AbstractIndex<IKey>> indexList;
 
-    public Table(final String name, final Schema schema, Map<Table,int[]> foreignKeysGroupedByTableMap) {
+    public Table(String name, Schema schema, Map<Table,int[]> foreignKeysGroupedByTableMap) {
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
@@ -44,13 +44,23 @@ public final class Table {
         this.foreignKeysGroupedByTableMap = foreignKeysGroupedByTableMap;
     }
 
-    public Table(final String name, final Schema schema){
+    public Table(String name, Schema schema){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
         this.indexes = new HashMap<>();
         this.indexList = new ArrayList<>();
         this.foreignKeysGroupedByTableMap = null;
+    }
+
+    public Table(String name, Schema schema, UniqueHashIndex primaryKeyIndex){
+        this.name = name;
+        this.schema = schema;
+        this.hashCode = name.hashCode();
+        this.indexes = new HashMap<>();
+        this.indexList = new ArrayList<>();
+        this.foreignKeysGroupedByTableMap = null;
+        this.primaryKeyIndex = primaryKeyIndex;
     }
 
     @Override

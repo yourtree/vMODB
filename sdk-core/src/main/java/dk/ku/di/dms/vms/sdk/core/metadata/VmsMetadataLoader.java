@@ -9,6 +9,8 @@ import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NoPrimaryKeyFoundException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NotAcceptableTypeException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.QueueMappingException;
@@ -42,7 +44,8 @@ public class VmsMetadataLoader {
 
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
-    public static VmsRuntimeMetadata load(String packageName, Constructor<?> facadeConstructor) throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    public static VmsRuntimeMetadata load(String packageName, Constructor<?> facadeConstructor)
+            throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
         Reflections reflections = configureReflections(packageName);
 
@@ -54,7 +57,9 @@ public class VmsMetadataLoader {
 
         Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, entityToTableNameMap);
 
-        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, facadeConstructor);
+        List<IVmsRepositoryFacade> repositoryFacades = new ArrayList<>(10);
+
+        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, facadeConstructor, repositoryFacades);
 
         // necessary remaining data structures to store a vms metadata
         Map<String, List<IdentifiableNode<VmsTransactionSignature>>> queueToVmsTransactionMap = new HashMap<>();
@@ -69,12 +74,18 @@ public class VmsMetadataLoader {
         // key: queue name; value: (input),(output)
         Map<String, String> inputOutputEventDistinction = new HashMap<>();
 
-        mapVmsTransactionInputOutput(reflections, loadedVmsInstances, queueToEventMap, eventToQueueMap, inputOutputEventDistinction, queueToVmsTransactionMap);
+        mapVmsTransactionInputOutput(reflections,
+                loadedVmsInstances, queueToEventMap, eventToQueueMap,
+                inputOutputEventDistinction, queueToVmsTransactionMap);
 
         Map<String, VmsEventSchema> inputEventSchemaMap = new HashMap<>();
         Map<String, VmsEventSchema> outputEventSchemaMap = new HashMap<>();
 
-        buildEventSchema( reflections, eventToQueueMap, inputOutputEventDistinction, inputEventSchemaMap, outputEventSchemaMap );
+        buildEventSchema( reflections,
+                eventToQueueMap,
+                inputOutputEventDistinction,
+                inputEventSchemaMap,
+                outputEventSchemaMap );
 
         /*
          *   TODO look at this. we should provide this implementation
@@ -91,6 +102,7 @@ public class VmsMetadataLoader {
                 queueToEventMap,
                 eventToQueueMap,
                 loadedVmsInstances,
+                repositoryFacades,
                 entityToTableNameMap);
 
     }
@@ -385,28 +397,31 @@ public class VmsMetadataLoader {
 
     }
 
-    @SuppressWarnings({"unchecked","rawtypes"})
-    protected static Map<String,Object> loadMicroserviceClasses(Set<Class<?>> vmsClasses, Constructor<?> facadeConstructor)
-                                                                // Map<String, VmsDataSchema> vmsDataSchemas)
+    @SuppressWarnings({"rawtypes"})
+    protected static Map<String, Object> loadMicroserviceClasses(
+            Set<Class<?>> vmsClasses,
+            Constructor<?> facadeConstructor,
+            List<IVmsRepositoryFacade> repositoryFacades
+            )
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
-        Map<String,Object> loadedMicroserviceInstances = new HashMap<>();
+        Map<String, Object> loadedMicroserviceInstances = new HashMap<>();
 
         for(Class<?> clazz : vmsClasses) {
 
             String clazzName = clazz.getCanonicalName();
 
-            //VmsDataSchema dataSchema = vmsDataSchemas.get(clazzName);
-
             Class<?> cls = Class.forName(clazzName);
             Constructor<?>[] constructors = cls.getDeclaredConstructors();
             Constructor<?> constructor = constructors[0];
 
-            List<Object> repositoryList = new ArrayList<>();
+            Class<?>[] parameterTypes = constructor.getParameterTypes();
+            List<Object> proxies = new ArrayList<>(parameterTypes.length);
 
-            for (Class parameterType : constructor.getParameterTypes()) {
+            for (Class parameterType : parameterTypes) {
 
-                InvocationHandler facade = (InvocationHandler) facadeConstructor.newInstance(parameterType);
+                IVmsRepositoryFacade facade = (IVmsRepositoryFacade) facadeConstructor.newInstance(parameterType);
+                repositoryFacades.add(facade);
 
                 Object proxyInstance = Proxy.newProxyInstance(
                         VmsMetadataLoader.class.getClassLoader(),
@@ -415,11 +430,11 @@ public class VmsMetadataLoader {
                         // the constructor rule to have only repositories
                         facade);
 
-                repositoryList.add(proxyInstance);
+                proxies.add(proxyInstance);
 
             }
 
-            Object vmsInstance = constructor.newInstance(repositoryList.toArray());
+            Object vmsInstance = constructor.newInstance(proxies.toArray());
 
             loadedMicroserviceInstances.put(clazzName, vmsInstance);
         }

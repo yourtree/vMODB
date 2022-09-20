@@ -41,6 +41,8 @@ public class StockService {
 
             final int finalI = i;
 
+            stockRepository.submit(() -> System.out.println("TESTE"));
+
             futures[finalI] = CompletableFuture.runAsync( new @Disjoint Runnable() {
 
               @Override
