@@ -1,7 +1,10 @@
 package dk.ku.di.dms.vms.modb.transaction;
 
+import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
+import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
@@ -10,9 +13,12 @@ import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.OperationSet;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.DataItemVersion;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.InsertOp;
 
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -43,7 +49,39 @@ public class TransactionFacade {
         writesPerIndexAndKey = new ConcurrentHashMap<>();
     }
 
+    /****** ENTITY *******/
 
+    public static void insert(Table table, Object[] values){
+
+        int recordSize = table.getSchema().getRecordSize();
+
+        ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(recordSize);
+
+        long threadId = Thread.currentThread().getId();
+        long tid = TransactionMetadata.tid(threadId);
+
+        writesPerTransaction.putIfAbsent( tid, new ArrayList<>(10) );
+
+        long startAddress = MemoryUtils.getByteBufferAddress(buffer);
+        long currAddress = startAddress;
+
+        int maxColumns = table.getSchema().columnOffset().length;
+        for(int index = 0; index < maxColumns; index++) {
+
+            DataTypeUtils.callWriteFunction( currAddress,
+                    table.getSchema().getColumnDataType(index),
+                    values[index]
+                    );
+
+            currAddress += table.getSchema().getColumnDataType(index).value;
+
+        }
+
+        DataItemVersion dataItemVersion = InsertOp.insert( tid, startAddress );
+
+        writesPerTransaction.get( tid ).add( dataItemVersion );
+
+    }
 
     /****** SCAN *******/
 

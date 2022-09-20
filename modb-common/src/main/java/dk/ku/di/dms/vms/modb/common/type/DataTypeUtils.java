@@ -1,10 +1,10 @@
-package dk.ku.di.dms.vms.modb.storage.memory;
+package dk.ku.di.dms.vms.modb.common.type;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
-import dk.ku.di.dms.vms.modb.common.type.DataType;
 import sun.misc.Unsafe;
 
 import java.nio.ByteBuffer;
+import java.util.Date;
 import java.util.function.Function;
 
 import static dk.ku.di.dms.vms.modb.common.type.Constants.DEFAULT_MAX_SIZE_CHAR;
@@ -26,10 +26,10 @@ public class DataTypeUtils {
             }
             case CHAR -> {
                 char[] res = new char[DEFAULT_MAX_SIZE_CHAR];
-                long startAddress = address;
+                long currAddress = address;
                 for(int i = 0; i < DEFAULT_MAX_SIZE_CHAR; i++) {
-                    res[i] = UNSAFE.getChar(startAddress);
-                    startAddress += Character.BYTES;
+                    res[i] = UNSAFE.getChar(currAddress);
+                    currAddress += Character.BYTES;
                 }
                 return res;
             }
@@ -49,8 +49,8 @@ public class DataTypeUtils {
 
     /**
      * Used by the append only buffer?
-     * @param dt
-     * @return
+     * @param dt Data type
+     * @return the corresponding function
      */
     public static Function<ByteBuffer,?> getReadFunction(DataType dt){
         switch (dt){
@@ -77,20 +77,54 @@ public class DataTypeUtils {
     }
 
     // just a wrapper
-//    public static <T> void callWriteFunction(long address, DataType dt, T value){
-//        switch (dt){
-//            case BOOL -> {
-//                // byte is used. on unsafe, the boolean is used
-//                UNSAFE.copyMemory(heapMemory, sourcePointer, null, targetPointer, numBytes);
-//                UNSAFE.putObject(address, value);
-//            }
-//            case INT, CHAR, LONG, DATE, FLOAT, DOUBLE -> UNSAFE.putObject(buffer, address, value);
-//            default -> throw new IllegalStateException("Unknown data type");
-//        }
-//    }
+    public static void callWriteFunction(long address, DataType dt, Object value){
+        switch (dt){
+            case BOOL -> // byte is used. on unsafe, the boolean is used
+                    UNSAFE.putByte(address, (byte)value);
+            case INT -> UNSAFE.putInt(address, (int)value);
+            case CHAR -> {
+                Character[] charArray = (Character[]) value;
+                long currAddress = address;
+                for(int i = 0; i < DEFAULT_MAX_SIZE_CHAR; i++) {
+                    UNSAFE.putChar(currAddress, charArray[i]);
+                    currAddress += Character.BYTES;
+                }
+            }
+            case LONG, DATE -> UNSAFE.putLong(address, (long)value);
+            case FLOAT -> UNSAFE.putFloat(address, (float)value);
+            case DOUBLE -> UNSAFE.putDouble(address, (double)value);
+            default -> throw new IllegalStateException("Unknown data type");
+        }
+    }
 
     private static Object getChar(ByteBuffer buffer) {
         return buffer.get(buffer.array(), buffer.position(), buffer.position() + DEFAULT_MAX_SIZE_CHAR);
+    }
+
+    public static Class<?> getTypeFromDataType(DataType dataType) {
+
+        switch (dataType) {
+            case BOOL -> {
+                return boolean.class;
+            }
+            case INT -> {
+                return int.class;
+            }
+            case CHAR -> {
+                return char.class;
+            }
+            case LONG, DATE -> {
+                return long.class;
+            }
+            case FLOAT -> {
+                return float.class;
+            }
+            case DOUBLE -> {
+                return double.class;
+            }
+            default -> throw new IllegalStateException(dataType + " is not supported.");
+        }
+
     }
 
 }

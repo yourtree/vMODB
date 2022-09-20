@@ -11,8 +11,8 @@ public class MicroserviceExample2 {
     @Outbound("out3")
     @Transactional
     @Terminal
-    public OutEventExample3 methodExample1(OutEventExample out) {
-        System.out.println("methodExample1");
+    public OutEventExample3 methodExample2(OutEventExample out) {
+        System.out.println("methodExample2");
         return out != null ? new OutEventExample3(out.id) : null;
     }
 

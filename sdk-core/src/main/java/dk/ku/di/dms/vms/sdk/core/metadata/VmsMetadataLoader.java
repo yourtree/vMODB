@@ -9,7 +9,6 @@ import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
-import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NoPrimaryKeyFoundException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NotAcceptableTypeException;
@@ -44,7 +43,7 @@ public class VmsMetadataLoader {
 
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
-    public static VmsRuntimeMetadata load(String packageName, Constructor<?> facadeConstructor)
+    public static VmsRuntimeMetadata load(String packageName, Constructor<IVmsRepositoryFacade> facadeConstructor)
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
         Reflections reflections = configureReflections(packageName);
@@ -108,6 +107,7 @@ public class VmsMetadataLoader {
     }
 
     private static Reflections configureReflections(String packageName){
+
         if(packageName == null) {
             packageName = "dk.ku.di.dms.vms";
         }
@@ -400,7 +400,7 @@ public class VmsMetadataLoader {
     @SuppressWarnings({"rawtypes"})
     protected static Map<String, Object> loadMicroserviceClasses(
             Set<Class<?>> vmsClasses,
-            Constructor<?> facadeConstructor,
+            Constructor<IVmsRepositoryFacade> facadeConstructor,
             List<IVmsRepositoryFacade> repositoryFacades
             )
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
@@ -428,7 +428,7 @@ public class VmsMetadataLoader {
                         new Class[]{parameterType},
                         // it works without casting as long as all services respect
                         // the constructor rule to have only repositories
-                        facade);
+                        facade.asInvocationHandler());
 
                 proxies.add(proxyInstance);
 

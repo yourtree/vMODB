@@ -9,7 +9,7 @@ import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
-import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 
 /**
  *

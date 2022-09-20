@@ -5,20 +5,27 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.definition.Row;
+import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
-import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
+import dk.ku.di.dms.vms.sdk.embed.entity.EntityUtils;
 
-import java.lang.reflect.*;
-import java.nio.ByteBuffer;
+import java.lang.invoke.VarHandle;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,7 +35,7 @@ import java.util.logging.Logger;
  * The embed repository facade contains references to DBMS components
  * since the application is co-located with the MODB
  */
-public final class EmbedRepositoryFacade implements IVmsRepositoryFacade {
+public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, InvocationHandler {
 
     private static final Logger logger = Logger.getLogger(EmbedRepositoryFacade.class.getName());
 
@@ -37,16 +44,11 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade {
     private final Class<? extends IEntity<?>> entityClazz;
 
     // DBMS components
-//    private VmsRuntimeMetadata vmsRuntimeMetadata;
-//    private Catalog catalog;
-//    private Analyzer analyzer;
-//    private Planner planner;
-//    private TransactionFacade transactionFacade;
     private ModbModules modbModules;
 
     private final Map<String, AbstractOperator> cachedPlans;
 
-    List<Field> entityFields;
+    private Map<String, VarHandle> entityFieldMap;
 
     @SuppressWarnings({"unchecked"})
     public EmbedRepositoryFacade(final Class<? extends IRepository<?,?>> repositoryClazz){
@@ -61,8 +63,19 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade {
 
     }
 
-    public void setModbModules(ModbModules modbModules){
+    public void setModbModules(ModbModules modbModules) throws NoSuchFieldException, IllegalAccessException {
+
         this.modbModules = modbModules;
+
+        String table = modbModules.vmsRuntimeMetadata().entityToTableNameMap().get( this.entityClazz );
+
+        // VmsDataSchema dataSchema = modbModules.vmsRuntimeMetadata().dataSchema().get(table);
+
+        Schema schema = modbModules.catalog().getTable(table).getSchema();
+
+        // https://stackoverflow.com/questions/43558270/correct-way-to-use-varhandle-in-java-9
+        this.entityFieldMap = EntityUtils.getFieldsFromEntity( this.entityClazz, schema );
+
     }
 
     /**
@@ -74,7 +87,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade {
      * @throws AnalyzerException the query passed cannot be parsed
      */
     @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws IllegalAccessException {
+    public Object invoke(Object proxy, Method method, Object[] args) {
 
         String methodName = method.getName();
 
@@ -91,21 +104,16 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade {
 
                 Table table = this.modbModules.catalog().getTable(tableName);
 
-                int recordSize = table.getSchema().getRecordSize();
-
-                ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(recordSize);
-
-                // get values from entity
-
-                // Row row
                 Object[] values = new Object[table.getSchema().getColumnNames().length];
 
                 int fieldIdx = 0;
+                // get values from entity
                 for(String columnName : table.getSchema().getColumnNames()){
-                    values[fieldIdx] = entityFields.get(fieldIdx).get( args[0] );
+                    values[fieldIdx] = this.entityFieldMap.get(columnName).get( args[0] );
+                    fieldIdx++;
                 }
 
-                // TODO store tuple in the primary index
+                TransactionFacade.insert(table, values);
 
                 break;
             }
@@ -184,6 +192,11 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade {
         DataType dataType = scanOperator.asScan().index.schema().getColumnDataType(projectionColumnIndex);
         return DataTypeUtils.getValue(dataType, memRes.address);
 
+    }
+
+    @Override
+    public InvocationHandler asInvocationHandler() {
+        return this;
     }
 }
 

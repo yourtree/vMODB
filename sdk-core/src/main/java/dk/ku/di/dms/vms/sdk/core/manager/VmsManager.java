@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.sdk.core.manager;
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.event.handler.VmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.facade.DefaultRepositoryFacade;
+import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
@@ -57,10 +58,12 @@ public final class VmsManager {
         // this.metadata.executorService = executorService;
         IVmsInternalChannels vmsInternalPubSubService = VmsInternalChannels.getInstance();
 
-        Constructor<?> constructor = DefaultRepositoryFacade.class.getConstructors()[0];
-
         VmsRuntimeMetadata vmsMetadata;
         try {
+
+            @SuppressWarnings("unchecked")
+            Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) DefaultRepositoryFacade.class.getConstructors()[0];
+
             vmsMetadata = VmsMetadataLoader.load(null, constructor);
         } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
             throw new RuntimeException("Cannot start VMs, error loading metadata.");

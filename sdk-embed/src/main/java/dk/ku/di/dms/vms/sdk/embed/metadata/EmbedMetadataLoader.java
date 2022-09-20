@@ -27,10 +27,12 @@ public class EmbedMetadataLoader {
 
     public static VmsRuntimeMetadata load(String packageName) {
 
-        Constructor<?> constructor = EmbedRepositoryFacade.class.getConstructors()[0];
-
         try {
-            VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.playground.app", constructor);
+
+            @SuppressWarnings("unchecked")
+            Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) EmbedRepositoryFacade.class.getConstructors()[0];
+
+            VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load(packageName, constructor);
 
             ModbModules modbModules = loadModbModules(vmsRuntimeMetadata);
 
@@ -42,6 +44,8 @@ public class EmbedMetadataLoader {
 
         } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
             // logger.wa("Cannot start VMs, error loading metadata.");
+        } catch (NoSuchFieldException e) {
+            e.printStackTrace();
         }
 
         return null;
@@ -71,7 +75,7 @@ public class EmbedMetadataLoader {
 
             UniqueHashIndex pkIndex = new UniqueHashIndex(recordBufferContext, schema, schema.getPrimaryKeyColumns());
 
-            Table table = new Table(vmsDataSchema.tableName, schema);
+            Table table = new Table(vmsDataSchema.tableName, schema, pkIndex);
 
             catalog.insertTable(table);
 

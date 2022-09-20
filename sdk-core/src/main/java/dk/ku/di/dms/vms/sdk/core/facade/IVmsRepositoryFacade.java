@@ -5,8 +5,10 @@ import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Type;
 
-public interface IVmsRepositoryFacade extends InvocationHandler {
+public interface IVmsRepositoryFacade {
 
     Object fetch(SelectStatement selectStatement, Type type);
+
+    InvocationHandler asInvocationHandler();
 
 }

@@ -8,7 +8,6 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The default repository facade does not contain references to DBMS components
@@ -39,6 +38,11 @@ public class DefaultRepositoryFacade implements IVmsRepositoryFacade, Invocation
     @Override
     public Object fetch(SelectStatement selectStatement, Type type) {
         return null;
+    }
+
+    @Override
+    public InvocationHandler asInvocationHandler() {
+        return this;
     }
 
 }

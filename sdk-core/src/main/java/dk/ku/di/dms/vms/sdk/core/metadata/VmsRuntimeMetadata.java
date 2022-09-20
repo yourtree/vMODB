@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.sdk.core.metadata;
 
-import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;

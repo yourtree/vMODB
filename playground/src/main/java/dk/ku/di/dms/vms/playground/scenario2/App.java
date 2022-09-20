@@ -14,15 +14,12 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.EmbedVmsEventHandler;
-import dk.ku.di.dms.vms.sdk.embed.facade.EmbedRepositoryFacade;
+import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 
 import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -157,14 +154,9 @@ public class App
 
         IVmsInternalChannels vmsInternalPubSubService = VmsInternalChannels.getInstance();
 
-        Constructor<?> constructor = EmbedRepositoryFacade.class.getConstructors()[0];
+        VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.load(packageName);
 
-        VmsRuntimeMetadata vmsMetadata;
-        try {
-            vmsMetadata = VmsMetadataLoader.load(packageName, constructor);
-        } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
-            throw new RuntimeException("Cannot start VMs, error loading metadata.");
-        }
+        assert vmsMetadata != null;
 
         ExecutorService vmsAppLogicTaskPool = Executors.newSingleThreadExecutor();
 

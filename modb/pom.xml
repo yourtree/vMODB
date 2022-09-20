@@ -4,15 +4,15 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>dk.di.ku.dms.vms</groupId>
-  <artifactId>modb</artifactId>
-  <version>1.0-SNAPSHOT</version>
-
     <parent>
         <groupId>dk.ku.di.dms.vms</groupId>
         <artifactId>vms-runtime-java</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
+
+    <groupId>dk.di.ku.dms.vms.modb</groupId>
+    <artifactId>modb</artifactId>
+    <version>1.0-SNAPSHOT</version>
 
   <name>modb</name>
   <url>http://rnlaigner.github.io</url>

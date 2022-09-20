@@ -8,7 +8,7 @@ import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
-import dk.ku.di.dms.vms.modb.storage.memory.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;

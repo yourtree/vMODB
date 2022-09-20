@@ -6,28 +6,20 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOption
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
-import dk.ku.di.dms.vms.modb.common.type.DataType;
-import dk.ku.di.dms.vms.modb.definition.Schema;
-import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.EmbedVmsEventHandler;
-import dk.ku.di.dms.vms.sdk.embed.facade.EmbedRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 
 import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -140,8 +132,8 @@ public class App
                 serdes
         );
 
-        Thread coordThread = new Thread(coordinator);
-        coordThread.start();
+        Thread coordinatorThread = new Thread(coordinator);
+        coordinatorThread.start();
 
     }
 
