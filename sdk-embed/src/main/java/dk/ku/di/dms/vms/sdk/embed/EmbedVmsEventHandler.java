@@ -67,7 +67,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     private final VmsRuntimeMetadata vmsMetadata;
 
     /** EXTERNAL VMSs **/
-    private Map<String, NetworkNode> consumerVms; // sent by coordinator
+    private final Map<String, NetworkNode> consumerVms; // sent by coordinator
     private final Map<Integer, ConnectionMetadata> vmsConnectionMetadataMap;
 
     /** SERIALIZATION **/
@@ -172,10 +172,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
                         String objStr = serdesProxy.serialize(outputEvent.output(), clazz);
 
-                        TransactionEvent.Payload payload = new TransactionEvent.Payload(
-                                outputEvent.tid(), 0, 0, outputEvent.outputQueue(), objStr);
-
-                        TransactionEvent.write( leaderConnectionMetadata.writeBuffer, payload );
+                        TransactionEvent.write( leaderConnectionMetadata.writeBuffer, outputEvent.tid(), 0, 0, outputEvent.outputQueue(), objStr );
                         leaderConnectionMetadata.writeBuffer.flip();
 
                         leaderConnectionMetadata.channel.write(leaderConnectionMetadata.writeBuffer, null,
@@ -574,24 +571,47 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         @Override
         public void completed(Integer result, ConnectionMetadata connectionMetadata) {
 
-            logger.info("Leader has entered in contact. Let's check what the leader wants.");
-
             connectionMetadata.readBuffer.position(0);
             byte messageType = connectionMetadata.readBuffer.get();
 
-            // receive input events
-            if(messageType == EVENT) {
+            logger.info("Leader has sent a message type: "+messageType);
 
-                TransactionEvent.Payload transactionEventPayload = TransactionEvent.read(connectionMetadata.readBuffer);
+            // receive input events
+            if(messageType == BATCH_OF_EVENTS){
+
+                int count =  connectionMetadata.readBuffer.getInt();
+
+                TransactionEvent.Payload payload;
+
+                // extract events batched
+                for(int i = 0; i < count; i++){
+                    // discard message type...
+                    byte eventType = connectionMetadata.readBuffer.get();
+                    payload = TransactionEvent.read(connectionMetadata.readBuffer);
+                    if(vmsMetadata.queueToEventMap().get( payload.event() ) != null) {
+                        vmsInternalChannels.transactionInputQueue().add(payload);
+                    }
+                }
+
+            } else if(messageType == END_OF_BATCH) {
+
+                // it means this VMS is a terminal in the current batch to be committed
+
+
+
+            } else if(messageType == EVENT) {
+
+                TransactionEvent.Payload payload = TransactionEvent.read(connectionMetadata.readBuffer);
 
                 // send to scheduler.... drop if the event cannot be processed (not an input event in this vms)
-                if(vmsMetadata.queueToEventMap().get( transactionEventPayload.event() ) != null) {
-                    vmsInternalChannels.transactionInputQueue().add(transactionEventPayload);
+                if(vmsMetadata.queueToEventMap().get( payload.event() ) != null) {
+                    vmsInternalChannels.transactionInputQueue().add(payload);
                 }
 
             } else if (messageType == BATCH_COMMIT_REQUEST){
                 // must send batch commit ok
                 BatchCommitRequest.Payload batchCommitReq = BatchCommitRequest.read( connectionMetadata.readBuffer );
+                connectionMetadata.readBuffer.clear();
                 vmsInternalChannels.batchCommitQueue().add( batchCommitReq );
             } else if(messageType == TX_ABORT){
                 TransactionAbort.Payload transactionAbortReq = TransactionAbort.read( connectionMetadata.readBuffer );

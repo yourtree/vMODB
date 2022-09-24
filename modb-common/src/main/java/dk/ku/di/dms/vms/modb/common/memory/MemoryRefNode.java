@@ -8,6 +8,7 @@ public class MemoryRefNode {
 
     public final long address;
 
+    // size
     public final long bytes;
 
     public MemoryRefNode next;

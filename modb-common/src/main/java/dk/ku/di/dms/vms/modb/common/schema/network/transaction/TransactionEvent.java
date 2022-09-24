@@ -12,11 +12,15 @@ public final class TransactionEvent {
 
     // this payload
     // message type | tid | last tid | size | event name | size | payload
-    private static final int header = Byte.BYTES + Long.BYTES + Long.BYTES + Integer.BYTES;
+    private static final int header = Long.BYTES + Long.BYTES + Integer.BYTES;
 
     public static void write(ByteBuffer buffer, Payload payload){
-
         buffer.put( Constants.EVENT );
+        writeNoType(buffer, payload);
+    }
+
+    public static void writeNoType(ByteBuffer buffer, Payload payload){
+
         buffer.putLong( payload.tid );
         buffer.putLong( payload.lastTid );
         buffer.putLong( payload.batch );
@@ -48,7 +52,7 @@ public final class TransactionEvent {
         buffer.putInt( payloadBytes.length );
         buffer.put( payloadBytes );
 
-        return new Payload( tid, lastTid, batch, event, payload );
+        return new Payload( tid, lastTid, batch, event, payload, 1 + (Long.BYTES * 3) + eventBytes.length + payloadBytes.length );
 
     }
 
@@ -67,7 +71,7 @@ public final class TransactionEvent {
 
         // String payload = new String( buffer.array(), header + Integer.BYTES + eventSize, payloadSize, StandardCharsets.UTF_8 );
 
-        return new Payload( tid, lastTid, batch, eventName, payload );
+        return new Payload( tid, lastTid, batch, eventName, payload, (Long.BYTES * 3) + eventSize + payloadSize );
     }
 
     /**
@@ -75,7 +79,15 @@ public final class TransactionEvent {
      * It serves both for input and output
      */
     public static record Payload(
-            long tid, long lastTid, long batch, String event, String payload
+            long tid, long lastTid, long batch, String event, String payload, int totalSize
     ){}
+
+    public static Payload of(long tid, long lastTid, long batch, String event, String payload){
+        // considering UTF-8
+        // https://www.quora.com/How-many-bytes-can-a-string-hold
+        int eventBytes = (event.length() * 8) / 8;
+        int payloadBytes = (payload.length() * 8) / 8;
+        return new Payload(tid, lastTid, batch, event, payload, header + eventBytes + payloadBytes);
+    }
 
 }

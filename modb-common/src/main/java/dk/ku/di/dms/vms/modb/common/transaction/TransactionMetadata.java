@@ -17,7 +17,7 @@ public class TransactionMetadata {
     private static final Map<Long,Long> threadToTidMap;
 
     static {
-        threadToTidMap = new HashMap<Long,Long>();
+        threadToTidMap = new HashMap<>();
     }
 
     // a tid might have multiple tasks

@@ -420,7 +420,7 @@ public class VmsMetadataLoader {
 
             for (Class parameterType : parameterTypes) {
 
-                IVmsRepositoryFacade facade = (IVmsRepositoryFacade) facadeConstructor.newInstance(parameterType);
+                IVmsRepositoryFacade facade = facadeConstructor.newInstance(parameterType);
                 repositoryFacades.add(facade);
 
                 Object proxyInstance = Proxy.newProxyInstance(

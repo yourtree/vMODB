@@ -8,6 +8,27 @@ public class KeyUtils {
 
     private KeyUtils(){}
 
+    public static IKey buildRecordKey(Schema schema, int[] columns, Object... object){
+
+        if(columns.length == 1){
+            return SimpleKey.of( object[0] );
+        }
+
+        if(columns.length == object.length){
+            return CompositeKey.of( object );
+        }
+
+        Object[] values = new Object[columns.length];
+        int offset;
+        for(int i = 0; i < columns.length; i++){
+            offset = schema.getColumnOffset(columns[i]);
+            values[i] = object[offset];
+        }
+
+        return CompositeKey.of( values );
+
+    }
+
     /**
      * Build a key based on the columns
      * @param schema schema

@@ -1,7 +1,8 @@
 package dk.ku.di.dms.vms.modb.persistence;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
-import jdk.incubator.foreign.*;
+import jdk.incubator.foreign.MemorySegment;
+import jdk.incubator.foreign.ResourceScope;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import sun.misc.Unsafe;
@@ -58,7 +59,10 @@ public class PersistenceTest {
 
         long lostBytes = numberBuckets * 8;
 
-        MemorySegment segment = MemorySegment.mapFile(
+//        MemorySession session = MemorySession.openShared();
+//        MemorySegment segment = FileChannel.open(Path.of(filePath), StandardOpenOption.TRUNCATE_EXISTING).map( FileChannel.MapMode.READ_WRITE, 0, TEN_GB - lostBytes, session);
+        MemorySegment segment =
+                MemorySegment.mapFile(
                 file.toPath(),
                 0,
                 TEN_GB - lostBytes,

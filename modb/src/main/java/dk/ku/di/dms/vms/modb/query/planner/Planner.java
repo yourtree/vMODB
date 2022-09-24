@@ -61,7 +61,7 @@ public class Planner {
                 if(indexSelected == null){
                     return new Sum(queryTree.groupByProjections.get(0).columnReference.dataType,
                             queryTree.groupByProjections.get(0).columnReference.columnPosition,
-                            queryTree.groupByProjections.get(0).columnReference.table.primaryKeyIndex);
+                            queryTree.groupByProjections.get(0).columnReference.table.primaryKeyIndex());
                 }
                 return new IndexSum(queryTree.groupByProjections.get(0).columnReference.dataType,
                         queryTree.groupByProjections.get(0).columnReference.columnPosition,
@@ -130,7 +130,7 @@ public class Planner {
 
         } else {
             // then must get the PK index, ScanWithProjection
-            return new FullScanWithProjection( tb, tb.primaryKeyIndex, projectionColumns, entrySize );
+            return new FullScanWithProjection( tb, tb.primaryKeyIndex(), projectionColumns, entrySize );
 
         }
 

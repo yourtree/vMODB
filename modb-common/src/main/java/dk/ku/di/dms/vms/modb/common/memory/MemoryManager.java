@@ -1,10 +1,14 @@
 package dk.ku.di.dms.vms.modb.common.memory;
 
 import java.nio.ByteBuffer;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.logging.Logger;
 
 /**
  *
@@ -26,6 +30,8 @@ import java.util.concurrent.ConcurrentSkipListSet;
  *
  */
 public final class MemoryManager {
+
+    private static final Logger logger = Logger.getLogger("MemoryManager");
 
     /**
      * Inspiration from JVM class: {@link sun.nio.ch.Util}
@@ -70,9 +76,31 @@ public final class MemoryManager {
 
     }
 
+    private static final Map<Long, MemoryRefNode> memoryRefCache = new ConcurrentHashMap<>(10);
+    private static final Map<Long, MemoryRefNode> assignedMemoryRef = new ConcurrentHashMap<>(10);
+
     private static final BufferCache bufferCache = new BufferCache();
 
-    private static final Map<Long,ByteBuffer> assignedBuffers = new ConcurrentHashMap<>(10);
+    private static final Map<Long, ByteBuffer> assignedBuffers = new ConcurrentHashMap<>(10);
+
+    public static MemoryRefNode getTemporaryDirectMemory(long size) {
+
+        MemoryRefNode refNode = memoryRefCache.remove(size);
+        if(refNode == null){
+            long address = MemoryUtils.getUnsafe().allocateMemory(size);
+            MemoryRefNode memRef = new MemoryRefNode(address, size);
+            assignedMemoryRef.put( address, memRef );
+            return memRef;
+        }
+        assignedMemoryRef.put( refNode.address(), refNode );
+        return refNode;
+
+    }
+
+    public static void releaseTemporaryDirectMemory(long address){
+        MemoryRefNode refNode = assignedMemoryRef.remove( address );
+        memoryRefCache.put( refNode.bytes(), refNode);
+    }
 
     public static ByteBuffer getTemporaryDirectBuffer(int size) {
 
@@ -83,8 +111,6 @@ public final class MemoryManager {
         return bb;
 
     }
-
-
 
     public static ByteBuffer getTemporaryDirectBuffer() {
 
@@ -97,6 +123,10 @@ public final class MemoryManager {
     }
 
     public static void releaseTemporaryDirectBuffer(ByteBuffer buf) {
+
+        if(buf.position() > 0 || buf.limit() < buf.capacity())
+            logger.warning("Buffer returned without being properly cleared!");
+
         long address = MemoryUtils.getByteBufferAddress(buf);
         assignedBuffers.remove(address);
         bufferCache.offer(buf);

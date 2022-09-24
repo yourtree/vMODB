@@ -13,8 +13,4 @@ public class InsertOp extends DataItemVersion {
         this.bufferAddress = bufferAddress;
     }
 
-    public InsertOp asInsert(){
-        return this;
-    }
-
 }

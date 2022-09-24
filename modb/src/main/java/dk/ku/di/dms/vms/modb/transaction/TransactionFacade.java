@@ -2,8 +2,9 @@ package dk.ku.di.dms.vms.modb.transaction;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
@@ -13,13 +14,13 @@ import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
-import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.OperationSet;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.DataItemVersion;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.InsertOp;
 
-import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -53,31 +54,80 @@ public class TransactionFacade {
 
     public static void insert(Table table, Object[] values){
 
-        int recordSize = table.getSchema().getRecordSize();
+        // check constraints
 
-        ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(recordSize);
+        // pk -> lookup
+        IKey pk = KeyUtils.buildRecordKey(table.getSchema(), table.getSchema().getPrimaryKeyColumns(), values);
+        Map<IKey, OperationSet> keyMap = writesPerIndexAndKey.get( table.primaryKeyIndex().key() );
+
+        boolean exception = false;
+        if(keyMap == null){
+            // no writes so far in this batch for this index
+
+            // lets check now the index itself
+            if(table.primaryKeyIndex().exists(pk)){
+                exception = true;
+            }
+
+        } else if(keyMap.get(pk) != null) {
+            exception = true;
+            // check if this key is present in the keyMap
+        }
+
+        if(exception){
+
+            long threadId = Thread.currentThread().getId();
+            long tid = TransactionMetadata.tid(threadId);
+            List<DataItemVersion> writesTid = writesPerTransaction.get(tid);
+
+            if(writesTid == null){
+                // throw right away
+                throw new IllegalStateException("Primary key"+pk+"already exists for this table: "+table.getName());
+            }
+
+            // clean writes from this transaction
+
+            for(DataItemVersion v : writesTid){
+
+                // do we have a write in the corresponding index? always yes. if no, it is a bug
+                Map<IKey, OperationSet> operations = writesPerIndexAndKey.get( v.indexKey() );
+                if(operations != null){
+                    operations.remove(v.pk());
+                }
+
+            }
+
+            throw new IllegalStateException("Primary key"+pk+"already exists for this table: "+table.getName());
+        }
+
+        int recordSize = table.getSchema().getRecordSizeWithoutHeader();
+
+        MemoryRefNode memRef = MemoryManager.getTemporaryDirectMemory(recordSize);
 
         long threadId = Thread.currentThread().getId();
         long tid = TransactionMetadata.tid(threadId);
 
         writesPerTransaction.putIfAbsent( tid, new ArrayList<>(10) );
 
-        long startAddress = MemoryUtils.getByteBufferAddress(buffer);
-        long currAddress = startAddress;
+        long addressToWriteTo = memRef.address();
 
         int maxColumns = table.getSchema().columnOffset().length;
-        for(int index = 0; index < maxColumns; index++) {
+        int index;
 
-            DataTypeUtils.callWriteFunction( currAddress,
-                    table.getSchema().getColumnDataType(index),
-                    values[index]
-                    );
+        // TODO For embed and default?, can be directly put in a buffer instead of saving an object.
+        for(index = 0; index < maxColumns; index++) {
 
-            currAddress += table.getSchema().getColumnDataType(index).value;
+            DataType dt = table.getSchema().getColumnDataType(index);
+
+            DataTypeUtils.callWriteFunction( addressToWriteTo,
+                    dt,
+                    values[index] );
+
+            addressToWriteTo += dt.value;
 
         }
 
-        DataItemVersion dataItemVersion = InsertOp.insert( tid, startAddress );
+        DataItemVersion dataItemVersion = InsertOp.insert( tid, addressToWriteTo );
 
         writesPerTransaction.get( tid ).add( dataItemVersion );
 

@@ -26,7 +26,7 @@ public class RecordBufferContext {
     // number of records stored so far
     public int size;
 
-    // just to avoid many method calls, since this vlue does not change
+    // just to avoid many method calls, since this value does not change
     public final long address;
 
     // to avoid having to get info from schema every time

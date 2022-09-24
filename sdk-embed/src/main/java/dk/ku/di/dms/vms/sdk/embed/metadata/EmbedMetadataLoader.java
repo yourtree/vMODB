@@ -71,6 +71,8 @@ public class EmbedMetadataLoader {
             Schema schema = new Schema(vmsDataSchema.columnNames, vmsDataSchema.columnDataTypes,
                     vmsDataSchema.primaryKeyColumns, null);
 
+            // map this to a file, so whenever a batch commit arrives i can make the file durable
+
             RecordBufferContext recordBufferContext = loadMemoryBuffer(10, schema.getRecordSize());
 
             UniqueHashIndex pkIndex = new UniqueHashIndex(recordBufferContext, schema, schema.getPrimaryKeyColumns());
@@ -87,7 +89,6 @@ public class EmbedMetadataLoader {
     private static RecordBufferContext loadMemoryBuffer(int maxNumberOfRecords, int recordSize){
 
         Cleaner cleaner = Cleaner.create();
-
         try(ResourceScope scope = ResourceScope.newSharedScope(cleaner)) {
             MemorySegment segment = MemorySegment.allocateNative(1024 * 100, scope);
             return new RecordBufferContext(segment, maxNumberOfRecords, recordSize);

@@ -12,6 +12,9 @@ import java.util.Map;
  */
 public class Schema {
 
+    // flag active + materialized hashed PK
+    private static final int recordHeader = Header.SIZE + Integer.BYTES;
+
     // identification of columns that form the primary key. all tables must have a primary key
     private final int[] primaryKeyColumns;
 
@@ -38,8 +41,7 @@ public class Schema {
 
         this.columnOffset = new int[columnDataTypes.length];
 
-        // flag active + materialized hashed PK
-        int acc = Header.SIZE + Integer.BYTES;
+        int acc = recordHeader;
         for(int j = 0; j < columnDataTypes.length; j++){
             switch (columnDataTypes[j]){
                 case LONG, DATE -> acc += Long.BYTES;
@@ -94,6 +96,10 @@ public class Schema {
 
     public int getRecordSize(){
         return this.recordSize;
+    }
+
+    public int getRecordSizeWithoutHeader(){
+        return this.recordSize - recordHeader;
     }
 
     private void addConstraints( ConstraintReference[] constraints ){

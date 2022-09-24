@@ -4,7 +4,6 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import sun.misc.Unsafe;
 
 import java.nio.ByteBuffer;
-import java.util.Date;
 import java.util.function.Function;
 
 import static dk.ku.di.dms.vms.modb.common.type.Constants.DEFAULT_MAX_SIZE_CHAR;
@@ -80,19 +79,38 @@ public class DataTypeUtils {
     public static void callWriteFunction(long address, DataType dt, Object value){
         switch (dt){
             case BOOL -> // byte is used. on unsafe, the boolean is used
-                    UNSAFE.putByte(address, (byte)value);
-            case INT -> UNSAFE.putInt(address, (int)value);
+                    UNSAFE.putByte(null, address, (byte)value);
+            case INT -> UNSAFE.putInt(null, address, (int)value);
             case CHAR -> {
                 Character[] charArray = (Character[]) value;
-                long currAddress = address;
+                long currPos = address;
                 for(int i = 0; i < DEFAULT_MAX_SIZE_CHAR; i++) {
-                    UNSAFE.putChar(currAddress, charArray[i]);
-                    currAddress += Character.BYTES;
+                    UNSAFE.putChar(null, currPos, charArray[i]);
+                    currPos += Character.BYTES;
                 }
             }
-            case LONG, DATE -> UNSAFE.putLong(address, (long)value);
-            case FLOAT -> UNSAFE.putFloat(address, (float)value);
-            case DOUBLE -> UNSAFE.putDouble(address, (double)value);
+            case LONG, DATE -> UNSAFE.putLong(null, address, (long)value);
+            case FLOAT -> UNSAFE.putFloat(null, address, (float)value);
+            case DOUBLE -> UNSAFE.putDouble(null, address, (double)value);
+            default -> throw new IllegalStateException("Unknown data type");
+        }
+    }
+
+    public static void callWriteFunction(ByteBuffer buffer, DataType dt, Object value){
+
+        switch (dt){
+            case BOOL -> // byte is used. on unsafe, the boolean is used
+                    buffer.put( (byte)value);
+            case INT -> buffer.putInt( (int)value);
+            case CHAR -> {
+                Character[] charArray = (Character[]) value;
+                for(int i = 0; i < DEFAULT_MAX_SIZE_CHAR; i++) {
+                    buffer.putChar(charArray[i]);
+                }
+            }
+            case LONG, DATE -> buffer.putLong((long)value);
+            case FLOAT -> buffer.putFloat( (float)value);
+            case DOUBLE -> buffer.putDouble((double)value);
             default -> throw new IllegalStateException("Unknown data type");
         }
     }

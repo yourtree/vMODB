@@ -18,13 +18,11 @@ import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
-import dk.ku.di.dms.vms.modb.common.schema.network.control.Heartbeat;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
 import java.io.IOException;
@@ -37,6 +35,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
@@ -46,7 +45,7 @@ import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.S
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.VMS_TYPE;
 import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.SERVER;
 import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.VMS;
-import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.*;
+import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.UNREACHABLE_NODE;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -78,7 +77,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
     // received from program start
     private final Map<Integer, NetworkNode> starterVMSs;
 
-    // receive from program start + those that joined later
+    // those received from program start + those that joined later
     private final Map<String, VmsIdentifier> vmsMetadata;
 
     private final Map<String, TransactionDAG> transactionMap;
@@ -91,14 +90,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
     // must update the "me" on snapshotting (i.e., committing)
     private long tid;
 
-    // initial design, maybe readwrite lock might be better in case several reading threads
-    private final Object batchCommitLock;
-
     // the offset of the pending batch commit
     private long batchOffsetPendingCommit;
 
     // the current batch on which new transactions are being generated for
-    private volatile long batchOffset;
+    private long batchOffset;
 
     // metadata about all non-committed batches. when a batch commit finishes, it is removed from this map
     private final Map<Long, BatchContext> batchContextMap;
@@ -121,6 +117,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     private final CountDownLatch connectVmsBarrier;
 
+    private final AtomicBoolean scheduleBatchCommit;
+
     public Coordinator(
                        ExecutorService taskExecutor,
 
@@ -129,7 +127,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                        Map<Integer, NetworkNode> startersVMSs,
                        Map<String, TransactionDAG> transactionMap,
-                       // Map<Integer, Map<String, NetworkNode>> vmsConsumerSet, // built from the transactionMap
 
                        ServerIdentifier me,
                        CoordinatorOptions options,
@@ -155,7 +152,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
         this.servers = servers == null ? new ConcurrentHashMap<>() : servers;
         this.starterVMSs = startersVMSs;
         this.vmsMetadata = new HashMap<>(10);
-        this.batchCommitLock = new Object();
 
         // connection to VMSs
         this.connectToVmsProtocolMap = new HashMap<>(10);
@@ -174,11 +170,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         // transactions
         this.tid = startingTid;
-        this.parsedTransactionRequests = parsedTransactionRequests; // shared data structure
-        this.transactionMap = Objects.requireNonNull(transactionMap); // in production, it requires receiving new transaction definitions
-        // this.vmsConsumerSet = vmsConsumerSet;
+        // shared data structure
+        this.parsedTransactionRequests = parsedTransactionRequests;
+
+        // in production, it requires receiving new transaction definitions
+        this.transactionMap = Objects.requireNonNull(transactionMap);
         this.txManagerCtx = new TransactionManagerContext(
-                new LinkedBlockingQueue<>(),
+                // new LinkedBlockingQueue<>(),
                 new ConcurrentLinkedQueue<>(),
                 new ConcurrentLinkedQueue<>() );
 
@@ -187,7 +185,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         this.batchOffsetPendingCommit = batchOffset;
         this.batchContextMap = new ConcurrentHashMap<>();
         this.batchReplicationStrategy = batchReplicationStrategy;
-
+        this.scheduleBatchCommit = new AtomicBoolean(false);
         this.transactionInputsToResend = new LinkedBlockingDeque<>();
     }
 
@@ -205,38 +203,38 @@ public final class Coordinator extends SignalingStoppableRunnable {
     public void run() {
 
         // setup asynchronous listener for new connections
-        serverSocket.accept( null, new AcceptCompletionHandler());
+        this.serverSocket.accept( null, new AcceptCompletionHandler());
 
         // only submit when there are events to react to
         // perhaps not a good idea to have this thread in a pool, since this thread will get blocked
         // BUT, it is simply about increasing the pool size with +1...
         TransactionManager txManager = new TransactionManager();
-        // Future<?> txManagerTask = taskExecutor.submit( txManager );
-        // txManager.run();
 
         // they can run concurrently, max 3 at a time always
         ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool( 1 );
 
-        // callbacks
-        ScheduledFuture<?> parseTask = scheduledExecutorService.scheduleWithFixedDelay(
-                this::processTransactionInputEvents, 0L, 10000, TimeUnit.MILLISECONDS);
-
-        // the TCP provides this by design
-        // ScheduledFuture<?> heartbeatTask = scheduledExecutorService.scheduleAtFixedRate(this::sendHeartbeats, 0L, options.getHeartbeatTimeout() - options.getHeartbeatSlack(), TimeUnit.MILLISECONDS);
-
         ScheduledFuture<?> batchCommitTask = scheduledExecutorService.scheduleAtFixedRate(
-                this::spawnBatchCommitFake, 10000, options.getBatchWindow(), TimeUnit.MILLISECONDS);
-
-        // if the transaction manager thread blocks (e.g., waiting for a queue), the thread is not delivered back to the pool
+                this::scheduleBatchCommit, 30000, options.getBatchWindow(), TimeUnit.MILLISECONDS);
 
         // connect to all virtual microservices
         connectToVMSs();
+
+        // initialize batch offset map
+        this.batchContextMap.put(batchOffset, new BatchContext(batchOffset));
 
         while(isRunning()){
 
             try {
 
+                processTransactionInputEvents();
+
                 txManager.doAction();
+
+                // handle batch commit task
+                if(scheduleBatchCommit.get()){
+                    scheduleBatchCommit.set(false);
+                    runBatchCommit();
+                }
 
                 // handle other events
                 if(!transactionInputsToResend.isEmpty()){
@@ -245,11 +243,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     resendTransactionalInputEvents(vmsConnectionMetadataMap.get(kv.getKey().hashCode()), list);
                 }
 
-            } catch (Exception ignored) {} // not going to be interrupted by our code
+            } catch (Exception e) {
+                logger.warning("Exception captured: "+e.getMessage());
+            }
 
         }
 
-        failSafeClose(batchCommitTask, parseTask);
+        failSafeClose(batchCommitTask);
 
     }
 
@@ -458,6 +458,20 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         // new barrier? maybe not. just assume all VMSs received. otherwise they can request
 
+        // do we need this check?
+//        boolean allKnown = true;
+//        for (TransactionInput.Event inputEvent : transactionInput.events) {
+//            // look for the event in the topology
+//            EventIdentifier event = transactionDAG.topology.get(inputEvent.name);
+//            VmsIdentifier vms = vmsMetadata.get(event.vms);
+//            if(vms == null) {
+//                logger.info("A transaction is dropped because there is no metadata about one participating vms: "+ event.vms);
+//                allKnown = false;
+//                break;
+//            }
+//        }
+//        if(!allKnown) continue;
+
     }
 
     private NetworkNode findConsumerVms(String outputEvent){
@@ -475,12 +489,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     }
 
-    private void failSafeClose(ScheduledFuture<?> batchCommitTask,
-                               ScheduledFuture<?> parseTask){
+    private void failSafeClose(ScheduledFuture<?> batchCommitTask){
         // safe close
         batchCommitTask.cancel(false);
         // heartbeatTask.cancel(false); // do not interrupt given the lock management
-        parseTask.cancel(false);
+        // parseTask.cancel(false);
 //        if(!txManagerTask.isDone())
 //            txManager.stop();
         try { serverSocket.close(); } catch (IOException ignored) {}
@@ -527,6 +540,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 }
                 case(EVENT) -> {
+                    // it could be interesting to received batch events from VMSs later
                     logger.info("New event received from VMS");
                 }
                 default ->
@@ -535,8 +549,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
             }
 
             connectionMetadata.readBuffer.clear();
-
             connectionMetadata.channel.read( connectionMetadata.readBuffer, connectionMetadata, this );
+
         }
 
         @Override
@@ -788,7 +802,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     /**
      *
-     * TODO make it a batch of events. crate another message type
+     * TODO make it a batch of events.
      * 15 | number of events | for each event { size in bytes and payload }
      *
      * A thread will execute this piece of code to liberate the "Accept" thread handler
@@ -812,6 +826,140 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     }
 
+    private class EventBatchSendProtocol {
+
+        private int idx;
+
+        private final VmsIdentifier vms;
+
+        private final EventBatchWriteCompletionHandler writeCompletionHandler;
+
+        private final List<TransactionEvent.Payload> list;
+
+        private boolean terminal;
+
+        private long batch;
+
+        public EventBatchSendProtocol(VmsIdentifier vms, List<TransactionEvent.Payload> list, boolean terminal, long batch) {
+            this.idx = 0;
+            this.vms = vms;
+            this.writeCompletionHandler = new EventBatchWriteCompletionHandler();
+            this.list = list;
+            this.terminal = terminal;
+            this.batch = batch;
+        }
+
+        public EventBatchSendProtocol(VmsIdentifier vms, List<TransactionEvent.Payload> list) {
+            this.idx = 0;
+            this.vms = vms;
+            this.writeCompletionHandler = new EventBatchWriteCompletionHandler();
+            this.list = list;
+        }
+
+        public void init() {
+
+            ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get(vms.hashCode());
+
+            connectionMetadata.writeLock.acquireUninterruptibly();
+
+            batchEvents(connectionMetadata);
+
+            // keep sending until finished
+            connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata, this.writeCompletionHandler);
+
+        }
+
+        private void batchEvents(ConnectionMetadata connectionMetadata){
+
+            int bufferSize = connectionMetadata.writeBuffer.capacity();
+
+            connectionMetadata.writeBuffer.clear();
+
+            connectionMetadata.writeBuffer.put(BATCH_OF_EVENTS);
+
+            // separate 4 bytes (int) for number of events in this buffer
+            // connectionMetadata.writeBuffer.putInt(0);
+            connectionMetadata.writeBuffer.position(5);
+
+            // batch them all in the buffer,
+            // until buffer capacity is reached or elements are all sent
+
+            int remainingBytes = bufferSize - 1 - Integer.BYTES;
+            int listSize = this.list.size();
+
+            int count = 0;
+
+            // maybe we need a safe limit
+            while(this.idx < listSize && remainingBytes > this.list.get(idx).totalSize()){
+                TransactionEvent.write( connectionMetadata.writeBuffer, this.list.get(idx) );
+                remainingBytes = remainingBytes - list.get(this.idx).totalSize();
+                this.idx++;
+                count++;
+            }
+
+            connectionMetadata.writeBuffer.mark();
+            connectionMetadata.writeBuffer.putInt(1, count);
+            connectionMetadata.writeBuffer.reset();
+
+            connectionMetadata.writeBuffer.flip();
+        }
+
+        private class EventBatchWriteCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
+
+            private boolean terminalSent;
+            public EventBatchWriteCompletionHandler(){
+                this.terminalSent = false;
+            }
+
+            @Override
+            public void completed(Integer result, ConnectionMetadata connectionMetadata) {
+
+                // do we still have events to batch?
+                if(idx < list.size()){
+                    batchEvents(connectionMetadata);
+                    connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata, this);
+                } else {
+
+                    if(terminal && !terminalSent){
+                        terminalSent = true;
+
+                        // TODO send terminal message
+                        connectionMetadata.writeBuffer.clear();
+
+                        connectionMetadata.writeBuffer.put(END_OF_BATCH);
+                        connectionMetadata.writeBuffer.putLong(batch);
+
+                        connectionMetadata.writeBuffer.flip();
+                        connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata, this);
+
+                    } else {
+                        connectionMetadata.writeBuffer.clear();
+                        connectionMetadata.writeLock.release();
+                    }
+                }
+
+            }
+
+            @Override
+            public void failed(Throwable exc, ConnectionMetadata attachment) {
+                logger.warning("Failure on batching events.");
+            }
+        }
+
+    }
+
+    /**
+     * Do not schedule a new batch commit if TID has not been incremented since last
+     * batch commit scheduling
+     */
+    private void scheduleBatchCommit(){
+        logger.info("Batch commit schedule spawned.");
+        boolean outcome;
+        do{
+            outcome = scheduleBatchCommit.compareAndExchange(false, true);
+        } while (!outcome);
+    }
+
     /**
      * Given a set of VMSs involved in the last batch
      * (for easiness can send to all of them for now)
@@ -819,170 +967,184 @@ public final class Coordinator extends SignalingStoppableRunnable {
      *
      * Callback to start batch commit process
      *
+     * we need a cut. all vms must be aligned in terms of tid
+     * because the other thread might still be sending intersecting TIDs
+     * e.g., vms 1 receives batch 1 tid 1 vms 2 received batch 2 tid 1
+     * this is solved by fixing the batch per transaction (and all its events)
+     * this is an anomaly across batches
+     *
+     * but another problem is that an interleaving can allow the following problem
+     * commit handler issues batch 1 to vms 1 with last tid 1
+     * but tx-mgr issues event with batch 1 vms 1 last tid 2
+     * this can happen because the tx-mgr is still in the loop
+     * this is an anomaly within a batch
+     *
+     * so we need synchronization to disallow the second
+     *
+     * obtain a consistent snapshot of last TIDs for all VMSs
+     * the transaction manager must obtain the next batch inside the synchronized block
+     *
      * TODO store the transactions in disk before sending
      */
-    private void spawnBatchCommitFake() {
+    private void runBatchCommit(){
 
-        logger.info("Batch commit spawned.");
-    }
-
-
-    private void spawnBatchCommit(){
-
-        logger.info("Batch commit spawned.");
-
-        // we need a cut. all vms must be aligned in terms of tid
-        // because the other thread might still be sending intersecting TIDs
-        // e.g., vms 1 receives batch 1 tid 1 vms 2 received batch 2 tid 1
-        // this is solved by fixing the batch per transaction (and all its events)
-        // this is an anomaly across batches
-
-        // but another problem is that an interleaving can allow the following problem
-        // commit handler issues batch 1 to vms 1 with last tid 1
-        // but tx-mgr issues event with batch 1 vms 1 last tid 2
-        // this can happen because the tx-mgr is still in the loop
-        // this is an anomaly within a batch
-
-        // so we need synchronization to disallow the second
-
-        // obtain a consistent snapshot of last TIDs for all VMSs
-        // the transaction manager must obtain the next batch inside the synchronized block
+        logger.info("Batch commit run started.");
 
         // why do I need to replicate vmsTidMap? to restart from this point if the leader fails
         Map<String,Long> lastTidOfBatchPerVms;
-        long currBatch;
-        synchronized (batchCommitLock) {
+        long currBatch = batchOffset;
+        BatchContext currBatchContext = batchContextMap.get( currBatch );
 
-            currBatch = batchOffset;
+        // a map of the last tid for each vms
+        lastTidOfBatchPerVms = vmsMetadata.values().stream().collect(
+                Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getLastTid ) );
 
-            BatchContext currBatchContext = batchContextMap.get( currBatch );
-            currBatchContext.seal();
+        currBatchContext.seal(lastTidOfBatchPerVms);
 
-            // a map of the last tid for each vms
-            lastTidOfBatchPerVms = vmsMetadata.values().stream().collect(
-                    Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getLastTid ) );
+        // increment batch offset
+        batchOffset = batchOffset + 1;
 
-            // define new batch context
-            // need to get
-            BatchContext newBatchContext = new BatchContext(batchOffset, lastTidOfBatchPerVms);
-            batchContextMap.put( batchOffset, newBatchContext );
+        // define new batch context
+        BatchContext newBatchContext = new BatchContext(batchOffset);
+        batchContextMap.put( batchOffset, newBatchContext );
 
-            long newBatch = ++batchOffset; // first increase the value and then execute the statement
+        logger.info("Current batch offset is "+currBatch+" and new batch offset is "+batchOffset);
 
-            logger.info("Current batch offset is "+currBatch+" and new batch offset is "+newBatch);
-
-        }
         // new TIDs will be emitted with the new batch in the transaction manager
 
-        // to refrain the number of servers increasing concurrently, instead of
-        // synchronizing the operation, I can simply obtain the collection first
-        // but what happens if one of the servers in the list fails?
-        Collection<ServerIdentifier> activeServers = servers.values();
-        int nServers = activeServers.size();
+        for(VmsIdentifier vms : vmsMetadata.values()){
 
-        CompletableFuture<?>[] promises = new CompletableFuture[nServers];
+            var list = vms.transactionEventsPerBatch.get(currBatch);
+            if(list != null) {
 
-        Set<Integer> serverVotes = Collections.synchronizedSet( new HashSet<>(nServers) );
+                EventBatchSendProtocol protocol;
+                if(currBatchContext.terminalVMSs.contains(vms.vmsIdentifier)) {
+                    protocol = new EventBatchSendProtocol(vms, list, true, currBatch);
+                } else {
+                    protocol = new EventBatchSendProtocol(vms, list);
+                }
+                protocol.init();
+            }
 
-        String lastTidOfBatchPerVmsJson = serdesProxy.serializeMap( lastTidOfBatchPerVms );
+        }
 
-        int i = 0;
-        for(ServerIdentifier server : activeServers){
+        // the batch commit only has progress (a safety property) the way it is implemented now when future events
+        // touch the same VMSs that have been touched by transactions in the last batch.
+        // how can we guarantee progress?
 
-            if(!server.isActive()) continue;
-            promises[i] = CompletableFuture.supplyAsync( () ->
-            {
-                // could potentially use another channel for writing commit-related messages...
-                // could also just open and close a new connection
-                // actually I need this since I must read from this thread instead of relying on the
-                // read completion handler
-                AsynchronousSocketChannel channel = null;
-                try {
+        if ( batchReplicationStrategy != NONE) {
 
-                    InetSocketAddress address = new InetSocketAddress(server.host, server.port);
-                    channel = AsynchronousSocketChannel.open(group);
-                    channel.setOption( TCP_NODELAY, true );
-                    channel.setOption( SO_KEEPALIVE, false );
-                    channel.connect(address).get();
+            // to refrain the number of servers increasing concurrently, instead of
+            // synchronizing the operation, I can simply obtain the collection first
+            // but what happens if one of the servers in the list fails?
+            Collection<ServerIdentifier> activeServers = servers.values();
+            int nServers = activeServers.size();
 
-                    ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024);
-                    BatchReplication.write( buffer, currBatch, lastTidOfBatchPerVmsJson );
-                    channel.write( buffer ).get();
+            CompletableFuture<?>[] promises = new CompletableFuture[nServers];
 
-                    buffer.clear();
+            Set<Integer> serverVotes = Collections.synchronizedSet(new HashSet<>(nServers));
 
-                    // immediate read in the same channel
-                    channel.read( buffer ).get();
+            String lastTidOfBatchPerVmsJson = serdesProxy.serializeMap(lastTidOfBatchPerVms);
 
-                    BatchReplication.BatchReplicationPayload response = BatchReplication.read( buffer );
+            int i = 0;
+            for (ServerIdentifier server : activeServers) {
 
-                    buffer.clear();
+                if (!server.isActive()) continue;
+                promises[i] = CompletableFuture.supplyAsync(() ->
+                {
+                    // could potentially use another channel for writing commit-related messages...
+                    // could also just open and close a new connection
+                    // actually I need this since I must read from this thread instead of relying on the
+                    // read completion handler
+                    AsynchronousSocketChannel channel = null;
+                    try {
 
-                    MemoryManager.releaseTemporaryDirectBuffer(buffer);
+                        InetSocketAddress address = new InetSocketAddress(server.host, server.port);
+                        channel = AsynchronousSocketChannel.open(group);
+                        channel.setOption(TCP_NODELAY, true);
+                        channel.setOption(SO_KEEPALIVE, false);
+                        channel.connect(address).get();
 
-                    // assuming the follower always accept
-                    if(currBatch == response.batch()) serverVotes.add( server.hashCode() );
+                        ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024);
+                        BatchReplication.write(buffer, currBatch, lastTidOfBatchPerVmsJson);
+                        channel.write(buffer).get();
 
-                    return null;
+                        buffer.clear();
 
-                } catch (InterruptedException | ExecutionException | IOException e) {
-                    // cannot connect to host
-                    logger.warning("Error connecting to host. I am "+ me.host+":"+me.port+" and the target is "+ server.host+":"+ server.port);
-                    return null;
-                } finally {
-                    if(channel != null && channel.isOpen()) {
-                        try {
-                            channel.close();
-                        } catch (IOException ignored) {}
+                        // immediate read in the same channel
+                        channel.read(buffer).get();
+
+                        BatchReplication.BatchReplicationPayload response = BatchReplication.read(buffer);
+
+                        buffer.clear();
+
+                        MemoryManager.releaseTemporaryDirectBuffer(buffer);
+
+                        // assuming the follower always accept
+                        if (currBatch == response.batch()) serverVotes.add(server.hashCode());
+
+                        return null;
+
+                    } catch (InterruptedException | ExecutionException | IOException e) {
+                        // cannot connect to host
+                        logger.warning("Error connecting to host. I am " + me.host + ":" + me.port + " and the target is " + server.host + ":" + server.port);
+                        return null;
+                    } finally {
+                        if (channel != null && channel.isOpen()) {
+                            try {
+                                channel.close();
+                            } catch (IOException ignored) {
+                            }
+                        }
                     }
+
+                    // these threads need to block to wait for server response
+
+                }, taskExecutor).exceptionallyAsync((x) -> {
+                    defaultLogError(UNREACHABLE_NODE, server.hashCode());
+                    return null;
+                }, taskExecutor);
+                i++;
+            }
+
+            // if none, do nothing
+            if ( batchReplicationStrategy == AT_LEAST_ONE){
+                // asynchronous
+                // at least one is always necessary
+                int j = 0;
+                while (j < nServers && serverVotes.size() < 1){
+                    promises[i].join();
+                    j++;
+                }
+                if(serverVotes.isEmpty()){
+                    logger.warning("The system has entered in a state that data may be lost since there are no followers to replicate the current batch offset.");
+                }
+            } else if ( batchReplicationStrategy == MAJORITY ){
+
+                int simpleMajority = ((nServers + 1) / 2);
+                // idea is to iterate through servers, "joining" them until we have enough
+                int j = 0;
+                while (j < nServers && serverVotes.size() <= simpleMajority){
+                    promises[i].join();
+                    j++;
                 }
 
-                // these threads need to block to wait for server response
+                if(serverVotes.size() < simpleMajority){
+                    logger.warning("The system has entered in a state that data may be lost since a majority have not been obtained to replicate the current batch offset.");
+                }
+            } else if ( batchReplicationStrategy == ALL ) {
+                CompletableFuture.allOf( promises ).join();
+                if ( serverVotes.size() < nServers ) {
+                    logger.warning("The system has entered in a state that data may be lost since there are missing votes to replicate the current batch offset.");
+                }
+            }
 
-            }, taskExecutor).exceptionallyAsync( (x) -> {
-                defaultLogError( UNREACHABLE_NODE, server.hashCode() );
-                return null;
-            }, taskExecutor);
-            i++;
+            // for now, we don't have a fallback strategy...
         }
-
-        // if none, do nothing
-        if ( batchReplicationStrategy == AT_LEAST_ONE){
-            // asynchronous
-            // at least one is always necessary
-            int j = 0;
-            while (j < nServers && serverVotes.size() < 1){
-                promises[i].join();
-                j++;
-            }
-            if(serverVotes.isEmpty()){
-                logger.warning("The system has entered in a state that data may be lost since there are no followers to replicate the current batch offset.");
-            }
-        } else if ( batchReplicationStrategy == MAJORITY ){
-
-            int simpleMajority = ((nServers + 1) / 2);
-            // idea is to iterate through servers, "joining" them until we have enough
-            int j = 0;
-            while (j < nServers && serverVotes.size() <= simpleMajority){
-                promises[i].join();
-                j++;
-            }
-
-            if(serverVotes.size() < simpleMajority){
-                logger.warning("The system has entered in a state that data may be lost since a majority have not been obtained to replicate the current batch offset.");
-            }
-        } else if ( batchReplicationStrategy == ALL ) {
-            CompletableFuture.allOf( promises ).join();
-            if ( serverVotes.size() < nServers ) {
-                logger.warning("The system has entered in a state that data may be lost since there are missing votes to replicate the current batch offset.");
-            }
-        }
-
-        // for now, we don't have a fallback strategy...
 
     }
 
-    /**
+    /*
      * (a) Heartbeat sending to avoid followers to initiate a leader election. That can still happen due to network latency.
      *
      * Given a list of known followers, send to each a heartbeat
@@ -992,19 +1154,19 @@ public final class Coordinator extends SignalingStoppableRunnable {
      *
      * I can implement later a priority-based scheduling of writes.... maybe some Java DT can help?
      */
-    private void sendHeartbeats() {
-        logger.info("Sending vote requests. I am "+ me.host+":"+me.port);
-        for(ServerIdentifier server : servers.values()){
-            ConnectionMetadata connectionMetadata = serverConnectionMetadataMap.get( server.hashCode() );
-            if(connectionMetadata.channel != null) {
-                Heartbeat.write(connectionMetadata.writeBuffer, me);
-                connectionMetadata.writeLock.acquireUninterruptibly();
-                connectionMetadata.channel.write( connectionMetadata.writeBuffer, connectionMetadata, new WriteCompletionHandler() );
-            } else {
-                issueQueue.add( new Issue( CHANNEL_NOT_REGISTERED, server.hashCode() ) );
-            }
-        }
-    }
+//    private void sendHeartbeats() {
+//        logger.info("Sending vote requests. I am "+ me.host+":"+me.port);
+//        for(ServerIdentifier server : servers.values()){
+//            ConnectionMetadata connectionMetadata = serverConnectionMetadataMap.get( server.hashCode() );
+//            if(connectionMetadata.channel != null) {
+//                Heartbeat.write(connectionMetadata.writeBuffer, me);
+//                connectionMetadata.writeLock.acquireUninterruptibly();
+//                connectionMetadata.channel.write( connectionMetadata.writeBuffer, connectionMetadata, new WriteCompletionHandler() );
+//            } else {
+//                issueQueue.add( new Issue( CHANNEL_NOT_REGISTERED, server.hashCode() ) );
+//            }
+//        }
+//    }
 
     /**
      * Allows to reuse the thread pool assigned to socket to complete the writing
@@ -1031,33 +1193,30 @@ public final class Coordinator extends SignalingStoppableRunnable {
      *  how long does it take to process a batch of input transactions?
      *  instead of trying to match the rate of processing, perhaps we can create read tasks
      *
-     * TODO do not send the transactions. the batch commit should perform this
-     *  only parse then and save in memory data structure
-     *
      *  processing the transaction input and creating the
      *  corresponding events
      *  the network buffering will send
      */
     private void processTransactionInputEvents(){
 
-        logger.info("processTransactionInputEvents spawned.");
+        // logger.info("processTransactionInputEvents spawned.");
 
-        if(vmsMetadata.isEmpty()){
+        if(this.vmsMetadata.isEmpty()){
             logger.info("No VMS metadata received so far. Transaction input events will not be processed yet.");
             return;
         }
 
-        int size = parsedTransactionRequests.size();
-        if( parsedTransactionRequests.size() == 0 ){
+        int size = this.parsedTransactionRequests.size();
+        if( size == 0 ){
             return;
         }
 
         Collection<TransactionInput> transactionRequests = new ArrayList<>(size); // threshold, for concurrent appends
-        parsedTransactionRequests.drainTo( transactionRequests );
+        this.parsedTransactionRequests.drainTo( transactionRequests );
 
         for(TransactionInput transactionInput : transactionRequests){
 
-            TransactionDAG transactionDAG = transactionMap.get( transactionInput.name );
+            TransactionDAG transactionDAG = this.transactionMap.get( transactionInput.name );
 
             // should find a way to continue emitting new transactions without stopping this thread
             // non-blocking design
@@ -1065,28 +1224,10 @@ public final class Coordinator extends SignalingStoppableRunnable {
             // not belong to different batches
 
             // to allow for a snapshot of the last TIDs of each vms involved in this transaction
-            long batch_;
-            synchronized (batchCommitLock) {
-                // get the batch here since the batch handler is also incrementing it inside a synchronized block
-                batch_ = batchOffset;
-            }
-
-            boolean allKnown = true;
-            for (TransactionInput.Event inputEvent : transactionInput.events) {
-                // look for the event in the topology
-                EventIdentifier event = transactionDAG.topology.get(inputEvent.name);
-                VmsIdentifier vms = vmsMetadata.get(event.vms);
-                if(vms == null) {
-                    logger.info("A transaction is dropped because there is no metadata about one participating vms: "+ event.vms);
-                    allKnown = false;
-                    break;
-                }
-            }
-
-            if(!allKnown) continue;
+            long batch_ = this.batchOffset;
 
             // this is the only thread updating this value, so it is by design an atomic operation
-            long tid_ = ++tid;
+            long tid_ = ++this.tid;
 
             // for each input event, send the event to the proper vms
             // assuming the input is correct, i.e., all events are present
@@ -1096,54 +1237,26 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 EventIdentifier event = transactionDAG.topology.get(inputEvent.name);
 
                 // get the vms
-                VmsIdentifier vms = vmsMetadata.get(event.vms);
-
-                // get the connection metadata
-                ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.hashCode() );
-
-                // we could employ deterministic writes to the channel, that is, an order that would not require locking for writes
-                // we could possibly open a channel per write operation, but... what are the consequences of too much opened connections?
-                // FIXME make this thread handles the resend, this way we don't need locks
-                connectionMetadata.writeLock.acquireUninterruptibly();
-
-                // get current pos to later verify whether
-                // int currentPos = connectionMetadata.writeBuffer.position();
-                // connectionMetadata.writeBuffer.mark();
+                VmsIdentifier vms = this.vmsMetadata.get(event.vms);
 
                 // write. think about failures/atomicity later
-                TransactionEvent.Payload txEvent = TransactionEvent.write(connectionMetadata.writeBuffer, tid_, vms.lastTid, batch_, inputEvent.name, inputEvent.payload);
-
-                connectionMetadata.writeBuffer.flip();
-                try {
-                    connectionMetadata.channel.write(connectionMetadata.writeBuffer).get(); //, connectionMetadata, new WriteCompletionHandler());
-                } catch (InterruptedException | ExecutionException e) {
-                    // queue for later sending
-                    vms.off();
-                    vms.pendingWrites.add(txEvent);
-                } finally {
-                    connectionMetadata.writeBuffer.clear();
-                    connectionMetadata.writeLock.release();
-                }
+                TransactionEvent.Payload txEvent = TransactionEvent.of(tid_, vms.lastTid, batch_, inputEvent.name, inputEvent.payload);
 
                 // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
-                List<TransactionEvent.Payload> list = vms.transactionEventsPerBatch.get(batch_);
-                if (list == null ){
-                    vms.transactionEventsPerBatch.put(batch_, new ArrayList<>());
-                } else {
-                    list.add(txEvent);
-                }
+                List<TransactionEvent.Payload> list = vms.transactionEventsPerBatch.computeIfAbsent(batch_, k -> new ArrayList<>(10));
+                list.add(txEvent);
 
                 // a vms, although receiving an event from a "next" batch, cannot yet commit, since
                 // there may have additional events to arrive from the current batch
                 // so the batch request must contain the last tid of the given vms
 
-                // update for next transaction
+                // update for next transaction. this is basically to ensure VMS do not wait for a tid that will never come. TIDs processed by a vms may not be sequential
                 vms.lastTid = tid_;
 
             }
 
             // add terminal to the set... so cannot be immutable when the batch context is created...
-            batchContextMap.get(batch_).terminalVMSs.addAll( transactionDAG.terminals );
+            this.batchContextMap.get(batch_).terminalVMSs.addAll( transactionDAG.terminals );
 
         }
 
@@ -1160,8 +1273,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
      * TODO make this the only thread writing to the socket
      *      that requires buffers to read what should be written (for the spawn batch?)
      *      network fluctuation is another problem...
-     *      - resend bring here
-     *      - process transaction input events here
      *
      */
     public class TransactionManager {
@@ -1172,6 +1283,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 // https://web.mit.edu/6.005/www/fa14/classes/20-queues-locks/message-passing/
                 byte action = !txManagerCtx.batchCompleteEvents.isEmpty() ? BATCH_COMPLETE : 0;
                 action = action == 0 ? (!txManagerCtx.transactionAbortEvents.isEmpty() ? TX_ABORT : action) : action;
+
+                //Byte action = txManagerCtx.actionQueue.poll();
 
                 // do we have any transaction-related event?
                 switch(action){
@@ -1187,13 +1300,15 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         // only if it is not a duplicate vote
                         if( batchContext.missingVotes.remove( msg.vms() ) ){
 
-                            // making this implement order-independent, so not assuming batch commit are received in order, although they are necessarily applied in order both here and in the VMSs
-                            // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes, it must check the batch context match to see whether it is completed
+                            // making this implement order-independent, so not assuming batch commit are received in order,
+                            // although they are necessarily applied in order both here and in the VMSs
+                            // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes,
+                            // it must check the batch context match to see whether it is completed
                             if( batchContext.batchOffset == batchOffsetPendingCommit && batchContext.missingVotes.size() == 0 ){
 
                                 sendCommitRequestToVMSs(batchContext);
 
-                                // is the next batch completed already?
+                                // is the next batches completed already?
                                 batchContext = batchContextMap.get( ++batchOffsetPendingCommit );
                                 while(batchContext.missingVotes.size() == 0){
                                     sendCommitRequestToVMSs(batchContext);
@@ -1251,15 +1366,19 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 }
             } catch (InterruptedException e) {
-                issueQueue.add( new Issue( TRANSACTION_MANAGER_STOPPED, me.hashCode() ) );
+                logger.warning("Exception.... look into that!");
+                // issueQueue.add( new Issue( TRANSACTION_MANAGER_STOPPED, me.hashCode() ) );
             }
 
         }
 
-        // this could be asynchronously
+        // TODO this could be asynchronously
         private void sendCommitRequestToVMSs(BatchContext batchContext){
 
             for(VmsIdentifier vms : vmsMetadata.values()){
+
+                // no need to send commit request to terminals. they have already logged their state since the previous VMS in the DAG have decidedly delivered events to him
+                if(batchContext.terminalVMSs.contains(vms.vmsIdentifier)) continue;
 
                 ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.hashCode() );
 
@@ -1278,6 +1397,5 @@ public final class Coordinator extends SignalingStoppableRunnable {
         }
 
     }
-
 
 }

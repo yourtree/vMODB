@@ -64,7 +64,7 @@ public class CoordinatorOptions {
     }
 
     public long getBatchWindow() {
-        return batchWindow;
+        return this.batchWindow;
     }
 
     public CoordinatorOptions withBatchWindow(long batchWindow) {

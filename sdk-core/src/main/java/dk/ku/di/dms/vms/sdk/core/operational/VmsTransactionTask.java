@@ -89,7 +89,6 @@ public class VmsTransactionTask implements Runnable {
             taskResultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, false));
 
         } catch (Exception e) {
-
             // (i) whether to return to the scheduler or (ii) to push to the payload handler for forwarding it to the queue
             // we can only notify it because the scheduler does not need to know the events. the scheduler just needs to
             // know whether the processing of events has been completed can be directly sent to the microservice outside

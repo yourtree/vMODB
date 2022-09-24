@@ -1,13 +1,12 @@
 package dk.ku.di.dms.vms.modb.service;
 
-import jdk.incubator.foreign.MemoryAddress;
-import jdk.incubator.foreign.MemorySegment;
-import jdk.incubator.foreign.ResourceScope;
+
 import org.junit.Test;
 
-import java.io.ByteArrayInputStream;
+import java.lang.foreign.MemoryAddress;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.MemorySession;
 import java.lang.ref.Cleaner;
-import java.nio.ByteBuffer;
 
 /**
  * Might be useful for dealing with bytebuffer objects: https://www.py4j.org/
@@ -32,7 +31,7 @@ public class ByteBufferTest {
 
         Cleaner cleaner = Cleaner.create();
 
-        try(ResourceScope scope = ResourceScope.newSharedScope(cleaner)) {
+        try(MemorySession scope = MemorySession.openShared(cleaner)) {
 
             MemorySegment segment = MemorySegment.allocateNative(100, scope);
 

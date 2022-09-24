@@ -26,7 +26,7 @@ public final class Table {
     public final Map<Table, int[]> foreignKeysGroupedByTableMap;
 
     // all tables must have a pk. besides, used for fast path on planner
-    public UniqueHashIndex primaryKeyIndex;
+    private UniqueHashIndex primaryKeyIndex;
 
     // Other indexes, hashed by the column set in order of the schema. The IKey is indexed by the order of columns in the index
     // public Map<IIndexKey, Map<IKey, AbstractIndex<IKey>>> indexes;

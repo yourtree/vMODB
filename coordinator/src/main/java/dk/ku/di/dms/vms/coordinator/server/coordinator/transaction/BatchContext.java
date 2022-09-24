@@ -17,18 +17,19 @@ public final class BatchContext {
     public Set<String> missingVotes;
 
     // may change across batches
-    public Set<String> terminalVMSs;
+    public final Set<String> terminalVMSs;
 
-    public final Map<String,Long> lastTidOfBatchPerVms;
+    public Map<String, Long> lastTidOfBatchPerVms;
 
-    public BatchContext(long batchOffset, Map<String,Long> lastTidOfBatchPerVms) {
+    public BatchContext(long batchOffset) {
         this.batchOffset = batchOffset;
-        this.lastTidOfBatchPerVms = Collections.unmodifiableMap(lastTidOfBatchPerVms);
         this.terminalVMSs = new HashSet<>();
     }
 
     // called when the batch is over
-    public void seal(){
+    public void seal(Map<String, Long> lastTidOfBatchPerVms){
+        this.lastTidOfBatchPerVms = Collections.unmodifiableMap(lastTidOfBatchPerVms);
+        // synchronized because vote can be received by different threads
         this.missingVotes = Collections.synchronizedSet(terminalVMSs);
     }
 

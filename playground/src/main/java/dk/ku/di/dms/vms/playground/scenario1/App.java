@@ -67,21 +67,25 @@ public class App
 
             while(true) {
 
-                EventExample eventExample = new EventExample(val);
+                if(val < 3) {
 
-                String payload = serdes.serialize(eventExample, EventExample.class);
+                    EventExample eventExample = new EventExample(val);
 
-                TransactionInput.Event eventPayload = new TransactionInput.Event("in", payload);
+                    String payload = serdes.serialize(eventExample, EventExample.class);
 
-                TransactionInput txInput = new TransactionInput("example", eventPayload);
+                    TransactionInput.Event eventPayload = new TransactionInput.Event("in", payload);
 
-                logger.info("Adding "+val);
+                    TransactionInput txInput = new TransactionInput("example", eventPayload);
 
-                parsedTransactionRequests.add(txInput);
+                    logger.info("Adding " + val);
+
+                    parsedTransactionRequests.add(txInput);
+
+                }
 
                 try {
                     logger.info("Producer going to bed... ");
-                    Thread.sleep(120000);
+                    Thread.sleep(10000);
                     logger.info("Producer woke up! Time to insert one more ");
                 } catch (InterruptedException ignored) { }
 
@@ -110,6 +114,8 @@ public class App
         TransactionBootstrap txBootstrap = new TransactionBootstrap();
         TransactionDAG dag =  txBootstrap.init("example")
                 .input( "a", "example", "in" )
+                // bad way to do it for single-microservice transactions
+                .terminal("t", "example", "a")
                 .build();
 
         Map<String, TransactionDAG> transactionMap = new HashMap<>(1);
@@ -126,7 +132,7 @@ public class App
                 serverEm1,
                 new CoordinatorOptions(),
                 0,
-                0,
+                1,
                 BatchReplicationStrategy.NONE,
                 App.parsedTransactionRequests,
                 serdes

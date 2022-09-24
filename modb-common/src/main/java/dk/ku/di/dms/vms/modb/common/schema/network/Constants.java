@@ -14,12 +14,18 @@ public final class Constants {
 
     public static final byte PRESENTATION = 5;
 
-    public static final byte CONSUMER_SET = 12;
+    public static final byte CONSUMER_SET = 15;
 
     /**
      * Transaction-related Events
      */
     public static final byte EVENT = 4;
+
+    /**
+     * Batch of events
+     */
+    public static final byte BATCH_OF_EVENTS = 14;
+
 
     // coming from one or more VMSs in the same transaction
     public static final byte TX_ABORT = 6;
@@ -47,6 +53,17 @@ public final class Constants {
     public static final byte BATCH_REPLICATION = 8;
 
     public static final byte BATCH_REPLICATION_ACK = 12;
+
+    /**
+     * Sent to terminal VMSs participating in a batch
+     * that whenever and end of batch is observed
+     * the batch complete can be sent to the coordinator
+     *
+     * We cannot guarantee the implicit batch progression will be perceived by VMSs
+     * since new events may never arrive again to a certain VMS
+     *
+     */
+    public static final byte END_OF_BATCH = 17;
 
     // then the coordinator sends this message
     // VMSs after receiving this message snapshot (log) their states
