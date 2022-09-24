@@ -8,7 +8,6 @@ import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
-import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 
 import java.util.Map;
 import java.util.Queue;
@@ -16,6 +15,10 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  *   This class has the objective to decouple completely the
@@ -51,8 +54,6 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
 
     private static final BlockingQueue<OutboundEventResult> transactionOutputQueue;
 
-    private static final BlockingQueue<BatchComplete.Payload> batchCompleteOutputQueue;
-
     private static final BlockingQueue<TransactionAbort.Payload> transactionAbortInputQueue;
 
     private static final BlockingQueue<TransactionAbort.Payload> transactionAbortOutputQueue;
@@ -61,28 +62,37 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
 
     private static final BlockingQueue<BatchAbortRequest.Payload> batchAbortQueue;
 
-    private static final Queue<VmsTransactionTaskResult> transactionResultQueue;
-
     private static final Queue<DataRequestEvent> requestQueue;
 
     private static final Map<Long, DataResponseEvent> responseMap;
 
+    private static final AtomicBoolean batchCommitInCourse;
+
+    private static final Lock lock;
+
+    private static final Condition start;
+
+    private static final Condition complete;
+
     static {
         INSTANCE = new VmsInternalChannels();
 
-        /** transaction **/
+        /* transaction **/
         transactionInputQueue = new LinkedBlockingQueue<>();
         transactionOutputQueue = new LinkedBlockingQueue<>();
-        transactionResultQueue = new ConcurrentLinkedQueue<>();
 
-        /** abort **/
+        /* abort **/
         transactionAbortInputQueue = new LinkedBlockingQueue<>();
         transactionAbortOutputQueue = new LinkedBlockingQueue<>();
 
-        /** batch **/
+        /* batch **/
         batchCommitQueue = new LinkedBlockingQueue<>();
-        batchCompleteOutputQueue = new LinkedBlockingQueue<>();
         batchAbortQueue = new LinkedBlockingQueue<>();
+
+        batchCommitInCourse = new AtomicBoolean(false);
+        lock = new ReentrantLock();
+        start = lock.newCondition();
+        complete = lock.newCondition();
 
         requestQueue = new ConcurrentLinkedQueue<>();
         responseMap = new ConcurrentHashMap<>();
@@ -99,11 +109,6 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
     }
 
     @Override
-    public BlockingQueue<BatchComplete.Payload> batchCompleteOutputQueue() {
-        return batchCompleteOutputQueue;
-    }
-
-    @Override
     public BlockingQueue<TransactionAbort.Payload> transactionAbortInputQueue() {
         return transactionAbortInputQueue;
     }
@@ -112,7 +117,6 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
     public BlockingQueue<TransactionAbort.Payload> transactionAbortOutputQueue() {
         return transactionAbortOutputQueue;
     }
-
 
     @Override
     public BlockingQueue<BatchCommitRequest.Payload> batchCommitQueue() {
@@ -134,4 +138,29 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
         return responseMap;
     }
 
+
+    @Override
+    public AtomicBoolean batchCommitInCourse(){
+        return batchCommitInCourse;
+    }
+
+    @Override
+    public void signalCanStart() {
+        lock.lock();
+        start.signal();
+        complete.awaitUninterruptibly();
+        lock.unlock();
+    }
+
+    @Override
+    public void waitForCanStartSignal() {
+        lock.lock();
+        start.awaitUninterruptibly();
+    }
+
+    @Override
+    public void signalComplete() {
+        complete.signal();
+        lock.unlock();
+    }
 }

@@ -2,17 +2,18 @@ package dk.ku.di.dms.vms.sdk.core.event.channel;
 
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
-import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
-import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
+import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
+import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
 
 /**
  * In a virtual microservice paradigm, internal components exchange a lot of internal events.
@@ -35,6 +36,13 @@ import java.util.concurrent.BlockingQueue;
  */
 public interface IVmsInternalChannels {
 
+    AtomicBoolean batchCommitInCourse();
+
+    // https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/locks/Condition.html
+    void signalCanStart();
+    void waitForCanStartSignal();
+    void signalComplete();
+
     /*
      * TRANSACTIONAL EVENTS
      */
@@ -55,7 +63,7 @@ public interface IVmsInternalChannels {
      */
 
     // this should be sent by terminal vms
-    BlockingQueue<BatchComplete.Payload> batchCompleteOutputQueue();
+    // BlockingQueue<BatchComplete.Payload> batchCompleteOutputQueue();
 
     // abort a specific transaction from the batch and restart state from there
     // should maintain a MV scheme to avoid rolling back to the last committed state

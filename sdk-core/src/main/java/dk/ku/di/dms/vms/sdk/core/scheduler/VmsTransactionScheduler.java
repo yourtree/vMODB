@@ -4,15 +4,14 @@ import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
+import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.logging.Logger;
 
 import static java.util.logging.Logger.getLogger;
@@ -37,6 +36,10 @@ public class VmsTransactionScheduler extends StoppableRunnable {
     // A tree map because the executor requires executing the operation in order
     private final TreeMap<Long, List<VmsTransactionTask>> readyTasksPerTidMap;
 
+    private final Map<Long, List<Future<VmsTransactionTaskResult>>> submittedTasksPerTidMap;
+
+    private final Map<Long, List<VmsTransactionTaskResult>> resultTasksPerTidMap;
+
     // offset tracking for execution
     private OffsetTracker currentOffset;
 
@@ -54,34 +57,22 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     private final IVmsSerdesProxy serdes;
 
-    /**
-     * It represents the queue holding the results of the submitted tasks
-     *
-     * What is the difference between the resultQueue and outputQueue?
-     * The output queue represents the result of the function executed
-     * whereas the result queue is the metadata regarding the output (TID and more)
-     *
-     * FIXME Should not be here...
-     */
-    private final Queue<VmsTransactionTaskResult> transactionResultQueue;
-
     public VmsTransactionScheduler(ExecutorService vmsAppLogicTaskPool,
                                    IVmsInternalChannels vmsChannels,
                                    Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap,
                                    Map<String, Class<?>> queueToEventMap,
                                    IVmsSerdesProxy serdes){
-
         super();
         this.vmsTransactionTaskPool = vmsAppLogicTaskPool;
         this.eventToTransactionMap = eventToTransactionMap;
         this.waitingTasksPerTidMap = new HashMap<>();
         this.readyTasksPerTidMap = new TreeMap<>();
+        this.submittedTasksPerTidMap = new HashMap<>();
+        this.resultTasksPerTidMap = new HashMap<>();
         this.offsetMap = new TreeMap<>();
         this.vmsChannels = vmsChannels;
         this.queueToEventMap = queueToEventMap;
         this.serdes = serdes;
-
-        this.transactionResultQueue = new ConcurrentLinkedQueue<>();
     }
 
     /**
@@ -116,20 +107,14 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
             processTaskResult();
 
-            // TODO process batch and abort
-
-            //vmsChannels.batchCompleteOutputQueue()
-
-            //vmsChannels.batchCommitQueue()
-
         }
 
     }
 
-    private TransactionEvent.Payload take(){
-        if(vmsChannels.transactionInputQueue().size() > 0) return vmsChannels.transactionInputQueue().poll();
-        return null;
-    }
+//    private TransactionEvent.Payload take(){
+//        if(vmsChannels.transactionInputQueue().size() > 0) return vmsChannels.transactionInputQueue().poll();
+//        return null;
+//    }
 
     private void initializeOffset(){
         currentOffset = new OffsetTracker(0, 1);
@@ -145,22 +130,74 @@ public class VmsTransactionScheduler extends StoppableRunnable {
      */
     private void processTaskResult() {
 
-        while(!transactionResultQueue.isEmpty()){
+        if(submittedTasksPerTidMap.get(currentOffset.tid()) == null) return;
 
-            VmsTransactionTaskResult res = transactionResultQueue.poll();
+        List<Future<VmsTransactionTaskResult>> list = submittedTasksPerTidMap.get(currentOffset.tid());
+        List<VmsTransactionTaskResult> resultList = resultTasksPerTidMap.get(currentOffset.tid());
 
-            if(res != null && !res.failed()){
+        for(int i = list.size() - 1; i >= 0; --i){
 
-                currentOffset.signalFinished();
+           Future<VmsTransactionTaskResult> resultFuture = list.get(i);
 
-                if(currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED){
+            if(resultFuture.isDone()){
 
-                    // clean maps
-                    readyTasksPerTidMap.remove( currentOffset.tid() );
+                VmsTransactionTaskResult res;
+                try {
 
+                    res = resultFuture.get();
+                    resultList.add(res);
+
+                    if(res.status() == VmsTransactionTaskResult.Status.SUCCESS) {
+
+                        currentOffset.signalFinished();
+
+                        list.remove(i);
+
+                        if (currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED_SUCCESSFULLY) {
+
+                            // clean maps
+                            readyTasksPerTidMap.remove(currentOffset.tid());
+                            submittedTasksPerTidMap.remove(currentOffset.tid());
+
+                            // now can send all to output queue (coordinator)
+                            boolean atLeastOneHasPayload = false;
+                            for(var result : resultList) {
+                                if(result.result() != null){
+                                    atLeastOneHasPayload = true;
+                                    vmsChannels.transactionOutputQueue().add(result.result());
+                                }
+
+                            }
+
+                            // what if all the results of a tid are void?
+                            if(!atLeastOneHasPayload){
+                                vmsChannels.transactionOutputQueue().add( new OutboundEventResult(
+                                        currentOffset.tid(),
+                                        null,
+                                        null,
+                                        true // must be marked as terminal since there is no output
+                                ));
+                            }
+
+                            resultTasksPerTidMap.remove(currentOffset.tid());
+
+                        }
+
+                    } else {
+                        currentOffset.signalError();
+                        // TODO must deal with errors (i.e., abort)
+
+                        readyTasksPerTidMap.remove(currentOffset.tid());
+                        submittedTasksPerTidMap.remove(currentOffset.tid());
+                        resultTasksPerTidMap.remove(currentOffset.tid());
+
+                    }
+
+                } catch (InterruptedException | ExecutionException ignored) {
+                    logger.warning("A task supposedly done returned an exception.");
                 }
 
-            } // else --> should deal with abort...
+            }
 
         }
 
@@ -243,7 +280,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
             List<IdentifiableNode<VmsTransactionSignature>> signatures = eventToTransactionMap.get(transactionalEvent.event());
 
             // create the offset
-            offsetMap.put( transactionalEvent.tid(), new OffsetTracker(transactionalEvent.tid(), signatures.size()));
+            this.offsetMap.put( transactionalEvent.tid(), new OffsetTracker(transactionalEvent.tid(), signatures.size()));
 
             VmsTransactionTask task;
 
@@ -253,9 +290,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
                 task = new VmsTransactionTask(
                         transactionalEvent.tid(),
                         vmsTransactionSignatureIdentifiableNode.object(),
-                        signature.inputQueues().length,
-                        vmsChannels.transactionOutputQueue(),
-                        transactionResultQueue
+                        signature.inputQueues().length
                         );
 
                 Class<?> clazz = this.queueToEventMap.get(transactionalEvent.event());
@@ -277,9 +312,19 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     private void dispatchReadyTasksForExecution() {
 
-        if(!readyTasksPerTidMap.isEmpty() && readyTasksPerTidMap.firstKey() == currentOffset.tid() && currentOffset.status() == OffsetTracker.OffsetStatus.READY){
+        if(this.vmsChannels.batchCommitInCourse().get()){
+            this.vmsChannels.signalCanStart(); // this will make this thread wait
+        }
 
-            List<VmsTransactionTask> tasks = readyTasksPerTidMap.get(readyTasksPerTidMap.firstKey());
+        // only currentOffset is necessary being checked, the other conditions causally follows:
+        // !readyTasksPerTidMap.isEmpty() && readyTasksPerTidMap.firstKey() == currentOffset.tid() &&
+        if(this.currentOffset.status() == OffsetTracker.OffsetStatus.READY){
+
+            List<VmsTransactionTask> tasks = this.readyTasksPerTidMap.get(readyTasksPerTidMap.firstKey());
+
+            List<Future<VmsTransactionTaskResult>> list = new ArrayList<>(tasks.size());
+            this.submittedTasksPerTidMap.put(currentOffset.tid(), list);
+            this.resultTasksPerTidMap.put(currentOffset.tid(), new ArrayList<>(tasks.size()));
 
             // later, we may have precedence between tasks of the same tid
             // i.e., right now any ordering is fine
@@ -288,10 +333,10 @@ public class VmsTransactionScheduler extends StoppableRunnable {
                 task.setIdentifier( idx ); // arbitrary unique identifier
                 idx++;
                 // submit
-                vmsTransactionTaskPool.submit( task );
+                list.add( this.vmsTransactionTaskPool.submit( task ) );
             }
 
-            currentOffset.moveToExecutingState();
+            this.currentOffset.moveToExecutingState();
 
             // must store submitted tasks in case we need to re-execute.
             //          what could go wrong?
@@ -315,11 +360,12 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         // if( offsetMap.size() == 1 ) return; // cannot move, the payload hasn't arrived yet, so the respective offset has not been created
 
         // if next is the right one ---> the concept of "next" may change according to recovery from failures and aborts
-        if(currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED && offsetMap.get( currentOffset.tid() + 1 ) != null ){
+        if(currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED_SUCCESSFULLY && offsetMap.get( currentOffset.tid() + 1 ) != null ){
 
             // should be here to remove the tid 0. the tid 0 never receives a result task
             offsetMap.remove( currentOffset.tid() );
 
+            // not necessarily... the event handler must inform the sequence of tids for a batch
             currentOffset = offsetMap.get( currentOffset.tid() + 1 );
         }
 

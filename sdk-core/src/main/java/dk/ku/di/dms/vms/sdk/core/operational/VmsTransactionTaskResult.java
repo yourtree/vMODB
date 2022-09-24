@@ -7,4 +7,12 @@ public record VmsTransactionTaskResult(
     long threadId,
     long tid,
     int identifier,
-    boolean failed){}
+    OutboundEventResult result, // what the coordinator knows about
+    Status status){
+
+    public enum Status {
+        SUCCESS,
+        FAILURE
+    }
+
+}

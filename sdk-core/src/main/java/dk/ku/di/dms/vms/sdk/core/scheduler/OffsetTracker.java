@@ -6,7 +6,8 @@ class OffsetTracker {
         INIT,
         READY,
         EXECUTING,
-        FINISHED
+        FINISHED_SUCCESSFULLY,
+        FINISHED_WITH_ERROR
     }
 
     private final long tid;
@@ -31,12 +32,14 @@ class OffsetTracker {
     }
 
     private void moveToDoneState(){
-        this.status = OffsetStatus.FINISHED;
+        this.status = OffsetStatus.FINISHED_SUCCESSFULLY;
     }
 
     public void moveToExecutingState(){
         this.status = OffsetStatus.EXECUTING;
     }
+
+    private void moveToErrorState() { this.status = OffsetStatus.FINISHED_WITH_ERROR; }
 
     // constraints in objects would be great! e.g., remainingTasks >= 0 always
     public void signalReady(){
@@ -52,6 +55,10 @@ class OffsetTracker {
         // if(this.remainingFinishedTasks == 0) throw new RuntimeException("Cannot have below zero remaining tasks.");
         this.remainingFinishedTasks--;
         if(remainingFinishedTasks == 0) moveToDoneState();
+    }
+
+    public void signalError(){
+        moveToErrorState();
     }
 
     public long tid() {

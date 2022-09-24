@@ -90,7 +90,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
     // must update the "me" on snapshotting (i.e., committing)
     private long tid;
 
-    // the offset of the pending batch commit
+    // the offset of the pending batch commit (always < batchOffset)
     private long batchOffsetPendingCommit;
 
     // the current batch on which new transactions are being generated for
@@ -923,11 +923,16 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     if(terminal && !terminalSent){
                         terminalSent = true;
 
-                        // TODO send terminal message
                         connectionMetadata.writeBuffer.clear();
 
                         connectionMetadata.writeBuffer.put(END_OF_BATCH);
                         connectionMetadata.writeBuffer.putLong(batch);
+
+                        var batchContext = batchContextMap.get(batch);
+                        long lastBatchTid = batchContext.lastTidOfBatchPerVms.get( vms.getIdentifier() );
+
+                        // also write the last tid for this batch, so the terminal vms know when to send the batch complete
+                        connectionMetadata.writeBuffer.putLong(lastBatchTid);
 
                         connectionMetadata.writeBuffer.flip();
                         connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata, this);

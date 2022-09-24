@@ -78,8 +78,10 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     private ConnectionMetadata leaderConnectionMetadata;
 
     /** INTERNAL STATE **/
-    private long currentTid;
-    private long currentBatchOffset;
+    private BatchContext currentBatch;
+
+    // metadata about all non-committed batches. when a batch commit finishes, it is removed from this map
+    private final Map<Long, BatchContext> batchContextMap;
 
     public EmbedVmsEventHandler(IVmsInternalChannels vmsInternalChannels, // for communicating with other components
                                 VmsIdentifier me, // to identify which vms this is
@@ -104,6 +106,10 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         SocketAddress address = new InetSocketAddress(me.host, me.port);
         serverSocket.bind(address);
 
+        this.currentBatch = new BatchContext(me.lastBatch, me.lastTid);
+        this.currentBatch.setStatus(BatchContext.Status.FINISHED);
+        this.batchContextMap = new ConcurrentHashMap<>(3);
+
     }
 
     /**
@@ -118,9 +124,6 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     @Override
     public void run() {
 
-        // we must also load internal state
-        loadInternalState();
-
         // setup accept since we need to accept connections from the coordinator and other VMSs
         serverSocket.accept( null, new AcceptCompletionHandler());
 
@@ -131,11 +134,6 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
             //  write events to leader and VMSs...
             try {
-
-                if(!vmsInternalChannels.batchCompleteOutputQueue().isEmpty()){
-                    // handle
-
-                }
 
                 if(!vmsInternalChannels.transactionAbortOutputQueue().isEmpty()){
                     // handle
@@ -163,37 +161,34 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
                         // connectionMetadata.readBuffer.flip()
                     } else {
-                        // send to leader
 
-                        leaderConnectionMetadata.writeLock.acquire();
-                        leaderConnectionMetadata.writeBuffer.clear();
 
-                        Class<?> clazz = vmsMetadata.queueToEventMap().get(outputEvent.outputQueue());
+                        // if there is a output for a given tid, that is because all of the task of the tid have succeeded
+                        if(currentBatch.lastTid == outputEvent.tid()){
 
-                        String objStr = serdesProxy.serialize(outputEvent.output(), clazz);
+                            // send batch complete to leader and increment batch
+                            // it may be the case that a vms does not participate in a batch
+                            // either way it must receive a batch commit request since
+                            // single vms transaction may have executed
 
-                        TransactionEvent.write( leaderConnectionMetadata.writeBuffer, outputEvent.tid(), 0, 0, outputEvent.outputQueue(), objStr );
-                        leaderConnectionMetadata.writeBuffer.flip();
+                            // BatchComplete.write();
 
-                        leaderConnectionMetadata.channel.write(leaderConnectionMetadata.writeBuffer, null,
-                                new CompletionHandler<>() {
+                            // we need to stop the scheduler...
+                            this.vmsInternalChannels.batchCommitInCourse().set(true);
+                            // this will make this thread wait
+                            this.vmsInternalChannels.waitForCanStartSignal();
 
-                                    @Override
-                                    public void completed(Integer result, Object attachment) {
-                                        leaderConnectionMetadata.writeBuffer.clear();
-                                        leaderConnectionMetadata.writeLock.release();
-                                    }
+                            // make state durable
 
-                                    @Override
-                                    public void failed(Throwable exc, Object attachment) {
-                                        leaderConnectionMetadata.writeBuffer.clear();
-                                        if(!leaderConnectionMetadata.channel.isOpen()){
-                                            leader.off();
-                                        }
-                                        leaderConnectionMetadata.writeLock.release();
-                                    }
-                                }
-                        );
+                            // get buffered writes in transaction facade and merge in memory
+
+
+
+                            this.vmsInternalChannels.signalComplete();
+                        }
+
+                        // send to leader (if there is a payload)
+                        // sendEventToLeader(outputEvent);
 
                     }
 
@@ -207,12 +202,36 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
     }
 
-    /**
-     * Last committed state is read on startup. More to come...
-     */
-    private void loadInternalState() {
-        this.currentTid = 0;
-        this.currentBatchOffset = 0;
+    private void sendEventToLeader(OutboundEventResult outputEvent) throws InterruptedException {
+        leaderConnectionMetadata.writeLock.acquire();
+        leaderConnectionMetadata.writeBuffer.clear();
+
+        Class<?> clazz = vmsMetadata.queueToEventMap().get(outputEvent.outputQueue());
+
+        String objStr = serdesProxy.serialize(outputEvent.output(), clazz);
+
+        TransactionEvent.write( leaderConnectionMetadata.writeBuffer, outputEvent.tid(), 0, 0, outputEvent.outputQueue(), objStr );
+        leaderConnectionMetadata.writeBuffer.flip();
+
+        leaderConnectionMetadata.channel.write(leaderConnectionMetadata.writeBuffer, null,
+                new CompletionHandler<>() {
+
+                    @Override
+                    public void completed(Integer result, Object attachment) {
+                        leaderConnectionMetadata.writeBuffer.clear();
+                        leaderConnectionMetadata.writeLock.release();
+                    }
+
+                    @Override
+                    public void failed(Throwable exc, Object attachment) {
+                        leaderConnectionMetadata.writeBuffer.clear();
+                        if(!leaderConnectionMetadata.channel.isOpen()){
+                            leader.off();
+                        }
+                        leaderConnectionMetadata.writeLock.release();
+                    }
+                }
+        );
     }
 
     private class ConnectToExternalVmsProtocol {
@@ -596,8 +615,17 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             } else if(messageType == END_OF_BATCH) {
 
                 // it means this VMS is a terminal in the current batch to be committed
+                // TODO the coordinator could also append it to the end of event batch to avoid message overhead
+                // for now lets make the logic work first
+                long batch = connectionMetadata.readBuffer.getLong();
+                long lastBatchTid = connectionMetadata.readBuffer.getLong();
 
+                BatchContext batchContext = new BatchContext(batch, lastBatchTid);
+                if(batchContext.batch == currentBatch.batch + 1 && currentBatch.status() == BatchContext.Status.FINISHED){
+                    currentBatch = batchContext;
+                }
 
+                batchContextMap.put(batch, batchContext);
 
             } else if(messageType == EVENT) {
 

@@ -4,13 +4,14 @@ import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 
 import java.util.Queue;
+import java.util.concurrent.Callable;
 
 /**
  * A class that encapsulates the events
  * that form the input of a data operation.
  * In other words, the actual data operation ready for execution.
  */
-public class VmsTransactionTask implements Runnable {
+public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
 
     // this is the global tid
     private final long tid;
@@ -26,20 +27,11 @@ public class VmsTransactionTask implements Runnable {
 
     private int remainingTasks;
 
-    private final Queue<OutboundEventResult> outputQueue;
-
-    private final Queue<VmsTransactionTaskResult> taskResultQueue;
-
-    public VmsTransactionTask (long tid, VmsTransactionSignature signature, int inputSize,
-                               Queue<OutboundEventResult> outputQueue,
-                               Queue<VmsTransactionTaskResult> taskResultQueue){
+    public VmsTransactionTask (long tid, VmsTransactionSignature signature, int inputSize){
         this.tid = tid;
         this.signature = signature;
         this.inputs = new Object[inputSize];
         this.remainingTasks = inputSize;
-
-        this.outputQueue = outputQueue;
-        this.taskResultQueue = taskResultQueue;
     }
 
     public void putEventInput(int index, Object event){
@@ -60,7 +52,7 @@ public class VmsTransactionTask implements Runnable {
     }
 
     @Override
-    public void run() {
+    public VmsTransactionTaskResult call() {
 
         // get thread id
         long threadId = Thread.currentThread().getId();
@@ -79,20 +71,34 @@ public class VmsTransactionTask implements Runnable {
 
                 OutboundEventResult eventOutput = new OutboundEventResult(tid, signature.outputQueue(), output, signature.terminal());
 
-                // push to subscriber ---> this should not be sent to external
-                // world if one of the correlated task has failed
-                outputQueue.add(eventOutput); // same thread
-
+                return new VmsTransactionTaskResult(
+                        threadId,
+                        tid,
+                        identifier,
+                        eventOutput,
+                        VmsTransactionTaskResult.Status.SUCCESS);
             }
 
-            // push result to the scheduler instead of returning an object
-            taskResultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, false));
+            return new VmsTransactionTaskResult(
+                    threadId,
+                    tid,
+                    identifier,
+                    null,
+                    VmsTransactionTaskResult.Status.SUCCESS);
+
 
         } catch (Exception e) {
             // (i) whether to return to the scheduler or (ii) to push to the payload handler for forwarding it to the queue
             // we can only notify it because the scheduler does not need to know the events. the scheduler just needs to
             // know whether the processing of events has been completed can be directly sent to the microservice outside
-            taskResultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, true));
+            // taskResultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, true));
+            return new VmsTransactionTaskResult(
+                    threadId,
+                    tid,
+                    identifier,
+                    null,
+                    VmsTransactionTaskResult.Status.FAILURE);
+
         }
 
     }

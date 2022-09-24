@@ -16,6 +16,7 @@ import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
+import dk.ku.di.dms.vms.sdk.embed.BatchContext;
 import dk.ku.di.dms.vms.sdk.embed.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 
@@ -170,7 +171,7 @@ public class App
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
         EmbedVmsEventHandler eventHandler = new EmbedVmsEventHandler(
-                    vmsInternalPubSubService, vmsIdentifier, vmsMetadata, serdes, socketPool );
+                    vmsInternalPubSubService, vmsIdentifier, vmsMetadata, serdes, socketPool);
 
         Thread eventHandlerThread = new Thread(eventHandler);
         eventHandlerThread.start();
