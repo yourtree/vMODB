@@ -80,11 +80,11 @@ public interface IVmsInternalChannels {
     /**
      * A queue of requests for data
      */
-    Queue<DataRequestEvent> dataRequestQueue();
+    //Queue<DataRequestEvent> dataRequestQueue();
 
     /**
      * A map of data request responses (keyed by thread identifier)
      */
-    Map<Long, DataResponseEvent> dataResponseMap();
+    //Map<Long, DataResponseEvent> dataResponseMap();
 
 }

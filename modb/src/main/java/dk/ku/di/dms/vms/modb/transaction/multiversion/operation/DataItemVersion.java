@@ -16,17 +16,13 @@ import dk.ku.di.dms.vms.modb.index.IIndexKey;
 public abstract class DataItemVersion {
 
     // transaction id that modified the item
-    protected long tid;
+    protected final long tid;
 
-    protected IKey pk;
+    protected final IKey pk;
 
-    protected IIndexKey indexKey;
+    protected final IIndexKey indexKey;
 
-    protected DataItemVersion(long tid) {
-        this.tid = tid;
-    }
-
-    protected DataItemVersion(long tid, IIndexKey indexKey, IKey pk) {
+    public DataItemVersion(long tid, IIndexKey indexKey, IKey pk) {
         this.tid = tid;
         this.indexKey = indexKey;
         this.pk = pk;
@@ -44,16 +40,16 @@ public abstract class DataItemVersion {
         return this.indexKey;
     }
 
-    public static UpdateOp update(long tid, int columnIndex, long address){
-        return new UpdateOp(tid, columnIndex, address);
+    public static UpdateOp update(long tid, int columnIndex, long address, IIndexKey indexKey, IKey pk){
+        return new UpdateOp(tid, columnIndex, address, indexKey, pk);
     }
 
-    public static InsertOp insert(long tid, long bufferAddress){
-        return new InsertOp(tid, bufferAddress);
+    public static InsertOp insert(long tid, long bufferAddress, IIndexKey indexKey, IKey pk){
+        return new InsertOp(tid, bufferAddress, indexKey, pk);
     }
 
-    public static DeleteOp delete(long tid){
-        return new DeleteOp(tid);
+    public static DeleteOp delete(long tid, IIndexKey indexKey, IKey pk){
+        return new DeleteOp(tid, indexKey, pk);
     }
 
 }

@@ -77,16 +77,16 @@ public class App
 
                     TransactionInput txInput = new TransactionInput("example", eventPayload);
 
-                    logger.info("Adding " + val);
+                    logger.info("[Producer] Adding " + val);
 
                     parsedTransactionRequests.add(txInput);
 
                 }
 
                 try {
-                    logger.info("Producer going to bed... ");
+                    //logger.info("Producer going to bed... ");
                     Thread.sleep(10000);
-                    logger.info("Producer woke up! Time to insert one more ");
+                    //logger.info("Producer woke up! Time to insert one more ");
                 } catch (InterruptedException ignored) { }
 
                 val++;

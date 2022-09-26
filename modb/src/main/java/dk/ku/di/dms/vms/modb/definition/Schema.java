@@ -109,6 +109,9 @@ public class Schema {
             for( ConstraintReference constraintReference : constraints ){
                 this.constraintMap.put( constraintReference.column, constraintReference );
             }
+        } else {
+            // to avoid null pointer downstream
+            this.constraintMap = new HashMap<>();
         }
 
     }

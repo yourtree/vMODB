@@ -904,6 +904,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 var batchContext = batchContextMap.get(batch);
                 long lastBatchTid = batchContext.lastTidOfBatchPerVms.get( vms.getIdentifier() );
                 BatchCommitRequest.write( connectionMetadata.writeBuffer, batch, lastBatchTid );
+                count++;
             }
 
             connectionMetadata.writeBuffer.mark();

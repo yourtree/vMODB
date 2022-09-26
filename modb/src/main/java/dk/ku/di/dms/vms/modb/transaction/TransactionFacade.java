@@ -53,7 +53,7 @@ public class TransactionFacade {
 
     static {
         // writesPerTransaction = Collections.synchronizedMap( new LinkedHashMap<>() );
-        writesPerTransaction = new LinkedHashMap<>();
+        writesPerTransaction = new ConcurrentHashMap<>();
         writesPerIndexAndKey = new ConcurrentHashMap<>();
     }
 
@@ -61,13 +61,12 @@ public class TransactionFacade {
 
     public static void insert(Table table, Object[] values){
 
-        // check constraints
-
-        // pk -> lookup
         IKey pk = KeyUtils.buildRecordKey(table.getSchema(), table.getSchema().getPrimaryKeyColumns(), values);
         Map<IKey, OperationSet> keyMap = writesPerIndexAndKey.get( table.primaryKeyIndex().key() );
 
-        if(pkConstraintViolation(table, pk, keyMap) || constraintViolation(table, values)){
+        boolean a = pkConstraintViolation(table, pk, keyMap);
+        boolean b = constraintViolation(table, values);
+        if(a || b){
 
             long threadId = Thread.currentThread().getId();
             long tid = TransactionMetadata.tid(threadId);
@@ -100,8 +99,6 @@ public class TransactionFacade {
         long threadId = Thread.currentThread().getId();
         long tid = TransactionMetadata.tid(threadId);
 
-        writesPerTransaction.putIfAbsent( tid, new ArrayList<>(10) );
-
         long addressToWriteTo = memRef.address();
 
         int maxColumns = table.getSchema().columnOffset().length;
@@ -120,11 +117,17 @@ public class TransactionFacade {
 
         }
 
-        InsertOp dataItemVersion = InsertOp.insert( tid, addressToWriteTo );
+        IIndexKey indexKey = table.primaryKeyIndex().key();
 
+        InsertOp dataItemVersion = InsertOp.insert( tid, addressToWriteTo, indexKey, pk );
+
+        writesPerTransaction.putIfAbsent( tid, new ArrayList<>(5) );
         writesPerTransaction.get( tid ).add( dataItemVersion );
 
-        keyMap = new HashMap<>();
+        if(keyMap == null){
+            keyMap = new HashMap<>();
+            writesPerIndexAndKey.putIfAbsent(indexKey, keyMap);
+        }
 
         OperationSet operationSet = new OperationSet();
         operationSet.lastWriteType = OperationSet.Type.INSERT;
@@ -135,14 +138,12 @@ public class TransactionFacade {
     }
 
     private static boolean pkConstraintViolation(Table table, IKey pk, Map<IKey, OperationSet> keyMap){
-
-        if(keyMap == null){
-            // no writes so far in this batch for this index
-
-            // lets check now the index itself
-            return table.primaryKeyIndex().exists(pk);
-
-        } else return keyMap.get(pk) != null;
+        if(keyMap != null && keyMap.get(pk) != null){
+            //  writes in this batch for this pk
+            return true;
+        }
+        // lets check now the index itself
+        return table.primaryKeyIndex().exists(pk);
     }
 
     private static boolean constraintViolation(Table table, Object[] values) {

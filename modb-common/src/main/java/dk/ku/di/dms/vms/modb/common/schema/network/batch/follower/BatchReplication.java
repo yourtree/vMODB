@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.batch.follower;
 
+import dk.ku.di.dms.vms.modb.common.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 
 import java.nio.ByteBuffer;
@@ -26,7 +27,7 @@ public final class BatchReplication {
     public static BatchReplicationPayload read(ByteBuffer buffer){
         long batch = buffer.getLong();
         int size = buffer.getInt();
-        String map = new String(buffer.array(), headerSize, size, StandardCharsets.UTF_8 );
+        String map = ByteUtils.extractStringFromByteBuffer(buffer, size);
         return new BatchReplicationPayload(batch,map);
     }
 

@@ -27,6 +27,8 @@ import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -672,26 +674,32 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
                 int count = connectionMetadata.readBuffer.getInt();
 
+                List<TransactionEvent.Payload> payloads = new ArrayList<>(count);
+
                 TransactionEvent.Payload payload;
 
                 // extract events batched
-                for(int i = 0; i < count; i++){
-                    // discard message type...
-                    byte eventType = connectionMetadata.readBuffer.get();
-
-                    if(eventType == EVENT){
-                        payload = TransactionEvent.read(connectionMetadata.readBuffer);
-                        if(vmsMetadata.queueToEventMap().get( payload.event() ) != null)
-                            vmsInternalChannels.transactionInputQueue().add(payload);
-
-                    } else if(eventType == BATCH_COMMIT_REQUEST){
-                        // it means this VMS is a terminal node in the current batch to be committed
-
-                        BatchCommitRequest.Payload bPayload = BatchCommitRequest.read( connectionMetadata.readBuffer );
-                        vmsInternalChannels.newBatchCommitRequestQueue().add(bPayload);
-
-                    }
+                for(int i = 0; i < count - 1; i++){
+                    // move offset to discard message type
+                    connectionMetadata.readBuffer.get();
+                    payload = TransactionEvent.read(connectionMetadata.readBuffer);
+                    if(vmsMetadata.queueToEventMap().get( payload.event() ) != null)
+                        payloads.add(payload);
                 }
+
+                byte eventType = connectionMetadata.readBuffer.get();
+                if(eventType == BATCH_COMMIT_REQUEST){
+                    // it means this VMS is a terminal node in the current batch to be committed
+                    BatchCommitRequest.Payload bPayload = BatchCommitRequest.read( connectionMetadata.readBuffer );
+                    vmsInternalChannels.newBatchCommitRequestQueue().add(bPayload);
+                } else { // then it is still event
+                    payload = TransactionEvent.read(connectionMetadata.readBuffer);
+                    if(vmsMetadata.queueToEventMap().get( payload.event() ) != null)
+                        payloads.add(payload);
+                }
+
+                // add after to make sure the batch context map is filled by the time the output event is generated
+                vmsInternalChannels.transactionInputQueue().addAll(payloads);
 
             } else if(messageType == BATCH_COMMIT_REQUEST) {
 

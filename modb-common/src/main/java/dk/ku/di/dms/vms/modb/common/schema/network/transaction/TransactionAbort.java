@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.transaction;
 
+import dk.ku.di.dms.vms.modb.common.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 
@@ -34,7 +35,7 @@ public class TransactionAbort {
     public static Payload read(ByteBuffer buffer){
         long tid = buffer.getLong();
         int size = buffer.getInt();
-        String vms = new String(buffer.array(), headerSize, size, StandardCharsets.UTF_8 );
+        String vms = ByteUtils.extractStringFromByteBuffer(buffer, size);
         return new Payload(tid, vms);
     }
 
