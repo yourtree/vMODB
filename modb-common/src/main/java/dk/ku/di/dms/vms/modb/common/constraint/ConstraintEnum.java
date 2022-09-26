@@ -5,7 +5,7 @@ public enum ConstraintEnum {
     // For now, the only ones supported
     NOT_NULL,
 
-    NULL, // useless. do not supported
+    // NULL, // useless. do not supported
 
     POSITIVE_OR_ZERO,
 

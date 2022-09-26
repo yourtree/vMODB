@@ -1,5 +1,9 @@
 package dk.ku.di.dms.vms.modb.definition;
 
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.index.IIndexKey;
+import dk.ku.di.dms.vms.modb.index.ReadWriteIndex;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -15,22 +19,37 @@ public final class Catalog {
 
     private final Map<String, Table> tableMap;
 
+    private final Map<IIndexKey, ReadWriteIndex<IKey>> indexMap;
+
     public Catalog() {
         this.tableMap = new HashMap<>();
+        this.indexMap = new HashMap<>();
     }
 
     public Table getTable(String tableName) {
-        return tableMap.getOrDefault(tableName,null);
+        return this.tableMap.getOrDefault(tableName,null);
     }
 
     public void insertTable(Table table){
-        tableMap.put(table.getName(),table);
+        this.tableMap.put(table.getName(),table);
     }
 
     public void insertTables(Table... tables){
         for(Table table : tables) {
-            tableMap.put(table.getName(), table);
+            this.tableMap.put(table.getName(), table);
         }
+    }
+
+    public void insertIndex(IIndexKey indexKey, ReadWriteIndex<IKey> index){
+        this.indexMap.put(indexKey, index);
+    }
+
+    public ReadWriteIndex<IKey> getIndexByKey(IIndexKey indexKey){
+        return this.indexMap.get(indexKey);
+    }
+
+    public Map<IIndexKey, ReadWriteIndex<IKey>> indexMap(){
+        return this.indexMap;
     }
 
 }

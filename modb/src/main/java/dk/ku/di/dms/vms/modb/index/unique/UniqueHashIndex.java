@@ -95,4 +95,8 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
         return this;
     }
 
+    public RecordBufferContext buffer(){
+        return this.recordBufferContext;
+    }
+
 }

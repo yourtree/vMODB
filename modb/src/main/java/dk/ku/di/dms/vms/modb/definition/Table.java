@@ -28,14 +28,13 @@ public final class Table {
     // all tables must have a pk. besides, used for fast path on planner
     private UniqueHashIndex primaryKeyIndex;
 
-    // Other indexes, hashed by the column set in order of the schema. The IKey is indexed by the order of columns in the index
-    // public Map<IIndexKey, Map<IKey, AbstractIndex<IKey>>> indexes;
+    // Other indexes, hashed by the column set in order of the schema
     public Map<IIndexKey, AbstractIndex<IKey>> indexes;
 
     // just a cached list of the indexes map to avoid using iterators from the map when deciding for an index
     public List<AbstractIndex<IKey>> indexList;
 
-    public Table(String name, Schema schema, Map<Table,int[]> foreignKeysGroupedByTableMap) {
+    public Table(String name, Schema schema, Map<Table, int[]> foreignKeysGroupedByTableMap) {
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();

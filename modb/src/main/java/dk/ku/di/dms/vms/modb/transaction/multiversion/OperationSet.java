@@ -18,7 +18,16 @@ public class OperationSet {
     public InsertOp insertOp;
 
     // keyed by columnIndex and ordered by TID (increasing)
+    // ideally must be indexed decreasingly
     public Map<Integer, List<UpdateOp>> updateOps;
+
+    public enum Type {
+        DELETE,
+        UPDATE,
+        INSERT
+    }
+
+    public Type lastWriteType;
 
     public OperationSet(){
         this.updateOps = new HashMap<>(10);

@@ -1,14 +1,18 @@
 package dk.ku.di.dms.vms.modb.transaction;
 
+import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
+import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
+import dk.ku.di.dms.vms.modb.index.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
@@ -18,9 +22,7 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.OperationSet;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.DataItemVersion;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.InsertOp;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -34,19 +36,24 @@ import java.util.concurrent.ConcurrentHashMap;
  * Repository facade parses the request. Transaction facade deals with low-level operations
  *
  * Batch-commit aware. That means when a batch comes, must make data durable.
+ *
+ * TODO in order to accommodate two or more VMSs in the same resource,
+ *  need to make this class an instance and put it into modb modules
  */
 public class TransactionFacade {
 
     private TransactionFacade(){}
 
-    // key: tid
+    // key: tid. always ordered by default (insertion order)
+    // single-thread, no need to synchronize
     private static final Map<Long, List<DataItemVersion>> writesPerTransaction;
 
-    // key: PK
+    // key: PK accessed by many read-only transactions
     private static final Map<IIndexKey, Map<IKey, OperationSet>> writesPerIndexAndKey;
 
     static {
-        writesPerTransaction = new ConcurrentHashMap<>();
+        // writesPerTransaction = Collections.synchronizedMap( new LinkedHashMap<>() );
+        writesPerTransaction = new LinkedHashMap<>();
         writesPerIndexAndKey = new ConcurrentHashMap<>();
     }
 
@@ -60,21 +67,7 @@ public class TransactionFacade {
         IKey pk = KeyUtils.buildRecordKey(table.getSchema(), table.getSchema().getPrimaryKeyColumns(), values);
         Map<IKey, OperationSet> keyMap = writesPerIndexAndKey.get( table.primaryKeyIndex().key() );
 
-        boolean exception = false;
-        if(keyMap == null){
-            // no writes so far in this batch for this index
-
-            // lets check now the index itself
-            if(table.primaryKeyIndex().exists(pk)){
-                exception = true;
-            }
-
-        } else if(keyMap.get(pk) != null) {
-            exception = true;
-            // check if this key is present in the keyMap
-        }
-
-        if(exception){
+        if(pkConstraintViolation(table, pk, keyMap) || constraintViolation(table, values)){
 
             long threadId = Thread.currentThread().getId();
             long tid = TransactionMetadata.tid(threadId);
@@ -127,9 +120,79 @@ public class TransactionFacade {
 
         }
 
-        DataItemVersion dataItemVersion = InsertOp.insert( tid, addressToWriteTo );
+        InsertOp dataItemVersion = InsertOp.insert( tid, addressToWriteTo );
 
         writesPerTransaction.get( tid ).add( dataItemVersion );
+
+        keyMap = new HashMap<>();
+
+        OperationSet operationSet = new OperationSet();
+        operationSet.lastWriteType = OperationSet.Type.INSERT;
+        operationSet.insertOp = dataItemVersion;
+
+        keyMap.put(pk, operationSet);
+
+    }
+
+    private static boolean pkConstraintViolation(Table table, IKey pk, Map<IKey, OperationSet> keyMap){
+
+        if(keyMap == null){
+            // no writes so far in this batch for this index
+
+            // lets check now the index itself
+            return table.primaryKeyIndex().exists(pk);
+
+        } else return keyMap.get(pk) != null;
+    }
+
+    private static boolean constraintViolation(Table table, Object[] values) {
+
+        Map<Integer, ConstraintReference> constraints = table.getSchema().constraints();
+
+        boolean violation = false;
+
+        for(Map.Entry<Integer, ConstraintReference> c : constraints.entrySet()) {
+
+            if(c.getValue().constraint == ConstraintEnum.NOT_NULL){
+                violation = values[c.getKey()] == null;
+            } else {
+
+                switch (table.getSchema().getColumnDataType(c.getKey())) {
+
+                    case INT -> violation = ConstraintHelper.eval((int)values[c.getKey()] , 0, Integer::compareTo, c.getValue().constraint);
+                    case LONG, DATE -> violation = ConstraintHelper.eval((long)values[c.getKey()] , 0L, Long::compareTo, c.getValue().constraint);
+                    case FLOAT -> violation = ConstraintHelper.eval((float)values[c.getKey()] , 0f, Float::compareTo, c.getValue().constraint);
+                    case DOUBLE -> violation = ConstraintHelper.eval((double)values[c.getKey()] , 0d, Double::compareTo, c.getValue().constraint);
+                    case CHAR -> {
+                        //
+                    }
+                    case BOOL -> {
+                        //
+                    }
+                    default -> throw new IllegalStateException("Data type not recognized!");
+                }
+            }
+
+            if(violation) return true;
+
+        }
+
+        return false;
+
+    }
+
+    private static class ConstraintHelper {
+
+        public static <T> boolean eval(T v1, T v2, Comparator<T> comparator, ConstraintEnum constraint){
+
+            if(constraint == ConstraintEnum.POSITIVE_OR_ZERO){
+                return comparator.compare(v1, v2) >= 0;
+            }
+            if(constraint == ConstraintEnum.POSITIVE){
+                return comparator.compare(v1, v2) > 0;
+            }
+            return false;
+        }
 
     }
 
@@ -178,6 +241,73 @@ public class TransactionFacade {
         ConsistentView consistentView = new ConsistentView(operator.index, operationSetMap, tid);
 
         return operator.run( consistentView, filterContext );
+
+    }
+
+    /* COMMIT *******/
+
+    /**
+     * Only log those data versions until the corresponding batch.
+     * TIDs are not necessarily a sequence.
+     * TODO merge the last values of each data item to avoid multiple writes
+     *      use virtual threads to speed up
+     *
+     * @param lastTid the last tid of the batch
+     */
+    public static void log(long lastTid, Catalog catalog){
+
+        // make state durable
+        // get buffered writes in transaction facade and merge in memory
+
+        for(var entry : writesPerIndexAndKey.entrySet()){
+
+            // for each index, get the last update
+            ReadWriteIndex<IKey> index = catalog.getIndexByKey(entry.getKey());
+
+            for(var keyEntry : entry.getValue().entrySet()){
+
+
+
+                switch (keyEntry.getValue().lastWriteType){
+
+                    case INSERT -> {
+
+                        if(keyEntry.getValue().insertOp.tid() <= lastTid) {
+                            // memcopy
+                            index.insert(keyEntry.getKey(), keyEntry.getValue().insertOp.bufferAddress);
+                        }
+
+                    }
+
+                    case DELETE -> {
+                        // put bit active as 0
+                    }
+
+                    case UPDATE -> {
+                        // memcopy
+
+                    }
+
+                }
+
+            }
+
+
+
+            // log index since all updates are made
+            index.asUniqueHashIndex().buffer().log();
+
+            writesPerIndexAndKey.remove(entry.getKey());
+
+        }
+
+
+        for(var tx : writesPerTransaction.entrySet()){
+            if(tx.getKey() > lastTid) break; // can stop
+            writesPerTransaction.remove( tx.getKey() );
+        }
+
+        // TODO must modify corresponding secondary indexes too
 
     }
 

@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.sdk.embed.metadata;
 
-import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.definition.Schema;
@@ -18,14 +16,22 @@ import dk.ku.di.dms.vms.sdk.embed.facade.ModbModules;
 import jdk.incubator.foreign.MemorySegment;
 import jdk.incubator.foreign.ResourceScope;
 
+import java.io.File;
+import java.io.IOException;
 import java.lang.ref.Cleaner;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.util.logging.Logger;
+
+import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
+import static java.util.logging.Logger.getLogger;
 
 public class EmbedMetadataLoader {
 
-    public static VmsRuntimeMetadata load(String packageName) {
+    private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
+
+    public static VmsRuntimeMetadata loadRuntimeMetadata(String packageName) {
 
         try {
 
@@ -34,21 +40,25 @@ public class EmbedMetadataLoader {
 
             VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load(packageName, constructor);
 
-            ModbModules modbModules = loadModbModules(vmsRuntimeMetadata);
-
-            for(IVmsRepositoryFacade facade : vmsRuntimeMetadata.repositoryFacades()){
-                ((EmbedRepositoryFacade)facade).setModbModules(modbModules);
-            }
-
             return vmsRuntimeMetadata;
 
         } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
-            // logger.wa("Cannot start VMs, error loading metadata.");
-        } catch (NoSuchFieldException e) {
-            e.printStackTrace();
+            logger.warning("Cannot start VMs, error loading metadata: "+e.getMessage());
         }
 
         return null;
+
+    }
+
+    public static ModbModules loadModbModulesIntoRepositories(VmsRuntimeMetadata vmsRuntimeMetadata) throws NoSuchFieldException, IllegalAccessException {
+
+        ModbModules modbModules = loadModbModules(vmsRuntimeMetadata);
+
+        for(IVmsRepositoryFacade facade : vmsRuntimeMetadata.repositoryFacades()){
+            ((EmbedRepositoryFacade)facade).setModbModules(modbModules);
+        }
+
+        return modbModules;
 
     }
 
@@ -73,32 +83,61 @@ public class EmbedMetadataLoader {
 
             // map this to a file, so whenever a batch commit arrives i can make the file durable
 
-            RecordBufferContext recordBufferContext = loadMemoryBuffer(10, schema.getRecordSize());
+            RecordBufferContext recordBufferContext = loadMemoryBuffer(10, schema.getRecordSize(), vmsDataSchema.tableName );
 
             UniqueHashIndex pkIndex = new UniqueHashIndex(recordBufferContext, schema, schema.getPrimaryKeyColumns());
 
             Table table = new Table(vmsDataSchema.tableName, schema, pkIndex);
 
+            // TODO create secondary indexes
+
             catalog.insertTable(table);
+            catalog.insertIndex(pkIndex.key(), pkIndex );
 
         }
 
         return catalog;
     }
 
-    private static RecordBufferContext loadMemoryBuffer(int maxNumberOfRecords, int recordSize){
+    private static RecordBufferContext loadMemoryBuffer(int maxNumberOfRecords, int recordSize, String append){
 
         Cleaner cleaner = Cleaner.create();
-        try(ResourceScope scope = ResourceScope.newSharedScope(cleaner)) {
-            MemorySegment segment = MemorySegment.allocateNative(1024 * 100, scope);
+        ResourceScope scope = ResourceScope.newSharedScope(cleaner);
+        long sizeInBytes = (long) maxNumberOfRecords * recordSize;
+        try {
+
+            MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, append);
             return new RecordBufferContext(segment, maxNumberOfRecords, recordSize);
+
         } catch (Exception e){
 
-            ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024 * 100);
-            long address = MemoryUtils.getByteBufferAddress(buffer);
+            logger.warning("Could not map file. Resorting to direct memory allocation attempt: "+e.getMessage());
 
-            return new RecordBufferContext(buffer, address, maxNumberOfRecords, recordSize);
+            MemorySegment segment = MemorySegment.allocateNative(sizeInBytes, scope);
+            return new RecordBufferContext(segment, maxNumberOfRecords, recordSize);
+
         }
+
+    }
+
+    private static MemorySegment mapFileIntoMemorySegment(long bytes, String append) throws IOException {
+
+        String userHome = System.getProperty("user.home");
+
+        String filePath = userHome + "/vms/" + append;
+
+        File file = new File(filePath);
+        if (file.exists()) {
+            file.delete();
+        }
+        file.createNewFile();
+
+        return MemorySegment.mapFile(
+                        file.toPath(),
+                        0,
+                        bytes,
+                        FileChannel.MapMode.READ_WRITE,
+                        ResourceScope.newSharedScope());
 
     }
 

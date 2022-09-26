@@ -9,6 +9,8 @@ import java.nio.ByteBuffer;
  */
 public final class BatchCommitRequest {
 
+    public static final int size = 1 + (2 * Long.BYTES);
+
     // send the last tid (corresponding to the vms) and batch id
     public static void write(ByteBuffer buffer, long batch, long tid){
         buffer.put(Constants.BATCH_COMMIT_REQUEST);

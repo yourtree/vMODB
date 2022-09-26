@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.sdk.embed;
+package dk.ku.di.dms.vms.sdk.embed.scheduler;
 
 public class BatchContext {
 
@@ -14,10 +14,12 @@ public class BatchContext {
         this.status = Status.NEW;
     }
 
-    enum Status {
+    public enum Status {
         NEW,
-        COMMITTING,
-        FINISHED
+        IN_PROGRESS,
+        COMMITTED,
+        REPLYING, // to the coordinator
+        DONE // write has completed
     }
 
     public Status status(){

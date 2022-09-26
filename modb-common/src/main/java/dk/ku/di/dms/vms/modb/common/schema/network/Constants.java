@@ -40,7 +40,8 @@ public final class Constants {
 
     /**
      * all terminal VMSs that have participated in a batch must send this event
-     * to coordinator in order to complete a batch
+     * to coordinator in order to complete a batch.
+     * Then after the coordinator send the batch commit request to all other VMSs
      * {@link BatchComplete}
     */
     public static final byte BATCH_COMPLETE = 7;
@@ -62,11 +63,9 @@ public final class Constants {
      * We cannot guarantee the implicit batch progression will be perceived by VMSs
      * since new events may never arrive again to a certain VMS
      *
+     * then the coordinator sends this message
+     * VMSs after receiving this message snapshot (log) their states
      */
-    public static final byte END_OF_BATCH = 17;
-
-    // then the coordinator sends this message
-    // VMSs after receiving this message snapshot (log) their states
     public static final byte BATCH_COMMIT_REQUEST = 9;
 
     // a commit response can indicate whether a leadership no longer holds

@@ -2,8 +2,6 @@ package dk.ku.di.dms.vms.sdk.core.event.channel;
 
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
@@ -12,8 +10,6 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Condition;
 
 /**
  * In a virtual microservice paradigm, internal components exchange a lot of internal events.
@@ -35,13 +31,6 @@ import java.util.concurrent.locks.Condition;
  *
  */
 public interface IVmsInternalChannels {
-
-    AtomicBoolean batchCommitInCourse();
-
-    // https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/locks/Condition.html
-    void signalCanStart();
-    void waitForCanStartSignal();
-    void signalComplete();
 
     /*
      * TRANSACTIONAL EVENTS
@@ -75,10 +64,10 @@ public interface IVmsInternalChannels {
     /**
      *  This is sent by the leader by all non-terminal VMSs involved in the last batch commit
      */
-    BlockingQueue<BatchCommitRequest.Payload> batchCommitQueue();
+    // BlockingQueue<BatchCommitRequest.Payload> batchCommitQueue();
 
     // sent by the new leader
-    BlockingQueue<BatchAbortRequest.Payload> batchAbortQueue();
+    // BlockingQueue<BatchAbortRequest.Payload> batchAbortQueue();
 
     // no response, al vms will definitely commit. if there is crash, they rerun the events
     // methods must be deterministic if developers want to maintain the same state as run before the crash

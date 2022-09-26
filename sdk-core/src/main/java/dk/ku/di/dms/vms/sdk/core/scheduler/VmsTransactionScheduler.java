@@ -11,7 +11,10 @@ import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 import static java.util.logging.Logger.getLogger;
@@ -24,7 +27,7 @@ import static java.util.logging.Logger.getLogger;
  */
 public class VmsTransactionScheduler extends StoppableRunnable {
 
-    private static final Logger logger = getLogger("VmsTransactionScheduler");
+    protected static final Logger logger = getLogger("VmsTransactionScheduler");
 
     // payload that cannot execute because some dependence need to be fulfilled
     // payload A < B < C < D
@@ -46,9 +49,12 @@ public class VmsTransactionScheduler extends StoppableRunnable {
     // offset tracking. i.e., cannot issue a task if predecessor transaction is not ready yet
     private final Map<Long, OffsetTracker> offsetMap;
 
+    // map the last tid
+    private final Map<Long, Long> lastTidToTidMap;
+
     private final ExecutorService vmsTransactionTaskPool;
 
-    private final IVmsInternalChannels vmsChannels;
+    protected final IVmsInternalChannels vmsChannels;
 
     // mapping
     private final Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap;
@@ -70,6 +76,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         this.submittedTasksPerTidMap = new HashMap<>();
         this.resultTasksPerTidMap = new HashMap<>();
         this.offsetMap = new TreeMap<>();
+        this.lastTidToTidMap = new HashMap<>();
         this.vmsChannels = vmsChannels;
         this.queueToEventMap = queueToEventMap;
         this.serdes = serdes;
@@ -116,7 +123,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 //        return null;
 //    }
 
-    private void initializeOffset(){
+    protected void initializeOffset(){
         currentOffset = new OffsetTracker(0, 1);
         currentOffset.signalReady();
         currentOffset.signalFinished();
@@ -128,7 +135,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
      * TODO we have to deal with failures
      *  not only container failures but also constraints being violated
      */
-    private void processTaskResult() {
+    protected void processTaskResult() {
 
         if(submittedTasksPerTidMap.get(currentOffset.tid()) == null) return;
 
@@ -219,7 +226,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     }
 
-    private void processNewEvent(){
+    protected void processNewEvent(){
 
         TransactionEvent.Payload transactionalEvent; // take();
         try {
@@ -282,6 +289,9 @@ public class VmsTransactionScheduler extends StoppableRunnable {
             // create the offset
             this.offsetMap.put( transactionalEvent.tid(), new OffsetTracker(transactionalEvent.tid(), signatures.size()));
 
+            // mark the last tid
+            this.lastTidToTidMap.put( transactionalEvent.lastTid(), transactionalEvent.tid() );
+
             VmsTransactionTask task;
 
             for (IdentifiableNode<VmsTransactionSignature> vmsTransactionSignatureIdentifiableNode : signatures) {
@@ -310,11 +320,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     }
 
-    private void dispatchReadyTasksForExecution() {
-
-        if(this.vmsChannels.batchCommitInCourse().get()){
-            this.vmsChannels.signalCanStart(); // this will make this thread wait
-        }
+    protected void dispatchReadyTasksForExecution() {
 
         // only currentOffset is necessary being checked, the other conditions causally follows:
         // !readyTasksPerTidMap.isEmpty() && readyTasksPerTidMap.firstKey() == currentOffset.tid() &&
@@ -355,18 +361,17 @@ public class VmsTransactionScheduler extends StoppableRunnable {
      * Assumption: we always have at least one offset in the list. of course, I could do this by design but the code guarantee that
      * Is it safe to move the offset pointer? this method takes care of that
      */
-    private void moveOffsetPointerIfNecessary(){
+    protected void moveOffsetPointerIfNecessary(){
 
         // if( offsetMap.size() == 1 ) return; // cannot move, the payload hasn't arrived yet, so the respective offset has not been created
 
         // if next is the right one ---> the concept of "next" may change according to recovery from failures and aborts
-        if(currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED_SUCCESSFULLY && offsetMap.get( currentOffset.tid() + 1 ) != null ){
+        if(currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED_SUCCESSFULLY && this.lastTidToTidMap.get( currentOffset.tid() ) != null ){
 
             // should be here to remove the tid 0. the tid 0 never receives a result task
             offsetMap.remove( currentOffset.tid() );
 
-            // not necessarily... the event handler must inform the sequence of tids for a batch
-            currentOffset = offsetMap.get( currentOffset.tid() + 1 );
+            currentOffset = offsetMap.get( this.lastTidToTidMap.get( currentOffset.tid() ) );
         }
 
     }

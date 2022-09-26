@@ -12,16 +12,18 @@ import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.playground.app.EventExample;
-import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
-import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
-import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.EmbedVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
+import dk.ku.di.dms.vms.sdk.embed.facade.ModbModules;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
+import dk.ku.di.dms.vms.sdk.embed.scheduler.BatchContext;
+import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -49,7 +51,7 @@ public class App
     // input transactions
     private static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
-    public static void main( String[] args ) throws IOException {
+    public static void main( String[] args ) throws IOException, NoSuchFieldException, IllegalAccessException {
 
         loadMicroservice( new NetworkNode("localhost", 1080),
                 "example",
@@ -150,11 +152,15 @@ public class App
 
     }
 
-    private static void loadMicroservice(NetworkNode node, String vmsName, String packageName) throws IOException {
+    private static void loadMicroservice(NetworkNode node, String vmsName, String packageName) throws IOException, NoSuchFieldException, IllegalAccessException {
 
-        IVmsInternalChannels vmsInternalPubSubService = VmsInternalChannels.getInstance();
+        VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
 
-        VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.load(packageName);
+        VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata(packageName);
+
+        ModbModules modbModules = EmbedMetadataLoader.loadModbModulesIntoRepositories(vmsMetadata);
+
+        Queue<BatchContext> batchCommitRequest = new LinkedBlockingDeque<>();
 
         assert vmsMetadata != null;
 
@@ -162,8 +168,8 @@ public class App
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
-        VmsTransactionScheduler scheduler =
-                new VmsTransactionScheduler(vmsAppLogicTaskPool, vmsInternalPubSubService, vmsMetadata.queueToVmsTransactionMap(), vmsMetadata.queueToEventMap(), serdes);
+        EmbedVmsTransactionScheduler scheduler =
+                new EmbedVmsTransactionScheduler(vmsAppLogicTaskPool, vmsInternalPubSubService, vmsMetadata.queueToVmsTransactionMap(), vmsMetadata.queueToEventMap(), serdes, modbModules.catalog());
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
                 node.host, node.port, vmsName,

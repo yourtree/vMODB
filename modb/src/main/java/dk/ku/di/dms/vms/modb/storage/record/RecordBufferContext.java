@@ -40,7 +40,9 @@ public class RecordBufferContext {
      */
     // public ByteBuffer metadataBuffer;
 
-    MemorySegment memorySegment;
+    private MemorySegment memorySegment;
+
+    private ByteBuffer byteBuffer;
 
     public RecordBufferContext(MemorySegment memorySegment, int capacity, int recordSize) {
         this.memorySegment = memorySegment;
@@ -49,13 +51,17 @@ public class RecordBufferContext {
         this.recordSize = recordSize;
     }
 
-    ByteBuffer byteBuffer;
-
     public RecordBufferContext(ByteBuffer byteBuffer, long address, int capacity, int recordSize) {
         this.byteBuffer = byteBuffer;
         this.address = address;
         this.capacity = capacity;
         this.recordSize = recordSize;
+    }
+
+    public void log(){
+
+        this.memorySegment.force();
+
     }
 
 }

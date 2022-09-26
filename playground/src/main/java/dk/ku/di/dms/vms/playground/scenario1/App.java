@@ -12,13 +12,12 @@ import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.playground.app.EventExample;
-import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
-import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
-import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
-import dk.ku.di.dms.vms.sdk.embed.BatchContext;
 import dk.ku.di.dms.vms.sdk.embed.EmbedVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
+import dk.ku.di.dms.vms.sdk.embed.facade.ModbModules;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
+import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -46,7 +45,7 @@ public class App
     // input transactions
     private static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
-    public static void main( String[] args ) throws IOException {
+    public static void main( String[] args ) throws IOException, NoSuchFieldException, IllegalAccessException {
 
         loadMicroservice();
 
@@ -147,11 +146,13 @@ public class App
     /**
      * Load one microservice at first and perform several transactions and batch commit
      */
-    private static void loadMicroservice() throws IOException {
+    private static void loadMicroservice() throws IOException, NoSuchFieldException, IllegalAccessException {
 
-        IVmsInternalChannels vmsInternalPubSubService = VmsInternalChannels.getInstance();
+        VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
 
-        VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.load("dk.ku.di.dms.vms.playground.app");
+        VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata("dk.ku.di.dms.vms.playground.app");
+
+        ModbModules modbModules = EmbedMetadataLoader.loadModbModulesIntoRepositories(vmsMetadata);
 
         if(vmsMetadata == null) throw new IllegalStateException("Cannot start VMs, error loading metadata.");
 
@@ -159,8 +160,13 @@ public class App
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
-        VmsTransactionScheduler scheduler =
-                new VmsTransactionScheduler(vmsAppLogicTaskPool, vmsInternalPubSubService, vmsMetadata.queueToVmsTransactionMap(), vmsMetadata.queueToEventMap(), serdes);
+        EmbedVmsTransactionScheduler scheduler =
+                new EmbedVmsTransactionScheduler(
+                        vmsAppLogicTaskPool,
+                        vmsInternalPubSubService,
+                        vmsMetadata.queueToVmsTransactionMap(),
+                        vmsMetadata.queueToEventMap(), serdes,
+                        modbModules.catalog());
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
                 "localhost", 1080, "example",

@@ -44,15 +44,15 @@ public abstract class DataItemVersion {
         return this.indexKey;
     }
 
-    public static DataItemVersion update(long tid, int columnIndex, long address){
+    public static UpdateOp update(long tid, int columnIndex, long address){
         return new UpdateOp(tid, columnIndex, address);
     }
 
-    public static DataItemVersion insert(long tid, long bufferAddress){
+    public static InsertOp insert(long tid, long bufferAddress){
         return new InsertOp(tid, bufferAddress);
     }
 
-    public static DataItemVersion delete(long tid){
+    public static DeleteOp delete(long tid){
         return new DeleteOp(tid);
     }
 

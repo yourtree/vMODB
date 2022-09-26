@@ -1,24 +1,11 @@
 package dk.ku.di.dms.vms.sdk.core.event.channel;
 
-import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
-import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 
-import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  *   This class has the objective to decouple completely the
@@ -58,22 +45,6 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
 
     private static final BlockingQueue<TransactionAbort.Payload> transactionAbortOutputQueue;
 
-    private static final BlockingQueue<BatchCommitRequest.Payload> batchCommitQueue;
-
-    private static final BlockingQueue<BatchAbortRequest.Payload> batchAbortQueue;
-
-    private static final Queue<DataRequestEvent> requestQueue;
-
-    private static final Map<Long, DataResponseEvent> responseMap;
-
-    private static final AtomicBoolean batchCommitInCourse;
-
-    private static final Lock lock;
-
-    private static final Condition start;
-
-    private static final Condition complete;
-
     static {
         INSTANCE = new VmsInternalChannels();
 
@@ -85,17 +56,6 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
         transactionAbortInputQueue = new LinkedBlockingQueue<>();
         transactionAbortOutputQueue = new LinkedBlockingQueue<>();
 
-        /* batch **/
-        batchCommitQueue = new LinkedBlockingQueue<>();
-        batchAbortQueue = new LinkedBlockingQueue<>();
-
-        batchCommitInCourse = new AtomicBoolean(false);
-        lock = new ReentrantLock();
-        start = lock.newCondition();
-        complete = lock.newCondition();
-
-        requestQueue = new ConcurrentLinkedQueue<>();
-        responseMap = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -118,49 +78,4 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
         return transactionAbortOutputQueue;
     }
 
-    @Override
-    public BlockingQueue<BatchCommitRequest.Payload> batchCommitQueue() {
-        return batchCommitQueue;
-    }
-
-    @Override
-    public BlockingQueue<BatchAbortRequest.Payload> batchAbortQueue() {
-        return batchAbortQueue;
-    }
-
-    @Override
-    public Queue<DataRequestEvent> dataRequestQueue() {
-        return requestQueue;
-    }
-
-    @Override
-    public Map<Long, DataResponseEvent> dataResponseMap() {
-        return responseMap;
-    }
-
-
-    @Override
-    public AtomicBoolean batchCommitInCourse(){
-        return batchCommitInCourse;
-    }
-
-    @Override
-    public void signalCanStart() {
-        lock.lock();
-        start.signal();
-        complete.awaitUninterruptibly();
-        lock.unlock();
-    }
-
-    @Override
-    public void waitForCanStartSignal() {
-        lock.lock();
-        start.awaitUninterruptibly();
-    }
-
-    @Override
-    public void signalComplete() {
-        complete.signal();
-        lock.unlock();
-    }
 }

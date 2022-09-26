@@ -834,9 +834,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         private final EventBatchWriteCompletionHandler writeCompletionHandler;
 
-        private final List<TransactionEvent.Payload> list;
+        private final List<TransactionEvent.Payload> payloadList;
 
         private boolean terminal;
+
+        private boolean terminalSent;
 
         private long batch;
 
@@ -844,7 +846,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
             this.idx = 0;
             this.vms = vms;
             this.writeCompletionHandler = new EventBatchWriteCompletionHandler();
-            this.list = list;
+            this.payloadList = list;
             this.terminal = terminal;
             this.batch = batch;
         }
@@ -853,7 +855,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
             this.idx = 0;
             this.vms = vms;
             this.writeCompletionHandler = new EventBatchWriteCompletionHandler();
-            this.list = list;
+            this.payloadList = list;
         }
 
         public void init() {
@@ -885,16 +887,23 @@ public final class Coordinator extends SignalingStoppableRunnable {
             // until buffer capacity is reached or elements are all sent
 
             int remainingBytes = bufferSize - 1 - Integer.BYTES;
-            int listSize = this.list.size();
+            int listSize = this.payloadList.size();
 
             int count = 0;
 
             // maybe we need a safe limit
-            while(this.idx < listSize && remainingBytes > this.list.get(idx).totalSize()){
-                TransactionEvent.write( connectionMetadata.writeBuffer, this.list.get(idx) );
-                remainingBytes = remainingBytes - list.get(this.idx).totalSize();
+            while(this.idx < listSize && remainingBytes > this.payloadList.get(idx).totalSize()){
+                TransactionEvent.write( connectionMetadata.writeBuffer, this.payloadList.get(idx) );
+                remainingBytes = remainingBytes - payloadList.get(this.idx).totalSize();
                 this.idx++;
                 count++;
+            }
+
+            if(this.idx == listSize && remainingBytes >= BatchCommitRequest.size){
+                this.terminalSent = true;
+                var batchContext = batchContextMap.get(batch);
+                long lastBatchTid = batchContext.lastTidOfBatchPerVms.get( vms.getIdentifier() );
+                BatchCommitRequest.write( connectionMetadata.writeBuffer, batch, lastBatchTid );
             }
 
             connectionMetadata.writeBuffer.mark();
@@ -906,16 +915,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         private class EventBatchWriteCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
 
-            private boolean terminalSent;
-            public EventBatchWriteCompletionHandler(){
-                this.terminalSent = false;
-            }
-
             @Override
             public void completed(Integer result, ConnectionMetadata connectionMetadata) {
 
                 // do we still have events to batch?
-                if(idx < list.size()){
+                if(idx < payloadList.size()){
                     batchEvents(connectionMetadata);
                     connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata, this);
                 } else {
@@ -925,14 +929,10 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                         connectionMetadata.writeBuffer.clear();
 
-                        connectionMetadata.writeBuffer.put(END_OF_BATCH);
-                        connectionMetadata.writeBuffer.putLong(batch);
-
                         var batchContext = batchContextMap.get(batch);
                         long lastBatchTid = batchContext.lastTidOfBatchPerVms.get( vms.getIdentifier() );
 
-                        // also write the last tid for this batch, so the terminal vms know when to send the batch complete
-                        connectionMetadata.writeBuffer.putLong(lastBatchTid);
+                        BatchCommitRequest.write( connectionMetadata.writeBuffer, batch, lastBatchTid );
 
                         connectionMetadata.writeBuffer.flip();
                         connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata, this);
@@ -959,10 +959,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
      */
     private void scheduleBatchCommit(){
         logger.info("Batch commit schedule spawned.");
-        boolean outcome;
-        do{
-            outcome = scheduleBatchCommit.compareAndExchange(false, true);
-        } while (!outcome);
+        scheduleBatchCommit.set(true);
     }
 
     /**

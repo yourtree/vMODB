@@ -4,16 +4,17 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
+import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
+import dk.ku.di.dms.vms.sdk.embed.scheduler.BatchContext;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
@@ -60,7 +61,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     private final AsynchronousChannelGroup group;
 
     /** INTERNAL CHANNELS **/
-    private final IVmsInternalChannels vmsInternalChannels;
+    private final VmsEmbedInternalChannels vmsInternalChannels;
 
     /** VMS METADATA **/
     private final VmsIdentifier me; // this merges network and semantic data about the vms
@@ -83,7 +84,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     // metadata about all non-committed batches. when a batch commit finishes, it is removed from this map
     private final Map<Long, BatchContext> batchContextMap;
 
-    public EmbedVmsEventHandler(IVmsInternalChannels vmsInternalChannels, // for communicating with other components
+    public EmbedVmsEventHandler(VmsEmbedInternalChannels vmsInternalChannels, // for communicating with other components
                                 VmsIdentifier me, // to identify which vms this is
                                 VmsRuntimeMetadata vmsMetadata, // metadata about this vms
                                 IVmsSerdesProxy serdesProxy, // ser/des of objects
@@ -107,7 +108,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         serverSocket.bind(address);
 
         this.currentBatch = new BatchContext(me.lastBatch, me.lastTid);
-        this.currentBatch.setStatus(BatchContext.Status.FINISHED);
+        this.currentBatch.setStatus(BatchContext.Status.DONE);
         this.batchContextMap = new ConcurrentHashMap<>(3);
 
     }
@@ -157,36 +158,25 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                             continue;
                         }
 
-                        ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get(vms.hashCode());
+                        // ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get(vms.hashCode());
 
                         // connectionMetadata.readBuffer.flip()
+
+                        // then must check whether the current tid is higher than the current batch last tid. if higher, process batch commit
+                        // the idea is to avoid having to wait for the batch commit request to arrive. we can continue process transactions
+                        // as long as we log the write state. since the terminals have initiated, that means the transactions have executed
+                        // successfully in the previous nodes
+
                     } else {
 
-
                         // if there is a output for a given tid, that is because all of the task of the tid have succeeded
-                        if(currentBatch.lastTid == outputEvent.tid()){
+                        if(this.currentBatch.lastTid == outputEvent.tid()){
+                            // we need to alert the scheduler...
+                            this.vmsInternalChannels.batchContextQueue().add( this.currentBatch );
 
-                            // send batch complete to leader and increment batch
-                            // it may be the case that a vms does not participate in a batch
-                            // either way it must receive a batch commit request since
-                            // single vms transaction may have executed
-
-                            // BatchComplete.write();
-
-                            // we need to stop the scheduler...
-                            this.vmsInternalChannels.batchCommitInCourse().set(true);
-                            // this will make this thread wait
-                            this.vmsInternalChannels.waitForCanStartSignal();
-
-                            // make state durable
-
-                            // get buffered writes in transaction facade and merge in memory
-
-
-
-                            this.vmsInternalChannels.signalComplete();
                         }
 
+                        logger.info("Terminal, but there may be a payload to send to leader...");
                         // send to leader (if there is a payload)
                         // sendEventToLeader(outputEvent);
 
@@ -194,11 +184,91 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
                 }
 
+                // do we have a new batch request?
+                checkBatchRelatedEvents();
+
             } catch (Exception e) {
                 logger.log(Level.SEVERE, "Problem on handling event on event handler:"+e.getMessage());
             }
 
         }
+
+    }
+
+    private void checkBatchRelatedEvents() {
+
+        if(this.currentBatch.status() == BatchContext.Status.COMMITTED){
+
+            this.currentBatch.setStatus(BatchContext.Status.REPLYING);
+
+            this.leaderConnectionMetadata.writeLock.acquireUninterruptibly();
+            this.leaderConnectionMetadata.writeBuffer.clear();
+            BatchComplete.write( leaderConnectionMetadata.writeBuffer, this.currentBatch.batch, this.me );
+
+            this.leaderConnectionMetadata.writeBuffer.flip();
+
+//            this.leaderConnectionMetadata.channel.write(this.leaderConnectionMetadata.writeBuffer).get();
+//            this.leaderConnectionMetadata.writeBuffer.clear();
+//            this.leaderConnectionMetadata.writeLock.release();
+
+            this.leaderConnectionMetadata.channel.write(this.leaderConnectionMetadata.writeBuffer, null,
+                    new CompletionHandler<>() {
+
+                        @Override
+                        public void completed(Integer result, Object attachment) {
+                            currentBatch.setStatus(BatchContext.Status.DONE);
+                            leaderConnectionMetadata.writeBuffer.clear();
+                            leaderConnectionMetadata.writeLock.release();
+                        }
+
+                        @Override
+                        public void failed(Throwable exc, Object attachment) {
+                            leaderConnectionMetadata.writeBuffer.clear();
+                            if(!leaderConnectionMetadata.channel.isOpen()){
+                                leader.off();
+                            }
+                            leaderConnectionMetadata.writeLock.release();
+                        }
+                    }
+            );
+
+        }
+
+        // the current batch is finished and at the same time do we have a new one, so we can move on the batch offset?
+        var peek = vmsInternalChannels.newBatchCommitRequestQueue().peek();
+        if(peek != null && this.currentBatch.status() == BatchContext.Status.DONE && peek.batch() == currentBatch.batch + 1){
+
+            // remove from queue
+            vmsInternalChannels.newBatchCommitRequestQueue().poll();
+
+            BatchContext batchContext = new BatchContext(peek.batch(), peek.tid());
+            this.batchContextMap.put(peek.batch(), batchContext);
+            this.currentBatch = batchContext;
+
+        }
+
+    }
+
+    private void processBatchCommitIfNecessary(OutboundEventResult outputEvent) throws InterruptedException {
+
+        // send batch complete to leader and increment batch
+        // it may be the case that a vms does not participate in a batch
+        // either way it must receive a batch commit request since
+        // single vms transaction may have executed own code
+//        else {
+//
+//            // is this event the last tid of some future batch?
+//            BatchContext currBatchCtx = currentBatch;
+//            // find the previous of this batch commit and put on the next
+//            while(currBatchCtx.next != null && currBatchCtx.lastTid != outputEvent.tid()){
+//                currBatchCtx = currBatchCtx.next;
+//            }
+//            if(currBatchCtx.lastTid == outputEvent.tid()){
+//                // mark this batch to be committed after the current one
+//                logger.info("Batch ID: "+currBatchCtx.batch+" scheduled to run after current batch.");
+//            }
+//
+//        }
 
     }
 
@@ -598,7 +668,9 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             // receive input events
             if(messageType == BATCH_OF_EVENTS){
 
-                int count =  connectionMetadata.readBuffer.getInt();
+                // to increase performance, one would buffer this buffer for processing and then read from another buffer
+
+                int count = connectionMetadata.readBuffer.getInt();
 
                 TransactionEvent.Payload payload;
 
@@ -606,26 +678,28 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 for(int i = 0; i < count; i++){
                     // discard message type...
                     byte eventType = connectionMetadata.readBuffer.get();
-                    payload = TransactionEvent.read(connectionMetadata.readBuffer);
-                    if(vmsMetadata.queueToEventMap().get( payload.event() ) != null) {
-                        vmsInternalChannels.transactionInputQueue().add(payload);
+
+                    if(eventType == EVENT){
+                        payload = TransactionEvent.read(connectionMetadata.readBuffer);
+                        if(vmsMetadata.queueToEventMap().get( payload.event() ) != null)
+                            vmsInternalChannels.transactionInputQueue().add(payload);
+
+                    } else if(eventType == BATCH_COMMIT_REQUEST){
+                        // it means this VMS is a terminal node in the current batch to be committed
+
+                        BatchCommitRequest.Payload bPayload = BatchCommitRequest.read( connectionMetadata.readBuffer );
+                        vmsInternalChannels.newBatchCommitRequestQueue().add(bPayload);
+
                     }
                 }
 
-            } else if(messageType == END_OF_BATCH) {
+            } else if(messageType == BATCH_COMMIT_REQUEST) {
 
-                // it means this VMS is a terminal in the current batch to be committed
-                // TODO the coordinator could also append it to the end of event batch to avoid message overhead
+                // it means this VMS is not a terminal node in the current batch to be committed
                 // for now lets make the logic work first
-                long batch = connectionMetadata.readBuffer.getLong();
-                long lastBatchTid = connectionMetadata.readBuffer.getLong();
 
-                BatchContext batchContext = new BatchContext(batch, lastBatchTid);
-                if(batchContext.batch == currentBatch.batch + 1 && currentBatch.status() == BatchContext.Status.FINISHED){
-                    currentBatch = batchContext;
-                }
-
-                batchContextMap.put(batch, batchContext);
+                BatchCommitRequest.Payload payload = BatchCommitRequest.read( connectionMetadata.readBuffer );
+                vmsInternalChannels.newBatchCommitRequestQueue().add(payload);
 
             } else if(messageType == EVENT) {
 
@@ -636,19 +710,24 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                     vmsInternalChannels.transactionInputQueue().add(payload);
                 }
 
-            } else if (messageType == BATCH_COMMIT_REQUEST){
-                // must send batch commit ok
-                BatchCommitRequest.Payload batchCommitReq = BatchCommitRequest.read( connectionMetadata.readBuffer );
-                connectionMetadata.readBuffer.clear();
-                vmsInternalChannels.batchCommitQueue().add( batchCommitReq );
-            } else if(messageType == TX_ABORT){
+            }
+//            else if (messageType == BATCH_COMMIT_REQUEST){
+//                // must send batch commit ok
+//                BatchCommitRequest.Payload batchCommitReq = BatchCommitRequest.read( connectionMetadata.readBuffer );
+//                connectionMetadata.readBuffer.clear();
+//                vmsInternalChannels.batchCommitQueue().add( batchCommitReq );
+//            }
+            else if(messageType == TX_ABORT){
                 TransactionAbort.Payload transactionAbortReq = TransactionAbort.read( connectionMetadata.readBuffer );
                 vmsInternalChannels.transactionAbortInputQueue().add( transactionAbortReq );
-            } else if (messageType == BATCH_ABORT_REQUEST){
-                // some new leader request to rollback to last batch commit
-                BatchAbortRequest.Payload batchAbortReq = BatchAbortRequest.read( connectionMetadata.readBuffer );
-                vmsInternalChannels.batchAbortQueue().add(batchAbortReq);
-            } else if( messageType == CONSUMER_SET){
+            }
+//            else if (messageType == BATCH_ABORT_REQUEST){
+//                // some new leader request to rollback to last batch commit
+//                BatchAbortRequest.Payload batchAbortReq = BatchAbortRequest.read( connectionMetadata.readBuffer );
+//                vmsInternalChannels.batchAbortQueue().add(batchAbortReq);
+//            }
+
+            else if( messageType == CONSUMER_SET){
 
                 // read
                 var receivedConsumerVms = ConsumerSet.read(connectionMetadata.readBuffer, serdesProxy);
