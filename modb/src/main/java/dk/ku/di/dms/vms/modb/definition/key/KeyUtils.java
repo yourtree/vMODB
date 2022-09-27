@@ -8,6 +8,13 @@ public class KeyUtils {
 
     private KeyUtils(){}
 
+    public static IKey buildRecordKey(Object... object){
+        if(object.length == 1){
+            return SimpleKey.of( object[0] );
+        }
+        return CompositeKey.of( object );
+    }
+
     public static IKey buildRecordKey(Schema schema, int[] columns, Object... object){
 
         if(columns.length == 1){

@@ -44,6 +44,10 @@ public abstract class DataItemVersion {
         return new UpdateOp(tid, columnIndex, address, indexKey, pk);
     }
 
+    public static UpdateOp update(long tid, long address, IIndexKey indexKey, IKey pk){
+        return new UpdateOp(tid, address, indexKey, pk);
+    }
+
     public static InsertOp insert(long tid, long bufferAddress, IIndexKey indexKey, IKey pk){
         return new InsertOp(tid, bufferAddress, indexKey, pk);
     }

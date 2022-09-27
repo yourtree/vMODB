@@ -20,7 +20,9 @@ import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.OperationSet;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.DataItemVersion;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.DeleteOp;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.InsertOp;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.UpdateOp;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -57,8 +59,121 @@ public class TransactionFacade {
         writesPerIndexAndKey = new ConcurrentHashMap<>();
     }
 
-    /****** ENTITY *******/
+    /* ENTITY *******/
 
+    /**
+     *
+     * @param table The corresponding database table
+     * @param values The values that form the primary key
+     */
+    public static void delete(Table table, Object[] values){
+
+        IKey pk = KeyUtils.buildRecordKey(values);
+
+        IIndexKey indexKey = table.primaryKeyIndex().key();
+        Map<IKey, OperationSet> keyMap = writesPerIndexAndKey.get( indexKey );
+
+        // if != null, there may have been an insert of this key
+        if(keyMap != null && keyMap.get(pk) != null){
+            OperationSet operationSet = keyMap.get(pk);
+            long threadId = Thread.currentThread().getId();
+            long tid = TransactionMetadata.tid(threadId);
+            operationSet.deleteOp = DeleteOp.delete( tid, indexKey, pk );
+            operationSet.lastWriteType = OperationSet.Type.DELETE;
+
+            writesPerTransaction.putIfAbsent( tid, new ArrayList<>(5) );
+            writesPerTransaction.get( tid ).add( operationSet.deleteOp );
+
+            // does this key even exist? if not, don't even need to save it on transaction metadata
+        } else if(table.primaryKeyIndex().exists(pk)) {
+
+            if(keyMap == null) {
+                keyMap = new HashMap<>();
+                writesPerIndexAndKey.putIfAbsent(indexKey, keyMap);
+            }
+
+            long threadId = Thread.currentThread().getId();
+            long tid = TransactionMetadata.tid(threadId);
+            OperationSet operationSet = new OperationSet();
+            operationSet.lastWriteType = OperationSet.Type.DELETE;
+            operationSet.deleteOp = DeleteOp.delete( tid, indexKey, pk );
+
+            keyMap.put(pk, operationSet);
+
+            writesPerTransaction.putIfAbsent( tid, new ArrayList<>(5) );
+            writesPerTransaction.get( tid ).add( operationSet.deleteOp );
+        }
+
+    }
+
+    public static void update(Table table, Object[] values){
+
+        IKey pk = KeyUtils.buildRecordKey(table.getSchema(), table.getSchema().getPrimaryKeyColumns(), values);
+
+        IIndexKey indexKey = table.primaryKeyIndex().key();
+        Map<IKey, OperationSet> keyMap = writesPerIndexAndKey.get( indexKey );
+
+        // if != null, there may have been an insert of this key
+        if(keyMap != null && keyMap.get(pk) != null){
+
+            // is the last write a delete operation?
+            OperationSet operationSet = keyMap.get(pk);
+            if(operationSet.lastWriteType == OperationSet.Type.DELETE){
+                throw new IllegalStateException("[a] Cannot update a nonexistent record. Key: "+pk+" for table: "+table.getName());
+            }
+
+            if(constraintViolation(table, values)){
+                throw new IllegalStateException("Constraints violated for record. Key: "+pk+" for table: "+table.getName());
+            }
+
+            long threadId = Thread.currentThread().getId();
+            long tid = TransactionMetadata.tid(threadId);
+
+            long addressToWriteTo = writeToMemory(table, values);
+
+            UpdateOp dataItemVersion = UpdateOp.update( tid, addressToWriteTo, indexKey, pk );
+
+            writesPerTransaction.putIfAbsent( tid, new ArrayList<>(5) );
+            writesPerTransaction.get( tid ).add( dataItemVersion );
+
+            if(operationSet.lastWriteType == OperationSet.Type.INSERT)
+                operationSet.lastWriteType = OperationSet.Type.UPDATE;
+
+        } else if(table.primaryKeyIndex().exists(pk)) {
+
+            if(constraintViolation(table, values)){
+                throw new IllegalStateException("Constraints violated for record. Key: "+pk+" for table: "+table.getName());
+            }
+
+            if(keyMap == null) {
+                keyMap = new HashMap<>();
+                writesPerIndexAndKey.putIfAbsent(indexKey, keyMap);
+            }
+
+            long threadId = Thread.currentThread().getId();
+            long tid = TransactionMetadata.tid(threadId);
+
+            long addressToWriteTo = writeToMemory(table, values);
+
+            UpdateOp dataItemVersion = UpdateOp.update( tid, addressToWriteTo, indexKey, pk );
+
+            OperationSet operationSet = new OperationSet();
+            operationSet.lastWriteType = OperationSet.Type.UPDATE;
+            operationSet.recordUpdateOps.add( dataItemVersion );
+
+            keyMap.put(pk, operationSet);
+
+        } else {
+            throw new IllegalStateException("[b] Cannot update a nonexistent record. Key: "+pk+" for table: "+table.getName());
+        }
+
+    }
+
+    /**
+     *
+     * @param table The corresponding database table
+     * @param values The fields extracted from the entity
+     */
     public static void insert(Table table, Object[] values){
 
         IKey pk = KeyUtils.buildRecordKey(table.getSchema(), table.getSchema().getPrimaryKeyColumns(), values);
@@ -92,32 +207,12 @@ public class TransactionFacade {
             throw new IllegalStateException("Primary key"+pk+"already exists for this table: "+table.getName());
         }
 
-        int recordSize = table.getSchema().getRecordSizeWithoutHeader();
-
-        MemoryRefNode memRef = MemoryManager.getTemporaryDirectMemory(recordSize);
+        IIndexKey indexKey = table.primaryKeyIndex().key();
 
         long threadId = Thread.currentThread().getId();
         long tid = TransactionMetadata.tid(threadId);
 
-        long addressToWriteTo = memRef.address();
-
-        int maxColumns = table.getSchema().columnOffset().length;
-        int index;
-
-        // TODO For embed and default?, can be directly put in a buffer instead of saving an object.
-        for(index = 0; index < maxColumns; index++) {
-
-            DataType dt = table.getSchema().getColumnDataType(index);
-
-            DataTypeUtils.callWriteFunction( addressToWriteTo,
-                    dt,
-                    values[index] );
-
-            addressToWriteTo += dt.value;
-
-        }
-
-        IIndexKey indexKey = table.primaryKeyIndex().key();
+        long addressToWriteTo = writeToMemory(table, values);
 
         InsertOp dataItemVersion = InsertOp.insert( tid, addressToWriteTo, indexKey, pk );
 
@@ -135,6 +230,27 @@ public class TransactionFacade {
 
         keyMap.put(pk, operationSet);
 
+    }
+
+    private static long writeToMemory(Table table, Object[] values) {
+        int recordSize = table.getSchema().getRecordSizeWithoutHeader();
+        MemoryRefNode memRef = MemoryManager.getTemporaryDirectMemory(recordSize);
+        long addressToWriteTo = memRef.address();
+        int maxColumns = table.getSchema().columnOffset().length;
+        int index;
+        // TODO For embed and default?, can be directly put in a buffer instead of saving an object.
+        for(index = 0; index < maxColumns; index++) {
+
+            DataType dt = table.getSchema().getColumnDataType(index);
+
+            DataTypeUtils.callWriteFunction( addressToWriteTo,
+                    dt,
+                    values[index] );
+
+            addressToWriteTo += dt.value;
+
+        }
+        return addressToWriteTo;
     }
 
     private static boolean pkConstraintViolation(Table table, IKey pk, Map<IKey, OperationSet> keyMap){

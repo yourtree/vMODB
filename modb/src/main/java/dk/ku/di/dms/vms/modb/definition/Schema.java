@@ -70,6 +70,10 @@ public class Schema {
         return this.columnPositionMap.get(columnName);
     }
 
+    public String getColumnName(int columnIndex){
+        return this.columnNames[columnIndex];
+    }
+
     public String[] getColumnNames(){
         return this.columnNames;
     }

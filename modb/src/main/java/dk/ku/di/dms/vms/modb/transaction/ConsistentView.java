@@ -38,15 +38,15 @@ import java.util.Map;
  */
 public class ConsistentView implements ReadOnlyIndex<IKey> {
 
-    private ReadOnlyIndex<IKey> index;
+    private final ReadOnlyIndex<IKey> index;
 
     /**
      * Since the previous checkpointed state, multiple updates may have been applied
      *
      */
-    private Map<IKey, OperationSet> keyVersionMap;
+    private final Map<IKey, OperationSet> keyVersionMap;
 
-    private long tid;
+    private final long tid;
 
     public ConsistentView(ReadOnlyIndex<IKey> index, Map<IKey, OperationSet> keyVersionMap, long tid) {
         this.index = index;
@@ -158,7 +158,7 @@ public class ConsistentView implements ReadOnlyIndex<IKey> {
         if(operationSet.insertOp != null && operationSet.insertOp.tid() <= tid){
 
             // besides, do we have a column update?
-            if(operationSet.updateOps == null){
+            if(operationSet.columnUpdateOps == null){
                 int columnOffset = schema().getColumnOffset(columnIndex);
                 return operationSet.insertOp.bufferAddress + columnOffset;
             } else {
@@ -173,7 +173,7 @@ public class ConsistentView implements ReadOnlyIndex<IKey> {
 
     private long getUpdatedColumnIfPossible(int columnIndex, OperationSet operationSet) {
         // do we have a column update on this column index?
-        List<UpdateOp> updateOpList = operationSet.updateOps.get(columnIndex);
+        List<UpdateOp> updateOpList = operationSet.columnUpdateOps.get(columnIndex);
 
         if(updateOpList == null || updateOpList.size() == 0){
             int columnOffset = schema().getColumnOffset(columnIndex);
@@ -188,6 +188,17 @@ public class ConsistentView implements ReadOnlyIndex<IKey> {
 
         if(updateOpList.get(index).tid() <= tid){
             return updateOpList.get(index).address;
+        }
+
+        // check the recordUpdateRecord now
+        if(!operationSet.recordUpdateOps.isEmpty()){
+            index = operationSet.recordUpdateOps.size() - 1;
+            while(index > 0 && operationSet.recordUpdateOps.get(index).tid() > tid){
+                index--;
+            }
+            if(operationSet.recordUpdateOps.get(index).tid() <= tid){
+                return operationSet.recordUpdateOps.get(index).address;
+            }
         }
 
         // in case even the last checked version does not apply to the current tid

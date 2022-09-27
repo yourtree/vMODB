@@ -6,7 +6,6 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Row;
@@ -20,6 +19,7 @@ import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityUtils;
 
+import java.io.Serializable;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -41,6 +41,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
     // private final Class<?> pkClazz;
 
     private final Class<? extends IEntity<?>> entityClazz;
+    private final Class<? extends Serializable> pkClazz;
 
     // DBMS components
     private ModbModules modbModules;
@@ -55,7 +56,9 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         Type[] types = ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
 
         this.entityClazz = (Class<? extends IEntity<?>>) types[1];
-        // this.pkClazz = (Class<?>) types[0];
+
+        // not sure whether we need to comply with hibernate...
+        this.pkClazz = (Class<? extends Serializable>) types[0];
 
         // read-only transactions may put items here
         this.cachedPlans = new ConcurrentHashMap<>();
@@ -95,21 +98,41 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
             // hash is table + record id hashed
             // values are versions. in the absence of versions, read from store
             // an object will inform the oldest and newest TIDs and contain reference to the versions
-
-            case "insert": {
+            case "delete": {
 
                 String tableName = this.modbModules.vmsRuntimeMetadata().entityToTableNameMap().get( entityClazz );
 
                 Table table = this.modbModules.catalog().getTable(tableName);
 
-                Object[] values = new Object[table.getSchema().getColumnNames().length];
-
-                int fieldIdx = 0;
-                // get values from entity
-                for(String columnName : table.getSchema().getColumnNames()){
-                    values[fieldIdx] = this.entityFieldMap.get(columnName).get( args[0] );
-                    fieldIdx++;
+                int[] pkColumnsIndex = table.getSchema().getPrimaryKeyColumns();
+                Object[] values = new Object[pkColumnsIndex.length];
+                String columnName;
+                for(int columnIndex : pkColumnsIndex){
+                    columnName = table.getSchema().getColumnName(columnIndex);
+                    values[columnIndex] = this.entityFieldMap.get(columnName).get( args[0] );
                 }
+
+                TransactionFacade.delete(table, values);
+
+                break;
+
+            }
+            case "update" : {
+
+                String tableName = this.modbModules.vmsRuntimeMetadata().entityToTableNameMap().get( entityClazz );
+                Table table = this.modbModules.catalog().getTable(tableName);
+                Object[] values = extractFieldValuesFromEntityObject(args[0], table);
+
+                TransactionFacade.update(table, values);
+
+                break;
+
+            }
+            case "insert": {
+
+                String tableName = this.modbModules.vmsRuntimeMetadata().entityToTableNameMap().get( entityClazz );
+                Table table = this.modbModules.catalog().getTable(tableName);
+                Object[] values = extractFieldValuesFromEntityObject(args[0], table);
 
                 TransactionFacade.insert(table, values);
 
@@ -141,6 +164,18 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         }
 
         return null;
+    }
+
+    private Object[] extractFieldValuesFromEntityObject(Object entityObject, Table table) {
+        Object[] values = new Object[table.getSchema().getColumnNames().length];
+
+        int fieldIdx = 0;
+        // get values from entity
+        for(String columnName : table.getSchema().getColumnNames()){
+            values[fieldIdx] = this.entityFieldMap.get(columnName).get(entityObject);
+            fieldIdx++;
+        }
+        return values;
     }
 
     @Override

@@ -90,6 +90,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
     // must update the "me" on snapshotting (i.e., committing)
     private long tid;
 
+    // the last tid of last batch (to avoid sending a batch with no events)
+    private long lastBatchTid;
+
     // the offset of the pending batch commit (always < batchOffset)
     private long batchOffsetPendingCommit;
 
@@ -170,6 +173,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         // transactions
         this.tid = startingTid;
+        this.lastBatchTid = startingTid;
+
         // shared data structure
         this.parsedTransactionRequests = parsedTransactionRequests;
 
@@ -231,9 +236,12 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 txManager.doAction();
 
                 // handle batch commit task
-                if(scheduleBatchCommit.get()){
-                    scheduleBatchCommit.set(false);
-                    runBatchCommit();
+                if(this.scheduleBatchCommit.get()){
+                    this.scheduleBatchCommit.set(false);
+                    if(this.lastBatchTid < this.tid)
+                        runBatchCommit();
+                    else
+                        logger.info("No new transactions since last batch. New batch is not being spawned.");
                 }
 
                 // handle other events
@@ -992,6 +1000,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
     private void runBatchCommit(){
 
         logger.info("Batch commit run started.");
+
+        this.lastBatchTid = this.tid;
 
         // why do I need to replicate vmsTidMap? to restart from this point if the leader fails
         Map<String,Long> lastTidOfBatchPerVms;
