@@ -38,8 +38,6 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
     private static final Logger logger = Logger.getLogger(EmbedRepositoryFacade.class.getName());
 
-    // private final Class<?> pkClazz;
-
     private final Class<? extends IEntity<?>> entityClazz;
     private final Class<? extends Serializable> pkClazz;
 

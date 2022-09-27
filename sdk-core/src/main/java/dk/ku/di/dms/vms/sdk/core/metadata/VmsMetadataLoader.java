@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.metadata;
 
 import dk.ku.di.dms.vms.modb.api.annotations.*;
+import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
@@ -48,11 +49,11 @@ public class VmsMetadataLoader {
 
         Reflections reflections = configureReflections(packageName);
 
-        Map<Class<?>,String> entityToTableNameMap = loadVmsTableNames(reflections);
+        Map<Class<?>, String> entityToTableNameMap = loadVmsTableNames(reflections);
 
         Set<Class<?>> vmsClasses = reflections.getTypesAnnotatedWith(Microservice.class);
 
-        Map<Class<? extends IEntity<?>>,String> entityToVirtualMicroservice = mapEntitiesToVirtualMicroservice(vmsClasses);
+        Map<Class<? extends IEntity<?>>, String> entityToVirtualMicroservice = mapEntitiesToVirtualMicroservice(vmsClasses);
 
         Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, entityToTableNameMap);
 
@@ -61,13 +62,13 @@ public class VmsMetadataLoader {
         Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, facadeConstructor, repositoryFacades);
 
         // necessary remaining data structures to store a vms metadata
-        Map<String, List<IdentifiableNode<VmsTransactionSignature>>> queueToVmsTransactionMap = new HashMap<>();
+        Map<String, VmsTransactionMetadata> queueToVmsTransactionMap = new HashMap<>();
 
         // event to type
         Map<String, Class<?>> queueToEventMap = new HashMap<>();
 
         // type to event
-        Map<Class<?>,String> eventToQueueMap = new HashMap<>();
+        Map<Class<?>, String> eventToQueueMap = new HashMap<>();
 
         // distinction between input and output events
         // key: queue name; value: (input),(output)
@@ -451,9 +452,7 @@ public class VmsMetadataLoader {
                                                        Map<String, Class<?>> queueToEventMap,
                                                        Map<Class<?>, String> eventToQueueMap,
                                                        Map<String, String> inputOutputEventDistinction,
-                                                       Map<String,
-                                                               List<IdentifiableNode<VmsTransactionSignature>>>
-                                                               queueToVmsTransactionMap) {
+                                                       Map<String, VmsTransactionMetadata> queueToVmsTransactionMap) {
 
         Set<Method> transactionalMethods = reflections.getMethodsAnnotatedWith(Transactional.class);
 
@@ -510,7 +509,8 @@ public class VmsMetadataLoader {
             String[] inputQueues = ((Inbound) optionalInbound.get()).values();
             String outputQueue = ((Outbound) optionalOutbound.get()).value();
 
-            if (eventToQueueMap.get(outputType) == null) {
+            String queueName = eventToQueueMap.get(outputType);
+            if (queueName == null) {
                 eventToQueueMap.put(outputType, outputQueue);
 
                 // not sure why I need this now... just doing it for completeness
@@ -523,17 +523,26 @@ public class VmsMetadataLoader {
 
                 inputOutputEventDistinction.put(outputQueue,"output");
 
-            } else {
+            } else if(queueToEventMap.get(queueName) != outputType) {
                 throw new QueueMappingException(
                         "Error mapping: A payload type cannot be mapped to two (or more) output queues.");
             }
 
             Optional<Annotation> optionalTerminal = Arrays.stream(annotations).filter(p -> p.annotationType() == Terminal.class ).findFirst();
 
+            Optional<Annotation> optionalTransactional = Arrays.stream(annotations).filter(p -> p.annotationType() == Transactional.class ).findFirst();
+
+            // default
+            TransactionTypeEnum transactionType = TransactionTypeEnum.RW;
+            if(optionalTransactional.isPresent()) {
+                Annotation ann = optionalTransactional.get();
+                transactionType = ((Transactional) ann).type();
+            }
+
             if(optionalTerminal.isPresent()){
-                vmsTransactionSignature = new VmsTransactionSignature(obj, true, method, inputQueues, outputQueue);
+                vmsTransactionSignature = new VmsTransactionSignature(obj, true, method, transactionType, inputQueues, outputQueue);
             } else {
-                vmsTransactionSignature = new VmsTransactionSignature(obj, false, method, inputQueues, outputQueue);
+                vmsTransactionSignature = new VmsTransactionSignature(obj, false, method, transactionType, inputQueues, outputQueue);
             }
 
             for (int i = 0; i < inputQueues.length; i++) {
@@ -550,13 +559,23 @@ public class VmsMetadataLoader {
                     throw new QueueMappingException("Error mapping: An input queue cannot be mapped to two or more payload types.");
                 }
 
-                List<IdentifiableNode<VmsTransactionSignature>> list = queueToVmsTransactionMap.get(inputQueues[i]);
-                if (list == null) {
-                    list = new ArrayList<>();
-                    list.add( new IdentifiableNode<>(i, vmsTransactionSignature) );
-                    queueToVmsTransactionMap.put(inputQueues[i], list);
+                VmsTransactionMetadata transactionMetadata = queueToVmsTransactionMap.get(inputQueues[i]);
+                if (transactionMetadata == null) {
+                    transactionMetadata = new VmsTransactionMetadata();
+                    transactionMetadata.signatures.add( new IdentifiableNode<>(i, vmsTransactionSignature) );
+                    queueToVmsTransactionMap.put(inputQueues[i], transactionMetadata);
                 } else {
-                    list.add(new IdentifiableNode<>(i, vmsTransactionSignature));
+                    transactionMetadata.signatures.add(new IdentifiableNode<>(i, vmsTransactionSignature));
+                }
+
+                if(vmsTransactionSignature.inputQueues().length > 1){
+                    transactionMetadata.numTasksWithMoreThanOneInput++;
+                }
+
+                switch (vmsTransactionSignature.type()){
+                    case RW -> transactionMetadata.numReadWriteTasks++;
+                    case R -> transactionMetadata.numReadTasks++;
+                    case W -> transactionMetadata.numWriteTasks++;
                 }
 
             }

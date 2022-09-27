@@ -181,7 +181,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // in production, it requires receiving new transaction definitions
         this.transactionMap = Objects.requireNonNull(transactionMap);
         this.txManagerCtx = new TransactionManagerContext(
-                // new LinkedBlockingQueue<>(),
                 new ConcurrentLinkedQueue<>(),
                 new ConcurrentLinkedQueue<>() );
 

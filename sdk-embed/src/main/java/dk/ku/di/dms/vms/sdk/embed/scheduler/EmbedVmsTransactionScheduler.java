@@ -1,14 +1,12 @@
 package dk.ku.di.dms.vms.sdk.embed.scheduler;
 
-import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
-import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
@@ -23,7 +21,7 @@ public class EmbedVmsTransactionScheduler extends VmsTransactionScheduler {
 
     public EmbedVmsTransactionScheduler(ExecutorService vmsAppLogicTaskPool,
                                         VmsEmbedInternalChannels vmsChannels,
-                                        Map<String, List<IdentifiableNode<VmsTransactionSignature>>> eventToTransactionMap,
+                                        Map<String, VmsTransactionMetadata> eventToTransactionMap,
                                         Map<String, Class<?>> queueToEventMap,
                                         IVmsSerdesProxy serdes,
                                         Catalog catalog) {

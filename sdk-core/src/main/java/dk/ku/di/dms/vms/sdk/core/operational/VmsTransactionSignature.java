@@ -1,5 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
+import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
+
 import java.lang.reflect.Method;
 
 /**
@@ -16,5 +18,6 @@ public record VmsTransactionSignature (
     // https://stackoverflow.com/questions/4685563/how-to-pass-a-function-as-a-parameter-in-java
     boolean terminal,
     Method method,
+    TransactionTypeEnum type,
     String[] inputQueues,
     String outputQueue){}

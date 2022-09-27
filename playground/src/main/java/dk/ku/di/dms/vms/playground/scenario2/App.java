@@ -17,13 +17,11 @@ import dk.ku.di.dms.vms.sdk.embed.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.facade.ModbModules;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
-import dk.ku.di.dms.vms.sdk.embed.scheduler.BatchContext;
 import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -78,7 +76,7 @@ public class App
 
             int val = 1;
 
-            while(true) {
+            while(val < 3) {
 
                 EventExample eventExample = new EventExample(val);
 
@@ -88,19 +86,21 @@ public class App
 
                 TransactionInput txInput = new TransactionInput("example", eventPayload);
 
-                logger.info("Adding "+val);
+                logger.info("[Producer] Adding "+val);
 
                 parsedTransactionRequests.add(txInput);
 
                 try {
-                    logger.info("Producer going to bed... ");
-                    Thread.sleep(120000);
-                    logger.info("Producer woke up! Time to insert one more ");
+                    //logger.info("Producer going to bed... ");
+                    Thread.sleep(10000);
+                    //logger.info("Producer woke up! Time to insert one more ");
                 } catch (InterruptedException ignored) { }
 
                 val++;
 
             }
+
+            logger.info("Producer going to bed definitely... ");
         }
     }
 
@@ -121,14 +121,14 @@ public class App
         VMSs.put(vms.hashCode(), vms);
 
         TransactionBootstrap txBootstrap = new TransactionBootstrap();
-        TransactionDAG dag =  txBootstrap.init("example")
+        TransactionDAG dag =  txBootstrap.init("tx_example")
                 .input( "a", "example", "in" )
+                .terminal("b", "example", "a")
+                .terminal("c", "example2", "a")
                 .build();
 
-        // now with two microservices
-
         Map<String, TransactionDAG> transactionMap = new HashMap<>(1);
-        transactionMap.put("example", dag);
+        transactionMap.put(dag.name, dag);
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
@@ -141,7 +141,7 @@ public class App
                 serverEm1,
                 new CoordinatorOptions(),
                 0,
-                0,
+                1,
                 BatchReplicationStrategy.NONE,
                 App.parsedTransactionRequests,
                 serdes
@@ -160,8 +160,6 @@ public class App
 
         ModbModules modbModules = EmbedMetadataLoader.loadModbModulesIntoRepositories(vmsMetadata);
 
-        Queue<BatchContext> batchCommitRequest = new LinkedBlockingDeque<>();
-
         assert vmsMetadata != null;
 
         ExecutorService vmsAppLogicTaskPool = Executors.newSingleThreadExecutor();
@@ -169,7 +167,13 @@ public class App
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
         EmbedVmsTransactionScheduler scheduler =
-                new EmbedVmsTransactionScheduler(vmsAppLogicTaskPool, vmsInternalPubSubService, vmsMetadata.queueToVmsTransactionMap(), vmsMetadata.queueToEventMap(), serdes, modbModules.catalog());
+                new EmbedVmsTransactionScheduler(
+                        vmsAppLogicTaskPool,
+                        vmsInternalPubSubService,
+                        vmsMetadata.queueToVmsTransactionMap(),
+                        vmsMetadata.queueToEventMap(),
+                        serdes,
+                        modbModules.catalog());
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
                 node.host, node.port, vmsName,

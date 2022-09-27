@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
+import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 
@@ -37,6 +38,10 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
     public void putEventInput(int index, Object event){
         this.inputs[index] = event;
         this.remainingTasks--;
+    }
+
+    public TransactionTypeEnum getTransactionType(){
+        return this.signature.type();
     }
 
     public long tid() {
