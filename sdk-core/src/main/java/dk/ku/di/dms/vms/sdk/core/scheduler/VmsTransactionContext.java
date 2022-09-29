@@ -1,8 +1,10 @@
-package dk.ku.di.dms.vms.sdk.core.operational;
+package dk.ku.di.dms.vms.sdk.core.scheduler;
+
+import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
+import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Future;
 
 /**
@@ -11,9 +13,9 @@ import java.util.concurrent.Future;
  * in a single VMS.
  *
  * The tasks found in the lists are READY to be scheduled for execution.
- * In other words, all input are fulfilled.
+ * In other words, all inputs are fulfilled.
  */
-public class VmsTransactionContext {
+class VmsTransactionContext {
 
     // R
     public final List<VmsTransactionTask> readTasks;

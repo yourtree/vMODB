@@ -30,7 +30,7 @@ public final class BatchContext {
     public void seal(Map<String, Long> lastTidOfBatchPerVms){
         this.lastTidOfBatchPerVms = Collections.unmodifiableMap(lastTidOfBatchPerVms);
         // synchronized because vote can be received by different threads
-        this.missingVotes = Collections.synchronizedSet(terminalVMSs);
+        this.missingVotes = Collections.synchronizedSet(new HashSet<>(terminalVMSs));
     }
 
 }

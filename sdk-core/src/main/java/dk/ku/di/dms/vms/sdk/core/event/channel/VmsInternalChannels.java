@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.sdk.core.event.channel;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
+import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -39,7 +40,7 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
 
     private static final BlockingQueue<TransactionEvent.Payload> transactionInputQueue;
 
-    private static final BlockingQueue<OutboundEventResult> transactionOutputQueue;
+    private static final BlockingQueue<VmsTransactionResult> transactionOutputQueue;
 
     private static final BlockingQueue<TransactionAbort.Payload> transactionAbortInputQueue;
 
@@ -64,7 +65,7 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
     }
 
     @Override
-    public BlockingQueue<OutboundEventResult> transactionOutputQueue() {
+    public BlockingQueue<VmsTransactionResult> transactionOutputQueue() {
         return transactionOutputQueue;
     }
 

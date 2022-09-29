@@ -23,7 +23,7 @@ public final class ConsumerSet {
         int size = buffer.getInt();
         if(size > 0) {
             String consumerSet = ByteUtils.extractStringFromByteBuffer(buffer, size);
-            return proxy.deserializeMap(consumerSet);
+            return proxy.deserializeConsumerSet(consumerSet);
         }
         return null;
     }

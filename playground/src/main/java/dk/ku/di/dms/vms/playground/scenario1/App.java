@@ -98,11 +98,9 @@ public class App
     private static void loadCoordinator() throws IOException {
 
         ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 1081 );
-        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 1082 );
 
         Map<Integer, ServerIdentifier> serverMap = new HashMap<>(2);
         serverMap.put(serverEm1.hashCode(), serverEm1);
-        serverMap.put(serverEm2.hashCode(), serverEm2);
 
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 

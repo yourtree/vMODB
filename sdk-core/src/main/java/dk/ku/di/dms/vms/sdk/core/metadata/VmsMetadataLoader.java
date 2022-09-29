@@ -110,6 +110,7 @@ public class VmsMetadataLoader {
     private static Reflections configureReflections(String packageName){
 
         if(packageName == null) {
+            // https://stackoverflow.com/questions/67159160/java-using-reflections-to-scan-classes-from-all-packages
             packageName = "dk.ku.di.dms.vms";
         }
 
@@ -527,6 +528,12 @@ public class VmsMetadataLoader {
                 throw new QueueMappingException(
                         "Error mapping: A payload type cannot be mapped to two (or more) output queues.");
             }
+//            else {
+//                logger.info("Is it falling here?");
+//                throw new QueueMappingException(
+//                        "forcing the debugger to stop here");
+//
+//            }
 
             Optional<Annotation> optionalTerminal = Arrays.stream(annotations).filter(p -> p.annotationType() == Terminal.class ).findFirst();
 

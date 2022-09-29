@@ -46,6 +46,8 @@ public final class Constants {
     */
     public static final byte BATCH_COMPLETE = 7;
 
+    public static final byte BATCH_COMMIT_INFO = 17;
+
     /**
      * all terminal VMSs that have participated in a batch must send this event to
      * coordinator in order to complete a batch

@@ -1,14 +1,10 @@
 package dk.ku.di.dms.vms.sdk.core.event.channel;
 
-import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
-import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
-import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
+import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 
-import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 
 /**
@@ -43,9 +39,9 @@ public interface IVmsInternalChannels {
 
     /**
      *  It represents events ready for delivery
-     *  The payload handler thread consumes (and never inserts!) from this queue
+     *  The payload handler thread consumes from (and never inserts into!) this queue
      */
-    BlockingQueue<OutboundEventResult> transactionOutputQueue();
+    BlockingQueue<VmsTransactionResult> transactionOutputQueue();
 
     /**
      * BATCH COMMIT, ABORT EVENTS

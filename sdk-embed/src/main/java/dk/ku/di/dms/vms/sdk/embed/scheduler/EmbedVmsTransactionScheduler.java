@@ -56,11 +56,11 @@ public class EmbedVmsTransactionScheduler extends VmsTransactionScheduler {
 
     private void processBatchCommit() {
 
-        if(!this.vmsChannels.batchContextQueue().isEmpty()){
+        if(!this.vmsChannels.batchCommitRequestQueue().isEmpty()){
 
-            BatchContext currentBatch = this.vmsChannels.batchContextQueue().poll();
+            BatchContext currentBatch = this.vmsChannels.batchCommitRequestQueue().remove();
 
-            currentBatch.setStatus(BatchContext.Status.IN_PROGRESS);
+            currentBatch.setStatus(BatchContext.Status.LOGGING);
 
             // of course I do not need to stop the scheduler on commit
             // I need to make access to the data versions data race free

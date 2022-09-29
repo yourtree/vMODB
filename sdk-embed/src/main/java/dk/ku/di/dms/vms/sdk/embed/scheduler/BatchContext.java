@@ -1,5 +1,7 @@
 package dk.ku.di.dms.vms.sdk.embed.scheduler;
 
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
+
 public class BatchContext {
 
     public final long batch;
@@ -7,6 +9,8 @@ public class BatchContext {
     public final long lastTid;
 
     private Status status;
+
+    public BatchCommitRequest.Payload requestPayload;
 
     public BatchContext(long batch, long lastTid) {
         this.batch = batch;
@@ -16,10 +20,13 @@ public class BatchContext {
 
     public enum Status {
         NEW,
-        IN_PROGRESS,
+        COMPLETED,
+        REPLYING_COMPLETED, // to the coordinator
+        COMPLETION_INFORMED, // write has completed
+        LOGGING,
         COMMITTED,
-        REPLYING, // to the coordinator
-        DONE // write has completed
+        REPLYING_COMMITTED,
+        COMMIT_INFORMED
     }
 
     public Status status(){

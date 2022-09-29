@@ -11,11 +11,18 @@ import java.util.concurrent.Callable;
  * A class that encapsulates the events
  * that form the input of a data operation.
  * In other words, the actual data operation ready for execution.
+ *
+ * FIXME this class is holding a lot of information. it must only know about tid and output object
+ *
  */
 public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
 
     // this is the global tid
     private final long tid;
+
+    private final long lastTid;
+
+    private final long batch;
 
     // the information necessary to run the method
     private final VmsTransactionSignature signature;
@@ -28,8 +35,10 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
 
     private int remainingTasks;
 
-    public VmsTransactionTask (long tid, VmsTransactionSignature signature, int inputSize){
+    public VmsTransactionTask (long tid, long lastTid, long batch, VmsTransactionSignature signature, int inputSize){
         this.tid = tid;
+        this.lastTid = lastTid;
+        this.batch = batch;
         this.signature = signature;
         this.inputs = new Object[inputSize];
         this.remainingTasks = inputSize;
@@ -72,23 +81,13 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
             // can be null, given we have terminal events (void method)
             // could also be terminal and generate event.. maybe an external system wants to consume
             // then send to the leader...
-            if (output != null) {
-
-                OutboundEventResult eventOutput = new OutboundEventResult(tid, signature.outputQueue(), output, signature.terminal());
-
-                return new VmsTransactionTaskResult(
-                        threadId,
-                        tid,
-                        identifier,
-                        eventOutput,
-                        VmsTransactionTaskResult.Status.SUCCESS);
-            }
+            OutboundEventResult eventOutput = new OutboundEventResult(tid, lastTid, batch, signature.outputQueue(), output, signature.terminal());
 
             return new VmsTransactionTaskResult(
                     threadId,
                     tid,
                     identifier,
-                    null,
+                    eventOutput,
                     VmsTransactionTaskResult.Status.SUCCESS);
 
 

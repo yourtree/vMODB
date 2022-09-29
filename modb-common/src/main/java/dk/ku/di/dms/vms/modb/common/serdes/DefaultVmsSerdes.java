@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
+import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -80,6 +81,16 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
     @Override
     public <K,V> Map<K,V> deserializeMap(String mapStr){
          return gson.fromJson(mapStr, new TypeToken<Map<K, V>>(){}.getType());
+    }
+
+    @Override
+    public String serializeConsumerSet(Map<String, NetworkNode> map) {
+        return gson.toJson( map );
+    }
+
+    @Override
+    public Map<String, NetworkNode> deserializeConsumerSet(String mapStr) {
+        return gson.fromJson(mapStr, new TypeToken<Map<String, NetworkNode>>(){}.getType());
     }
 
     @Override

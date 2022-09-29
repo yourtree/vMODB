@@ -163,31 +163,19 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
                 if(res.status() == VmsTransactionTaskResult.Status.SUCCESS) {
 
-                    currentOffset.signalTaskFinished();
+                    this.currentOffset.signalTaskFinished();
 
                     list.remove(i);
 
                     if (currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED_SUCCESSFULLY) {
 
-                        // now can send all to output queue (coordinator)
-                        boolean atLeastOneHasPayload = false;
-                        for(var result : txCtx.resultTasks) {
-                            if(result.result() != null){
-                                atLeastOneHasPayload = true;
-                                vmsChannels.transactionOutputQueue().add(result.result());
-                            }
+                        List<OutboundEventResult> outbounds = new ArrayList<>(txCtx.resultTasks.size());
+                        for(var resultTask : txCtx.resultTasks)
+                            outbounds.add(resultTask.result());
 
-                        }
-
-                        // what if all the results of a tid are void?
-                        if(!atLeastOneHasPayload){
-                            vmsChannels.transactionOutputQueue().add( new OutboundEventResult(
-                                    currentOffset.tid(),
-                                    null,
-                                    null,
-                                    true // must be marked as terminal since there is no output
-                            ));
-                        }
+                        // now can send all to output queue
+                        this.vmsChannels.transactionOutputQueue().add(
+                                new VmsTransactionResult(currentOffset.tid(), outbounds) );
 
                         this.transactionContextMap.remove(this.currentOffset.tid());
 
@@ -289,6 +277,8 @@ public class VmsTransactionScheduler extends StoppableRunnable {
                 VmsTransactionSignature signature = node.object();
                 task = new VmsTransactionTask(
                         transactionalEvent.tid(),
+                        transactionalEvent.lastTid(),
+                        transactionalEvent.batch(),
                         node.object(),
                         signature.inputQueues().length
                         );

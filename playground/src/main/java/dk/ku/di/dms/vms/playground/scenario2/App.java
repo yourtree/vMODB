@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOption
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
@@ -20,7 +21,9 @@ import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
@@ -46,19 +49,36 @@ public class App
 
     protected static final Logger logger = Logger.getLogger("App");
 
+    private static final String transactionName = "tx_example";
+
     // input transactions
     private static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
     public static void main( String[] args ) throws IOException, NoSuchFieldException, IllegalAccessException {
 
+        // the reflections is scanning all the packages, not respecting the package passed
+        List<String> inToDiscard = Collections.emptyList();
+        List<String> outToDiscard = List.of("out3");
+        List<String> inToSwap = List.of("out2");
+
         loadMicroservice( new NetworkNode("localhost", 1080),
                 "example",
-                "dk.ku.di.dms.vms.playground.app");
+                "dk.ku.di.dms.vms.playground.app",
+                inToDiscard,
+                outToDiscard,
+                inToSwap);
+
+        inToSwap = inToDiscard;
+        inToDiscard = List.of("in");
+        outToDiscard = List.of("out");
 
         loadMicroservice(
                 new NetworkNode("localhost", 1081),
                 "example2",
-                "dk.ku.di.dms.vms.playground.scenario2");
+                "dk.ku.di.dms.vms.playground.scenario2",
+                inToDiscard,
+                outToDiscard,
+                inToSwap);
 
         loadCoordinator();
 
@@ -84,7 +104,7 @@ public class App
 
                 TransactionInput.Event eventPayload = new TransactionInput.Event("in", payload);
 
-                TransactionInput txInput = new TransactionInput("example", eventPayload);
+                TransactionInput txInput = new TransactionInput(transactionName, eventPayload);
 
                 logger.info("[Producer] Adding "+val);
 
@@ -106,8 +126,8 @@ public class App
 
     private static void loadCoordinator() throws IOException {
 
-        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 1081 );
-        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 1082 );
+        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 1082 );
+        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 1083 );
 
         Map<Integer, ServerIdentifier> serverMap = new HashMap<>(2);
         serverMap.put(serverEm1.hashCode(), serverEm1);
@@ -115,13 +135,15 @@ public class App
 
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        NetworkNode vms = new NetworkNode("localhost", 1080);
+        NetworkNode vms1 = new NetworkNode("localhost", 1080);
+        NetworkNode vms2 = new NetworkNode("localhost", 1081);
 
-        Map<Integer,NetworkNode> VMSs = new HashMap<>(1);
-        VMSs.put(vms.hashCode(), vms);
+        Map<Integer,NetworkNode> VMSs = new HashMap<>(2);
+        VMSs.put(vms1.hashCode(), vms1);
+        VMSs.put(vms2.hashCode(), vms2);
 
         TransactionBootstrap txBootstrap = new TransactionBootstrap();
-        TransactionDAG dag =  txBootstrap.init("tx_example")
+        TransactionDAG dag =  txBootstrap.init(transactionName)
                 .input( "a", "example", "in" )
                 .terminal("b", "example", "a")
                 .terminal("c", "example2", "a")
@@ -152,23 +174,35 @@ public class App
 
     }
 
-    private static void loadMicroservice(NetworkNode node, String vmsName, String packageName) throws IOException, NoSuchFieldException, IllegalAccessException {
+    private static void loadMicroservice(NetworkNode node, String vmsName, String packageName, List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap) throws IOException, NoSuchFieldException, IllegalAccessException {
 
         VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
 
         VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata(packageName);
 
+        // discard events
+        for(String in : inToDiscard)
+            vmsMetadata.inputEventSchema().remove(in);
+
+        for(String out : outToDiscard)
+            vmsMetadata.outputEventSchema().remove(out);
+
+        for(String in : inToSwap) {
+            VmsEventSchema eventSchema = vmsMetadata.inputEventSchema().remove(in);
+            vmsMetadata.outputEventSchema().put(in, eventSchema);
+        }
+
         ModbModules modbModules = EmbedMetadataLoader.loadModbModulesIntoRepositories(vmsMetadata);
 
         assert vmsMetadata != null;
 
-        ExecutorService vmsAppLogicTaskPool = Executors.newSingleThreadExecutor();
+        ExecutorService readTaskPool = Executors.newSingleThreadExecutor();
 
-        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
+        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         EmbedVmsTransactionScheduler scheduler =
                 new EmbedVmsTransactionScheduler(
-                        vmsAppLogicTaskPool,
+                        readTaskPool,
                         vmsInternalPubSubService,
                         vmsMetadata.queueToVmsTransactionMap(),
                         vmsMetadata.queueToEventMap(),

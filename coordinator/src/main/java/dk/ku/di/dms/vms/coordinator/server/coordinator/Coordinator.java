@@ -14,7 +14,9 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitResponse;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
@@ -217,11 +219,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // they can run concurrently, max 3 at a time always
         ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool( 1 );
 
-        ScheduledFuture<?> batchCommitTask = scheduledExecutorService.scheduleAtFixedRate(
-                this::scheduleBatchCommit, 30000, options.getBatchWindow(), TimeUnit.MILLISECONDS);
-
         // connect to all virtual microservices
         connectToVMSs();
+
+        ScheduledFuture<?> batchCommitTask = scheduledExecutorService.scheduleAtFixedRate(
+                this::scheduleBatchCommit, 30000, options.getBatchWindow(), TimeUnit.MILLISECONDS);
 
         // initialize batch offset map
         this.batchContextMap.put(batchOffset, new BatchContext(batchOffset));
@@ -422,7 +424,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // that receives it
         for(VmsIdentifier vms : vmsMetadata.values()){
 
-            Map<String, NetworkNode> map = new HashMap<>(10);
+            Map<String, NetworkNode> map = new HashMap<>(2);
             vmsConsumerSet.put(vms.hashCode(), map);
 
             // for each output event
@@ -449,7 +451,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
             String mapStr = "";
             if(!map.isEmpty()){
-                mapStr = serdesProxy.serializeMap(map);
+                mapStr = serdesProxy.serializeConsumerSet(map);
             }
             ConsumerSet.write(protocol.buffer, mapStr);
             protocol.buffer.flip();
@@ -486,7 +488,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // can be the leader or a vms
         for( VmsIdentifier vms : vmsMetadata.values() ){
             if(vms.inputEventSchema.get(outputEvent) != null){
-                return vms;
+                return vms.asNetworkNode();
             }
         }
 
@@ -529,7 +531,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
             switch (type) {
 
                 // from all terminal VMSs involved in the last batch
-                case(BATCH_COMPLETE) -> {
+                case BATCH_COMPLETE -> {
 
                     // don't actually need the host and port in the payload since we have the attachment to this read operation...
                     BatchComplete.Payload response = BatchComplete.read(connectionMetadata.readBuffer);
@@ -539,14 +541,18 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     // actually it is unclear in which circumstances a vms would respond no... probably in case it has not received an ack from an aborted commit response?
                     // because only the aborted transaction will be rolled back
                 }
-                case(TX_ABORT) -> {
+                case BATCH_COMMIT_ACK -> {
+                    BatchCommitResponse.Payload response = BatchCommitResponse.read(connectionMetadata.readBuffer);
+                    logger.info("Just logging it, since we don't necessarily need to wait for that. "+response);
+                }
+                case TX_ABORT -> {
 
                     // get information of what
                     TransactionAbort.Payload response = TransactionAbort.read(connectionMetadata.readBuffer);
                     txManagerCtx.transactionAbortEvents().add(response);
 
                 }
-                case(EVENT) -> {
+                case EVENT -> {
                     // it could be interesting to received batch events from VMSs later
                     logger.info("New event received from VMS");
                 }
@@ -906,11 +912,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 count++;
             }
 
-            if(this.idx == listSize && remainingBytes >= BatchCommitRequest.size){
+            if(this.idx == listSize && remainingBytes >= BatchCommitInfo.size){
                 this.terminalSent = true;
                 var batchContext = batchContextMap.get(batch);
                 long lastBatchTid = batchContext.lastTidOfBatchPerVms.get( vms.getIdentifier() );
-                BatchCommitRequest.write( connectionMetadata.writeBuffer, batch, lastBatchTid );
+                BatchCommitInfo.write( connectionMetadata.writeBuffer, batch, lastBatchTid );
                 count++;
             }
 
@@ -1036,6 +1042,16 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     protocol = new EventBatchSendProtocol(vms, list);
                 }
                 protocol.init();
+            }
+            else {
+
+                // even though this vms does not have an input transaction event, does not mean it is not a terminal
+                // it must receive the batch commit info at least
+                if(currBatchContext.terminalVMSs.contains(vms.vmsIdentifier)) {
+                    var protocol = new EventBatchSendProtocol(vms, Collections.emptyList(), true, currBatch);
+                    protocol.init();
+                }
+
             }
 
         }
@@ -1267,6 +1283,12 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
             }
 
+            // also update the last tid of the terminals
+            for(String vms : transactionDAG.terminals){
+                VmsIdentifier vmsId = this.vmsMetadata.get(vms);
+                vmsId.lastTid = tid_;
+            }
+
             // add terminal to the set... so cannot be immutable when the batch context is created...
             this.batchContextMap.get(batch_).terminalVMSs.addAll( transactionDAG.terminals );
 
@@ -1300,8 +1322,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                 // do we have any transaction-related event?
                 switch(action){
-                    case BATCH_COMPLETE -> {
 
+                    case BATCH_COMPLETE -> {
                         // what if ACKs from VMSs take too long? or never arrive?
                         // need to deal with intersecting batches? actually just continue emitting for higher throughput
 
@@ -1320,9 +1342,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                                 sendCommitRequestToVMSs(batchContext);
 
-                                // is the next batches completed already?
+                                // are the next batches completed already?
                                 batchContext = batchContextMap.get( ++batchOffsetPendingCommit );
-                                while(batchContext.missingVotes.size() == 0){
+                                while(batchContext.missingVotes != null && batchContext.missingVotes.size() == 0){
                                     sendCommitRequestToVMSs(batchContext);
                                     batchContext = batchContextMap.get( ++batchOffsetPendingCommit );
                                 }
@@ -1384,13 +1406,10 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         }
 
-        // TODO this could be asynchronously
+        // TODO this could be done asynchronously
         private void sendCommitRequestToVMSs(BatchContext batchContext){
 
             for(VmsIdentifier vms : vmsMetadata.values()){
-
-                // no need to send commit request to terminals. they have already logged their state since the previous VMS in the DAG have decidedly delivered events to him
-                if(batchContext.terminalVMSs.contains(vms.vmsIdentifier)) continue;
 
                 ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get( vms.hashCode() );
 

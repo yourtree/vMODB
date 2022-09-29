@@ -25,7 +25,6 @@ public final class TransactionEvent {
         buffer.putLong( payload.lastTid );
         buffer.putLong( payload.batch );
 
-        // size event name
         byte[] eventBytes = payload.event.getBytes();
         buffer.putInt( eventBytes.length );
         buffer.put( eventBytes );
@@ -44,7 +43,6 @@ public final class TransactionEvent {
         buffer.putLong( batch );
 
         byte[] eventBytes = event.getBytes();
-        // size event name
         buffer.putInt( eventBytes.length );
         buffer.put( eventBytes );
 
@@ -68,8 +66,6 @@ public final class TransactionEvent {
         int payloadSize = buffer.getInt();
 
         String payload = ByteUtils.extractStringFromByteBuffer( buffer, payloadSize );
-
-        // String payload = new String( buffer.array(), header + Integer.BYTES + eventSize, payloadSize, StandardCharsets.UTF_8 );
 
         return new Payload( tid, lastTid, batch, eventName, payload, (Long.BYTES * 3) + eventSize + payloadSize );
     }
