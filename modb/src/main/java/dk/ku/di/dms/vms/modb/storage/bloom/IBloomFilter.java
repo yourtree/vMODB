@@ -13,8 +13,11 @@ package dk.ku.di.dms.vms.modb.storage.bloom;
  *
  * Bloom filter, elements cannot be remove. That makes the case for resetting the bloom filter at every checkpoint
  *
- * Other DTs that coiuld be useful: https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch
+ * Other DTs that could be useful: https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch
  * Skip list: https://web.stanford.edu/class/archive/cs/cs106b/cs106b.1172/lectures/29-EsotericDataStructures/EsotericDataStructures.pdf
+ *
+ *
+ * TODO use bloom filters for finding records in bucket (for non unique indexes)
  *
  */
 public interface IBloomFilter {

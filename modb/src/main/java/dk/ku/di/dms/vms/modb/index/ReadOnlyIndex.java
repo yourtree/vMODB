@@ -32,7 +32,7 @@ public interface ReadOnlyIndex<K> {
     /** information used by the planner to decide for the appropriate operator */
     IndexTypeEnum getType();
 
-    default RecordBucketIterator iterator(IKey key){
+    default IRecordIterator iterator(IKey key){
         throw new IllegalStateException("No iterator for a key supported by this index.");
     }
 

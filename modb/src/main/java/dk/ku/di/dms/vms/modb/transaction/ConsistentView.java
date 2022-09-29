@@ -80,15 +80,13 @@ public class ConsistentView implements ReadOnlyIndex<IKey> {
     }
 
     @Override
-    public RecordBucketIterator iterator(IKey key) {
-        //return ReadOnlyIndex.super.iterator(key);
-        return null;
+    public IRecordIterator iterator(IKey key) {
+        return new ConsistentRecordIterator(this, index.iterator(key));
     }
 
     @Override
     public IRecordIterator iterator() {
-        //return ReadOnlyIndex.super.iterator();
-        return null;
+        return new ConsistentRecordIterator(this, index.iterator());
     }
 
     @Override

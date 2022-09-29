@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 import dk.ku.di.dms.vms.modb.storage.iterator.BucketIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
@@ -99,16 +100,12 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
         return this.buffers[bucket].address();
     }
 
-//    public BucketIterator iterator(){
-//        return new BucketIterator(this.buffers);
-//    }
-
-    public RecordBucketIterator iterator(IKey key) {
+    public IRecordIterator iterator(IKey key) {
         int bucket = getBucket(key);
         return new RecordBucketIterator(this.buffers[bucket]);
     }
 
-    public RecordBucketIterator iterator(int key) {
+    public IRecordIterator iterator(int key) {
         int bucket = getBucket(key);
         return new RecordBucketIterator(this.buffers[bucket]);
     }
