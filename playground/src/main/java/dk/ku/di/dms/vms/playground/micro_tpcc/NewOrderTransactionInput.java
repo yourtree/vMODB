@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.playground.workload;
+package dk.ku.di.dms.vms.playground.micro_tpcc;
 
 public class NewOrderTransactionInput {
 

@@ -23,7 +23,7 @@
   <dependencies>
 
     <dependency>
-        <groupId>dk.di.ku.dms.vms.modb</groupId>
+        <groupId>dk.ku.di.dms.vms.modb</groupId>
         <artifactId>modb</artifactId>
         <version>1.0-SNAPSHOT</version>
         <scope>compile</scope>

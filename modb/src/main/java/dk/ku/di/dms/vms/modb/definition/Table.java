@@ -43,15 +43,6 @@ public final class Table {
         this.foreignKeysGroupedByTableMap = foreignKeysGroupedByTableMap;
     }
 
-    public Table(String name, Schema schema){
-        this.name = name;
-        this.schema = schema;
-        this.hashCode = name.hashCode();
-        this.indexes = new HashMap<>();
-        this.indexList = new ArrayList<>();
-        this.foreignKeysGroupedByTableMap = null;
-    }
-
     public Table(String name, Schema schema, UniqueHashIndex primaryKeyIndex){
         this.name = name;
         this.schema = schema;

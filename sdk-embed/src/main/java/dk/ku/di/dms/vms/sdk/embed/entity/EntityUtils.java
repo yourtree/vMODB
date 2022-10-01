@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.modb.definition.Schema;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -16,6 +17,12 @@ public final class EntityUtils {
     private static final MethodHandles.Lookup lookup;
     static {
         lookup = MethodHandles.lookup();
+    }
+
+    public static Object[] readEntityFromBuffer(ByteBuffer buffer, Schema schema){
+
+        return null;
+
     }
 
     public static Map<String, VarHandle> getFieldsFromEntity(Class<? extends IEntity<?>> entityClazz, Schema schema) throws NoSuchFieldException, IllegalAccessException {
@@ -30,7 +37,7 @@ public final class EntityUtils {
                     lookup_.findVarHandle(
                             entityClazz,
                             columnName,
-                            DataTypeUtils.getTypeFromDataType(schema.getColumnDataType(i))
+                            DataTypeUtils.getJavaTypeFromDataType(schema.getColumnDataType(i))
                     )
             );
             i++;

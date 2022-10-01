@@ -8,6 +8,8 @@ import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordIterator;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 
+import java.util.logging.Logger;
+
 import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
 
 /**
@@ -15,6 +17,8 @@ import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
  * Could deal with collisions by having a linked list
  */
 public class UniqueHashIndex extends AbstractIndex<IKey> {
+
+    private static Logger logger = Logger.getLogger("UniqueHashIndex");
 
     private final RecordBufferContext recordBufferContext;
 
@@ -35,13 +39,25 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
 
     @Override
     public void insert(IKey key, long srcAddress) {
-        update(key, srcAddress);
+        long pos = getPosition(key.hashCode());
+
+        if(UNSAFE.getBoolean(null, pos)){
+            logger.warning("Overwriting previously written record.");
+        }
+
+        UNSAFE.putBoolean(null, pos, true);
+        UNSAFE.putInt(pos, key.hashCode());
+        UNSAFE.copyMemory(null, srcAddress, null, pos + Schema.recordHeader, schema.getRecordSizeWithoutHeader());
         // this.size++; // this should only be set after commit, so we spread the overhead
     }
 
     /**
-     * The update can be possibly optimized for updating only the fields required
-     * instead of the whole record
+     * The update can be possibly optimized
+     * for updating only the fields required
+     * instead of the whole record.
+     *
+     * This method assumes the srcAddress
+     * begins with header data
      */
     @Override
     public void update(IKey key, long srcAddress) {

@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.coordinator.server.schema;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 

@@ -1,15 +1,14 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.scan;
 
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 /**
  * On-flight scanning, filtering, and projection in a single operator.
@@ -70,7 +69,7 @@ public final class IndexScanWithProjection extends AbstractScan {
         // non unique
         NonUniqueHashIndex cIndex = index.asNonUniqueHashIndex();
         for(IKey key : keys){
-            RecordBucketIterator iterator = cIndex.iterator(key);
+            IRecordIterator iterator = cIndex.iterator(key);
             while(iterator.hasNext()){
                 if(cIndex.checkCondition(iterator, filterContext)){
                     append(iterator, projectionColumns);

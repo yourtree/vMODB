@@ -6,5 +6,5 @@ import dk.ku.di.dms.vms.modb.api.annotations.Event;
 public record ItemNewOrderOut(
         // Map<Integer,Float> itemsPrice
         int[] itemsIds,
-        float itemPrices
+        float[] itemPrices
 ) {}

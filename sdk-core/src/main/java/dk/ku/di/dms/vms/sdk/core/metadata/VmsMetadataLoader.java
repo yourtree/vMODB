@@ -3,6 +3,8 @@ package dk.ku.di.dms.vms.sdk.core.metadata;
 import dk.ku.di.dms.vms.modb.api.annotations.*;
 import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
+import dk.ku.di.dms.vms.modb.api.query.parser.Parser;
+import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
@@ -96,6 +98,8 @@ public class VmsMetadataLoader {
          *   SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
          */
 
+        Map<String, SelectStatement> mapSelect = loadStaticQueries(reflections);
+
         return new VmsRuntimeMetadata(
                 vmsDataSchemas,
                 inputEventSchemaMap,
@@ -105,7 +109,8 @@ public class VmsMetadataLoader {
                 eventToQueueMap,
                 loadedVmsInstances,
                 repositoryFacades,
-                entityToTableNameMap);
+                entityToTableNameMap,
+                mapSelect);
 
     }
 
@@ -163,6 +168,8 @@ public class VmsMetadataLoader {
 
         for( Class<?> eventClazz : eventsClazz ){
 
+            if(eventToQueueMap.get(eventClazz) == null) continue; // ignored the ones not mapped
+
             Field[] fields = eventClazz.getDeclaredFields();
 
             String[] columnNames = new String[fields.length];
@@ -171,7 +178,7 @@ public class VmsMetadataLoader {
 
             for( Field field : fields ){
                 Class<?> attributeType = field.getType();
-                columnDataTypes[i] = getColumnDataTypeFromAttributeType(attributeType);
+                columnDataTypes[i] = getEventDataTypeFromAttributeType(attributeType);
                 columnNames[i] = field.getName();
                 i++;
             }
@@ -179,7 +186,8 @@ public class VmsMetadataLoader {
             // get queue name
             String queue = eventToQueueMap.get( eventClazz );
             if(queue == null){
-                throw new IllegalStateException("Event type not defined as @Event");
+                logger.warning("Cannot find the queue of an event type found in this project: "+eventClazz);
+                continue;
             }
 
             // is input?
@@ -592,6 +600,43 @@ public class VmsMetadataLoader {
         }
     }
 
+    private static DataType getEventDataTypeFromAttributeType(Class<?> attributeType){
+        String attributeCanonicalName = attributeType.getCanonicalName();
+        if (attributeCanonicalName.equalsIgnoreCase("int") || attributeType == Integer.class){
+            return DataType.INT;
+        }
+        else if (attributeCanonicalName.equalsIgnoreCase("float") || attributeType == Float.class){
+            return DataType.FLOAT;
+        }
+        else if (attributeCanonicalName.equalsIgnoreCase("double") || attributeType == Double.class){
+            return DataType.DOUBLE;
+        }
+        else if (attributeCanonicalName.equalsIgnoreCase("char") || attributeType == Character.class){
+            return DataType.CHAR;
+        }
+        else if (attributeCanonicalName.equalsIgnoreCase("long") || attributeType == Long.class){
+            return DataType.LONG;
+        }
+        else if (attributeType == Date.class){
+            return DataType.DATE;
+        }
+        else if(attributeType == String.class){
+            return DataType.STRING;
+        }
+        else if(attributeType == int[].class){
+            return DataType.INT_ARRAY;
+        }
+        else if(attributeType == float[].class){
+            return DataType.FLOAT_ARRAY;
+        }
+        else if(attributeType == String[].class){
+            return DataType.STRING_ARRAY;
+        }
+        else {
+            throw new NotAcceptableTypeException(attributeType.getCanonicalName() + " is not accepted");
+        }
+    }
+
     private static DataType getColumnDataTypeFromAttributeType(Class<?> attributeType) throws NotAcceptableTypeException {
         String attributeCanonicalName = attributeType.getCanonicalName();
         if (attributeCanonicalName.equalsIgnoreCase("int") || attributeType == Integer.class){
@@ -612,9 +657,39 @@ public class VmsMetadataLoader {
         else if (attributeType == Date.class){
             return DataType.DATE;
         }
-        else {
-            throw new NotAcceptableTypeException(attributeType.getCanonicalName() + " is not accepted");
+        else if(attributeType == String.class){
+            return DataType.STRING;
         }
+        else {
+            throw new NotAcceptableTypeException(attributeType.getCanonicalName() + " is not accepted as a column data type.");
+        }
+    }
+
+    private static Map<String, SelectStatement> loadStaticQueries(Reflections reflections){
+
+        Map<String, SelectStatement> res = new HashMap<>(3);
+        Set<Method> queryMethods = reflections.getMethodsAnnotatedWith(Query.class);
+
+        for(Method queryMethod : queryMethods){
+
+            try {
+                Query annotation = (Query) Arrays.stream(queryMethod.getAnnotations())
+                        .filter( a -> a.annotationType() == Query.class).findFirst().get();
+                var queryString = annotation.value();
+
+                // build the query now. simple parser only
+                SelectStatement selectStatement = Parser.parse(queryString);
+
+                res.put(queryString, selectStatement);
+
+            } catch(Exception e){
+                throw new IllegalStateException("Query annotation not found in the annotated method.");
+            }
+
+        }
+
+        return res;
+
     }
 
 }

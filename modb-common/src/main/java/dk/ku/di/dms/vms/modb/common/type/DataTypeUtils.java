@@ -1,18 +1,17 @@
 package dk.ku.di.dms.vms.modb.common.type;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
-import sun.misc.Unsafe;
 
 import java.nio.ByteBuffer;
 import java.util.function.Function;
 
-import static dk.ku.di.dms.vms.modb.common.type.Constants.DEFAULT_MAX_SIZE_CHAR;
+import static dk.ku.di.dms.vms.modb.common.type.Constants.DEFAULT_MAX_SIZE_STRING;
 
 public class DataTypeUtils {
 
     private DataTypeUtils(){}
 
-    private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
+    private static final jdk.internal.misc.Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
     public static Object getValue(DataType dt, long address){
 
@@ -24,9 +23,12 @@ public class DataTypeUtils {
                 return UNSAFE.getInt(address);
             }
             case CHAR -> {
-                char[] res = new char[DEFAULT_MAX_SIZE_CHAR];
+                return UNSAFE.getChar(address);
+            }
+            case STRING -> {
+                char[] res = new char[DEFAULT_MAX_SIZE_STRING];
                 long currAddress = address;
-                for(int i = 0; i < DEFAULT_MAX_SIZE_CHAR; i++) {
+                for(int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
                     res[i] = UNSAFE.getChar(currAddress);
                     currAddress += Character.BYTES;
                 }
@@ -59,8 +61,11 @@ public class DataTypeUtils {
              case INT -> {
                      return ByteBuffer::getInt;
                  }
-             case CHAR -> {
-                     return DataTypeUtils::getChar;
+            case CHAR -> {
+                return ByteBuffer::getChar;
+            }
+             case STRING -> {
+                     return DataTypeUtils::getString;
                  }
              case LONG, DATE -> {
                      return ByteBuffer::getLong;
@@ -81,13 +86,21 @@ public class DataTypeUtils {
             case BOOL -> // byte is used. on unsafe, the boolean is used
                     UNSAFE.putByte(null, address, (byte)value);
             case INT -> UNSAFE.putInt(null, address, (int)value);
-            case CHAR -> {
-                Character[] charArray = (Character[]) value;
+            case CHAR -> UNSAFE.putChar(null, address, (char)value);
+            case STRING -> {
                 long currPos = address;
-                for(int i = 0; i < DEFAULT_MAX_SIZE_CHAR; i++) {
-                    UNSAFE.putChar(null, currPos, charArray[i]);
-                    currPos += Character.BYTES;
+                if(value instanceof Character[] charArray) {
+                    for (int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
+                        UNSAFE.putChar(null, currPos, charArray[i]);
+                        currPos += Character.BYTES;
+                    }
+                } else if (value instanceof String strValue){
+                    for (int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
+                        UNSAFE.putChar(null, currPos, strValue.charAt(i));
+                        currPos += Character.BYTES;
+                    }
                 }
+
             }
             case LONG, DATE -> UNSAFE.putLong(null, address, (long)value);
             case FLOAT -> UNSAFE.putFloat(null, address, (float)value);
@@ -102,11 +115,23 @@ public class DataTypeUtils {
             case BOOL -> // byte is used. on unsafe, the boolean is used
                     buffer.put( (byte)value);
             case INT -> buffer.putInt( (int)value);
-            case CHAR -> {
-                Character[] charArray = (Character[]) value;
-                for(int i = 0; i < DEFAULT_MAX_SIZE_CHAR; i++) {
-                    buffer.putChar(charArray[i]);
+            case CHAR -> buffer.putChar( (char)value);
+            case STRING -> {
+
+                int start = buffer.position();
+                if(value instanceof Character[] charArray) {
+                    for (int i = 0; i < DEFAULT_MAX_SIZE_STRING && i < charArray.length; i++) {
+                        buffer.putChar(charArray[i]);
+                    }
+                } else if (value instanceof String strValue){
+
+                    for (int i = 0; i < DEFAULT_MAX_SIZE_STRING && i < strValue.length(); i++) {
+                        buffer.putChar(strValue.charAt(i));
+                    }
                 }
+
+                buffer.position(start + (Character.BYTES * DEFAULT_MAX_SIZE_STRING));
+
             }
             case LONG, DATE -> buffer.putLong((long)value);
             case FLOAT -> buffer.putFloat( (float)value);
@@ -115,11 +140,33 @@ public class DataTypeUtils {
         }
     }
 
-    private static Object getChar(ByteBuffer buffer) {
-        return buffer.get(buffer.array(), buffer.position(), buffer.position() + DEFAULT_MAX_SIZE_CHAR);
+    private static String getString(ByteBuffer buffer) {
+
+        if(buffer.isDirect()){
+//            char[] res = new char[DEFAULT_MAX_SIZE_STRING];
+//            long currAddress = MemoryUtils.getByteBufferAddress(buffer);
+//            for(int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
+//                res[i] = UNSAFE.getChar(currAddress);
+//                currAddress += Character.BYTES;
+//            }
+//            return res;
+            StringBuilder sb = new StringBuilder();
+            long currAddress = MemoryUtils.getByteBufferAddress(buffer);
+            for(int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
+                sb.append( UNSAFE.getChar(currAddress) );
+                currAddress += Character.BYTES;
+            }
+            return sb.toString();
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for(int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
+            sb.append( buffer.getChar() );
+        }
+        return sb.toString();
     }
 
-    public static Class<?> getTypeFromDataType(DataType dataType) {
+    public static Class<?> getJavaTypeFromDataType(DataType dataType) {
 
         switch (dataType) {
             case BOOL -> {
@@ -130,6 +177,9 @@ public class DataTypeUtils {
             }
             case CHAR -> {
                 return char.class;
+            }
+            case STRING -> {
+                return String.class;
             }
             case LONG, DATE -> {
                 return long.class;

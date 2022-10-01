@@ -6,7 +6,10 @@ public enum DataType {
 
     INT(Integer.BYTES),
 
-    CHAR(Character.BYTES * Constants.DEFAULT_MAX_SIZE_CHAR),
+    CHAR(Character.BYTES),
+
+    // stored as char array of fixed size
+    STRING(Character.BYTES * Constants.DEFAULT_MAX_SIZE_STRING),
 
     LONG(Long.BYTES),
 
@@ -14,7 +17,14 @@ public enum DataType {
 
     DOUBLE(Double.BYTES),
 
-    DATE(Long.BYTES);
+    DATE(Long.BYTES),
+
+    // should only be used by events
+    STRING_ARRAY(Constants.DEFAULT_MAX_SIZE_STRING),
+
+    FLOAT_ARRAY(Float.BYTES * 10),
+
+    INT_ARRAY(Integer.BYTES * 10);
 
     public final int value;
 

@@ -13,7 +13,7 @@ import java.util.Map;
 public class Schema {
 
     // flag active + materialized hashed PK
-    private static final int recordHeader = Header.SIZE + Integer.BYTES;
+    public static final int recordHeader = Header.SIZE + Integer.BYTES;
 
     // identification of columns that form the primary key. all tables must have a primary key
     private final int[] primaryKeyColumns;
@@ -43,15 +43,16 @@ public class Schema {
 
         int acc = recordHeader;
         for(int j = 0; j < columnDataTypes.length; j++){
+            columnOffset[j] = acc;
             switch (columnDataTypes[j]){
                 case LONG, DATE -> acc += Long.BYTES;
-                case CHAR -> acc += Constants.DEFAULT_MAX_SIZE_CHAR;
+                case CHAR -> acc += Character.BYTES;
+                case STRING -> acc += (Character.BYTES * Constants.DEFAULT_MAX_SIZE_STRING);
                 case INT -> acc += Integer.BYTES;
                 case FLOAT -> acc += Float.BYTES;
                 case DOUBLE -> acc += Double.BYTES;
-                // case BOOL -> acc += 1;
+                // case BOOL -> acc += 1; // byte size
             }
-            columnOffset[j] = acc;
         }
 
         this.recordSize = acc;
@@ -126,6 +127,10 @@ public class Schema {
             columnPosArray[j] = getColumnPosition( columnList[j] );
         }
         return columnPosArray;
+    }
+
+    public DataType[] columnDataTypes() {
+        return columnDataTypes;
     }
 
 }

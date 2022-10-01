@@ -4,13 +4,17 @@ import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Catalog;
+import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
+import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
+import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
@@ -24,6 +28,7 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.DeleteOp;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.InsertOp;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.UpdateOp;
 
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -54,9 +59,35 @@ public class TransactionFacade {
     private static final Map<IIndexKey, Map<IKey, OperationSet>> writesPerIndexAndKey;
 
     static {
-        // writesPerTransaction = Collections.synchronizedMap( new LinkedHashMap<>() );
         writesPerTransaction = new ConcurrentHashMap<>();
         writesPerIndexAndKey = new ConcurrentHashMap<>();
+    }
+
+    /**
+     * It installs the writes without taking into consideration concurrency control
+     */
+    public static void bulkInsert(Table table, List<Object[]> objects){
+        // create a memory space for all. insert in the address
+    }
+
+    public static void bulkInsert(Table table, ByteBuffer buffer, int numberOfRecords){
+
+        // if the memory address is occupied, must log warning
+        // so we can increase the table size
+
+        AbstractIndex<IKey> index = table.primaryKeyIndex();
+
+        long address = MemoryUtils.getByteBufferAddress(buffer);
+
+        int sizeWithoutHeader = table.schema.getRecordSizeWithoutHeader();
+
+        IKey key;
+        for (int i = 0; i < numberOfRecords; i++) {
+            key = KeyUtils.buildPrimaryKey(table.schema, address);
+            index.insert( key, address );
+            address += sizeWithoutHeader;
+        }
+
     }
 
     /* ENTITY *******/

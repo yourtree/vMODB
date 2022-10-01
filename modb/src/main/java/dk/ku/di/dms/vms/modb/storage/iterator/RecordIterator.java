@@ -12,7 +12,7 @@ import sun.misc.Unsafe;
  */
 public class RecordIterator extends CachingKeyIterator implements IRecordIterator {
 
-    protected static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
+    protected static final jdk.internal.misc.Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
     protected long address;
     protected final int recordSize;

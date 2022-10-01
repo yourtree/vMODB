@@ -16,11 +16,11 @@ import java.util.Map;
 
 public class PersistenceTest {
 
-    private static Unsafe unsafe;
+    private static jdk.internal.misc.Unsafe unsafe;
 
     @BeforeClass
     public static void setUp(){
-        unsafe = MemoryUtils.getUnsafe();
+        unsafe = MemoryUtils.UNSAFE;
         assert unsafe != null;
     }
 

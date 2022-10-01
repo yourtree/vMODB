@@ -17,7 +17,7 @@ import java.util.*;
  */
 public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
 
-    protected static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
+    protected static final jdk.internal.misc.Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
     protected final int[] columns;
 

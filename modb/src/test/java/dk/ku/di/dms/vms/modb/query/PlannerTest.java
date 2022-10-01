@@ -25,7 +25,7 @@ public class PlannerTest {
     @Test
     public void testSimplePlan() throws AnalyzerException {
         final QueryTree queryTree = TestCommon.getSimpleQueryTree();
-        assert true;
+        assert queryTree != null;
     }
 
     @Test

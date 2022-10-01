@@ -36,6 +36,40 @@ public class KeyUtils {
 
     }
 
+    public static IKey buildPrimaryKey(Schema schema, long srcAddress){
+        return buildRecordKeyNoHeader(schema, schema.getPrimaryKeyColumns(), srcAddress);
+    }
+
+    public static IKey buildRecordKeyNoHeader(Schema schema, int[] columns, long srcAddress){
+
+        IKey key;
+
+        // 2 - build the pk
+        if(columns.length == 1){
+            DataType columnType = schema.getColumnDataType( columns[0] );
+            srcAddress += ( schema.columnOffset()[columns[0]] - Schema.recordHeader);
+            key = SimpleKey.of( DataTypeUtils.getValue(columnType, srcAddress) );
+        } else {
+
+            Object[] values = new Object[columns.length];
+            long currAddress = srcAddress;
+
+            for(int i = 0; i < columns.length; i++){
+                DataType columnType = schema.getColumnDataType( columns[i] );
+                currAddress += (schema.columnOffset()[columns[i]] - Schema.recordHeader);;
+                values[i] = DataTypeUtils.getValue(columnType, currAddress);
+                // make it default to get the correct offset next iteration
+                currAddress = srcAddress;
+            }
+
+            key = CompositeKey.of( values );
+
+        }
+
+        return key;
+
+    }
+
     /**
      * Build a key based on the columns
      * @param schema schema
@@ -61,6 +95,7 @@ public class KeyUtils {
                 DataType columnType = schema.getColumnDataType( columns[i] );
                 currAddress += schema.columnOffset()[columns[i]];
                 values[i] = DataTypeUtils.getValue(columnType, currAddress);
+                // make it default to get the correct offset next iteration
                 currAddress = srcAddress;
             }
 

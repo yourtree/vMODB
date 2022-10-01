@@ -16,12 +16,14 @@ public enum ExpressionTypeEnum {
 
     NOT_EQUALS("<>"),
 
+    // only for string or char
+    LIKE("LIKE"),
+
+    // nullable expression
+
     IS_NULL("IS NULL"),
 
     IS_NOT_NULL("IS NOT NULL"),
-
-    // only for string or char
-    LIKE("LIKE"),
 
     // boolean expression
 

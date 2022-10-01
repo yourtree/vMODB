@@ -2,6 +2,8 @@ package dk.ku.di.dms.vms.modb.query.complex.planner.operator.scan;
 
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.query.complex.planner.operator.AbstractOperator;
+import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.query.refac.FilterContext;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;

@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.planner.filter.types.TypedBiPredicate;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
@@ -102,10 +103,22 @@ public class FilterContextBuilder {
         };
     }
 
-    public static final TypedBiPredicate<Character[]> charEqPredicate = ((t1, t2) -> String.valueOf(t1).contentEquals(String.valueOf(t2)));
-    public static final TypedBiPredicate<Character[]> charNotEqPredicate = ((t1, t2) -> !String.valueOf(t1).contentEquals(String.valueOf(t2)));
+    public static final TypedBiPredicate<Character[]> charArrayEqPredicate = ((t1, t2) -> Arrays.toString(t1).compareTo(Arrays.toString(t2)) == 0);
+    public static final TypedBiPredicate<Character[]> charArrayNotEqPredicate = ((t1, t2) -> Arrays.toString(t1).compareTo(Arrays.toString(t2)) != 0);
 
     private static TypedBiPredicate<Character[]> getCharArrayValuePredicate(ExpressionTypeEnum expressionType){
+        return switch (expressionType) {
+            case EQUALS -> charArrayEqPredicate;
+            case NOT_EQUALS -> charArrayNotEqPredicate;
+            default -> throw new IllegalStateException("FAIL");
+        };
+    }
+
+    public static final TypedBiPredicate<Character> charEqPredicate = ((t1, t2) -> t1.compareTo(t2) == 0);
+    public static final TypedBiPredicate<Character> charNotEqPredicate = ((t1, t2) -> t1.compareTo(t2) != 0);
+
+
+    private static TypedBiPredicate<Character> getCharValuePredicate(ExpressionTypeEnum expressionType){
         return switch (expressionType) {
             case EQUALS -> charEqPredicate;
             case NOT_EQUALS -> charNotEqPredicate;
@@ -155,7 +168,7 @@ public class FilterContextBuilder {
                 case INT: {
                     filterContext.biPredicates.add(getIntValuePredicate(expressionType));
                 }
-                case CHAR: {
+                case STRING: {
                     filterContext.biPredicates.add(getCharArrayValuePredicate(expressionType));
                 }
                 case LONG: {
@@ -172,6 +185,9 @@ public class FilterContextBuilder {
                 }
                 case BOOL: {
                     filterContext.biPredicates.add( getBooleanValuePredicate(expressionType) );
+                }
+                case CHAR: {
+                    filterContext.biPredicates.add( getCharValuePredicate(expressionType) );
                 }
                 default: {
                     throw new IllegalStateException("Unexpected value: " + dataType);

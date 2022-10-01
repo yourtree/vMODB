@@ -1,5 +1,6 @@
-package dk.ku.di.dms.vms.sdk.embed;
+package dk.ku.di.dms.vms.sdk.embed.handler;
 
+import dk.ku.di.dms.vms.modb.common.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
@@ -13,6 +14,9 @@ import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.modb.definition.Catalog;
+import dk.ku.di.dms.vms.modb.definition.Table;
+import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
@@ -72,6 +76,11 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     private final VmsIdentifier me; // this merges network and semantic data about the vms
     private final VmsRuntimeMetadata vmsMetadata;
 
+    // necessary for bulk load. idealy we would have a component to handle that
+    // this component would have the reference to catalog
+    // but let's go like this now
+    private final Catalog catalog;
+
     /** EXTERNAL VMSs **/
     private final Map<String, NetworkNode> consumerVms; // sent by coordinator
     private final Map<Integer, ConnectionMetadata> vmsConnectionMetadataMap;
@@ -92,6 +101,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     public EmbedVmsEventHandler(VmsEmbedInternalChannels vmsInternalChannels, // for communicating with other components
                                 VmsIdentifier me, // to identify which vms this is
                                 VmsRuntimeMetadata vmsMetadata, // metadata about this vms
+                                Catalog catalog,
                                 IVmsSerdesProxy serdesProxy, // ser/des of objects
                                 ExecutorService executorService // for recurrent and continuous tasks
     ) throws IOException {
@@ -101,6 +111,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         this.me = me;
 
         this.vmsMetadata = vmsMetadata;
+        this.catalog = catalog;
         this.vmsConnectionMetadataMap = new ConcurrentHashMap<>(10);
         this.consumerVms = new ConcurrentHashMap<>(10);
 
@@ -536,38 +547,65 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             byte nodeTypeIdentifier = this.buffer.get(1);
             this.buffer.position(2);
 
-            if(nodeTypeIdentifier == SERVER_TYPE){
-                ConnectionFromLeaderProtocol connectionFromLeader = new ConnectionFromLeaderProtocol(channel, this.buffer);
-                // could be a virtual thread
-                connectionFromLeader.processLeaderPresentation();
-            } else if(nodeTypeIdentifier == VMS_TYPE) {
+            switch (nodeTypeIdentifier) {
 
-                // then it is a vms intending to connect due to a data/event
-                // that should be delivered to this vms
-                VmsIdentifier producerVms = Presentation.readVms(this.buffer, serdesProxy);
-                this.buffer.clear();
+                case (SERVER_TYPE) -> {
+                    ConnectionFromLeaderProtocol connectionFromLeader = new ConnectionFromLeaderProtocol(channel, this.buffer);
+                    // could be a virtual thread
+                    connectionFromLeader.processLeaderPresentation();
+                }
+                case (VMS_TYPE) -> {
 
-                ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer();
+                    // then it is a vms intending to connect due to a data/event
+                    // that should be delivered to this vms
+                    VmsIdentifier producerVms = Presentation.readVms(this.buffer, serdesProxy);
+                    this.buffer.clear();
 
-                ConnectionMetadata connMetadata = new ConnectionMetadata(
-                        producerVms.hashCode(),
-                        ConnectionMetadata.NodeType.VMS,
-                        this.buffer,
-                        writeBuffer,
-                        this.channel,
-                        new Semaphore(1)
-                );
+                    ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer();
 
-                vmsConnectionMetadataMap.put( producerVms.hashCode(), connMetadata );
+                    ConnectionMetadata connMetadata = new ConnectionMetadata(
+                            producerVms.hashCode(),
+                            ConnectionMetadata.NodeType.VMS,
+                            this.buffer,
+                            writeBuffer,
+                            this.channel,
+                            new Semaphore(1)
+                    );
 
-                // setup event receiving for this vms
-                this.channel.read(this.buffer, connMetadata, new VmsReadCompletionHandler() );
+                    vmsConnectionMetadataMap.put(producerVms.hashCode(), connMetadata);
 
-            } else {
-                logger.warning("Presentation message from unknown source:"+nodeTypeIdentifier);
-                this.buffer.clear();
-                MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
-                try { this.channel.close(); } catch (IOException ignored) { }
+                    // setup event receiving for this vms
+                    this.channel.read(this.buffer, connMetadata, new VmsReadCompletionHandler());
+
+                }
+                case CLIENT -> {
+                    // used for bulk data loading for now (may be used for tests later)
+
+                    // read the entity
+                    int sizeTable = this.buffer.getInt();
+                    String tableName = ByteUtils.extractStringFromByteBuffer(buffer, sizeTable);
+
+                    ConnectionMetadata connMetadata = new ConnectionMetadata(
+                            tableName.hashCode(),
+                            ConnectionMetadata.NodeType.CLIENT,
+                            this.buffer,
+                            null,
+                            this.channel,
+                            null
+                    );
+
+                    new BulkDataLoaderProtocol( catalog.getTable(tableName) ).init( connMetadata );
+
+                }
+                default -> {
+                    logger.warning("Presentation message from unknown source:" + nodeTypeIdentifier);
+                    this.buffer.clear();
+                    MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
+                    try {
+                        this.channel.close();
+                    } catch (IOException ignored) {
+                    }
+                }
             }
         }
 
@@ -615,6 +653,54 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             if (serverSocket.isOpen()){
                 serverSocket.accept(null, this);
             }
+        }
+
+    }
+
+    private static class BulkDataLoaderProtocol {
+
+        private final Table table;
+
+        protected BulkDataLoaderProtocol(Table table){
+            this.table = table;
+        }
+
+        public void init(ConnectionMetadata connectionMetadata){
+            connectionMetadata.channel.read( connectionMetadata.readBuffer,
+                    connectionMetadata, new ReadCompletionHandler() );
+        }
+
+        private class ReadCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
+
+            @Override
+            public void completed(Integer result, ConnectionMetadata connectionMetadata) {
+
+                // should be a batch of events
+                connectionMetadata.readBuffer.position(0);
+                byte messageType = connectionMetadata.readBuffer.get();
+
+                assert (messageType == BATCH_OF_EVENTS);
+
+                int count = connectionMetadata.readBuffer.getInt();
+
+                ByteBuffer bb = MemoryManager.getTemporaryDirectBuffer();
+                ByteBuffer oldBB = connectionMetadata.readBuffer;
+                connectionMetadata.readBuffer = bb;
+
+                // set up read handler again without waiting for tx facade
+                connectionMetadata.channel.read( connectionMetadata.readBuffer,
+                        connectionMetadata, this );
+
+                TransactionFacade.bulkInsert(table, oldBB, count);
+
+                oldBB.clear();
+                MemoryManager.releaseTemporaryDirectBuffer(oldBB);
+
+            }
+
+            @Override
+            public void failed(Throwable exc, ConnectionMetadata connectionMetadata) { }
+
         }
 
     }

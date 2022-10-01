@@ -20,7 +20,7 @@ public final class MemoryUtils {
 
     }
 
-    public static Unsafe UNSAFE;
+    public static jdk.internal.misc.Unsafe UNSAFE;
 
     private static long BUFFER_ADDRESS_FIELD_OFFSET;
     private static long BUFFER_CAPACITY_FIELD_OFFSET;
@@ -39,12 +39,12 @@ public final class MemoryUtils {
     }
 
     // @SuppressWarnings("restriction")
-    public static sun.misc.Unsafe getUnsafe() {
+    private static jdk.internal.misc.Unsafe getUnsafe() {
         Field unsafeField = null;
         try {
-            unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField = jdk.internal.misc.Unsafe.class.getDeclaredField("theUnsafe");
             unsafeField.setAccessible(true);
-            return (sun.misc.Unsafe) unsafeField.get(null);
+            return (jdk.internal.misc.Unsafe) unsafeField.get(null);
         }
         catch (NoSuchFieldException | IllegalAccessException e) {
             e.printStackTrace();

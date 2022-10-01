@@ -36,7 +36,7 @@ public abstract class AbstractOperator {
         }
 
         // else, get a new memory segment
-        MemoryRefNode claimed = MemoryManager.claim();
+        MemoryRefNode claimed = MemoryManager.getTemporaryDirectMemory();
 
         claimed.next = memoryRefNode;
         memoryRefNode = claimed;
@@ -56,7 +56,7 @@ public abstract class AbstractOperator {
         }
 
         // else, get a new memory segment
-        MemoryRefNode claimed = MemoryManager.claim(size);
+        MemoryRefNode claimed = MemoryManager.getTemporaryDirectMemory(size);
 
         claimed.next = memoryRefNode;
         memoryRefNode = claimed;

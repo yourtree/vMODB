@@ -20,10 +20,11 @@ public class ConnectionMetadata {
 
     public enum NodeType {
         SERVER,
-        VMS
+        VMS,
+        CLIENT
     }
 
-    public final ByteBuffer readBuffer;
+    public ByteBuffer readBuffer;
     public final ByteBuffer writeBuffer;
 
     public AsynchronousSocketChannel channel;

@@ -7,7 +7,7 @@ import sun.misc.Unsafe;
 
 public class RecordBucketIterator extends CachingKeyIterator implements IRecordIterator {
 
-    private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
+    private static final jdk.internal.misc.Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
     private long currPosition;
 

@@ -349,6 +349,16 @@ public class VmsTransactionScheduler extends StoppableRunnable {
      * In other words, no RW tasks for the same transaction can be scheduled
      * concurrently. One at a time. Read tasks can be scheduled concurrently.
      *
+     * To avoid interleaving between tasks of the same transaction,
+     * a simple strategy is now adopted:
+     * (i) All read tasks are executed first. Bad for throughput
+     * (ii) Look at the prescribed precedences provided by the user. Also bad for throughput.
+     * (iii) Concurrency control with abort and restarts in case of deadlock.
+     *          A read transaction may be allowed to see writes installed by different tasks.
+     * (iv) Have assumptions. The user may have different tasks. ACID is only provided if the
+     *      tasks do not see each other writes.
+     *      In other words, no concurrency control for tasks of the same TID.
+     *
      */
     protected void dispatchReadyTasksForExecution() {
 

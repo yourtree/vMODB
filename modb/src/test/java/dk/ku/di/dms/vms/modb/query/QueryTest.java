@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.modb.definition.Row;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
+import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
@@ -55,8 +56,8 @@ public class QueryTest {
         String[] columnNames = { "col1", "col2" };
         DataType[] columnDataTypes = { DataType.INT, DataType.INT };
         final Schema schema = new Schema( columnNames, columnDataTypes, new int[]{0}, null );
-        catalog.insertTable( new Table( "tb1", schema ));
-        catalog.insertTable( new Table( "tb2", schema ));
+        catalog.insertTable( new Table( "tb1", schema, (UniqueHashIndex) null));
+        catalog.insertTable( new Table( "tb2", schema,  (UniqueHashIndex) null ));
 
         try {
             // TODO move this test to query test

@@ -2,14 +2,14 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.count;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
-import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -73,7 +73,7 @@ public class IndexCountDistinct extends AbstractCount {
         NonUniqueHashIndex cIndex = index.asNonUniqueHashIndex();
         long address;
         for(IKey key : keys){
-            RecordBucketIterator iterator = cIndex.iterator(key);
+            IRecordIterator iterator = cIndex.iterator(key);
             while(iterator.hasNext()){
 
                 if(index.checkCondition(iterator, filterContext)) {

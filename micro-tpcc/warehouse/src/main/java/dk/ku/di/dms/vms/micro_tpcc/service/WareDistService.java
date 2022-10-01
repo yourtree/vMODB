@@ -5,10 +5,8 @@ import dk.ku.di.dms.vms.micro_tpcc.events.WareDistNewOrderIn;
 import dk.ku.di.dms.vms.micro_tpcc.events.WareDistNewOrderOut;
 import dk.ku.di.dms.vms.micro_tpcc.repository.IDistrictRepository;
 import dk.ku.di.dms.vms.micro_tpcc.repository.IWarehouseRepository;
-import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
-import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.annotations.*;
+import dk.ku.di.dms.vms.modb.api.query.builder.InsertStatementBuilder;
 import dk.ku.di.dms.vms.modb.api.query.builder.QueryBuilderFactory;
 import dk.ku.di.dms.vms.modb.api.query.builder.UpdateStatementBuilder;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
@@ -37,64 +35,40 @@ public class WareDistService {
      *       (i) A < B (ii) B < A
      *       (iii) it does not matter the order of processing, but no concurrent
      *       (iv) order does not matter and can run concurrently
+     *
+     *  For this transaction, does the scheduler guarantees the correctness because the provideTaxInfo
+     *  has the TID info? No. The write may happen before and install the next_o_id + 1.
+     *  What can we do?
+     *      (i) Schedule all reads first, wait for them to complete and then schedule the writes.
+     *      (ii)
       */
     @Inbound(values = "waredist-new-order-in")
     @Outbound("waredist-new-order-out")
-    @Transactional(type = R)
-    public WareDistNewOrderOut provideTaxInfo(WareDistNewOrderIn in)
-            throws ExecutionException, InterruptedException {
-
-        // create two threads, one for each query
-        ExecutorService exec = Executors.newFixedThreadPool(2);
-
-        Callable<DistrictInfoDTO> r1 = () -> districtRepository.getNextOidAndTax(in.d_w_id(), in.d_id());
-        Future<DistrictInfoDTO> fut1 = exec.submit(r1);
-
-        Callable<Float> r2 = () -> warehouseRepository.getWarehouseTax(in.d_w_id());
-        Future<Float> fut2 = exec.submit(r2);
-
-        DistrictInfoDTO getNextOidAndTax = fut1.get();
-        Float tax = fut2.get();
-
-        exec.shutdown();
-
-        return new WareDistNewOrderOut(
-                tax,
-                getNextOidAndTax.d_tax(),
-                getNextOidAndTax.d_next_o_id(),
-                in.d_w_id(),
-                in.d_id()
-        );
-    }
-
-    @Inbound(values = "waredist-new-order-in")
     @Transactional(type = RW)
-    public void processDistrictUpdate(WareDistNewOrderIn districtUpdateRequest) {
+    public WareDistNewOrderOut provideTaxInfo(WareDistNewOrderIn in) {
 
-        // repository query, much simpler
-        /*
-        QueryBuilderFactory.QueryBuilder builder = QueryBuilderFactory.init();
-        String sql = builder.select("d_next_o_id, d_tax")
-                .from("district")
-                .where("d_w_id = ", districtUpdateRequest.d_w_id)
-                .and("d_id = ", districtUpdateRequest.d_id)
-                .build();
-        */
-
-        DistrictInfoDTO districtData = districtRepository
-                .getNextOidAndTax(districtUpdateRequest.d_w_id(), districtUpdateRequest.d_id());
-
-        int nextOid = districtData.d_next_o_id();
+        DistrictInfoDTO districtData = districtRepository.getNextOidAndTax(in.d_w_id(), in.d_id());
+        Float tax = warehouseRepository.getWarehouseTax(in.d_w_id());
 
         UpdateStatementBuilder builder = QueryBuilderFactory.update();
         IStatement sql = builder.update("district")
-                .set("d_next_o_id",nextOid+1)
-                .where("d_w_id", EQUALS, districtUpdateRequest.d_w_id())
-                .and("d_id", EQUALS, districtUpdateRequest.d_id())
+                .set("d_next_o_id",districtData.d_next_o_id() + 1)
+                .where("d_w_id", EQUALS, in.d_w_id())
+                .and("d_id", EQUALS, in.d_id())
                 .build();
 
         districtRepository.issue(sql);
 
+//        InsertStatementBuilder builderInsert = new InsertStatementBuilder();
+//        var insertSta = builderInsert.insert("this").into("tb").build();
+
+        return new WareDistNewOrderOut(
+                tax,
+                districtData.d_tax(),
+                districtData.d_next_o_id(),
+                in.d_w_id(),
+                in.d_id()
+        );
     }
 
 }

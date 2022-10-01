@@ -24,7 +24,7 @@ import sun.misc.Unsafe;
  */
 public class AppendOnlyBuffer {
 
-    private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
+    private static final jdk.internal.misc.Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
     // what is found in the metadata buffer of this storage structure?
     private final long address;

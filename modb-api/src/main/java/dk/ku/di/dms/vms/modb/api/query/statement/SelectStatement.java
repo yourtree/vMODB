@@ -1,9 +1,6 @@
 package dk.ku.di.dms.vms.modb.api.query.statement;
 
-import dk.ku.di.dms.vms.modb.api.query.clause.GroupBySelectElement;
-import dk.ku.di.dms.vms.modb.api.query.clause.HavingClauseElement;
-import dk.ku.di.dms.vms.modb.api.query.clause.JoinClauseElement;
-import dk.ku.di.dms.vms.modb.api.query.clause.OrderByClauseElement;
+import dk.ku.di.dms.vms.modb.api.query.clause.*;
 
 import java.util.List;
 
@@ -22,6 +19,14 @@ public final class SelectStatement extends AbstractStatement {
     public List<OrderByClauseElement> orderByClause;
 
     public List<String> groupByClause;
+
+    public SelectStatement() {}
+
+    public SelectStatement(List<String> selectClause, String table, List<WhereClauseElement<?>> whereClause) {
+        this.selectClause = selectClause;
+        this.fromClause = List.of(table);
+        this.whereClause = whereClause;
+    }
 
     @Override
     public StatementType getType() {

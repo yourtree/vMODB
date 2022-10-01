@@ -21,7 +21,7 @@ import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
  */
 public class OrderedRecordBuffer {
 
-    private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
+    private static final jdk.internal.misc.Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
     private final LinkedList<Long> deletedOffsets;
 
@@ -395,7 +395,7 @@ public class OrderedRecordBuffer {
         long addressToSwap = this.buffer.address();
         long nextElemToSwap = this.first;
 
-        MemoryRefNode mc = MemoryManager.claim(entrySize);
+        MemoryRefNode mc = MemoryManager.getTemporaryDirectMemory(entrySize);
 
         // move along the linked list. if the next is not the next address, then swap
         int activeRecordsVerified = 0;

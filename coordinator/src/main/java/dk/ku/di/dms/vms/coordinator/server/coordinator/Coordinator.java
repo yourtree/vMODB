@@ -8,7 +8,7 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.transaction.TransactionMa
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.modb.common.data_structure.KeyValueEntry;
+import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
@@ -116,7 +116,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
     private final TransactionManagerContext txManagerCtx;
 
     // value is the batch
-    BlockingQueue<KeyValueEntry<VmsIdentifier, Long>> transactionInputsToResend;
+    BlockingQueue<Tuple<VmsIdentifier, Long>> transactionInputsToResend;
 
     private final Map<Integer, ConnectToVmsProtocol> connectToVmsProtocolMap;
 
@@ -248,8 +248,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 // handle other events
                 if(!transactionInputsToResend.isEmpty()){
                     var kv = transactionInputsToResend.take();
-                    var list = kv.getKey().transactionEventsPerBatch.get( kv.getValue() );
-                    resendTransactionalInputEvents(vmsConnectionMetadataMap.get(kv.getKey().hashCode()), list);
+                    var list = kv.getT1().transactionEventsPerBatch.get( kv.getT2() );
+                    resendTransactionalInputEvents(vmsConnectionMetadataMap.get(kv.getT1().hashCode()), list);
                 }
 
             } catch (Exception e) {
@@ -788,7 +788,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
             List<TransactionEvent.Payload> list = newVms.transactionEventsPerBatch.get( newVms.lastBatch + 1 );
             if(list != null) {// avoiding creating a task for nothing
-                KeyValueEntry<VmsIdentifier, Long> resendTask = new KeyValueEntry<>(newVms, newVms.lastBatch + 1);
+                Tuple<VmsIdentifier, Long> resendTask = new Tuple<>(newVms, newVms.lastBatch + 1);
                 transactionInputsToResend.add(resendTask);
             }
 

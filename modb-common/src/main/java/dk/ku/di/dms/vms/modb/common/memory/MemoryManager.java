@@ -1,12 +1,10 @@
 package dk.ku.di.dms.vms.modb.common.memory;
 
 import java.nio.ByteBuffer;
-import java.util.LinkedHashMap;
+import java.nio.ByteOrder;
 import java.util.Map;
 import java.util.SortedSet;
-import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.logging.Logger;
 
@@ -83,11 +81,14 @@ public final class MemoryManager {
 
     private static final Map<Long, ByteBuffer> assignedBuffers = new ConcurrentHashMap<>(10);
 
+    public static MemoryRefNode getTemporaryDirectMemory(){
+        return getTemporaryDirectMemory(1024);
+    }
     public static MemoryRefNode getTemporaryDirectMemory(long size) {
 
         MemoryRefNode refNode = memoryRefCache.remove(size);
         if(refNode == null){
-            long address = MemoryUtils.getUnsafe().allocateMemory(size);
+            long address = MemoryUtils.UNSAFE.allocateMemory(size);
             MemoryRefNode memRef = new MemoryRefNode(address, size);
             assignedMemoryRef.put( address, memRef );
             return memRef;
@@ -106,20 +107,18 @@ public final class MemoryManager {
 
         ByteBuffer bb = bufferCache.get(size);
         if(bb == null){
-            return ByteBuffer.allocateDirect(size);
+            ByteBuffer newBB = ByteBuffer.allocateDirect(size);
+            newBB.order(ByteOrder.nativeOrder());
+            return newBB;
         }
         return bb;
 
     }
 
+    /*** Buffers are for network operations because it is required by the Java APIs */
+
     public static ByteBuffer getTemporaryDirectBuffer() {
-
-        ByteBuffer bb = bufferCache.get(1024);
-        if(bb == null){
-            return ByteBuffer.allocateDirect(1024);
-        }
-        return bb;
-
+        return getTemporaryDirectBuffer(1024);
     }
 
     public static void releaseTemporaryDirectBuffer(ByteBuffer buf) {
@@ -130,35 +129,6 @@ public final class MemoryManager {
         long address = MemoryUtils.getByteBufferAddress(buf);
         assignedBuffers.remove(address);
         bufferCache.offer(buf);
-    }
-
-    private static final int DEFAULT_KB = 2048; // 4KB -> 4000 bytes
-
-    public static MemoryRefNode claim(){
-        ByteBuffer buf = bufferCache.get(DEFAULT_KB);
-        long address = MemoryUtils.getByteBufferAddress(buf);
-        assignedBuffers.put(address, buf);
-        MemoryRefNode mc = new MemoryRefNode(address, DEFAULT_KB);
-        return mc;
-    }
-
-    public static MemoryRefNode claim(int bytes){
-        ByteBuffer buf = bufferCache.get(bytes);
-        long address = MemoryUtils.getByteBufferAddress(buf);
-        assignedBuffers.put(address, buf);
-        MemoryRefNode mc = new MemoryRefNode(address, bytes);
-        return mc;
-    }
-
-    /**
-     * Must be unclaimed by the {IRepositoryFacade}
-     * @param memoryClaimed
-     */
-    public void unclaim(MemoryRefNode memoryClaimed){
-        ByteBuffer buf = assignedBuffers.remove(memoryClaimed.address);
-        if(buf != null){
-            bufferCache.offer(buf);
-        }
     }
 
 }

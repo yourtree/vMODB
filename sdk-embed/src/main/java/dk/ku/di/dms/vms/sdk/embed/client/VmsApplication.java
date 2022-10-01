@@ -67,14 +67,18 @@ public final class VmsApplication {
                             serdes,
                             modbModules.catalog());
 
+            // ideally lastTid and lastBatch must be read from the log
+
             VmsIdentifier vmsIdentifier = new VmsIdentifier(
                     host, port, vmsName,
                     0, 0,
                     vmsMetadata.dataSchema(),
-                    vmsMetadata.inputEventSchema(), vmsMetadata.outputEventSchema());
+                    vmsMetadata.inputEventSchema(),
+                    vmsMetadata.outputEventSchema());
 
             // TODO setup server to receive data, bulk loading
             // must pass the corresponding repositories
+            // map. key: entity. value: repository
 
         } catch (Exception e) {
             e.printStackTrace();
