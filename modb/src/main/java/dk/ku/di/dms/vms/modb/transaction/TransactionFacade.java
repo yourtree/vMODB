@@ -9,11 +9,9 @@ import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Catalog;
-import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.ReadWriteIndex;
@@ -64,12 +62,9 @@ public class TransactionFacade {
     }
 
     /**
-     * It installs the writes without taking into consideration concurrency control
+     * It installs the writes without taking into consideration concurrency control.
+     * Used when the buffer received is aligned with how the data is stored in memory
      */
-    public static void bulkInsert(Table table, List<Object[]> objects){
-        // create a memory space for all. insert in the address
-    }
-
     public static void bulkInsert(Table table, ByteBuffer buffer, int numberOfRecords){
 
         // if the memory address is occupied, must log warning
@@ -90,7 +85,40 @@ public class TransactionFacade {
 
     }
 
-    /* ENTITY *******/
+    /****** ENTITY *******/
+
+    public static void insertAll(Table table, List<Object[]> objects){
+        insertAll(table, objects, true);
+    }
+
+    /**
+     *
+     * @param table the table to insert
+     * @param objects the parsed objects
+     * @param transactional whether it should write to the multiversioning scheme or directly to the index entries
+     */
+    public static void insertAll(Table table, List<Object[]> objects, boolean transactional){
+
+        // get tid, do all the checks, etc
+        if(transactional){
+
+            return;
+        }
+
+        AbstractIndex<IKey> index = table.primaryKeyIndex();
+
+        for(Object[] entry : objects){
+
+            IKey key = KeyUtils.buildPrimaryKey(table.schema, entry);
+            // TODO finish
+
+        }
+
+        // index.retrieve()
+
+    }
+
+
 
     /**
      *

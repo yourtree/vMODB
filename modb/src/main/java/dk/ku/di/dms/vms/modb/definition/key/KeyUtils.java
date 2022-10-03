@@ -40,6 +40,10 @@ public class KeyUtils {
         return buildRecordKeyNoHeader(schema, schema.getPrimaryKeyColumns(), srcAddress);
     }
 
+    public static IKey buildPrimaryKey(Schema schema, Object[] object){
+        return buildRecordKey(schema, schema.getPrimaryKeyColumns(), object);
+    }
+
     public static IKey buildRecordKeyNoHeader(Schema schema, int[] columns, long srcAddress){
 
         IKey key;

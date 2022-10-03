@@ -25,6 +25,7 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,6 +41,8 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
     private final Class<? extends IEntity<?>> entityClazz;
     private final Class<? extends Serializable> pkClazz;
+
+    private Table table;
 
     // DBMS components
     private ModbModules modbModules;
@@ -76,6 +79,9 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         // https://stackoverflow.com/questions/43558270/correct-way-to-use-varhandle-in-java-9
         this.entityFieldMap = EntityUtils.getFieldsFromEntity( this.entityClazz, schema );
 
+        String tableName = this.modbModules.vmsRuntimeMetadata().entityToTableNameMap().get( entityClazz );
+        this.table = this.modbModules.catalog().getTable( tableName );
+
     }
 
     /**
@@ -86,6 +92,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
      * @return A DTO (i.e., any class where attribute values are final), a row {@link Row}, or set of rows
      */
     @Override
+    @SuppressWarnings("unchecked")
     public Object invoke(Object proxy, Method method, Object[] args) {
 
         String methodName = method.getName();
@@ -138,17 +145,8 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
             }
             case "insertAll": {
 
-                // acts as a single transaction, so all constraints, of every single row must be present
 
-                String tableName = this.modbModules.vmsRuntimeMetadata().entityToTableNameMap().get( entityClazz );
-
-                Table table = this.modbModules.catalog().getTable(tableName);
-
-//                PlanNode node = planner.planBulkInsert(tableForInsertion, (List<? extends IEntity<?>>) args[0]); //(args[0]);
-//
-//                SequentialQueryExecutor queryExecutor = new SequentialQueryExecutor(node);
-//
-//                queryExecutor.get();
+                this.insertAll((List<Object>) args[0]);
 
                 break;
             }
@@ -222,6 +220,21 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         int projectionColumnIndex = scanOperator.asScan().projectionColumns[0];
         DataType dataType = scanOperator.asScan().index.schema().getColumnDataType(projectionColumnIndex);
         return DataTypeUtils.getValue(dataType, memRes.address);
+
+    }
+
+    @Override
+    public void insertAll(List<Object> entities) {
+
+        // acts as a single transaction, so all constraints, of every single row must be present
+        List<Object[]> parsedEntities = new ArrayList<>(entities.size());
+        for (Object entityObject : entities){
+            Object[] parsed = extractFieldValuesFromEntityObject(entityObject, table);
+            parsedEntities.add(parsed);
+        }
+
+        // decide what to do
+        TransactionFacade.insertAll( table, parsedEntities, false );
 
     }
 

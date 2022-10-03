@@ -15,15 +15,29 @@ import java.nio.channels.ClosedChannelException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Logger;
 
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_OF_EVENTS;
 import static java.net.StandardSocketOptions.*;
+import static java.util.logging.Logger.getLogger;
 
 public class DataLoader {
 
+    private static final Logger logger = getLogger("DataLoader");
+
     private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-    private void start() throws IOException, ExecutionException, InterruptedException {
+    private final CountDownLatch latch;
+
+    public DataLoader(){
+        this.latch = new CountDownLatch(7);
+    }
+
+    public void start() throws IOException, ExecutionException, InterruptedException {
+
+
 
         loadWarehouses(Constants.DEFAULT_NUM_WARE);
         loadDistricts(Constants.DEFAULT_NUM_WARE, Constants.DIST_PER_WARE);
@@ -41,6 +55,8 @@ public class DataLoader {
     private class BulkDataLoaderProtocol implements Runnable {
 
         private final List<?> objects;
+
+        private final Class<?> clazz;
         private Status status;
 
         private String table;
@@ -49,8 +65,9 @@ public class DataLoader {
 
         private final IVmsSerdesProxy serdes;
 
-        public BulkDataLoaderProtocol(String table, List<?> objects, SocketAddress vms, IVmsSerdesProxy serdes) throws IOException, ExecutionException, InterruptedException {
+        public BulkDataLoaderProtocol(String table, List<?> objects, Class<?> clazz, SocketAddress vms, IVmsSerdesProxy serdes) throws IOException, ExecutionException, InterruptedException {
             this.objects = objects;
+            this.clazz = clazz;
             this.vms = vms;
             this.table = table;
             this.channel = AsynchronousSocketChannel.open();
@@ -67,11 +84,10 @@ public class DataLoader {
         public void run() {
 
             ByteBuffer writeBuffer = null;
-
+            int bufferSize = 1024;
             // get send buffer size so we can obtain a bb accordingly
             try {
-                int size = this.channel.getOption(SO_SNDBUF);
-                writeBuffer = MemoryManager.getTemporaryDirectBuffer(size);
+                bufferSize = this.channel.getOption(SO_SNDBUF);
             } catch (ClosedChannelException e) {
                 // then channel is closed
                 throw new RuntimeException(e);
@@ -79,10 +95,9 @@ public class DataLoader {
                 if (!this.channel.isOpen()) {
                     throw new RuntimeException(e);
                 }
-                writeBuffer = MemoryManager.getTemporaryDirectBuffer();
-            } catch (UnsupportedOperationException ignore) {
-                writeBuffer = MemoryManager.getTemporaryDirectBuffer();
             }
+
+            writeBuffer = MemoryManager.getTemporaryDirectBuffer();
 
             // send presentation
             Presentation.writeClient(writeBuffer, table);
@@ -95,12 +110,57 @@ public class DataLoader {
                 throw new RuntimeException(e);
             }
 
-
             // start streaming
             this.status = Status.STREAMING;
 
+            int n = objects.size();
+            int i = 0;
+            int remaining = bufferSize;
+            int totalObjectSize;
             // while we can fulfill the buffer, send them
 
+            String objStr = serdes.serialize( objects.get(i), clazz );
+
+            byte[] bytes = objStr.getBytes();
+            int nextObjectSize = bytes.length;
+
+            while (i < n) {
+
+                writeBuffer.put(BATCH_OF_EVENTS);
+                // first int is to write the number of objects
+                writeBuffer.position(1 + Integer.BYTES);
+
+                int count = 0;
+                totalObjectSize = (nextObjectSize + Integer.BYTES);
+
+                while(i < n && remaining >= totalObjectSize){
+                    writeBuffer.putInt(nextObjectSize);
+                    writeBuffer.put(bytes);
+                    i++;
+                    count++;
+                    remaining = remaining - totalObjectSize;
+
+                    if(i < n) {
+                        // update nextObjectSize
+                        objStr = serdes.serialize( objects.get(i), clazz );
+                        bytes = objStr.getBytes();
+                        nextObjectSize = bytes.length;
+                    }
+                }
+
+                // we have to seal anyway this buffer
+                writeBuffer.mark();
+                writeBuffer.putInt(1, count);
+                writeBuffer.reset();
+                writeBuffer.flip();
+
+                try {
+                    this.channel.write( writeBuffer ).get();
+                } catch (InterruptedException | ExecutionException e) {
+                    logger.warning("Error on sending bulk data to VMS!");
+                }
+
+            }
 
             // close connection
             try {
@@ -109,6 +169,7 @@ public class DataLoader {
                 throw new RuntimeException(e);
             } finally {
                 this.status = Status.DONE;
+                latch.countDown();
             }
 
         }
@@ -130,7 +191,7 @@ public class DataLoader {
             warehouses.add(new Warehouse(i + 1, ((double) Utils.randomNumber(10, 20) / 100.0), 3000000.00));
         }
 
-        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("warehouse", warehouses, new InetSocketAddress("localhost", 1081), serdes);
+        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("warehouse", warehouses, Warehouse.class, new InetSocketAddress("localhost", 1081), serdes);
         Thread thread = new Thread(protocol);
         thread.start();
 
@@ -153,7 +214,7 @@ public class DataLoader {
             }
         }
 
-        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("district", districts, new InetSocketAddress("localhost", 1082), serdes);
+        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("district", districts, District.class, new InetSocketAddress("localhost", 1082), serdes);
         Thread thread = new Thread(protocol);
         thread.start();
     }
@@ -199,7 +260,7 @@ public class DataLoader {
 
         }
 
-        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("customer", customers, new InetSocketAddress("localhost", 1083), serdes);
+        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("customer", customers, Customer.class, new InetSocketAddress("localhost", 1083), serdes);
         Thread thread = new Thread(protocol);
         thread.start();
 
@@ -234,7 +295,7 @@ public class DataLoader {
 
         }
 
-        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("history", historyRecords, new InetSocketAddress("localhost", 1083), serdes);
+        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("history", historyRecords, History.class, new InetSocketAddress("localhost", 1083), serdes);
         Thread thread = new Thread(protocol);
         thread.start();
 
@@ -259,7 +320,7 @@ public class DataLoader {
             items.add(new Item(i + 1, i_im_id, i_name, i_price, i_data));
         }
 
-        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("item", items, new InetSocketAddress("localhost", 1084), serdes);
+        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("item", items, Item.class, new InetSocketAddress("localhost", 1084), serdes);
         Thread thread = new Thread( protocol );
         thread.start();
 
@@ -285,7 +346,7 @@ public class DataLoader {
 
         }
 
-        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("stock", stock, new InetSocketAddress("localhost", 1085), serdes);
+        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("stock", stock, Stock.class, new InetSocketAddress("localhost", 1085), serdes);
         Thread thread = new Thread( protocol );
         thread.start();
 
@@ -352,15 +413,15 @@ public class DataLoader {
 
         }
 
-        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("orders", orders, new InetSocketAddress("localhost", 1086), serdes);
+        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("orders", orders, Order.class, new InetSocketAddress("localhost", 1086), serdes);
         Thread thread = new Thread( protocol );
         thread.start();
 
-        BulkDataLoaderProtocol protocol1 = new BulkDataLoaderProtocol("order_line", orderLines, new InetSocketAddress("localhost", 1086), serdes);
+        BulkDataLoaderProtocol protocol1 = new BulkDataLoaderProtocol("order_line", orderLines, OrderLine.class, new InetSocketAddress("localhost", 1086), serdes);
         Thread thread1 = new Thread( protocol1 );
         thread1.start();
 
-        BulkDataLoaderProtocol protocol2 = new BulkDataLoaderProtocol("new_orders", newOrders, new InetSocketAddress("localhost", 1086), serdes);
+        BulkDataLoaderProtocol protocol2 = new BulkDataLoaderProtocol("new_orders", newOrders, NewOrder.class, new InetSocketAddress("localhost", 1086), serdes);
         Thread thread2 = new Thread( protocol2 );
         thread2.start();
 

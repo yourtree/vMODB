@@ -26,7 +26,9 @@ public record VmsRuntimeMetadata(
         Map<Class<?>, String> eventToQueueMap,
 
         Map<String, Object> loadedVmsInstances,
-        List<IVmsRepositoryFacade> repositoryFacades,
+
+        // key is the entity (or table) name
+        Map<String, IVmsRepositoryFacade> repositoryFacades,
         Map<Class<?>, String> entityToTableNameMap,
 
         Map<String, SelectStatement> staticQueries

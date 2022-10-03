@@ -61,9 +61,9 @@ public class VmsMetadataLoader {
 
         Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, entityToTableNameMap);
 
-        List<IVmsRepositoryFacade> repositoryFacades = new ArrayList<>(10);
+        Map<String, IVmsRepositoryFacade> repositoryFacades = new HashMap<>(5);
 
-        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, facadeConstructor, repositoryFacades);
+        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, entityToTableNameMap, facadeConstructor, repositoryFacades);
 
         // necessary remaining data structures to store a vms metadata
         Map<String, VmsTransactionMetadata> queueToVmsTransactionMap = new HashMap<>();
@@ -352,7 +352,7 @@ public class VmsMetadataLoader {
                                 p.annotationType() == PositiveOrZero.class ||
                                 p.annotationType() == NotNull.class ||
                                 p.annotationType() == Null.class
-                        ).collect(Collectors.toList());
+                        ).toList();
 
                 constraints = new ConstraintReference[constraintAnnotations.size()];
                 int nC = 0;
@@ -412,8 +412,9 @@ public class VmsMetadataLoader {
     @SuppressWarnings({"rawtypes"})
     protected static Map<String, Object> loadMicroserviceClasses(
             Set<Class<?>> vmsClasses,
+            Map<Class<?>, String> entityToTableNameMap,
             Constructor<IVmsRepositoryFacade> facadeConstructor,
-            List<IVmsRepositoryFacade> repositoryFacades
+            Map<String, IVmsRepositoryFacade> repositoryFacades
             )
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
@@ -427,13 +428,18 @@ public class VmsMetadataLoader {
             Constructor<?>[] constructors = cls.getDeclaredConstructors();
             Constructor<?> constructor = constructors[0];
 
+            // the IRepository required for this vms class
             Class<?>[] parameterTypes = constructor.getParameterTypes();
             List<Object> proxies = new ArrayList<>(parameterTypes.length);
 
             for (Class parameterType : parameterTypes) {
 
                 IVmsRepositoryFacade facade = facadeConstructor.newInstance(parameterType);
-                repositoryFacades.add(facade);
+
+                // fill the repository facade map
+                Class<?> entityClazz = getEntityNameFromRepositoryClazz(parameterType);
+                String tableName = entityToTableNameMap.get(entityClazz);
+                repositoryFacades.putIfAbsent( tableName, facade );
 
                 Object proxyInstance = Proxy.newProxyInstance(
                         VmsMetadataLoader.class.getClassLoader(),
@@ -452,6 +458,14 @@ public class VmsMetadataLoader {
         }
 
         return loadedMicroserviceInstances;
+
+    }
+
+    private static Class<?> getEntityNameFromRepositoryClazz(Class<?> repositoryClazz){
+
+        Type[] types = ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
+
+        return (Class<?>) types[1];
 
     }
 

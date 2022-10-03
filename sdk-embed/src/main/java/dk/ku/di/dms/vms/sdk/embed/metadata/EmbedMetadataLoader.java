@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.sdk.embed.metadata;
 
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
+import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
@@ -13,6 +14,7 @@ import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.embed.facade.EmbedRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.facade.ModbModules;
+import dk.ku.di.dms.vms.sdk.embed.ingest.BulkDataLoader;
 import jdk.incubator.foreign.MemorySegment;
 import jdk.incubator.foreign.ResourceScope;
 
@@ -22,6 +24,7 @@ import java.lang.ref.Cleaner;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.channels.FileChannel;
+import java.util.Map;
 import java.util.logging.Logger;
 
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
@@ -38,9 +41,8 @@ public class EmbedMetadataLoader {
             @SuppressWarnings("unchecked")
             Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) EmbedRepositoryFacade.class.getConstructors()[0];
 
-            VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load(packageName, constructor);
+            return VmsMetadataLoader.load(packageName, constructor);
 
-            return vmsRuntimeMetadata;
 
         } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
             logger.warning("Cannot start VMs, error loading metadata: "+e.getMessage());
@@ -54,9 +56,14 @@ public class EmbedMetadataLoader {
 
         ModbModules modbModules = loadModbModules(vmsRuntimeMetadata);
 
-        for(IVmsRepositoryFacade facade : vmsRuntimeMetadata.repositoryFacades()){
-            ((EmbedRepositoryFacade)facade).setModbModules(modbModules);
+        for(Map.Entry<String, IVmsRepositoryFacade> facadeEntry : vmsRuntimeMetadata.repositoryFacades().entrySet()){
+            ((EmbedRepositoryFacade)facadeEntry.getValue()).setModbModules(modbModules);
         }
+
+        // instantiate loader
+        BulkDataLoader loader = new BulkDataLoader( vmsRuntimeMetadata.repositoryFacades(), vmsRuntimeMetadata.entityToTableNameMap(), VmsSerdesProxyBuilder.build() );
+
+        vmsRuntimeMetadata.loadedVmsInstances().put("data_loader", loader);
 
         return modbModules;
 
@@ -128,9 +135,9 @@ public class EmbedMetadataLoader {
 
         File file = new File(filePath);
         if (file.exists()) {
-            file.delete();
+            if(!file.delete()) throw new IllegalStateException("File can not be deleted");
         }
-        file.createNewFile();
+        if(!file.createNewFile()) throw new IllegalStateException("File already exists.");
 
         return MemorySegment.mapFile(
                         file.toPath(),
