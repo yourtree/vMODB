@@ -581,9 +581,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 case CLIENT -> {
                     // used for bulk data loading for now (may be used for tests later)
 
-                    // read the entity
-                    int sizeTable = this.buffer.getInt();
-                    String tableName = ByteUtils.extractStringFromByteBuffer(buffer, sizeTable);
+                    String tableName = Presentation.readClient(this.buffer);
 
                     ConnectionMetadata connMetadata = new ConnectionMetadata(
                             tableName.hashCode(),

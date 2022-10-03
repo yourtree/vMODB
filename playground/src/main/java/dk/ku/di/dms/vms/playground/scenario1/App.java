@@ -175,7 +175,7 @@ public class App
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
         EmbedVmsEventHandler eventHandler = new EmbedVmsEventHandler(
-                    vmsInternalPubSubService, vmsIdentifier, vmsMetadata, serdes, socketPool);
+                    vmsInternalPubSubService, vmsIdentifier, vmsMetadata, modbModules.catalog(), serdes, socketPool);
 
         Thread eventHandlerThread = new Thread(eventHandler);
         eventHandlerThread.start();

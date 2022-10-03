@@ -28,7 +28,7 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
     }
 
     /**
-     * https://algs4.cs.princeton.edu/34hash/
+     * <a href="https://algs4.cs.princeton.edu/34hash/">Why (key & 0x7fffffff)?</a>
      * "The code masks off the sign bit (to turn the 32-bit integer into a 31-bit non-negative integer)
      * and then computing the remainder when dividing by M, as in modular hashing."
      */
@@ -46,7 +46,7 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
         }
 
         UNSAFE.putBoolean(null, pos, true);
-        UNSAFE.putInt(pos, key.hashCode());
+        UNSAFE.putInt(null, pos, key.hashCode());
         UNSAFE.copyMemory(null, srcAddress, null, pos + Schema.recordHeader, schema.getRecordSizeWithoutHeader());
         // this.size++; // this should only be set after commit, so we spread the overhead
     }

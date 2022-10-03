@@ -72,7 +72,7 @@ public final class VmsManager {
         // pool for socket tasks. daemon to not preventing the JVM from closing
         ExecutorService socketTaskPool = Executors.newFixedThreadPool(2, new VmsDaemonThreadFactory());
 
-        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( vmsMetadata.queueToEventMap() );
+        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build(  );
 
         this.metadata.eventHandler = new VmsEventHandler(vmsInternalPubSubService, vmsMetadata, serdes, socketTaskPool);
 

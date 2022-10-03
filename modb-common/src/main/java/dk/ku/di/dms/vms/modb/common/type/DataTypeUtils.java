@@ -20,28 +20,28 @@ public class DataTypeUtils {
                 return UNSAFE.getBoolean(null, address);
             }
             case INT -> {
-                return UNSAFE.getInt(address);
+                return UNSAFE.getInt(null, address);
             }
             case CHAR -> {
-                return UNSAFE.getChar(address);
+                return UNSAFE.getChar(null, address);
             }
             case STRING -> {
                 char[] res = new char[DEFAULT_MAX_SIZE_STRING];
                 long currAddress = address;
                 for(int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
-                    res[i] = UNSAFE.getChar(currAddress);
+                    res[i] = UNSAFE.getChar(null, currAddress);
                     currAddress += Character.BYTES;
                 }
                 return res;
             }
             case LONG, DATE -> {
-                return UNSAFE.getLong(address);
+                return UNSAFE.getLong(null, address);
             }
             case FLOAT -> {
-                return UNSAFE.getFloat(address);
+                return UNSAFE.getFloat(null, address);
             }
             case DOUBLE -> {
-                return UNSAFE.getDouble(address);
+                return UNSAFE.getDouble(null, address);
             }
             default -> throw new IllegalStateException("Unknown data type");
         }
@@ -84,7 +84,7 @@ public class DataTypeUtils {
     public static void callWriteFunction(long address, DataType dt, Object value){
         switch (dt){
             case BOOL -> // byte is used. on unsafe, the boolean is used
-                    UNSAFE.putByte(null, address, (byte)value);
+                    UNSAFE.putBoolean(null, address, (boolean)value);
             case INT -> UNSAFE.putInt(null, address, (int)value);
             case CHAR -> UNSAFE.putChar(null, address, (char)value);
             case STRING -> {

@@ -38,6 +38,32 @@ public final class Presentation {
     // + size of data schema and event schema lists
     private static final int fixedVmsSize = vmsHeader + Integer.BYTES + Integer.BYTES;
 
+    public static void writeClient(ByteBuffer buffer, String table){
+        buffer.put( Constants.PRESENTATION );
+        buffer.put( CLIENT );
+
+        byte[] host = table.getBytes(StandardCharsets.UTF_8);
+        buffer.putInt( host.length );
+        buffer.put( host );
+    }
+
+    public static String readClient(ByteBuffer buffer){
+        int stringSize = buffer.getInt();
+
+        String table;
+        if(buffer.isDirect()){
+            byte[] byteArray = new byte[stringSize];
+            for(int i = 0; i < stringSize; i++){
+                byteArray[i] = buffer.get();
+            }
+            table = new String(byteArray, 0, stringSize, StandardCharsets.UTF_8);
+        } else {
+            table = new String(buffer.array(), serverHeader, stringSize, StandardCharsets.UTF_8);
+        }
+        return table;
+    }
+
+
     // for server consumption
     public static void writeServer(ByteBuffer buffer,
                                    ServerIdentifier serverIdentifier){

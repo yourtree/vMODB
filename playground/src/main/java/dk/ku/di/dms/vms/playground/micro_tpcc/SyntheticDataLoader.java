@@ -78,8 +78,8 @@
 //
 //        this.districtRepository.insertAll(districts);
 //
-//        List<Customer> customers = new ArrayList<>(num_ware + Constants.DIST_PER_WARE * Constants.DIST_PER_WARE);
-//        List<History> historyRecords = new ArrayList<>(num_ware + Constants.DIST_PER_WARE * Constants.DIST_PER_WARE);
+//        List<Customer> customers = new ArrayList<>(num_ware * Constants.DIST_PER_WARE * Constants.CUST_PER_DIST);
+//        List<History> historyRecords = new ArrayList<>(num_ware * Constants.DIST_PER_WARE * Constants.CUST_PER_DIST);
 //
 //        // generated given the lack of PK
 //        int hist_id = 0;
