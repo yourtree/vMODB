@@ -48,15 +48,15 @@ public class Parser {
             var left = tokens[i];
             i++;
             var exp = getExpressionFromString(tokens[i]);
-            if(exp != ExpressionTypeEnum.IS_NULL && exp != ExpressionTypeEnum.IS_NOT_NULL){
-                i++;
-                var right = tokens[i];
-                whereClauseElements.add( new WhereClauseElement<>(left, exp, Optional.empty()) );
-            } else {
-                whereClauseElements.add( new WhereClauseElement<>(left, exp, null) );
-            }
 
-            i++;
+            // skip the input
+            whereClauseElements.add( new WhereClauseElement<>(left, exp, null) );
+            i = i + 2;
+
+            // for now all where clauses ony contain AND
+            if(i < tokens.length && (tokens[i].equalsIgnoreCase("and") || tokens[i].equalsIgnoreCase("or"))){
+                i++;
+            }
 
         }
 
@@ -67,11 +67,15 @@ public class Parser {
     private static ExpressionTypeEnum getExpressionFromString(String exp){
 
         if (ExpressionTypeEnum.EQUALS.name.equalsIgnoreCase(exp)) {
-            return ExpressionTypeEnum.AND;
+            return ExpressionTypeEnum.EQUALS;
+        }
+
+        if (ExpressionTypeEnum.IN.name.equalsIgnoreCase(exp)) {
+            return ExpressionTypeEnum.IN;
         }
 
         // TODO complete
-        return ExpressionTypeEnum.EQUALS;
+        return null;
 
     }
 

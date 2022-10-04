@@ -30,6 +30,8 @@ public class MicroserviceExample {
 
         System.out.println("methodExample1");
 
+        repository.getItemsById( new int[]{1,2,3} );
+
         repository.insert(new EntityExample(in.id, in.id));
 
         return new OutEventExample2(in.id);

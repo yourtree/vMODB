@@ -10,6 +10,8 @@ public interface IVmsRepositoryFacade {
 
     Object fetch(SelectStatement selectStatement, Type type);
 
+    Object fetch(SelectStatement selectStatement);
+
     void insertAll(List<Object> entities);
 
     InvocationHandler asInvocationHandler();

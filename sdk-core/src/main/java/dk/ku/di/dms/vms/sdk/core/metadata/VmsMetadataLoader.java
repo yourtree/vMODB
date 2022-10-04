@@ -693,11 +693,12 @@ public class VmsMetadataLoader {
 
                 // build the query now. simple parser only
                 SelectStatement selectStatement = Parser.parse(queryString);
+                selectStatement.SQL = new StringBuilder(queryString);
 
-                res.put(queryString, selectStatement);
+                res.put(queryMethod.getName(), selectStatement);
 
             } catch(Exception e){
-                throw new IllegalStateException("Query annotation not found in the annotated method.");
+                throw new IllegalStateException("Error on processing the query annotation: "+e.getMessage());
             }
 
         }

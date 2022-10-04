@@ -452,8 +452,6 @@ public class TransactionFacade {
 
             for(var keyEntry : entry.getValue().entrySet()){
 
-
-
                 switch (keyEntry.getValue().lastWriteType){
 
                     case INSERT -> {

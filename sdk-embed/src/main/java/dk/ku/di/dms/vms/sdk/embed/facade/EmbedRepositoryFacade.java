@@ -159,9 +159,13 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
             default: {
 
                 // check if is it static query
+                SelectStatement selectStatement = modbModules.vmsRuntimeMetadata().staticQueries().get(methodName);
 
+                if(selectStatement == null)
+                    throw new IllegalStateException("Unknown repository operation.");
 
-                throw new IllegalStateException("Unknown repository operation.");
+                return fetch(selectStatement);
+
             }
         }
 
@@ -178,6 +182,15 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
             fieldIdx++;
         }
         return values;
+    }
+
+    /**
+     * Best guess return type. Differently from the parameter type received.
+     * @param selectStatement
+     * @return
+     */
+    public Object fetch(SelectStatement selectStatement) {
+        return fetch(selectStatement,null);
     }
 
     @Override
@@ -207,17 +220,20 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         }
 
         MemoryRefNode memRes = null;
-        // MemoryRefNode memRes = transactionFacade.;
+
+        // TODO complete for all types or migrate the choice to transaction facade
+        //  make an enum, it is easier
         if(scanOperator.isIndexScan()){
             // build keys and filters
             //memRes = OperatorExecution.run( wherePredicates, scanOperator.asIndexScan() );
+            memRes = TransactionFacade.run(wherePredicates, scanOperator.asIndexScan());
         } else {
             // build only filters
-            //memRes = OperatorExecution.run( wherePredicates, scanOperator.asFullScan() );
+            memRes = TransactionFacade.run( wherePredicates, scanOperator.asFullScan() );
         }
 
-        // parse output into object
-        if( type == IDTO.class) {
+        // TODO parse output into object
+        if(type == IDTO.class) {
             // look in the map of dto types for the setter and getter
             return null;
         }

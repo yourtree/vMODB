@@ -1,10 +1,14 @@
 package dk.ku.di.dms.vms.playground.micro_tpcc;
 
+import dk.ku.di.dms.vms.micro_tpcc.customer.entity.History;
 import dk.ku.di.dms.vms.micro_tpcc.entity.*;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.micro_tpcc.order.entity.NewOrder;
+import dk.ku.di.dms.vms.micro_tpcc.order.entity.Order;
+import dk.ku.di.dms.vms.micro_tpcc.order.entity.OrderLine;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;

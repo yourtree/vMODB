@@ -38,11 +38,10 @@ public final class MemoryUtils {
         return Class.forName(className);
     }
 
-    // @SuppressWarnings("restriction")
     private static jdk.internal.misc.Unsafe getUnsafe() {
         Field unsafeField = null;
         try {
-            unsafeField = jdk.internal.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField = Unsafe.class.getDeclaredField("theInternalUnsafe");
             unsafeField.setAccessible(true);
             return (jdk.internal.misc.Unsafe) unsafeField.get(null);
         }
