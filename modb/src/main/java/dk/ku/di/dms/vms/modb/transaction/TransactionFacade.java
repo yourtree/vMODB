@@ -66,21 +66,25 @@ public class TransactionFacade {
      * Used when the buffer received is aligned with how the data is stored in memory
      */
     public static void bulkInsert(Table table, ByteBuffer buffer, int numberOfRecords){
+        // if the memory address is occupied, must log warning
+        // so we can increase the table size
+        long address = MemoryUtils.getByteBufferAddress(buffer);
+        bulkInsert(table, address, numberOfRecords);
+    }
+
+    public static void bulkInsert(Table table, long srcAddress, int numberOfRecords){
 
         // if the memory address is occupied, must log warning
         // so we can increase the table size
-
         AbstractIndex<IKey> index = table.primaryKeyIndex();
-
-        long address = MemoryUtils.getByteBufferAddress(buffer);
-
         int sizeWithoutHeader = table.schema.getRecordSizeWithoutHeader();
+        long currAddress = srcAddress;
 
         IKey key;
         for (int i = 0; i < numberOfRecords; i++) {
-            key = KeyUtils.buildPrimaryKey(table.schema, address);
-            index.insert( key, address );
-            address += sizeWithoutHeader;
+            key = KeyUtils.buildPrimaryKey(table.schema, currAddress);
+            index.insert( key, currAddress );
+            currAddress += sizeWithoutHeader;
         }
 
     }
@@ -95,30 +99,30 @@ public class TransactionFacade {
      *
      * @param table the table to insert
      * @param objects the parsed objects
-     * @param transactional whether it should write to the multiversioning scheme or directly to the index entries
+     * @param transactional whether it should write to the multi-versioning scheme or directly to the index entries
      */
     public static void insertAll(Table table, List<Object[]> objects, boolean transactional){
 
         // get tid, do all the checks, etc
         if(transactional){
-
+            for(Object[] entry : objects){
+                insert(table, entry);
+            }
             return;
         }
 
-        AbstractIndex<IKey> index = table.primaryKeyIndex();
+        int bufferSize = table.getSchema().getRecordSizeWithoutHeader() * objects.size();
+        MemoryRefNode buffer = MemoryManager.getTemporaryDirectMemory( bufferSize );
+
+        long currAddress = buffer.address;
 
         for(Object[] entry : objects){
-
-            IKey key = KeyUtils.buildPrimaryKey(table.schema, entry);
-            // TODO finish
-
+            currAddress = writeToMemory( table, entry, currAddress );
         }
 
-        // index.retrieve()
+        bulkInsert(table, buffer.address, objects.size());
 
     }
-
-
 
     /**
      *
@@ -295,21 +299,27 @@ public class TransactionFacade {
         int recordSize = table.getSchema().getRecordSizeWithoutHeader();
         MemoryRefNode memRef = MemoryManager.getTemporaryDirectMemory(recordSize);
         long addressToWriteTo = memRef.address();
+        return writeToMemory(table, values, addressToWriteTo);
+    }
+
+    private static long writeToMemory(Table table, Object[] values, long targetAddress){
+
         int maxColumns = table.getSchema().columnOffset().length;
-        int index;
-        // TODO For embed and default?, can be directly put in a buffer instead of saving an object.
-        for(index = 0; index < maxColumns; index++) {
+        long currAddress = targetAddress;
+
+        for(int index = 0; index < maxColumns; index++) {
 
             DataType dt = table.getSchema().getColumnDataType(index);
 
-            DataTypeUtils.callWriteFunction( addressToWriteTo,
+            DataTypeUtils.callWriteFunction( currAddress,
                     dt,
                     values[index] );
 
-            addressToWriteTo += dt.value;
+            currAddress += dt.value;
 
         }
-        return addressToWriteTo;
+        return currAddress;
+
     }
 
     private static boolean pkConstraintViolation(Table table, IKey pk, Map<IKey, OperationSet> keyMap){

@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.modb.query.complex.planner.operator.filter;
 
-import dk.ku.di.dms.vms.modb.common.query.enums.ExpressionTypeEnum;
+import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.modb.common.meta.DataType;
 
 import java.util.Comparator;
 import java.util.Map;

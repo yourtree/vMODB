@@ -22,24 +22,23 @@ public class PlannerTest {
 //        assert node != null;
 //    }
 
-    @Test
-    public void testSimplePlan() throws AnalyzerException {
-        final QueryTree queryTree = TestCommon.getSimpleQueryTree();
-        assert queryTree != null;
-    }
+//    @Test
+//    public void testSimplePlan() throws AnalyzerException {
+//        final QueryTree queryTree = TestCommon.getSimpleQueryTree();
+//        assert queryTree != null;
+//    }
 
-    @Test
-    public void testFilterCombinations(){
-
-        Planner planner = new Planner();
-
-        int[] filters = { 1, 2, 3, 4 };
-
-        List<int[]> list = Combinatorics.getAllPossibleColumnCombinations( filters );
-
-        assert  list != null;
-
-    }
-
+//    @Test
+//    public void testFilterCombinations(){
+//
+//        Planner planner = new Planner();
+//
+//        int[] filters = { 1, 2, 3, 4 };
+//
+//        List<int[]> list = Combinatorics.getAllPossibleColumnCombinations( filters );
+//
+//        assert  list != null;
+//
+//    }
 
 }

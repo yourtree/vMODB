@@ -18,8 +18,6 @@ public abstract class AbstractOperator {
 
     protected final int entrySize;
 
-    private TransactionFacade transactionFacade;
-
     public AbstractOperator(int entrySize) {
         this.entrySize = entrySize;
     }

@@ -13,9 +13,9 @@ import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
-import dk.ku.di.dms.vms.sdk.embed.handler.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.facade.ModbModules;
+import dk.ku.di.dms.vms.sdk.embed.handler.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;
 
@@ -175,7 +175,7 @@ public class App
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
         EmbedVmsEventHandler eventHandler = new EmbedVmsEventHandler(
-                    vmsInternalPubSubService, vmsIdentifier, vmsMetadata, modbModules.catalog(), serdes, socketPool);
+                    vmsInternalPubSubService, vmsIdentifier, vmsMetadata, serdes, socketPool);
 
         Thread eventHandlerThread = new Thread(eventHandler);
         eventHandlerThread.start();

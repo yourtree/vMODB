@@ -5,7 +5,6 @@ import jdk.incubator.foreign.MemorySegment;
 import jdk.incubator.foreign.ResourceScope;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import sun.misc.Unsafe;
 
 import java.io.File;
 import java.io.IOException;

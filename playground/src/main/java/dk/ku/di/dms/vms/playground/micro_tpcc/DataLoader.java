@@ -37,8 +37,6 @@ public class DataLoader {
 
     public void start() throws IOException, ExecutionException, InterruptedException {
 
-
-
         loadWarehouses(Constants.DEFAULT_NUM_WARE);
         loadDistricts(Constants.DEFAULT_NUM_WARE, Constants.DIST_PER_WARE);
         loadCustomers(Constants.DEFAULT_NUM_WARE, Constants.DIST_PER_WARE, Constants.CUST_PER_DIST);
@@ -187,8 +185,8 @@ public class DataLoader {
 
         List<Warehouse> warehouses = new ArrayList<>(num_ware);
         // creating warehouse(s)
-        for (int i = 0; i < num_ware; i++) {
-            warehouses.add(new Warehouse(i + 1, ((double) Utils.randomNumber(10, 20) / 100.0), 3000000.00));
+        for (int i = 1; i <= num_ware; i++) {
+            warehouses.add(new Warehouse(i, ((double) Utils.randomNumber(10, 20) / 100.0), 3000000.00));
         }
 
         BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("warehouse", warehouses, Warehouse.class, new InetSocketAddress("localhost", 1081), serdes);
@@ -203,18 +201,18 @@ public class DataLoader {
         int d_next_o_id = Constants.ORD_PER_DIST + 1;
 
         // creating districts
-        for (int i = 0; i < num_ware; i++) {
-            for (int j = 0; j < distPerWare; j++) {
+        for (int i = 1; i <= num_ware; i++) {
+            for (int j = 1; j <= distPerWare; j++) {
                 districts.add( new District(
-                        j + 1, // district
-                        i + 1, // warehouse
+                        j, // district
+                        i, // warehouse
                         ((Utils.randomNumber(10, 20)) / 100.0),
                         30000.0,
                         d_next_o_id) );
             }
         }
 
-        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("district", districts, District.class, new InetSocketAddress("localhost", 1082), serdes);
+        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("district", districts, District.class, new InetSocketAddress("localhost", 1081), serdes);
         Thread thread = new Thread(protocol);
         thread.start();
     }
@@ -244,8 +242,8 @@ public class DataLoader {
 
                     customers.add( new Customer(
                             c_id,
-                            j + 1,
-                            i + 1,
+                            j,
+                            i,
                             ((Utils.randomNumber(0, 50)) / 100.0f),
                             c_first,
                             c_last,
@@ -260,7 +258,7 @@ public class DataLoader {
 
         }
 
-        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("customer", customers, Customer.class, new InetSocketAddress("localhost", 1083), serdes);
+        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("customer", customers, Customer.class, new InetSocketAddress("localhost", 1082), serdes);
         Thread thread = new Thread(protocol);
         thread.start();
 
@@ -304,20 +302,35 @@ public class DataLoader {
     public void loadItems(int max_items) throws IOException, ExecutionException, InterruptedException {
 
         List<Item> items = new ArrayList<>(max_items);
+        int pos = 0;
+        int[] orig = new int[max_items + 1];
+
+        for (int i = 0; i < max_items / 10; i++) {
+            orig[i] = 0;
+        }
+        for (int i = 0; i < max_items / 10; i++) {
+            do {
+                pos = Utils.randomNumber(0, max_items);
+            } while (orig[pos] != 0);
+            orig[pos] = 1;
+        }
 
         // creating items
-        for (int i = 0; i < max_items; i++) {
+        for (int i = 1; i <= max_items; i++) {
 
             int i_im_id = Utils.randomNumber(1, 10000);
 
             String i_name = Utils.makeAlphaString(14, 24);
 
-            // FIXME embrace orig[]
             String i_data = Utils.makeAlphaString(26, 50);
+            if (orig[i] != 0) {
+                pos = Utils.randomNumber(0, i_data.length() - 8);
+                i_data = i_data.substring(0, pos) + "original" + i_data.substring(pos + 8);
+            }
 
             float i_price = ((Utils.randomNumber(100, 10000)) / 100.0f);
 
-            items.add(new Item(i + 1, i_im_id, i_name, i_price, i_data));
+            items.add(new Item(i, i_im_id, i_name, i_price, i_data));
         }
 
         BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("item", items, Item.class, new InetSocketAddress("localhost", 1084), serdes);
@@ -332,16 +345,16 @@ public class DataLoader {
         List<Stock> stock = new ArrayList<>(num_ware * max_items);
 
         // creating stock items
-        for (int i = 0; i < num_ware; i++) {
+        for (int i = 1; i <= num_ware; i++) {
 
             // creating stock for each item
-            for (int j = 0; j < max_items; j++) {
+            for (int j = 1; j <= max_items; j++) {
 
                 int s_quantity = Utils.randomNumber(Constants.MIN_STOCK_QTY, Constants.MAX_STOCK_QTY);
                 String s_data = Utils.makeAlphaString(26, 50);
                 String s_dist = Utils.makeAlphaString(24, 24);
 
-                stock.add(new Stock(j + 1, i + 1, s_quantity, s_data, s_dist));
+                stock.add(new Stock(j, i, s_quantity, s_data, s_dist));
             }
 
         }

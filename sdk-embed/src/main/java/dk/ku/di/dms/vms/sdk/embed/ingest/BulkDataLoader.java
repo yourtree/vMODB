@@ -78,9 +78,6 @@ public class BulkDataLoader {
                 connectionMetadata.channel.read( connectionMetadata.readBuffer,
                         connectionMetadata, this );
 
-                // TransactionFacade.bulkInsert(table, oldBB, count);
-                // TODO call repository facade, it will convert the entity appropriately
-
                 List<Object> entities = new ArrayList<>(count);
                 for(int i = 0; i < count; i++){
                     int size = connectionMetadata.readBuffer.getInt();

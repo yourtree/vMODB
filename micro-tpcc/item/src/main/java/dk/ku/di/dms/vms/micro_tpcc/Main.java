@@ -9,7 +9,7 @@ public class Main {
             { "localhost", "1080", "true" };
 
     public static void main(String[] args){
-        VmsApplication.start("localhost", 1080);
+        VmsApplication.start("localhost", 8080);
     }
 
 }

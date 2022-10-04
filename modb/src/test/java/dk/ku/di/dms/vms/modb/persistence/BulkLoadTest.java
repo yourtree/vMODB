@@ -67,7 +67,7 @@ public class BulkLoadTest {
     private void produceItem(ByteBuffer buffer, int i){
         buffer.putInt(i);
         buffer.putFloat(i);
-        /**
+        /*
          * TODO would be good embrace length of string attributes
          * {@link javax.persistence.Column#length()}
           */

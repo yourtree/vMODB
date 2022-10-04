@@ -156,7 +156,13 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
                 SelectStatement selectStatement = ((IStatement) args[0]).asSelectStatement();
                 return fetch(selectStatement, (Type)args[1]);
             }
-            default: throw new IllegalStateException("Unknown repository operation.");
+            default: {
+
+                // check if is it static query
+
+
+                throw new IllegalStateException("Unknown repository operation.");
+            }
         }
 
         return null;

@@ -3,9 +3,6 @@ package dk.ku.di.dms.vms.modb.service;
 
 import org.junit.Test;
 
-import java.lang.foreign.MemoryAddress;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.MemorySession;
 import java.lang.ref.Cleaner;
 
 /**
@@ -31,15 +28,15 @@ public class ByteBufferTest {
 
         Cleaner cleaner = Cleaner.create();
 
-        try(MemorySession scope = MemorySession.openShared(cleaner)) {
-
-            MemorySegment segment = MemorySegment.allocateNative(100, scope);
-
-            MemoryAddress memoryAddress = segment.address();
-
-            // long address = memoryAddress.;
-
-        }
+//        try(MemorySession scope = MemorySession.openShared(cleaner)) {
+//
+//            MemorySegment segment = MemorySegment.allocateNative(100, scope);
+//
+//            MemoryAddress memoryAddress = segment.address();
+//
+//            // long address = memoryAddress.;
+//
+//        }
 
     }
 
