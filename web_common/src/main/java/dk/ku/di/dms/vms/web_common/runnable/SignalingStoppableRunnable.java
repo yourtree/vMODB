@@ -18,7 +18,7 @@ public abstract class SignalingStoppableRunnable extends StoppableRunnable {
     public static final byte NO_RESULT = 0;
     public static final byte FINISHED = 1;
 
-    protected final Logger logger = Logger.getLogger(this.getClass().getName());
+    protected static final Logger logger = Logger.getLogger(SignalingStoppableRunnable.class.getName());
 
     public final CustomUncaughtExceptionHandler exceptionHandler;
 

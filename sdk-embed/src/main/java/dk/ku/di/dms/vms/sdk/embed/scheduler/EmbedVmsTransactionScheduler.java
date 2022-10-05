@@ -39,7 +39,7 @@ public class EmbedVmsTransactionScheduler extends VmsTransactionScheduler {
 
         while(isRunning()) {
 
-            processNewEvent();
+            checkForNewEvents();
 
             moveOffsetPointerIfNecessary();
 

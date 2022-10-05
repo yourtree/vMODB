@@ -41,14 +41,14 @@ public class DataLoader {
 
     /**
      * TODO finish
-     * https://www.jetbrains.com/help/idea/debug-a-java-application-using-a-dockerfile.html#create-remote-debug-config
+     * <a href="https://www.jetbrains.com/help/idea/debug-a-java-application-using-a-dockerfile.html#create-remote-debug-config">...</a>
      */
-    public void start(String[] args) throws IOException, ExecutionException, InterruptedException {
+    public void start(String... args) throws IOException, ExecutionException, InterruptedException {
 
         for(String i : args){
             if(i.equalsIgnoreCase("warehouse")){
                 loadWarehouses(Constants.DEFAULT_NUM_WARE);
-                loadDistricts(Constants.DEFAULT_NUM_WARE, Constants.DIST_PER_WARE);
+                // loadDistricts(Constants.DEFAULT_NUM_WARE, Constants.DIST_PER_WARE);
             }
         }
 
@@ -126,6 +126,8 @@ public class DataLoader {
                 // keep trying while channel is opened?
                 throw new RuntimeException(e);
             }
+
+            writeBuffer.clear();
 
             // start streaming
             this.status = Status.STREAMING;
@@ -208,7 +210,7 @@ public class DataLoader {
             warehouses.add(new Warehouse(i, ((double) Utils.randomNumber(10, 20) / 100.0), 3000000.00));
         }
 
-        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("warehouse", warehouses, Warehouse.class, new InetSocketAddress("localhost", 1081), serdes);
+        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("warehouse", warehouses, Warehouse.class, new InetSocketAddress("localhost", 8081), serdes);
         Thread thread = new Thread(protocol);
         thread.start();
 
@@ -231,7 +233,7 @@ public class DataLoader {
             }
         }
 
-        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("district", districts, District.class, new InetSocketAddress("localhost", 1081), serdes);
+        BulkDataLoaderProtocol protocol = new BulkDataLoaderProtocol("district", districts, District.class, new InetSocketAddress("localhost", 8081), serdes);
         Thread thread = new Thread(protocol);
         thread.start();
     }

@@ -6,14 +6,19 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.facade.ModbModules;
+import dk.ku.di.dms.vms.sdk.embed.handler.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 /**
  * Starting point for initializing the runtime
@@ -22,7 +27,7 @@ public final class VmsApplication {
 
     private static final Logger logger = Logger.getLogger("VmsApplication");
 
-    public static void start(String host, int port, String[] packages){
+    public static void start(String host, int port, String[] packages, String... entitiesToExclude){
 
         // check first whether we are in decoupled or embed mode
         try {
@@ -47,7 +52,10 @@ public final class VmsApplication {
 
             VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata(packages);
 
-            ModbModules modbModules = EmbedMetadataLoader.loadModbModulesIntoRepositories(vmsMetadata);
+            Set<String> toExclude = entitiesToExclude != null ? Arrays.stream(entitiesToExclude).collect(
+                    Collectors.toSet()) : new HashSet<>();
+
+            ModbModules modbModules = EmbedMetadataLoader.loadModbModulesIntoRepositories(vmsMetadata, toExclude);
 
             assert vmsMetadata != null;
 
@@ -76,13 +84,29 @@ public final class VmsApplication {
                     vmsMetadata.inputEventSchema(),
                     vmsMetadata.outputEventSchema());
 
-            // TODO setup server to receive data, bulk loading
-            // must pass the corresponding repositories
-            // map. key: entity. value: repository
+            ExecutorService socketPool = Executors.newFixedThreadPool(2);
+
+            EmbedVmsEventHandler eventHandler = new EmbedVmsEventHandler(
+                    vmsInternalPubSubService, vmsIdentifier, vmsMetadata, serdes );
+
+//            Thread eventHandlerThread = new Thread(eventHandler);
+//            eventHandlerThread.start();
+//            Thread schedulerThread = new Thread(scheduler);
+//            schedulerThread.start();
+
+            // this is not the cause since the threads continue running in background...
+            CompletableFuture<?>[] futures = new CompletableFuture[2];
+            futures[0] = CompletableFuture.runAsync( eventHandler );
+            futures[1] = CompletableFuture.runAsync( scheduler );
+
+            CompletableFuture.allOf(futures).join();
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.warning("Error on starting the VMS application: "+e.getMessage());
         }
+
+        // abnormal termination
+        System.exit(1);
 
     }
 

@@ -35,9 +35,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.*;
@@ -58,13 +60,13 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
 public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
     /** EXECUTOR SERVICE (for socket channels) **/
-    private final ExecutorService taskExecutor;
+    private ExecutorService taskExecutor;
 
     /** SERVER SOCKET **/
     // other VMSs may want to connect in order to send events
     private final AsynchronousServerSocketChannel serverSocket;
 
-    private final AsynchronousChannelGroup group;
+    private AsynchronousChannelGroup group;
 
     /** INTERNAL CHANNELS **/
     private final VmsEmbedInternalChannels vmsInternalChannels;
@@ -119,6 +121,31 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
     }
 
+    public EmbedVmsEventHandler(VmsEmbedInternalChannels vmsInternalChannels, // for communicating with other components
+                                VmsIdentifier me, // to identify which vms this is
+                                VmsRuntimeMetadata vmsMetadata, // metadata about this vms
+                                IVmsSerdesProxy serdesProxy // ser/des of objects
+    ) throws IOException {
+        super();
+
+        this.vmsInternalChannels = vmsInternalChannels;
+        this.me = me;
+
+        this.vmsMetadata = vmsMetadata;
+        this.vmsConnectionMetadataMap = new ConcurrentHashMap<>(10);
+        this.consumerVms = new ConcurrentHashMap<>(10);
+
+        this.serdesProxy = serdesProxy;
+        this.serverSocket = AsynchronousServerSocketChannel.open(null);
+        SocketAddress address = new InetSocketAddress(me.host, me.port);
+        serverSocket.bind(address);
+
+        this.currentBatch = new BatchContext(me.lastBatch, me.lastTid);
+        this.currentBatch.setStatus(BatchContext.Status.COMPLETION_INFORMED);
+        this.batchContextMap = new ConcurrentHashMap<>(3);
+
+    }
+
     /**
      * A thread that basically writes events to other VMSs and the Leader
      * Retrieves data from all output queues
@@ -131,10 +158,29 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     @Override
     public void run() {
 
+        logger.info("Event handler has started running.");
+
         // setup accept since we need to accept connections from the coordinator and other VMSs
-        serverSocket.accept( null, new AcceptCompletionHandler());
+        // serverSocket.accept( null, new AcceptCompletionHandler());
+
+        // set up a new thread to accept. busy wait
+        Thread acceptor = new Thread(  ()-> {
+            while(true){
+                logger.info("Acceptor thread started!");
+                try {
+                    var channel = serverSocket.accept().get();
+                    logger.info("An unknown host has started a connection attempt.");
+                } catch (InterruptedException | ExecutionException e) {
+                    logger.info("Acceptor thread exception!");
+                }
+
+            }
+        } );
+        acceptor.start();
 
         // must wait for the consumer set before starting receiving transactions
+
+        logger.info("Accept handler has been setup.");
 
         // while not stopped
         while(isRunning()){
@@ -186,6 +232,8 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             }
 
         }
+
+        logger.info("Event handler has finished execution.");
 
     }
 
@@ -603,7 +651,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
         @Override
         public void failed(Throwable exc, Void void_) {
-            // do nothing
+            logger.warning("Error on processing presentation message!");
         }
 
     }
@@ -616,11 +664,13 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
 
+            logger.info("An unknown host has started a connection attempt.");
+
             final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024);
 
             try {
 
-                logger.info("An unknown host has started a connection attempt. Remote address: "+channel.getRemoteAddress());
+                logger.info("Remote address: "+channel.getRemoteAddress().toString());
 
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, true);
@@ -631,9 +681,11 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
                 logger.info("Read handler for unknown node has been setup: "+channel.getRemoteAddress());
 
-            } catch(Exception ignored){
+            } catch(Exception e){
+                logger.info("Accept handler for unknown node caught exception: "+e.getMessage());
                 MemoryManager.releaseTemporaryDirectBuffer(buffer);
             } finally {
+                logger.info("Accept handler set up again for listening.");
                 // continue listening
                 serverSocket.accept(null, this);
             }
@@ -642,8 +694,13 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
         @Override
         public void failed(Throwable exc, Void attachment) {
+
+            logger.warning("Error on accepting connection: "+ exc.getMessage());
+
             if (serverSocket.isOpen()){
                 serverSocket.accept(null, this);
+            } else {
+                logger.warning("Cannot set up ACCEPT again =(");
             }
         }
 

@@ -8,7 +8,8 @@ public class Main {
         VmsApplication.start("localhost", 8081, new String[]{
                 "dk.ku.di.dms.vms.micro_tpcc.common",
                 "dk.ku.di.dms.vms.micro_tpcc.warehouse"
-        });
+        },
+            "customer","stock","item"   );
     }
 
 }

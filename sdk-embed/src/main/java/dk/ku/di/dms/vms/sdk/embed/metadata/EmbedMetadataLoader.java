@@ -24,7 +24,9 @@ import java.lang.ref.Cleaner;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.channels.FileChannel;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
@@ -53,8 +55,12 @@ public class EmbedMetadataLoader {
     }
 
     public static ModbModules loadModbModulesIntoRepositories(VmsRuntimeMetadata vmsRuntimeMetadata) throws NoSuchFieldException, IllegalAccessException {
+        return loadModbModulesIntoRepositories(vmsRuntimeMetadata, new HashSet<>());
+    }
 
-        ModbModules modbModules = loadModbModules(vmsRuntimeMetadata);
+    public static ModbModules loadModbModulesIntoRepositories(VmsRuntimeMetadata vmsRuntimeMetadata, Set<String> entitiesToExclude) throws NoSuchFieldException, IllegalAccessException {
+
+        ModbModules modbModules = loadModbModules(vmsRuntimeMetadata, entitiesToExclude);
 
         for(Map.Entry<String, IVmsRepositoryFacade> facadeEntry : vmsRuntimeMetadata.repositoryFacades().entrySet()){
             ((EmbedRepositoryFacade)facadeEntry.getValue()).setModbModules(modbModules);
@@ -69,9 +75,9 @@ public class EmbedMetadataLoader {
 
     }
 
-    private static ModbModules loadModbModules(VmsRuntimeMetadata vmsRuntimeMetadata){
+    private static ModbModules loadModbModules(VmsRuntimeMetadata vmsRuntimeMetadata, Set<String> entitiesToExclude){
 
-        Catalog catalog = loadCatalog(vmsRuntimeMetadata);
+        Catalog catalog = loadCatalog(vmsRuntimeMetadata, entitiesToExclude);
 
         Analyzer analyzer = new Analyzer(catalog);
         Planner planner = new Planner();
@@ -79,27 +85,30 @@ public class EmbedMetadataLoader {
         return new ModbModules(vmsRuntimeMetadata, catalog, analyzer, planner);
     }
 
-    private static Catalog loadCatalog(VmsRuntimeMetadata vmsRuntimeMetadata) {
+    private static Catalog loadCatalog(VmsRuntimeMetadata vmsRuntimeMetadata, Set<String> entitiesToExclude) {
 
         Catalog catalog = new Catalog();
 
         for (VmsDataSchema vmsDataSchema : vmsRuntimeMetadata.dataSchema().values()) {
 
-            Schema schema = new Schema(vmsDataSchema.columnNames, vmsDataSchema.columnDataTypes,
-                    vmsDataSchema.primaryKeyColumns, null);
+            if(!entitiesToExclude.contains(vmsDataSchema.tableName)) {
 
-            // map this to a file, so whenever a batch commit arrives i can make the file durable
+                Schema schema = new Schema(vmsDataSchema.columnNames, vmsDataSchema.columnDataTypes,
+                        vmsDataSchema.primaryKeyColumns, null);
 
-            RecordBufferContext recordBufferContext = loadMemoryBuffer(10, schema.getRecordSize(), vmsDataSchema.tableName );
+                // map this to a file, so whenever a batch commit arrives i can make the file durable
 
-            UniqueHashIndex pkIndex = new UniqueHashIndex(recordBufferContext, schema, schema.getPrimaryKeyColumns());
+                RecordBufferContext recordBufferContext = loadMemoryBuffer(10, schema.getRecordSize(), vmsDataSchema.tableName);
 
-            Table table = new Table(vmsDataSchema.tableName, schema, pkIndex);
+                UniqueHashIndex pkIndex = new UniqueHashIndex(recordBufferContext, schema, schema.getPrimaryKeyColumns());
 
-            // TODO create secondary indexes
+                Table table = new Table(vmsDataSchema.tableName, schema, pkIndex);
 
-            catalog.insertTable(table);
-            catalog.insertIndex(pkIndex.key(), pkIndex );
+                // TODO create secondary indexes
+
+                catalog.insertTable(table);
+                catalog.insertIndex(pkIndex.key(), pkIndex);
+            }
 
         }
 

@@ -16,7 +16,7 @@ public class App {
         // bulk data load if necessary
         DataLoader dataLoader = new DataLoader();
 
-        dataLoader.start();
+        dataLoader.start("warehouse");
 
         // start generating new order transaction inputs
 
