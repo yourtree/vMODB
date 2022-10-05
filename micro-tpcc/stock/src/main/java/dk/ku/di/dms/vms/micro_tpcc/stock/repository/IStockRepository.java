@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.micro_tpcc.stock.repository;
 
-import dk.ku.di.dms.vms.micro_tpcc.entity.Stock;
+import dk.ku.di.dms.vms.micro_tpcc.common.entity.Stock;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.annotations.Repository;
 

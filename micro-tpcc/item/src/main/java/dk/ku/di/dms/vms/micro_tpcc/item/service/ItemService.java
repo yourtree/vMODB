@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.micro_tpcc.item.service;
 
-import dk.ku.di.dms.vms.micro_tpcc.events.ItemNewOrderIn;
-import dk.ku.di.dms.vms.micro_tpcc.events.ItemNewOrderOut;
+import dk.ku.di.dms.vms.micro_tpcc.common.events.ItemNewOrderIn;
+import dk.ku.di.dms.vms.micro_tpcc.common.events.ItemNewOrderOut;
 import dk.ku.di.dms.vms.micro_tpcc.item.repository.IItemRepository;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;

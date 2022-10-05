@@ -42,6 +42,11 @@ public class DefaultRepositoryFacade implements IVmsRepositoryFacade, Invocation
     }
 
     @Override
+    public Object fetch(SelectStatement selectStatement) {
+        return null;
+    }
+
+    @Override
     public void insertAll(List<Object> entities) {
 
     }

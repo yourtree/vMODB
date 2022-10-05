@@ -1,6 +1,12 @@
 # https://stackoverflow.com/questions/21964709/how-to-set-or-change-the-default-java-jdk-version-on-macos
 
 FROM openjdk:18
+
+# to refrain possibility of permission problems
+USER root
+RUN useradd -ms /bin/bash newuser
+USER newuser
+
 ADD target/ParentPOMProj.jar /usr/local/lib/warehouse.jar
 EXPOSE 8081
-ENTRYPOINT ["java","-jar","/usr/local/lib/warehouse.jar","--add-modules","jdk.incubator.foreign","--add-exports","java.base/jdk.internal.misc=ALL-UNNAMED","--add-opens","java.base/jdk.internal.util=ALL-UNNAMED"]
+ENTRYPOINT ["java","--add-modules","jdk.incubator.foreign","--add-exports","java.base/jdk.internal.misc=ALL-UNNAMED","--add-opens","java.base/jdk.internal.misc=ALL-UNNAMED","-jar","/usr/local/lib/warehouse.jar"]

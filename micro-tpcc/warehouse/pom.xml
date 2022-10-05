@@ -33,6 +33,21 @@
 
         <plugins>
 
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs>
+                        <arg>--add-modules</arg>
+                        <arg>jdk.incubator.foreign</arg>
+                        <arg>--add-exports</arg>
+                        <arg>java.base/jdk.internal.misc=ALL-UNNAMED</arg>
+                        <arg>--add-opens</arg>
+                        <arg>java.base/jdk.internal.misc=ALL-UNNAMED</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+
             <!-- Build a fat executable jar -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -45,7 +60,7 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <minimizeJar>true</minimizeJar>
+                            <minimizeJar>false</minimizeJar>
                             <artifactSet>
                                 <excludes>
 <!--                                    <exclude>junit:junit</exclude>-->
@@ -54,7 +69,7 @@
 <!--                            <createDependencyReducedPom>false</createDependencyReducedPom>-->
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>dk.ku.di.dms.vms.micro_tpcc.Main</mainClass>
+                                    <mainClass>dk.ku.di.dms.vms.micro_tpcc.warehouse.Main</mainClass>
                                 </transformer>
                             </transformers>
                         </configuration>

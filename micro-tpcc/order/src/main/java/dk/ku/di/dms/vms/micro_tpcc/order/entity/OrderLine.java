@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.micro_tpcc.order.entity;
 
-import dk.ku.di.dms.vms.micro_tpcc.entity.Stock;
+import dk.ku.di.dms.vms.micro_tpcc.common.entity.Stock;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsIndex;

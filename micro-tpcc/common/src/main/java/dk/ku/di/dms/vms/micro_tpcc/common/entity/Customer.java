@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.micro_tpcc.entity;
+package dk.ku.di.dms.vms.micro_tpcc.common.entity;
 
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;

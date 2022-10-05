@@ -25,24 +25,24 @@ public class ApplicationTest
 
     private static VmsRuntimeMetadata vmsMetadata;
 
-    @BeforeClass
-    public static void setup(){
-
-        try {
-
-//            IVmsInternalChannels internalPubSub = VmsInternalChannels.getInstance();
-            vmsMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example", null);
-
-            GsonBuilder builder = new GsonBuilder();
-//            builder.registerTypeAdapter( TransactionEvent.class, new TransactionEventAdapter( vmsMetadata.queueToEventMap() ) );
-            builder.setPrettyPrinting();
-            gson = builder.create();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-    }
+//    @BeforeClass
+//    public static void setup(){
+//
+//        try {
+//
+////            IVmsInternalChannels internalPubSub = VmsInternalChannels.getInstance();
+//            vmsMetadata = VmsMetadataLoader.load(null, null);
+//
+//            GsonBuilder builder = new GsonBuilder();
+////            builder.registerTypeAdapter( TransactionEvent.class, new TransactionEventAdapter( vmsMetadata.queueToEventMap() ) );
+//            builder.setPrettyPrinting();
+//            gson = builder.create();
+//
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+//
+//    }
 
     @Test
     public void testMetadataLoader() {

@@ -34,14 +34,14 @@ public class EmbedMetadataLoader {
 
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
-    public static VmsRuntimeMetadata loadRuntimeMetadata(String packageName) {
+    public static VmsRuntimeMetadata loadRuntimeMetadata(String... packages) {
 
         try {
 
             @SuppressWarnings("unchecked")
             Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) EmbedRepositoryFacade.class.getConstructors()[0];
 
-            return VmsMetadataLoader.load(packageName, constructor);
+            return VmsMetadataLoader.load(packages, constructor);
 
 
         } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
@@ -127,24 +127,48 @@ public class EmbedMetadataLoader {
 
     }
 
-    private static MemorySegment mapFileIntoMemorySegment(long bytes, String append) throws IOException {
+    private static MemorySegment mapFileIntoMemorySegment(long bytes, String append) {
 
         String userHome = System.getProperty("user.home");
 
+        if(userHome == null){
+            logger.warning("User home directory is not set in the environment. Resorting to /usr/local/lib");
+            userHome = "/usr/local/lib";
+        }
+
         String filePath = userHome + "/vms/" + append;
+
+        logger.info("Attempt to delete existing file in directory: "+filePath);
 
         File file = new File(filePath);
         if (file.exists()) {
             if(!file.delete()) throw new IllegalStateException("File can not be deleted");
         }
-        if(!file.createNewFile()) throw new IllegalStateException("File already exists.");
 
-        return MemorySegment.mapFile(
+        logger.info("Attempt to create new file in directory: "+filePath);
+
+        if(file.getParentFile().mkdirs()){
+            logger.info("Parent directory required being created.");
+        } else {
+            logger.info("Parent directory don't need to be created.");
+        }
+
+        try {
+
+            if(file.createNewFile()) {
+                logger.info("Attempt to create new file in directory: "+filePath+" completed successfully.");
+                return MemorySegment.mapFile(
                         file.toPath(),
                         0,
                         bytes,
                         FileChannel.MapMode.READ_WRITE,
                         ResourceScope.newSharedScope());
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        throw new IllegalStateException("File could not be created");
 
     }
 

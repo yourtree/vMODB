@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.playground.micro_tpcc;
 
+import dk.ku.di.dms.vms.micro_tpcc.common.entity.*;
 import dk.ku.di.dms.vms.micro_tpcc.customer.entity.History;
-import dk.ku.di.dms.vms.micro_tpcc.entity.*;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -37,6 +37,21 @@ public class DataLoader {
 
     public DataLoader(){
         this.latch = new CountDownLatch(7);
+    }
+
+    /**
+     * TODO finish
+     * https://www.jetbrains.com/help/idea/debug-a-java-application-using-a-dockerfile.html#create-remote-debug-config
+     */
+    public void start(String[] args) throws IOException, ExecutionException, InterruptedException {
+
+        for(String i : args){
+            if(i.equalsIgnoreCase("warehouse")){
+                loadWarehouses(Constants.DEFAULT_NUM_WARE);
+                loadDistricts(Constants.DEFAULT_NUM_WARE, Constants.DIST_PER_WARE);
+            }
+        }
+
     }
 
     public void start() throws IOException, ExecutionException, InterruptedException {

@@ -22,15 +22,15 @@ public final class VmsApplication {
 
     private static final Logger logger = Logger.getLogger("VmsApplication");
 
-    public static void start(String host, int port){
+    public static void start(String host, int port, String[] packages){
 
         // check first whether we are in decoupled or embed mode
         try {
 
             Optional<Package> optional = Arrays.stream(Package.getPackages()).filter(p ->
-                             !p.getName().contentEquals("dk.ku.di.dms.vms.sdk.embed")
-                          && !p.getName().contentEquals("dk.ku.di.dms.vms.sdk.core")
-                          && !p.getName().contentEquals("dk.ku.di.dms.vms.modb")
+                             !p.getName().contains("dk.ku.di.dms.vms.sdk.embed")
+                          && !p.getName().contains("dk.ku.di.dms.vms.sdk.core")
+                          && !p.getName().contains("dk.ku.di.dms.vms.modb")
                           && !p.getName().contains("java")
                           && !p.getName().contains("sun")
                           && !p.getName().contains("jdk")
@@ -45,7 +45,7 @@ public final class VmsApplication {
 
             VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
 
-            VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata(packageName);
+            VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata(packages);
 
             ModbModules modbModules = EmbedMetadataLoader.loadModbModulesIntoRepositories(vmsMetadata);
 

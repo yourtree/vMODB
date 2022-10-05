@@ -1,12 +1,12 @@
 package dk.ku.di.dms.vms.micro_tpcc.order.service;
 
+import dk.ku.di.dms.vms.micro_tpcc.common.events.*;
 import dk.ku.di.dms.vms.micro_tpcc.order.entity.NewOrder;
 import dk.ku.di.dms.vms.micro_tpcc.order.entity.Order;
 import dk.ku.di.dms.vms.micro_tpcc.order.entity.OrderLine;
 import dk.ku.di.dms.vms.micro_tpcc.order.repository.INewOrderRepository;
 import dk.ku.di.dms.vms.micro_tpcc.order.repository.IOrderLineRepository;
 import dk.ku.di.dms.vms.micro_tpcc.order.repository.IOrderRepository;
-import dk.ku.di.dms.vms.micro_tpcc.events.*;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Terminal;

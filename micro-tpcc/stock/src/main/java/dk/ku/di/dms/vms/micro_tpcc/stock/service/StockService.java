@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.micro_tpcc.stock.service;
 
-import dk.ku.di.dms.vms.micro_tpcc.events.StockNewOrderIn;
-import dk.ku.di.dms.vms.micro_tpcc.events.StockNewOrderOut;
+import dk.ku.di.dms.vms.micro_tpcc.common.events.StockNewOrderIn;
+import dk.ku.di.dms.vms.micro_tpcc.common.events.StockNewOrderOut;
 import dk.ku.di.dms.vms.micro_tpcc.stock.repository.IStockRepository;
 import dk.ku.di.dms.vms.modb.api.annotations.*;
 import dk.ku.di.dms.vms.modb.api.interfaces.IDTO;

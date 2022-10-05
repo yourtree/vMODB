@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.micro_tpcc.warehouse.service;
 
 import dk.ku.di.dms.vms.micro_tpcc.warehouse.dto.DistrictInfoDTO;
-import dk.ku.di.dms.vms.micro_tpcc.events.WareDistNewOrderIn;
-import dk.ku.di.dms.vms.micro_tpcc.events.WareDistNewOrderOut;
+import dk.ku.di.dms.vms.micro_tpcc.common.events.WareDistNewOrderIn;
+import dk.ku.di.dms.vms.micro_tpcc.common.events.WareDistNewOrderOut;
 import dk.ku.di.dms.vms.micro_tpcc.warehouse.repository.IDistrictRepository;
 import dk.ku.di.dms.vms.micro_tpcc.warehouse.repository.IWarehouseRepository;
 import dk.ku.di.dms.vms.modb.api.annotations.*;

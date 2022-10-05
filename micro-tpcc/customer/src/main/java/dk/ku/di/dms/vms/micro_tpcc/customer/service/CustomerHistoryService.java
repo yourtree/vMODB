@@ -2,11 +2,11 @@ package dk.ku.di.dms.vms.micro_tpcc.customer.service;
 
 import dk.ku.di.dms.vms.micro_tpcc.customer.dto.CustomerInfoDTO;
 import dk.ku.di.dms.vms.micro_tpcc.customer.repository.IHistoryRepository;
-import dk.ku.di.dms.vms.micro_tpcc.events.CustomerNewOrderIn;
-import dk.ku.di.dms.vms.micro_tpcc.events.CustomerNewOrderOut;
+import dk.ku.di.dms.vms.micro_tpcc.common.events.CustomerNewOrderIn;
+import dk.ku.di.dms.vms.micro_tpcc.common.events.CustomerNewOrderOut;
 import dk.ku.di.dms.vms.micro_tpcc.customer.repository.ICustomerRepository;
-import dk.ku.di.dms.vms.micro_tpcc.events.ItemNewOrderIn;
-import dk.ku.di.dms.vms.micro_tpcc.events.ItemNewOrderOut;
+import dk.ku.di.dms.vms.micro_tpcc.common.events.ItemNewOrderIn;
+import dk.ku.di.dms.vms.micro_tpcc.common.events.ItemNewOrderOut;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
@@ -16,8 +16,6 @@ import dk.ku.di.dms.vms.modb.api.query.builder.QueryBuilderFactory;
 import dk.ku.di.dms.vms.modb.api.query.builder.SelectStatementBuilder;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
-
-import java.util.List;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.R;
 import static dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum.EQUALS;

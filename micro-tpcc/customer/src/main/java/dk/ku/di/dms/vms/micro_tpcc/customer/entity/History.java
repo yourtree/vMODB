@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.micro_tpcc.customer.entity;
 
-import dk.ku.di.dms.vms.micro_tpcc.entity.Customer;
-import dk.ku.di.dms.vms.micro_tpcc.entity.District;
+import dk.ku.di.dms.vms.micro_tpcc.common.entity.Customer;
+import dk.ku.di.dms.vms.micro_tpcc.common.entity.District;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsIndex;

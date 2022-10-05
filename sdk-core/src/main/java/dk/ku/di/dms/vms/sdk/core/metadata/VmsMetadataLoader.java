@@ -46,10 +46,10 @@ public class VmsMetadataLoader {
 
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
-    public static VmsRuntimeMetadata load(String packageName, Constructor<IVmsRepositoryFacade> facadeConstructor)
+    public static VmsRuntimeMetadata load(String[] packages, Constructor<IVmsRepositoryFacade> facadeConstructor)
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
-        Reflections reflections = configureReflections(packageName);
+        Reflections reflections = configureReflections(packages);
 
         Map<Class<?>, String> entityToTableNameMap = loadVmsTableNames(reflections);
 
@@ -114,14 +114,17 @@ public class VmsMetadataLoader {
 
     }
 
-    private static Reflections configureReflections(String packageName){
+    private static Reflections configureReflections(String[] packages){
 
-        if(packageName == null) {
+        if(packages == null) {
             // https://stackoverflow.com/questions/67159160/java-using-reflections-to-scan-classes-from-all-packages
-            packageName = "dk.ku.di.dms.vms";
+            throw new IllegalStateException("No package to scan.");
         }
 
-        Collection<URL> urls = ClasspathHelper.forPackage(packageName);
+        Collection<URL> urls = new ArrayList<>(packages.length);
+        for(String package_ : packages){
+            urls.addAll( ClasspathHelper.forPackage(package_) );
+        }
 
         Configuration reflectionsConfig = new ConfigurationBuilder()
                 .setUrls(urls)
