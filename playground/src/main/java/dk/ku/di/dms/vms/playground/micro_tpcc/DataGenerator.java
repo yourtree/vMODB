@@ -2,13 +2,13 @@ package dk.ku.di.dms.vms.playground.micro_tpcc;
 
 import dk.ku.di.dms.vms.micro_tpcc.common.entity.*;
 import dk.ku.di.dms.vms.micro_tpcc.customer.entity.History;
+import dk.ku.di.dms.vms.micro_tpcc.order.entity.NewOrder;
+import dk.ku.di.dms.vms.micro_tpcc.order.entity.Order;
+import dk.ku.di.dms.vms.micro_tpcc.order.entity.OrderLine;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
-import dk.ku.di.dms.vms.micro_tpcc.order.entity.NewOrder;
-import dk.ku.di.dms.vms.micro_tpcc.order.entity.Order;
-import dk.ku.di.dms.vms.micro_tpcc.order.entity.OrderLine;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -25,30 +25,31 @@ import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_OF_EVENTS;
 import static java.net.StandardSocketOptions.*;
-import static java.util.logging.Logger.getLogger;
 
-public class DataLoader {
+public class DataGenerator {
 
-    private static final Logger logger = getLogger("DataLoader");
+    private static final Logger logger = Logger.getLogger("DataLoader");
 
     private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
     private final CountDownLatch latch;
 
-    public DataLoader(){
+    public DataGenerator(){
         this.latch = new CountDownLatch(7);
     }
 
     /**
      * TODO finish
-     * <a href="https://www.jetbrains.com/help/idea/debug-a-java-application-using-a-dockerfile.html#create-remote-debug-config">...</a>
+     * <a href="https://www.jetbrains.com/help/idea/debug-a-java-application-using-a-dockerfile.html#create-remote-debug-config">How to debug inside container.</a>
      */
     public void start(String... args) throws IOException, ExecutionException, InterruptedException {
 
         for(String i : args){
             if(i.equalsIgnoreCase("warehouse")){
                 loadWarehouses(Constants.DEFAULT_NUM_WARE);
-                // loadDistricts(Constants.DEFAULT_NUM_WARE, Constants.DIST_PER_WARE);
+            }
+            if(i.equalsIgnoreCase("warehouse")){
+                loadDistricts(Constants.DEFAULT_NUM_WARE, Constants.DIST_PER_WARE);
             }
         }
 
@@ -76,7 +77,7 @@ public class DataLoader {
         private final Class<?> clazz;
         private Status status;
 
-        private String table;
+        private final String table;
         private final AsynchronousSocketChannel channel;
         private final SocketAddress vms;
 
@@ -100,7 +101,7 @@ public class DataLoader {
         @Override
         public void run() {
 
-            ByteBuffer writeBuffer = null;
+            ByteBuffer writeBuffer;
             int bufferSize = 1024;
             // get send buffer size so we can obtain a bb accordingly
             try {
@@ -114,7 +115,7 @@ public class DataLoader {
                 }
             }
 
-            writeBuffer = MemoryManager.getTemporaryDirectBuffer();
+            writeBuffer = MemoryManager.getTemporaryDirectBuffer(bufferSize);
 
             // send presentation
             Presentation.writeClient(writeBuffer, table);
@@ -177,6 +178,8 @@ public class DataLoader {
                     this.channel.write( writeBuffer ).get();
                 } catch (InterruptedException | ExecutionException e) {
                     logger.warning("Error on sending bulk data to VMS!");
+                } finally {
+                    writeBuffer.clear();
                 }
 
             }
@@ -198,7 +201,6 @@ public class DataLoader {
             STREAMING,
             DONE
         }
-
 
     }
 
@@ -242,11 +244,9 @@ public class DataLoader {
 
         List<Customer> customers = new ArrayList<>(num_ware * distPerWare * custPerDist);
 
-        for (int i = 1; i <= num_ware; i++) {
-            for (int j = 1; j <= distPerWare; j++) {
-                for (int l = 1; l <= custPerDist; l++) {
-
-                    int c_id = l;
+        for (int c_w_id = 1; c_w_id <= num_ware; c_w_id++) {
+            for (int c_d_id = 1; c_d_id <= distPerWare; c_d_id++) {
+                for (int c_id = 1; c_id <= custPerDist; c_id++) {
 
                     String c_first = Utils.makeAlphaString(8, 16);
 
@@ -263,8 +263,8 @@ public class DataLoader {
 
                     customers.add( new Customer(
                             c_id,
-                            j,
-                            i,
+                            c_d_id,
+                            c_w_id,
                             ((Utils.randomNumber(0, 50)) / 100.0f),
                             c_first,
                             c_last,
@@ -291,10 +291,9 @@ public class DataLoader {
         int hist_id = 0;
         for (int i = 1; i <= num_ware; i++) {
             for (int j = 1; j <= distPerWare; j++) {
-                for (int l = 1; l <= custPerDist; l++) {
+                for (int c_id = 1; c_id <= custPerDist; c_id++) {
 
                     hist_id++;
-                    int c_id = l;
 
                     historyRecords.add(
                             new History(hist_id,
@@ -323,7 +322,7 @@ public class DataLoader {
     public void loadItems(int max_items) throws IOException, ExecutionException, InterruptedException {
 
         List<Item> items = new ArrayList<>(max_items);
-        int pos = 0;
+        int pos;
         int[] orig = new int[max_items + 1];
 
         for (int i = 0; i < max_items / 10; i++) {

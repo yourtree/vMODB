@@ -35,11 +35,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.*;
@@ -161,24 +159,10 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         logger.info("Event handler has started running.");
 
         // setup accept since we need to accept connections from the coordinator and other VMSs
-        // serverSocket.accept( null, new AcceptCompletionHandler());
-
-        // set up a new thread to accept. busy wait
-        Thread acceptor = new Thread(  ()-> {
-            while(true){
-                logger.info("Acceptor thread started!");
-                try {
-                    var channel = serverSocket.accept().get();
-                    logger.info("An unknown host has started a connection attempt.");
-                } catch (InterruptedException | ExecutionException e) {
-                    logger.info("Acceptor thread exception!");
-                }
-
-            }
-        } );
-        acceptor.start();
+        serverSocket.accept( null, new AcceptCompletionHandler());
 
         // must wait for the consumer set before starting receiving transactions
+        // this is guaranteed by the coordinator, the one who is sending transaction requests
 
         logger.info("Accept handler has been setup.");
 
@@ -188,10 +172,9 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             //  write events to leader and VMSs...
             try {
 
-                if(!vmsInternalChannels.transactionAbortOutputQueue().isEmpty()){
-                    // handle
-
-                }
+//                if(!vmsInternalChannels.transactionAbortOutputQueue().isEmpty()){
+//                    // TODO handle
+//                }
 
                 // it is better to get all the results of a given transaction instead of one by one. it must be atomic anyway
                 if(!vmsInternalChannels.transactionOutputQueue().isEmpty()){
@@ -237,6 +220,9 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
     }
 
+    /**
+     * TODO can pass a completion handler to the scheduler, so no need to have this on the event loop
+     */
     private void moveBatchIfNecessary() {
         if(this.currentBatch.status() == BatchContext.Status.COMMITTED){
 
@@ -620,6 +606,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                     // used for bulk data loading for now (may be used for tests later)
 
                     String tableName = Presentation.readClient(this.buffer);
+                    this.buffer.clear();
 
                     ConnectionMetadata connMetadata = new ConnectionMetadata(
                             tableName.hashCode(),

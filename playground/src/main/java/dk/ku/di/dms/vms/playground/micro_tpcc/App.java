@@ -14,9 +14,9 @@ public class App {
         // cannot initialize them here otherwise the events get mixed
 
         // bulk data load if necessary
-        DataLoader dataLoader = new DataLoader();
+        DataGenerator dataLoader = new DataGenerator();
 
-        dataLoader.start("warehouse");
+        dataLoader.start("warehouse","district");
 
         // start generating new order transaction inputs
 

@@ -7,11 +7,13 @@ import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.annotations.Loader;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_OF_EVENTS;
@@ -21,6 +23,8 @@ import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_OF_EVE
  */
 @Loader("data_loader")
 public class BulkDataLoader {
+
+    private static final Logger logger = Logger.getLogger("BulkDataLoader");
 
     private final Map<String, IVmsRepositoryFacade> repositoryFacades;
     private final Map<String, Class<?>> tableNameToEntityClazzMap;
@@ -62,6 +66,15 @@ public class BulkDataLoader {
             @Override
             public void completed(Integer result, ConnectionMetadata connectionMetadata) {
 
+                logger.info("New bulk data received. Result =="+result);
+
+                if(result == -1) {
+                    try {
+                        connectionMetadata.channel.close();
+                    } catch (IOException ignored) {}
+                    return;
+                }
+
                 // should be a batch of events
                 connectionMetadata.readBuffer.position(0);
                 byte messageType = connectionMetadata.readBuffer.get();
@@ -70,13 +83,7 @@ public class BulkDataLoader {
 
                 int count = connectionMetadata.readBuffer.getInt();
 
-                ByteBuffer bb = MemoryManager.getTemporaryDirectBuffer();
-                ByteBuffer oldBB = connectionMetadata.readBuffer;
-                connectionMetadata.readBuffer = bb;
-
-                // set up read handler again without waiting for tx facade
-                connectionMetadata.channel.read( connectionMetadata.readBuffer,
-                        connectionMetadata, this );
+                logger.info(count+" records to be ingested!");
 
                 List<Object> entities = new ArrayList<>(count);
                 for(int i = 0; i < count; i++){
@@ -88,8 +95,12 @@ public class BulkDataLoader {
 
                 repositoryFacade.insertAll( entities );
 
-                oldBB.clear();
-                MemoryManager.releaseTemporaryDirectBuffer(oldBB);
+                connectionMetadata.readBuffer.clear();
+                logger.info("Ingestion finished!");
+
+                // set up read handler again without waiting for tx facade
+                connectionMetadata.channel.read( connectionMetadata.readBuffer,
+                        connectionMetadata, this );
 
             }
 
