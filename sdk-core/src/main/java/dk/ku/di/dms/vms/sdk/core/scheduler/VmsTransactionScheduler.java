@@ -270,17 +270,18 @@ public class VmsTransactionScheduler extends StoppableRunnable {
             // fast path: in case only one payload
             if (task.isReady()) {
 
+                task.setIdentifier(txContext.getNextTaskIdentifier());
+
                 // we cannot submit now because it may not be the time for the tid
-                switch (node.object().type()){
-                    case RW -> txContext.readWriteTasks.add(task);
-                    case R -> txContext.readTasks.add(task);
-                    default -> txContext.writeTasks.add(task); // to avoid additional checking
-                    // case W -> flock.writeTasks.add(task);
+                if (node.object().type() == TransactionTypeEnum.R) {
+                    txContext.readTasks.add(task);
+                } else {
+                    txContext.writeTasks.add(task);
                 }
 
             } else {
-                var list = this.waitingTasksPerTidMap.putIfAbsent
-                        (task.tid(), new ArrayList<>(transactionMetadata.numTasksWithMoreThanOneInput));
+                var list = this.waitingTasksPerTidMap.get(task.tid());
+                if(list == null) list = new ArrayList<>(transactionMetadata.numTasksWithMoreThanOneInput);
                 list.add( task );
             }
 
@@ -310,11 +311,13 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
                 // get transaction context
                 var txContext = this.transactionContextMap.get( task.tid() );
+                task.setIdentifier(txContext.getNextTaskIdentifier());
 
-                switch (task.getTransactionType()){
-                    case RW -> txContext.readWriteTasks.add(task);
-                    case R -> txContext.readTasks.add(task);
-                    default -> txContext.writeTasks.add(task); // to avoid additional checking
+                if (task.getTransactionType() == TransactionTypeEnum.R) {
+                    txContext.readTasks.add(task);
+                } else {
+                    // they are submitted FIFO
+                    txContext.readWriteTasks.add(task);
                 }
 
             }
@@ -326,25 +329,16 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         }
     }
 
-    private void dispatchTaskList(VmsTransactionContext txCtx, List<VmsTransactionTask> tasks, TransactionTypeEnum transactionType){
+    private void dispatchReadyTaskList(VmsTransactionContext txCtx){
 
-        ExecutorService executorService = transactionType == TransactionTypeEnum.R ? readTaskPool : readWriteTaskPool;
-
-        int index = tasks.size() - 1;
+        int index = txCtx.readTasks.size() - 1;
         while (index >= 0) {
-
-            VmsTransactionTask task = tasks.get(index);
-
+            VmsTransactionTask task = txCtx.readTasks.get(index);
             // later, we may have precedence between tasks of the same tid
             // i.e., right now any ordering is fine
-
-            // if write, always single thread guaranteed by the scheduler
-            txCtx.submittedTasks.add( executorService.submit(task) );
-
-            tasks.remove(index);
-
+            txCtx.submittedTasks.add( readTaskPool.submit(task) );
+            txCtx.readTasks.remove(index);
             index--;
-
         }
 
     }
@@ -353,7 +347,6 @@ public class VmsTransactionScheduler extends StoppableRunnable {
      * Tasks are dispatched respecting the single-thread model for RW tasks
      * In other words, no RW tasks for the same transaction can be scheduled
      * concurrently. One at a time. Read tasks can be scheduled concurrently.
-     *
      * To avoid interleaving between tasks of the same transaction,
      * a simple strategy is now adopted:
      * (i) All read tasks are executed first. Bad for throughput
@@ -370,14 +363,13 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         // do we have ready tasks for the current TID?
         var txCtx = this.transactionContextMap.get( this.currentOffset.tid() );
         if( txCtx != null ){
+
             int numRead = txCtx.readTasks.size();
-            int numReadWrite = txCtx.readWriteTasks.size();
+            if(numRead > 0) dispatchReadyTaskList( txCtx );
 
-            if(numRead > 0)
-                dispatchTaskList( txCtx, txCtx.readTasks, TransactionTypeEnum.R );
-
-            if(numReadWrite > 0)
-                dispatchTaskList( txCtx, txCtx.readWriteTasks, TransactionTypeEnum.RW );
+            if(!txCtx.readWriteTasks.isEmpty()) {
+                txCtx.submittedTasks.add( readWriteTaskPool.submit( txCtx.readWriteTasks.poll() ) );
+            }
 
         }
 

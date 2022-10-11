@@ -4,30 +4,45 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
+ *
  * This class is used differently depending on the actual deployment
- *
  * If embed, only one instance of this class is used across modules
- *
- * If modb-service, then
+ * If modb-service, then we need another mapping scheme.
  *
  */
 public class TransactionMetadata {
 
-    // how can I get the transaction id?
-    private static final Map<Long,Long> threadToTidMap;
+    /**
+     * Tuple: <tid, identifier>
+     */
+    private static final Map<Long, TransactionId> threadToTidMap;
+
+    private static volatile TransactionId lastWriteTaskFinished;
+
+    private static final Map<Long, TransactionId> threadToPreviousTransactionMap;
 
     static {
         threadToTidMap = new HashMap<>();
+        threadToPreviousTransactionMap = new HashMap<>();
     }
 
     // a tid might have multiple tasks
     // so a tid can be executed by two different threads
-    public static void registerTransaction(long threadId, long tid){
-        threadToTidMap.put(threadId, tid);
+    public static void registerWriteTaskFinished(long tid, int identifier){
+        lastWriteTaskFinished = new TransactionId(tid, identifier);
     }
 
-    public static Long tid(long threadId){
+    public static void registerTransaction(long threadId, long tid, int identifier){
+        threadToTidMap.put(threadId, new TransactionId(tid, identifier));
+        threadToPreviousTransactionMap.put(threadId, lastWriteTaskFinished);
+    }
+
+    public static TransactionId tid(long threadId){
         return threadToTidMap.get(threadId);
+    }
+
+    public static TransactionId getPreviousWriteTransaction(long threadId){
+        return threadToPreviousTransactionMap.get(threadId);
     }
 
 }

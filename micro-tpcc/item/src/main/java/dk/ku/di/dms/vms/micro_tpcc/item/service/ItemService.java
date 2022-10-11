@@ -46,9 +46,7 @@ public class ItemService {
     @Outbound("item-new-order-out")
     @Transactional(type=R)
     public ItemNewOrderOut getItemsById(ItemNewOrderIn itemNewOrderIn){
-
         Tuple<int[], float[]> res = itemRepository.getItemsById(itemNewOrderIn.itemsIds());
-
         return new ItemNewOrderOut(res.getT1(), res.getT2());
     }
 

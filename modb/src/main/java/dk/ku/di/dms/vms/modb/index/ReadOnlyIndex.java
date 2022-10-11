@@ -69,20 +69,37 @@ public interface ReadOnlyIndex<K> {
         return checkCondition( address, filterContext );
     }
 
-    default long getColumnAddress(IRecordIterator iterator, int columnIndex){
-        return iterator.current() + schema().getColumnOffset(columnIndex);
-    }
-
-    default long getColumnAddress(K key, long address, int columnIndex){
-        return address + schema().getColumnOffset(columnIndex);
-    }
-
     default IKey hashAggregateGroup(K key, long address, int[] indexColumns){
         return KeyUtils.buildRecordKey(schema(), indexColumns, address);
     }
 
     default IKey hashAggregateGroup(IRecordIterator iterator, int[] indexColumns){
         return KeyUtils.buildRecordKey(schema(), indexColumns, iterator.current());
+    }
+
+    default Object[] readFromIndex(K key, long address) {
+        return this.readFromIndex(address);
+    }
+
+    default Object[] readFromIndex(long address) {
+        int size = schema().columnOffset().length;
+        Object[] objects = new Object[size];
+        long currAddress = address;
+
+        for(int i = 0; i < size; i++) {
+            DataType dt = schema().getColumnDataType(i);
+            objects[i] = DataTypeUtils.getValue(
+                    dt,
+                    currAddress );
+
+            currAddress += dt.value;
+        }
+        return objects;
+    }
+
+    default Object[] readFromIndex(K key) {
+        long address = this.retrieve(key);
+        return this.readFromIndex(address);
     }
 
     /**
@@ -93,7 +110,7 @@ public interface ReadOnlyIndex<K> {
      * @return
      */
     @SuppressWarnings("unchecked")
-    private boolean checkCondition(long address, FilterContext filterContext){
+    default boolean checkCondition(long address, FilterContext filterContext){
 
         if(!exists(address)) return false;
         if(filterContext == null) return true;

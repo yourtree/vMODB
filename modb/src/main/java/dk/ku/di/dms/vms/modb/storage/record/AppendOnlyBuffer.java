@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.modb.storage.record;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
-import sun.misc.Unsafe;
 
 /**
  * Append-only buffer.
@@ -41,8 +40,8 @@ public class AppendOnlyBuffer {
         this.capacity = capacity;
     }
 
-    // move offset and return the previous one
-    public void reserve(long bytes){
+    // move offset
+    public void forwardOffset(long bytes){
         this.nextOffset += bytes;
     }
 

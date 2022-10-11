@@ -9,7 +9,7 @@ import java.util.Map;
 
 /**
  * A catalog usually stores tables, views, columns, triggers and procedures in a DBMS
- * See https://en.wikipedia.org/wiki/Oracle_metadata
+ * See <a href="https://en.wikipedia.org/wiki/Oracle_metadata">Oracle Metadata</a>
  * In our case, the table already stores the columns
  * We don't have triggers nor stored procedures =)
  * For now, we don't have views, but we can implement the application-defined

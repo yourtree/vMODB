@@ -382,7 +382,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
      * I cannot set up the timeout here because I may spawn more than a thread to
      * handle messages. The timeout must be external to this thread, it is, the
      * thread that "owns" this one.
-     * https://blog.gceasy.io/2021/02/24/java-threads-may-not-be-memory-efficient/
+     * <a href="https://blog.gceasy.io/2021/02/24/java-threads-may-not-be-memory-efficient/">...</a>
      * Single thread, so no need to deal with data races.
      */
     private class ReadCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {

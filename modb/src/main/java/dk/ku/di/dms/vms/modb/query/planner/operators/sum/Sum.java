@@ -37,6 +37,12 @@ public class Sum extends AbstractOperator {
         default float asFloat() {
             throw new IllegalStateException("Not applied");
         }
+        default float asDouble() {
+            throw new IllegalStateException("Not applied");
+        }
+        default float asLong() {
+            throw new IllegalStateException("Not applied");
+        }
     }
 
     private static class IntSumOp implements SumOperation<Integer> {
@@ -104,14 +110,10 @@ public class Sum extends AbstractOperator {
 
         SumOperation sumOperation = buildOperation(dataType);
 
-
-
         IRecordIterator iterator = index.asUniqueHashIndex().iterator();
-        long address;
         while(iterator.hasNext()){
             if(index.checkCondition(iterator, filterContext)){
-                address = index.getColumnAddress(iterator, columnIndex);
-                Object val = DataTypeUtils.getValue( dataType, address );
+                Object val = index.readFromIndex(iterator.current())[columnIndex];
                 sumOperation.accept(val);
             }
             iterator.next();
@@ -127,6 +129,8 @@ public class Sum extends AbstractOperator {
         switch (dataType){
             case INT -> this.currentBuffer.append( sumOperation.asInt() );
             case FLOAT -> this.currentBuffer.append( sumOperation.asFloat() );
+            case DOUBLE -> this.currentBuffer.append( sumOperation.asDouble() );
+            case LONG -> this.currentBuffer.append( sumOperation.asLong() );
         }
 
     }

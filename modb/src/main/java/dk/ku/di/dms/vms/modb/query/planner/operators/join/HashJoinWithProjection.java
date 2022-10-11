@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.join;
 
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
@@ -121,21 +122,19 @@ public class HashJoinWithProjection extends AbstractOperator {
         int leftProjIdx = 0;
         int rightProjIdx = 0;
 
+        Object[] leftRecord = this.leftIndex.readFromIndex(key, leftSrcAddress);
+        Object[] rightRecord = this.rightIndex.readFromIndex(key, rightSrcAddress);
+
         for(int projOrdIdx = 0; projOrdIdx < projectionOrder.length; projOrdIdx++) {
 
             // left
             if(!projectionOrder[projOrdIdx]){
-
-                this.currentBuffer.copy(
-                        this.leftIndex.getColumnAddress(key, leftSrcAddress, leftProjectionColumns[leftProjIdx]),
-                        leftValueSizeInBytes[leftProjIdx]);
-
+                DataTypeUtils.callWriteFunction( this.currentBuffer.address(), this.leftIndex.schema().getColumnDataType( leftProjIdx ), leftRecord[leftProjectionColumns[leftProjIdx]] );
+                this.currentBuffer.forwardOffset(leftValueSizeInBytes[leftProjIdx]);
                 leftProjIdx++;
             } else {
-
-                this.currentBuffer.copy( this.rightIndex.getColumnAddress(key, rightSrcAddress, rightProjectionColumns[rightProjIdx]),
-                        rightValueSizeInBytes[rightProjIdx]);
-
+                DataTypeUtils.callWriteFunction( this.currentBuffer.address(), this.rightIndex.schema().getColumnDataType( rightProjIdx ), rightRecord[rightProjectionColumns[rightProjIdx]] );
+                this.currentBuffer.forwardOffset(rightValueSizeInBytes[rightProjIdx]);
                 rightProjIdx++;
             }
 

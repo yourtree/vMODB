@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.transaction;
+package dk.ku.di.dms.vms.modb.transaction.multiversion;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;

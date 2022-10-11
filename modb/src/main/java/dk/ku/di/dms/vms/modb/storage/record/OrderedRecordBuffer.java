@@ -4,7 +4,6 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import sun.misc.Unsafe;
 
 import java.util.LinkedList;
 
@@ -133,7 +132,7 @@ public class OrderedRecordBuffer {
             destOffset = buffer.nextOffset();
 
             // increasing the "position" in the buffer
-            buffer.reserve(entrySize);
+            buffer.forwardOffset(entrySize);
 
         }
 

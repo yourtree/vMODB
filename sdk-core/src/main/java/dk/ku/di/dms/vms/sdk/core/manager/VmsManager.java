@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.sdk.core.manager;
 
 import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.core.event.handler.VmsEventHandler;
-import dk.ku.di.dms.vms.sdk.core.facade.DefaultRepositoryFacade;
+import dk.ku.di.dms.vms.sdk.core.facade.NetworkRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
@@ -62,7 +62,7 @@ public final class VmsManager {
         try {
 
             @SuppressWarnings("unchecked")
-            Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) DefaultRepositoryFacade.class.getConstructors()[0];
+            Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) NetworkRepositoryFacade.class.getConstructors()[0];
 
             vmsMetadata = VmsMetadataLoader.load(null, constructor);
         } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {

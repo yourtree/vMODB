@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
+import dk.ku.di.dms.vms.modb.common.transaction.TransactionId;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
@@ -20,41 +21,45 @@ import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.OperationSet;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.DataItemVersion;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.DeleteOp;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.InsertOp;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.operation.UpdateOp;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.*;
 
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
 
 /**
  * A transaction management facade
  * Responsibilities:
  * - Keep track of modifications
  * - Commit (write to the actual corresponding regions of memories)
- *
  * AbstractIndex must be modified so reads can return the correct (versioned/consistent) value
- *
  * Repository facade parses the request. Transaction facade deals with low-level operations
- *
  * Batch-commit aware. That means when a batch comes, must make data durable.
- *
- * TODO in order to accommodate two or more VMSs in the same resource,
- *  need to make this class an instance and put it into modb modules
+ * in order to accommodate two or more VMSs in the same resource,
+ *  it would need to make this class an instance (no static methods) and put it into modb modules
  */
 public class TransactionFacade {
 
     private TransactionFacade(){}
 
-    // key: tid. always ordered by default (insertion order)
-    // single-thread, no need to synchronize
-    private static final Map<Long, List<DataItemVersion>> writesPerTransaction;
+    /**
+     * It is necessary to keep track of the changes
+     * key: tid. value: the version installed by this transaction
+     * single-thread, no need to synchronize.
+     * It only maintains the last write per key for a transaction.
+     */
+    private static final Map<TransactionId, Map<IKey, DataItemVersion>> writesPerTransaction;
 
-    // key: PK accessed by many read-only transactions
-    private static final Map<IIndexKey, Map<IKey, OperationSet>> writesPerIndexAndKey;
+    /**
+     * Why operation set of key contains only delete and insert?
+     * Because these are operations that cannot occur twice.
+     * The single-thread model safeguards interleavings, which means
+     * that any new RW task that intends to delete or insert a given key,
+     * can be simply checked without taking into consideration the transaction ID
+     */
+    private static final Map<IIndexKey, Map<IKey, OperationSetOfKey>> writesPerIndexAndKey;
 
     static {
         writesPerTransaction = new ConcurrentHashMap<>();
@@ -108,204 +113,316 @@ public class TransactionFacade {
             for(Object[] entry : objects){
                 insert(table, entry);
             }
-            return;
         }
 
         int bufferSize = table.getSchema().getRecordSizeWithoutHeader() * objects.size();
-        MemoryRefNode buffer = MemoryManager.getTemporaryDirectMemory( bufferSize );
+        MemoryRefNode memoryRefNode = MemoryManager.getTemporaryDirectMemory( bufferSize );
 
-        long currAddress = buffer.address;
+        long currAddress = memoryRefNode.address;
 
         for(Object[] entry : objects){
             currAddress = writeToMemory( table, entry, currAddress );
         }
 
-        bulkInsert(table, buffer.address, objects.size());
+        bulkInsert(table, memoryRefNode.address, objects.size());
 
     }
 
-    /**
-     *
-     * @param table The corresponding database table
-     * @param values The values that form the primary key
-     */
-    public static void delete(Table table, Object[] values){
+    public static void delete(Table table, Object[] values) {
+        IKey pk = KeyUtils.buildPrimaryKey(table.getSchema(), values);
+        deleteByKey(table, pk);
+    }
 
+    public static void deleteByKey(Table table, Object[] values) {
         IKey pk = KeyUtils.buildRecordKey(values);
+        deleteByKey(table, pk);
+    }
+
+    /**
+     * TODO not considering foreign key
+     * @param table The corresponding database table
+     * @param pk The primary key
+     */
+    private static void deleteByKey(Table table, IKey pk){
 
         IIndexKey indexKey = table.primaryKeyIndex().key();
-        Map<IKey, OperationSet> keyMap = writesPerIndexAndKey.get( indexKey );
+        Map<IKey, OperationSetOfKey> keyMap = writesPerIndexAndKey.get( indexKey );
 
         // if != null, there may have been an insert of this key
         if(keyMap != null && keyMap.get(pk) != null){
-            OperationSet operationSet = keyMap.get(pk);
-            long threadId = Thread.currentThread().getId();
-            long tid = TransactionMetadata.tid(threadId);
-            operationSet.deleteOp = DeleteOp.delete( tid, indexKey, pk );
-            operationSet.lastWriteType = OperationSet.Type.DELETE;
 
-            writesPerTransaction.putIfAbsent( tid, new ArrayList<>(5) );
-            writesPerTransaction.get( tid ).add( operationSet.deleteOp );
+            OperationSetOfKey operationSet = keyMap.get(pk);
+
+            if(operationSet.lastWriteType != WriteType.DELETE){
+
+                long threadId = Thread.currentThread().getId();
+                TransactionId tid = TransactionMetadata.tid(threadId);
+
+                TransactionHistoryEntry entry = new TransactionHistoryEntry(WriteType.DELETE, null);
+                DataItemVersion deleteVersion = new DataItemVersion( indexKey, pk, entry );
+
+                includeWriteInTransactionHistory( tid, deleteVersion );
+
+                includeHistoryEntryForKey( tid, entry, operationSet );
+
+            }
 
             // does this key even exist? if not, don't even need to save it on transaction metadata
         } else if(table.primaryKeyIndex().exists(pk)) {
 
-            if(keyMap == null) {
-                keyMap = new HashMap<>();
-                writesPerIndexAndKey.putIfAbsent(indexKey, keyMap);
-            }
-
             long threadId = Thread.currentThread().getId();
-            long tid = TransactionMetadata.tid(threadId);
-            OperationSet operationSet = new OperationSet();
-            operationSet.lastWriteType = OperationSet.Type.DELETE;
-            operationSet.deleteOp = DeleteOp.delete( tid, indexKey, pk );
+            TransactionId tid = TransactionMetadata.tid(threadId);
 
-            keyMap.put(pk, operationSet);
+            TransactionHistoryEntry entry = new TransactionHistoryEntry(WriteType.DELETE, null);
+            DataItemVersion deleteVersion = new DataItemVersion( indexKey, pk, entry );
 
-            writesPerTransaction.putIfAbsent( tid, new ArrayList<>(5) );
-            writesPerTransaction.get( tid ).add( operationSet.deleteOp );
+            includeWriteInTransactionHistory( tid, deleteVersion );
+
+            includeWriteInTheSetOfOperationsForAnIndexKey(pk, keyMap, indexKey, tid, entry );
+
         }
 
     }
 
-    public static void update(Table table, Object[] values){
+    public static Object[] lookupByKey(Table table, Object... valuesOfKey){
 
-        IKey pk = KeyUtils.buildRecordKey(table.getSchema(), table.getSchema().getPrimaryKeyColumns(), values);
+        IKey pk = KeyUtils.buildRecordKey(table.getSchema(), valuesOfKey);
+        Map<IKey, OperationSetOfKey> keyMap = writesPerIndexAndKey.get( table.primaryKeyIndex().key() );
 
-        IIndexKey indexKey = table.primaryKeyIndex().key();
-        Map<IKey, OperationSet> keyMap = writesPerIndexAndKey.get( indexKey );
-
-        // if != null, there may have been an insert of this key
         if(keyMap != null && keyMap.get(pk) != null){
 
-            // is the last write a delete operation?
-            OperationSet operationSet = keyMap.get(pk);
-            if(operationSet.lastWriteType == OperationSet.Type.DELETE){
-                throw new IllegalStateException("[a] Cannot update a nonexistent record. Key: "+pk+" for table: "+table.getName());
-            }
-
-            if(constraintViolation(table, values)){
-                throw new IllegalStateException("Constraints violated for record. Key: "+pk+" for table: "+table.getName());
-            }
-
             long threadId = Thread.currentThread().getId();
-            long tid = TransactionMetadata.tid(threadId);
+            TransactionId tid = TransactionMetadata.tid( threadId );
 
-            long addressToWriteTo = writeToMemory(table, values);
+            OperationSetOfKey operationSet = keyMap.get(pk);
 
-            UpdateOp dataItemVersion = UpdateOp.update( tid, addressToWriteTo, indexKey, pk );
+            // read your writes
+            if(writesPerTransaction.get( tid ) != null){
 
-            writesPerTransaction.putIfAbsent( tid, new ArrayList<>(5) );
-            writesPerTransaction.get( tid ).add( dataItemVersion );
+                // this tid has performed at least one write
+                var write = writesPerTransaction.get( tid ).get( pk );
 
-            if(operationSet.lastWriteType == OperationSet.Type.INSERT)
-                operationSet.lastWriteType = OperationSet.Type.UPDATE;
+                if( write != null ){
+                    if ( write.entry.type == WriteType.DELETE ) return null;
+                    return write.entry.record;
+                }
 
-        } else if(table.primaryKeyIndex().exists(pk)) {
-
-            if(constraintViolation(table, values)){
-                throw new IllegalStateException("Constraints violated for record. Key: "+pk+" for table: "+table.getName());
             }
 
-            if(keyMap == null) {
-                keyMap = new HashMap<>();
-                writesPerIndexAndKey.putIfAbsent(indexKey, keyMap);
+            // since I have not written anything to this key, we have to check the last update for this key
+            TransactionId previousTid = TransactionMetadata.getPreviousWriteTransaction( threadId );
+            var lastUpdateEntry = operationSet.updateHistoryMap.floorEntry(previousTid);
+            if( lastUpdateEntry != null ){
+                if(lastUpdateEntry.getValue().type == WriteType.DELETE) return null;
+                return lastUpdateEntry.getValue().record;
+            } else {
+                return readRecordFromIndex(table, pk);
             }
-
-            long threadId = Thread.currentThread().getId();
-            long tid = TransactionMetadata.tid(threadId);
-
-            long addressToWriteTo = writeToMemory(table, values);
-
-            UpdateOp dataItemVersion = UpdateOp.update( tid, addressToWriteTo, indexKey, pk );
-
-            OperationSet operationSet = new OperationSet();
-            operationSet.lastWriteType = OperationSet.Type.UPDATE;
-            operationSet.recordUpdateOps.add( dataItemVersion );
-
-            keyMap.put(pk, operationSet);
 
         } else {
-            throw new IllegalStateException("[b] Cannot update a nonexistent record. Key: "+pk+" for table: "+table.getName());
+            return readRecordFromIndex(table, pk);
+        }
+
+    }
+
+    private static Object[] readRecordFromIndex(Table table, IKey pk) {
+        if (table.primaryKeyIndex().exists(pk)){
+            long address = table.primaryKeyIndex().retrieve(pk);
+            return table.primaryKeyIndex().readFromIndex(address);
+        }
+        return null;
+    }
+
+    /**
+     * Called when a constraint is violated, leading to a transaction abort
+     * @param tid transaction id
+     */
+    private static void undoTransactionWrites(TransactionId tid){
+
+        var writesOfTid = writesPerTransaction.get(tid).entrySet();
+
+
+        for(var write : writesOfTid){
+
+            // do we have a write in the corresponding index? always yes. if no, it is a bug
+            Map<IKey, OperationSetOfKey> operationsOfIndex = writesPerIndexAndKey.get( write.getValue().indexKey() );
+            OperationSetOfKey operationSetOfKey = operationsOfIndex.get( write.getValue().pk() );
+
+            // get previous TID, not necessarily the previous TID. The lastTID may have not written to this key.
+            var entry = operationSetOfKey.updateHistoryMap.lowerEntry(tid);
+            if(entry != null) {
+                operationSetOfKey.cachedEntity = entry.getValue().record;
+                operationSetOfKey.lastWriteType = entry.getValue().type;
+            } else {
+                operationSetOfKey.cachedEntity = null;
+                operationSetOfKey.lastWriteType = null;
+            }
+
+            operationSetOfKey.updateHistoryMap.remove( tid );
+
         }
 
     }
 
     /**
-     *
+     * TODO if cached value is not null, then extract the updated columns to make constraint violation check faster
      * @param table The corresponding database table
      * @param values The fields extracted from the entity
      */
     public static void insert(Table table, Object[] values){
 
         IKey pk = KeyUtils.buildRecordKey(table.getSchema(), table.getSchema().getPrimaryKeyColumns(), values);
-        Map<IKey, OperationSet> keyMap = writesPerIndexAndKey.get( table.primaryKeyIndex().key() );
+        IIndexKey indexKey = table.primaryKeyIndex().key();
+        Map<IKey, OperationSetOfKey> keyMap = writesPerIndexAndKey.get( indexKey );
 
-        boolean a = pkConstraintViolation(table, pk, keyMap);
-        boolean b = constraintViolation(table, values);
-        if(a || b){
+        long threadId = Thread.currentThread().getId();
+        TransactionId tid = TransactionMetadata.tid(threadId);
 
-            long threadId = Thread.currentThread().getId();
-            long tid = TransactionMetadata.tid(threadId);
-            List<DataItemVersion> writesTid = writesPerTransaction.get(tid);
-
-            if(writesTid == null){
-                // throw right away
-                throw new IllegalStateException("Primary key"+pk+"already exists for this table: "+table.getName());
-            }
-
-            // clean writes from this transaction
-
-            for(DataItemVersion v : writesTid){
-
-                // do we have a write in the corresponding index? always yes. if no, it is a bug
-                Map<IKey, OperationSet> operations = writesPerIndexAndKey.get( v.indexKey() );
-                if(operations != null){
-                    operations.remove(v.pk());
-                }
-
-            }
-
+        if(pkConstraintViolation(table, pk, keyMap) || nonPkConstraintViolation(table, values)){
+            undoTransactionWrites(tid);
             throw new IllegalStateException("Primary key"+pk+"already exists for this table: "+table.getName());
         }
 
+        // create a new insert
+        TransactionHistoryEntry entry = new TransactionHistoryEntry(WriteType.INSERT, values);
+        DataItemVersion dataItemVersion = new DataItemVersion( indexKey, pk, entry );
+
+        // update writes per transaction
+        includeWriteInTransactionHistory(tid, dataItemVersion);
+
+        // update writes per index/key
+        includeWriteInTheSetOfOperationsForAnIndexKey(pk, keyMap, indexKey, tid, entry );
+
+    }
+
+    public static void update(Table table, Object[] values){
+
+        IKey pk = KeyUtils.buildRecordKey(table.getSchema(), table.getSchema().getPrimaryKeyColumns(), values);
         IIndexKey indexKey = table.primaryKeyIndex().key();
+        Map<IKey, OperationSetOfKey> keyMap = writesPerIndexAndKey.get( indexKey );
 
         long threadId = Thread.currentThread().getId();
-        long tid = TransactionMetadata.tid(threadId);
+        TransactionId tid = TransactionMetadata.tid(threadId);
 
-        long addressToWriteTo = writeToMemory(table, values);
+        // if != null, there may have been an insert of this key
+        if(keyMap != null && keyMap.get(pk) != null){
 
-        InsertOp dataItemVersion = InsertOp.insert( tid, addressToWriteTo, indexKey, pk );
+            // is the last write a delete operation?
+            OperationSetOfKey operationSet = keyMap.get(pk);
+            if(operationSet.lastWriteType == WriteType.DELETE){
+                undoTransactionWrites(tid);
+                throw new IllegalStateException("[a] Cannot update a nonexistent record. Key: "+pk+" for table: "+table.getName());
+            }
 
-        writesPerTransaction.putIfAbsent( tid, new ArrayList<>(5) );
-        writesPerTransaction.get( tid ).add( dataItemVersion );
+            if(nonPkConstraintViolation(table, values)){
+                undoTransactionWrites(tid);
+                throw new IllegalStateException("Constraints violated for record. Key: "+pk+" for table: "+table.getName());
+            }
 
-        if(keyMap == null){
-            keyMap = new HashMap<>();
-            writesPerIndexAndKey.putIfAbsent(indexKey, keyMap);
+        } else if(table.primaryKeyIndex().exists(pk)) {
+
+            if(nonPkConstraintViolation(table, values)){
+                undoTransactionWrites(tid);
+                throw new IllegalStateException("Constraints violated for record. Key: "+pk+" for table: "+table.getName());
+            }
+
+        } else {
+            throw new IllegalStateException("[b] Cannot update a nonexistent record. Key: "+pk+" for table: "+table.getName());
         }
 
-        OperationSet operationSet = new OperationSet();
-        operationSet.lastWriteType = OperationSet.Type.INSERT;
-        operationSet.insertOp = dataItemVersion;
+        // create a new update
+        TransactionHistoryEntry entry = new TransactionHistoryEntry(WriteType.UPDATE, values);
+        DataItemVersion dataItemVersion = new DataItemVersion( indexKey, pk, entry );
 
-        keyMap.put(pk, operationSet);
+        // update writes per transaction
+        includeWriteInTransactionHistory(tid, dataItemVersion);
+
+        // update writes per index/key
+        includeWriteInTheSetOfOperationsForAnIndexKey(pk, keyMap, indexKey, tid, entry );
 
     }
 
-    private static long writeToMemory(Table table, Object[] values) {
-        int recordSize = table.getSchema().getRecordSizeWithoutHeader();
-        MemoryRefNode memRef = MemoryManager.getTemporaryDirectMemory(recordSize);
-        long addressToWriteTo = memRef.address();
-        return writeToMemory(table, values, addressToWriteTo);
+    private static void includeWriteInTheSetOfOperationsForAnIndexKey(IKey pk, Map<IKey, OperationSetOfKey> keyMap, IIndexKey indexKey,
+                                                                      TransactionId transactionId, TransactionHistoryEntry entry) {
+
+        OperationSetOfKey operationSet;
+
+        if(keyMap == null){
+
+            // let's create the entry for this indexKey
+            keyMap = new ConcurrentHashMap<>();
+            writesPerIndexAndKey.put(indexKey, keyMap);
+
+            // that means we haven't had any previous transaction performing writes to this key
+            operationSet = new OperationSetOfKey();
+            keyMap.put(pk, operationSet);
+
+            includeHistoryEntryForKey(transactionId, entry, operationSet);
+
+        } else {
+            operationSet = keyMap.get(pk);
+
+            // the map for this index may have been created but no entry created for this key
+            if(operationSet == null){
+                operationSet = new OperationSetOfKey();
+                keyMap.put(pk, operationSet);
+            }
+
+            includeHistoryEntryForKey(transactionId, entry, operationSet);
+
+        }
+
     }
 
-    private static long writeToMemory(Table table, Object[] values, long targetAddress){
+    private static void includeHistoryEntryForKey(TransactionId tid, TransactionHistoryEntry entry,
+                                                  OperationSetOfKey operationSet) {
+
+        // let's get the last and update the entry
+//        TransactionHistoryEntry prev = operationSet.updateHistoryMap.get(tid);
+
+//        if (prev != null) {
+//            // swap O(1)
+//            TransactionHistoryEntry newPrev = new TransactionHistoryEntry(prev.type, prev.record);
+//            prev.type = writeType;
+//            prev.record = values;
+//            prev.previous = newPrev;
+//        } else {
+            // insert in the map O(log n)
+        // TODO this insert can be performed when the transaction finishes to allow for faster return to app code. this write in this map is not going to be used by this TID, only by subsequent tasks
+        //  we save a log n insertion...
+            operationSet.updateHistoryMap.put(tid, entry);
+//        }
+
+
+        // operationSet.deleteInsertCacheMap.put(tid, entry);
+
+        operationSet.lastWriteType = entry.type;
+        operationSet.cachedEntity = entry.record;
+
+    }
+
+    /**
+     * O(1)
+     */
+    private static void includeWriteInTransactionHistory(TransactionId tid, DataItemVersion dataItemVersion) {
+
+        var keyMapForTid = writesPerTransaction.putIfAbsent(tid, new HashMap<>());
+        assert keyMapForTid != null;
+//        if(lastDataItemWritten == null){
+//            lastDataItemWritten = new HashMap<>();
+//            lastDataItemWritten.put( dataItemVersion.pk(), dataItemVersion );
+//            writesPerTransaction.put(tid, lastDataItemWritten);
+//        } else {
+            keyMapForTid.put( dataItemVersion.pk(), dataItemVersion );
+//        }
+    }
+
+    /****** OBJECT AND MEMORY MANAGEMENT *******/
+
+    private static long writeToMemory(Table table, Object[] values, long address){
 
         int maxColumns = table.getSchema().columnOffset().length;
-        long currAddress = targetAddress;
+        long currAddress = address;
 
         for(int index = 0; index < maxColumns; index++) {
 
@@ -318,20 +435,30 @@ public class TransactionFacade {
             currAddress += dt.value;
 
         }
+
         return currAddress;
 
     }
 
-    private static boolean pkConstraintViolation(Table table, IKey pk, Map<IKey, OperationSet> keyMap){
+    /****** CONSTRAINT UTILS *******/
+
+    private static boolean pkConstraintViolation(Table table, IKey pk, Map<IKey, OperationSetOfKey> keyMap){
+
         if(keyMap != null && keyMap.get(pk) != null){
-            //  writes in this batch for this pk
-            return true;
+            // entering this block means we have updates for this PK
+
+            OperationSetOfKey operationSetOfKey = keyMap.get(pk);
+            // does the last write is a delete?
+            boolean lastStableWriteIsDelete = operationSetOfKey.lastWriteType != WriteType.DELETE;
+            // cannot make the following test now because this transaction may have deleted it before inserting
+            if(!lastStableWriteIsDelete) return true; // violation
+
         }
         // lets check now the index itself
         return table.primaryKeyIndex().exists(pk);
     }
 
-    private static boolean constraintViolation(Table table, Object[] values) {
+    private static boolean nonPkConstraintViolation(Table table, Object[] values) {
 
         Map<Integer, ConstraintReference> constraints = table.getSchema().constraints();
 
@@ -339,24 +466,35 @@ public class TransactionFacade {
 
         for(Map.Entry<Integer, ConstraintReference> c : constraints.entrySet()) {
 
-            if(c.getValue().constraint == ConstraintEnum.NOT_NULL){
-                violation = values[c.getKey()] == null;
-            } else {
+            switch (c.getValue().constraint.type){
 
-                switch (table.getSchema().getColumnDataType(c.getKey())) {
-
-                    case INT -> violation = ConstraintHelper.eval((int)values[c.getKey()] , 0, Integer::compareTo, c.getValue().constraint);
-                    case LONG, DATE -> violation = ConstraintHelper.eval((long)values[c.getKey()] , 0L, Long::compareTo, c.getValue().constraint);
-                    case FLOAT -> violation = ConstraintHelper.eval((float)values[c.getKey()] , 0f, Float::compareTo, c.getValue().constraint);
-                    case DOUBLE -> violation = ConstraintHelper.eval((double)values[c.getKey()] , 0d, Double::compareTo, c.getValue().constraint);
-                    case CHAR -> {
-                        //
+                case NUMBER -> {
+                    switch (table.getSchema().getColumnDataType(c.getKey())) {
+                        case INT -> violation = NumberTypeConstraintHelper.eval((int)values[c.getKey()] , 0, Integer::compareTo, c.getValue().constraint);
+                        case LONG, DATE -> violation = NumberTypeConstraintHelper.eval((long)values[c.getKey()] , 0L, Long::compareTo, c.getValue().constraint);
+                        case FLOAT -> violation = NumberTypeConstraintHelper.eval((float)values[c.getKey()] , 0f, Float::compareTo, c.getValue().constraint);
+                        case DOUBLE -> violation = NumberTypeConstraintHelper.eval((double)values[c.getKey()] , 0d, Double::compareTo, c.getValue().constraint);
+                        default -> throw new IllegalStateException("Data type "+c.getValue().constraint.type+" cannot be applied to a number");
                     }
-                    case BOOL -> {
-                        //
-                    }
-                    default -> throw new IllegalStateException("Data type not recognized!");
                 }
+
+                case NUMBER_WITH_VALUE -> {
+                    Object valToCompare = c.getValue().asValueConstraint().value;
+                    switch (table.getSchema().getColumnDataType(c.getKey())) {
+                        case INT -> violation = NumberTypeConstraintHelper.eval((int)values[c.getKey()] , (int)valToCompare, Integer::compareTo, c.getValue().constraint);
+                        case LONG, DATE -> violation = NumberTypeConstraintHelper.eval((long)values[c.getKey()] , (long)valToCompare, Long::compareTo, c.getValue().constraint);
+                        case FLOAT -> violation = NumberTypeConstraintHelper.eval((float)values[c.getKey()] , (float)valToCompare, Float::compareTo, c.getValue().constraint);
+                        case DOUBLE -> violation = NumberTypeConstraintHelper.eval((double)values[c.getKey()] , (double)valToCompare, Double::compareTo, c.getValue().constraint);
+                        default -> throw new IllegalStateException("Data type "+c.getValue().constraint.type+" cannot be applied to a number");
+                    }
+                }
+
+                case NULLABLE ->
+                        violation = NullableTypeConstraintHelper.eval(values[c.getKey()], c.getValue().constraint);
+
+                case CHARACTER ->
+                    violation = CharOrStringTypeConstraintHelper.eval((String) values[c.getKey()], c.getValue().constraint );
+
             }
 
             if(violation) return true;
@@ -367,28 +505,69 @@ public class TransactionFacade {
 
     }
 
-    private static class ConstraintHelper {
-
-        public static <T> boolean eval(T v1, T v2, Comparator<T> comparator, ConstraintEnum constraint){
-
-            if(constraint == ConstraintEnum.POSITIVE_OR_ZERO){
-                return comparator.compare(v1, v2) >= 0;
+    private static class NullableTypeConstraintHelper {
+        public static <T> boolean eval(T v1, ConstraintEnum constraint){
+            if (constraint == ConstraintEnum.NOT_NULL) {
+                return v1 != null;
             }
-            if(constraint == ConstraintEnum.POSITIVE){
-                return comparator.compare(v1, v2) > 0;
+            return v1 == null;
+        }
+    }
+
+    private static class CharOrStringTypeConstraintHelper {
+
+        public static boolean eval(String value, ConstraintEnum constraint){
+
+            if (constraint == ConstraintEnum.NOT_BLANK) {
+                for(int i = 0; i < value.length(); i++){
+                    if(value.charAt(i) != ' ') return true;
+                }
+            } else {
+                // TODO support pattern, non blank
+                throw new IllegalStateException("Constraint cannot be applied to characters.");
             }
             return false;
         }
 
     }
 
-    /****** SCAN *******/
+    /**
+     * Having the second parameter is necessary to avoid casting.
+     */
+    private static class NumberTypeConstraintHelper {
+
+        public static <T> boolean eval(T v1, T v2, Comparator<T> comparator, ConstraintEnum constraint){
+
+            switch (constraint) {
+
+                case POSITIVE_OR_ZERO, MIN -> {
+                    return comparator.compare(v1, v2) >= 0;
+                }
+                case POSITIVE -> {
+                    return comparator.compare(v1, v2) > 0;
+                }
+                case NEGATIVE -> {
+                    return comparator.compare(v1, v2) < 0;
+                }
+                case NEGATIVE_OR_ZERO, MAX -> {
+                    return comparator.compare(v1, v2) <= 0;
+                }
+                default ->
+                    throw new IllegalStateException("Cannot compare the constraint "+constraint+" for number type.");
+            }
+
+        }
+
+    }
+
+    /****** SCAN OPERATORS *******/
 
     public static MemoryRefNode run(List<WherePredicate> wherePredicates,
                                     IndexScanWithProjection operator){
 
         long threadId = Thread.currentThread().getId();
-        long tid = TransactionMetadata.tid(threadId);
+        TransactionId tid = TransactionMetadata.tid(threadId);
+        TransactionId lastTid = TransactionMetadata.getPreviousWriteTransaction( threadId );
 
         List<Object> keyList = new ArrayList<>(operator.index.columns().length);
         List<WherePredicate> wherePredicatesNoIndex = new ArrayList<>(wherePredicates.size());
@@ -407,9 +586,9 @@ public class TransactionFacade {
         // build input
         IKey inputKey = KeyUtils.buildInputKey(keyList.toArray());
 
-        Map<IKey, OperationSet> operationSetMap = writesPerIndexAndKey.get(operator.index.key());
+        Map<IKey, OperationSetOfKey> operationSetMap = writesPerIndexAndKey.get(operator.index.key());
 
-        ConsistentView consistentView = new ConsistentView(operator.index, operationSetMap, tid);
+        ConsistentView consistentView = new ConsistentView(operator.index, writesPerTransaction.get( tid ), operationSetMap, lastTid);
 
         return operator.run( consistentView, filterContext, inputKey );
     }
@@ -419,18 +598,19 @@ public class TransactionFacade {
 
         FilterContext filterContext = FilterContextBuilder.build(wherePredicates);
 
-        Map<IKey, OperationSet> operationSetMap = writesPerIndexAndKey.get(operator.index.key());
+        Map<IKey, OperationSetOfKey> operationSetMap = writesPerIndexAndKey.get(operator.index.key());
 
         long threadId = Thread.currentThread().getId();
-        long tid = TransactionMetadata.tid(threadId);
+        TransactionId tid = TransactionMetadata.tid(threadId);
+        TransactionId lastTid = TransactionMetadata.getPreviousWriteTransaction( threadId );
 
-        ConsistentView consistentView = new ConsistentView(operator.index, operationSetMap, tid);
+        ConsistentView consistentView = new ConsistentView(operator.index,  writesPerTransaction.get( tid ), operationSetMap, lastTid);
 
         return operator.run( consistentView, filterContext );
 
     }
 
-    /* COMMIT *******/
+    /* CHECKPOINTING *******/
 
     /**
      * Only log those data versions until the corresponding batch.
@@ -455,12 +635,6 @@ public class TransactionFacade {
                 switch (keyEntry.getValue().lastWriteType){
 
                     case INSERT -> {
-
-                        if(keyEntry.getValue().insertOp.tid() <= lastTid) {
-                            // memcopy
-                            index.insert(keyEntry.getKey(), keyEntry.getValue().insertOp.bufferAddress);
-                        }
-
                     }
 
                     case DELETE -> {
@@ -468,7 +642,7 @@ public class TransactionFacade {
                     }
 
                     case UPDATE -> {
-                        // memcopy
+                        // memory copy
 
                     }
 
@@ -487,7 +661,7 @@ public class TransactionFacade {
 
 
         for(var tx : writesPerTransaction.entrySet()){
-            if(tx.getKey() > lastTid) break; // can stop
+//            if(tx.getKey() > lastTid) break; // can stop
             writesPerTransaction.remove( tx.getKey() );
         }
 

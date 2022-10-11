@@ -13,15 +13,17 @@ import java.util.List;
 /**
  * The default repository facade does not contain references to DBMS components
  * since the application is not co-located with the MODB
+ *
+ * However, it could maintain a cache, consistent with the VMS state
  */
-public class DefaultRepositoryFacade implements IVmsRepositoryFacade, InvocationHandler {
+public class NetworkRepositoryFacade implements IVmsRepositoryFacade, InvocationHandler {
 
     private final Class<?> pkClazz;
 
     private final Class<? extends IEntity<?>> entityClazz;
 
     @SuppressWarnings({"unchecked"})
-    public DefaultRepositoryFacade(Class<? extends IRepository<?,?>> repositoryClazz){
+    public NetworkRepositoryFacade(Class<? extends IRepository<?,?>> repositoryClazz){
 
         Type[] types = ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
 

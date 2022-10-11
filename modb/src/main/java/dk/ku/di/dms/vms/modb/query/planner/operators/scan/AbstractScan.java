@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.scan;
 
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
@@ -30,19 +31,19 @@ public abstract class AbstractScan extends AbstractOperator  {
 
     protected void append(IKey key, long srcAddress, int[] projectionColumns) {
         ensureMemoryCapacity();
+        Object[] record = index.readFromIndex(srcAddress);
         for (int projectionColumn : projectionColumns) {
-            long address = index.getColumnAddress(key, srcAddress, projectionColumn);
-            int size = index.schema().getColumnDataType(projectionColumn).value;
-            this.currentBuffer.copy(address, size);
+            DataTypeUtils.callWriteFunction(this.currentBuffer.address(), index.schema().getColumnDataType(projectionColumn), record[projectionColumn]);
+            this.currentBuffer.forwardOffset(index.schema().getColumnDataType(projectionColumn).value);
         }
     }
 
     protected void append(IRecordIterator iterator, int[] projectionColumns) {
         ensureMemoryCapacity();
+        Object[] record = index.readFromIndex(iterator.current());
         for (int projectionColumn : projectionColumns) {
-            long address = index.getColumnAddress(iterator, projectionColumn);
-            int size = index.schema().getColumnDataType(projectionColumn).value;
-            this.currentBuffer.copy(address, size);
+            DataTypeUtils.callWriteFunction(this.currentBuffer.address(), index.schema().getColumnDataType(projectionColumn), record[projectionColumn]);
+            this.currentBuffer.forwardOffset(index.schema().getColumnDataType(projectionColumn).value);
         }
     }
 

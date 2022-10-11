@@ -3,8 +3,10 @@ package dk.ku.di.dms.vms.sdk.core.scheduler;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.Future;
 
 /**
@@ -17,11 +19,13 @@ import java.util.concurrent.Future;
  */
 class VmsTransactionContext {
 
+    private int nextTaskIdentifier;
+
     // R
     public final List<VmsTransactionTask> readTasks;
 
     // RW
-    public final List<VmsTransactionTask> readWriteTasks;
+    public final Queue<VmsTransactionTask> readWriteTasks;
 
     // W
     public final List<VmsTransactionTask> writeTasks;
@@ -31,9 +35,10 @@ class VmsTransactionContext {
     public final List<VmsTransactionTaskResult> resultTasks;
 
     public VmsTransactionContext(int numReadTasks, int numReadWriteTasks, int numWriteTasks) {
+        this.nextTaskIdentifier = 1;
         this.readTasks = new ArrayList<>(numReadTasks);
         //this.readSubmitted = new boolean[numReadTasks];
-        this.readWriteTasks = new ArrayList<>(numReadWriteTasks);
+        this.readWriteTasks = new ArrayDeque<>(numReadWriteTasks);
         //this.readWriteSubmitted = new boolean[numReadWriteTasks];
         this.writeTasks = new ArrayList<>(numWriteTasks);
         //this.writeSubmitted = new boolean[numWriteTasks];
@@ -41,4 +46,9 @@ class VmsTransactionContext {
         this.submittedTasks = new ArrayList<>(total);
         this.resultTasks = new ArrayList<>(total);
     }
+
+    public int getNextTaskIdentifier(){
+        return nextTaskIdentifier++;
+    }
+
 }

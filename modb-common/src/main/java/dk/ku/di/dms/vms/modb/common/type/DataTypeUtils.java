@@ -143,13 +143,6 @@ public class DataTypeUtils {
     private static String getString(ByteBuffer buffer) {
 
         if(buffer.isDirect()){
-//            char[] res = new char[DEFAULT_MAX_SIZE_STRING];
-//            long currAddress = MemoryUtils.getByteBufferAddress(buffer);
-//            for(int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
-//                res[i] = UNSAFE.getChar(currAddress);
-//                currAddress += Character.BYTES;
-//            }
-//            return res;
             StringBuilder sb = new StringBuilder();
             long currAddress = MemoryUtils.getByteBufferAddress(buffer);
             for(int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {

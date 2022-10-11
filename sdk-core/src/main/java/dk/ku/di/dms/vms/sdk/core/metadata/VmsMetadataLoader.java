@@ -8,6 +8,7 @@ import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
+import dk.ku.di.dms.vms.modb.common.constraint.ValueConstraintReference;
 import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
@@ -26,10 +27,7 @@ import org.reflections.util.ConfigurationBuilder;
 
 import javax.persistence.Column;
 import javax.persistence.Id;
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Null;
-import javax.validation.constraints.Positive;
-import javax.validation.constraints.PositiveOrZero;
+import javax.validation.constraints.*;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.net.URL;
@@ -339,46 +337,81 @@ public class VmsMetadataLoader {
 
     private static ConstraintReference[] getConstraintReferences(List<Field> columnFields, String[] columnNames, DataType[] columnDataTypes, int columnPosition)
             throws UnsupportedConstraint, NotAcceptableTypeException {
-        if(columnFields != null) {
 
-            ConstraintReference[] constraints = null;
+        if(columnFields == null) {
+            return null;
+        }
 
-            // iterating over non-pk and non-fk columns;
-            for (Field field : columnFields) {
+        ConstraintReference[] constraints = null;
 
-                Class<?> attributeType = field.getType();
-                columnDataTypes[columnPosition] = getColumnDataTypeFromAttributeType(attributeType);
+        // iterating over non-pk and non-fk columns;
+        for (Field field : columnFields) {
 
-                // get constraints ought to be applied to this column, e.g., non-negative, not null, nullable
-                List<Annotation> constraintAnnotations = Arrays.stream(field.getAnnotations())
-                        .filter(p -> p.annotationType() == Positive.class ||
-                                p.annotationType() == PositiveOrZero.class ||
-                                p.annotationType() == NotNull.class ||
-                                p.annotationType() == Null.class
-                        ).toList();
+            Class<?> attributeType = field.getType();
+            columnDataTypes[columnPosition] = getColumnDataTypeFromAttributeType(attributeType);
 
-                constraints = new ConstraintReference[constraintAnnotations.size()];
-                int nC = 0;
-                for (Annotation constraint : constraintAnnotations) {
-                    String constraintName = constraint.annotationType().getName();
-                    switch (constraintName) {
-                        case "javax.validation.constraints.PositiveOrZero" -> constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE_OR_ZERO, columnPosition);
-                        case "javax.validation.constraints.Positive" -> constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE, columnPosition);
-                        case "javax.validation.constraints.Null" -> constraints[nC] = new ConstraintReference(ConstraintEnum.NULL, columnPosition);
-                        case "javax.validation.constraints.NotNull" -> constraints[nC] = new ConstraintReference(ConstraintEnum.NOT_NULL, columnPosition);
-                        default -> throw new UnsupportedConstraint("Constraint currently " + constraintName + " not supported.");
+            // get constraints ought to be applied to this column, e.g., non-negative, not null, nullable
+            List<Annotation> constraintAnnotations = Arrays.stream(field.getAnnotations())
+                    .filter(p -> p.annotationType() == Positive.class ||
+                            p.annotationType() == PositiveOrZero.class ||
+                            p.annotationType() == NotNull.class ||
+                            p.annotationType() == Null.class ||
+                            p.annotationType() == Negative.class ||
+                            p.annotationType() == NegativeOrZero.class ||
+                            p.annotationType() == Min.class ||
+                            p.annotationType() == Max.class ||
+                            p.annotationType() == NotBlank.class
+                    ).toList();
+
+            constraints = new ConstraintReference[constraintAnnotations.size()];
+            int nC = 0;
+            for (Annotation constraint : constraintAnnotations) {
+                String constraintName = constraint.annotationType().getName();
+                switch (constraintName) {
+                    case "javax.validation.constraints.PositiveOrZero" ->
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE_OR_ZERO, columnPosition);
+                    case "javax.validation.constraints.Positive" ->
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE, columnPosition);
+                    case "javax.validation.constraints.Null" ->
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.NULL, columnPosition);
+                    case "javax.validation.constraints.NotNull" ->
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.NOT_NULL, columnPosition);
+                    case "javax.validation.constraints.Negative" ->
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.NEGATIVE, columnPosition);
+                    case "javax.validation.constraints.NegativeOrZero" ->
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.NEGATIVE_OR_ZERO, columnPosition);
+                    case "javax.validation.constraints.Min" -> {
+                        long value = ((Min)constraint).value();
+                        if(value == 0){
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE_OR_ZERO, columnPosition);
+                        } else if(value == 1){
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.POSITIVE, columnPosition);
+                        } else {
+                            constraints[nC] = new ValueConstraintReference(ConstraintEnum.MIN, columnPosition, value);
+                        }
                     }
-                    nC++;
+                    case "javax.validation.constraints.Max" -> {
+                        long value = ((Max)constraint).value();
+                        if(value == 0){
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.NEGATIVE_OR_ZERO, columnPosition);
+                        } else {
+                            constraints[nC] = new ValueConstraintReference(ConstraintEnum.MAX, columnPosition, value);
+                        }
+                    }
+                    case "javax.validation.constraints.NotBlank" ->
+                            constraints[nC] = new ConstraintReference(ConstraintEnum.NOT_BLANK, columnPosition);
+                    default -> throw new UnsupportedConstraint("Constraint currently " + constraintName + " not supported.");
                 }
-
-                columnNames[columnPosition] = field.getName();
-                columnPosition++;
+                nC++;
             }
 
-            return constraints;
-
+            columnNames[columnPosition] = field.getName();
+            columnPosition++;
         }
-        return null;
+
+        return constraints;
+
+
     }
 
     @SuppressWarnings({"unchecked","rawtypes"})
@@ -555,12 +588,6 @@ public class VmsMetadataLoader {
                 throw new QueueMappingException(
                         "Error mapping: A payload type cannot be mapped to two (or more) output queues.");
             }
-//            else {
-//                logger.info("Is it falling here?");
-//                throw new QueueMappingException(
-//                        "forcing the debugger to stop here");
-//
-//            }
 
             Optional<Annotation> optionalTerminal = Arrays.stream(annotations).filter(p -> p.annotationType() == Terminal.class ).findFirst();
 

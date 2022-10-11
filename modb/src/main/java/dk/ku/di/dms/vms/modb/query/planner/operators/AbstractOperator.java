@@ -11,7 +11,7 @@ import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 
 public abstract class AbstractOperator {
 
-    // the first node of the memory segment nodes
+    // the first node (but last to be acquired) of the memory segment nodes
     protected MemoryRefNode memoryRefNode = null;
 
     protected AppendOnlyBuffer currentBuffer;

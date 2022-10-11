@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.constraint;
 
-public class ConstraintReference {
+public sealed class ConstraintReference permits ValueConstraintReference {
 
     public final ConstraintEnum constraint;
 
@@ -11,4 +11,9 @@ public class ConstraintReference {
         this.constraint = constraint;
         this.column = column;
     }
+
+    public ValueConstraintReference asValueConstraint() {
+        throw new IllegalStateException("This class is not a value-based constraint.");
+    }
+
 }

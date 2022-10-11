@@ -62,7 +62,6 @@ public class DataGenerator {
         loadCustomers(Constants.DEFAULT_NUM_WARE, Constants.DIST_PER_WARE, Constants.CUST_PER_DIST);
         loadHistory(Constants.DEFAULT_NUM_WARE, Constants.DIST_PER_WARE, Constants.CUST_PER_DIST);
 
-
         loadItems(Constants.MAX_ITEMS);
         loadStock(Constants.DEFAULT_NUM_WARE, Constants.MAX_ITEMS);
 
