@@ -8,14 +8,7 @@ public class KeyUtils {
 
     private KeyUtils(){}
 
-    public static IKey buildRecordKey(Object... object){
-        if(object.length == 1){
-            return SimpleKey.of( object[0] );
-        }
-        return CompositeKey.of( object );
-    }
-
-    public static IKey buildRecordKey(Schema schema, int[] columns, Object... object){
+    public static IKey buildRecordKey(int[] columns, Object... object){
 
         if(columns.length == 1){
             return SimpleKey.of( object[0] );
@@ -26,10 +19,8 @@ public class KeyUtils {
         }
 
         Object[] values = new Object[columns.length];
-        int offset;
         for(int i = 0; i < columns.length; i++){
-            offset = schema.getColumnOffset(columns[i]);
-            values[i] = object[offset];
+            values[i] = object[columns[i]];
         }
 
         return CompositeKey.of( values );
@@ -41,7 +32,11 @@ public class KeyUtils {
     }
 
     public static IKey buildPrimaryKey(Schema schema, Object[] object){
-        return buildRecordKey(schema, schema.getPrimaryKeyColumns(), object);
+        return buildRecordKey(schema.getPrimaryKeyColumns(), object);
+    }
+
+    public static IKey buildPrimaryKeyFromKeyValues(Object[] valuesOfKey){
+        return CompositeKey.of( valuesOfKey );
     }
 
     public static IKey buildRecordKeyNoHeader(Schema schema, int[] columns, long srcAddress){
@@ -110,10 +105,11 @@ public class KeyUtils {
         return key;
     }
 
+    public static IKey buildInputKey(Object value){
+        return SimpleKey.of(value);
+    }
+
     public static IKey buildInputKey(Object[] values){
-        if(values.length == 1){
-            return SimpleKey.of(values[0]);
-        }
         return CompositeKey.of(values);
     }
 

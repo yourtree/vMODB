@@ -12,6 +12,10 @@ import java.util.concurrent.ExecutorService;
 
 /**
  * For embedded scenario, we can have access to {@link TransactionFacade}
+ *
+ * TODO must move writes from finished tasks to the other map {@link TransactionFacade}
+ *  must override check transaction result method....
+ *
  */
 public class EmbedVmsTransactionScheduler extends VmsTransactionScheduler {
 

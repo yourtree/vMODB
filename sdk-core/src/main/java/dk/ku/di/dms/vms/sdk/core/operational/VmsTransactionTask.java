@@ -85,6 +85,7 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
             OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.lastTid, this.batch, this.signature.outputQueue(), output, this.signature.terminal());
 
             // TODO we need to erase the transactions that are not seen by any more new transactions
+            // need to move
             if(signature.type() != TransactionTypeEnum.R){
                 TransactionMetadata.registerWriteTaskFinished(this.tid, this.identifier);
             }
