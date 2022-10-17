@@ -17,7 +17,7 @@ import java.util.concurrent.Future;
  * The tasks found in the lists are READY to be scheduled for execution.
  * In other words, all inputs are fulfilled.
  */
-class VmsTransactionContext {
+class VmsTransactionTrackingContext {
 
     private int nextTaskIdentifier;
 
@@ -34,7 +34,7 @@ class VmsTransactionContext {
 
     public final List<VmsTransactionTaskResult> resultTasks;
 
-    public VmsTransactionContext(int numReadTasks, int numReadWriteTasks, int numWriteTasks) {
+    public VmsTransactionTrackingContext(int numReadTasks, int numReadWriteTasks, int numWriteTasks) {
         this.nextTaskIdentifier = 1;
         this.readTasks = new ArrayList<>(numReadTasks);
         //this.readSubmitted = new boolean[numReadTasks];

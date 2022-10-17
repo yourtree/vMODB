@@ -29,33 +29,30 @@ import java.util.logging.Logger;
  */
 public final class MemoryManager {
 
-    private static final Logger logger = Logger.getLogger("MemoryManager");
+    private static final Logger LOGGER = Logger.getLogger("MemoryManager");
 
     /**
      * Inspiration from JVM class: {@link sun.nio.ch.Util}
      * #getTemporaryDirectBuffer
      * If this class cannot be used, then use it as inspiration?
-     */
-
-    /**
      * A cache of direct byte buffers.
      */
     private static class BufferCache {
 
         // ordered by size
-        private SortedSet<ByteBuffer> buffers; // concurrent?
+        private final SortedSet<ByteBuffer> buffers;
 
         private BufferCache(){
             this.buffers = new ConcurrentSkipListSet<>( (a,b) -> a.capacity() > b.capacity() ? 1 : 0 );
         }
 
-        public ByteBuffer get(int size) {
+        public final ByteBuffer get(int size) {
 
-            if (buffers.isEmpty()) return null;
+            if (this.buffers.isEmpty()) return null;
 
-            for (ByteBuffer bb : buffers) {
+            for (ByteBuffer bb : this.buffers) {
                 if (bb.capacity() > size) {
-                    boolean res = buffers.remove(bb);
+                    boolean res = this.buffers.remove(bb);
                     if(res) { //  a concurrent call removed it
                         // prepare the buffer and return it
                         bb.rewind();
@@ -68,7 +65,7 @@ public final class MemoryManager {
             return null;
         }
 
-        public void offer(ByteBuffer buf) {
+        public final void offer(ByteBuffer buf) {
             this.buffers.add(buf);
         }
 
@@ -124,7 +121,7 @@ public final class MemoryManager {
     public static void releaseTemporaryDirectBuffer(ByteBuffer buf) {
 
         if(buf.position() > 0 || buf.limit() < buf.capacity())
-            logger.warning("Buffer returned without being properly cleared!");
+            LOGGER.warning("Buffer returned without being properly cleared!");
 
         long address = MemoryUtils.getByteBufferAddress(buf);
         assignedBuffers.remove(address);

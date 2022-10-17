@@ -14,7 +14,7 @@ import dk.ku.di.dms.vms.modb.definition.Table;
  * Space conscious non-unique hash index
  * It manages a sequential buffer for each hash entry
  */
-public class NonUniqueHashIndex extends AbstractIndex<IKey> {
+public final class NonUniqueHashIndex extends AbstractIndex<IKey> {
 
     // private volatile int size;
 
@@ -67,6 +67,16 @@ public class NonUniqueHashIndex extends AbstractIndex<IKey> {
         int bucket = getBucket(key);
 
         buffers[bucket].update(key, srcAddress);
+
+    }
+
+    @Override
+    public void insert(IKey key, Object[] record) {
+
+    }
+
+    @Override
+    public void update(IKey key, Object[] record) {
 
     }
 

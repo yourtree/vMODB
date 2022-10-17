@@ -7,7 +7,7 @@ import java.util.function.Function;
 
 import static dk.ku.di.dms.vms.modb.common.type.Constants.DEFAULT_MAX_SIZE_STRING;
 
-public class DataTypeUtils {
+public final class DataTypeUtils {
 
     private DataTypeUtils(){}
 

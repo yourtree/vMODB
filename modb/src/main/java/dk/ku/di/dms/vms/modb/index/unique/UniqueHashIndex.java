@@ -1,5 +1,8 @@
 package dk.ku.di.dms.vms.modb.index.unique;
 
+import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.definition.Header;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
@@ -16,9 +19,9 @@ import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
  * This index does not support growing number of keys
  * Could deal with collisions by having a linked list
  */
-public class UniqueHashIndex extends AbstractIndex<IKey> {
+public final class UniqueHashIndex extends AbstractIndex<IKey> {
 
-    private static Logger logger = Logger.getLogger("UniqueHashIndex");
+    private static final Logger logger = Logger.getLogger("UniqueHashIndex");
 
     private final RecordBufferContext recordBufferContext;
 
@@ -38,6 +41,31 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
     }
 
     @Override
+    public void insert(IKey key, Object[] record){
+
+        long pos = getPosition(key.hashCode());
+
+        UNSAFE.putBoolean(null, pos, true);
+        UNSAFE.putInt(null, pos, key.hashCode());
+
+        int maxColumns = this.schema.columnOffset().length;
+        long currAddress = pos + Header.SIZE + Integer.BYTES;
+
+        for(int index = 0; index < maxColumns; index++) {
+
+            DataType dt = this.schema.getColumnDataType(index);
+
+            DataTypeUtils.callWriteFunction( currAddress,
+                    dt,
+                    record[index] );
+
+            currAddress += dt.value;
+
+        }
+
+    }
+
+    @Override
     public void insert(IKey key, long srcAddress) {
         long pos = getPosition(key.hashCode());
 
@@ -51,11 +79,30 @@ public class UniqueHashIndex extends AbstractIndex<IKey> {
         // this.size++; // this should only be set after commit, so we spread the overhead
     }
 
+    @Override
+    public void update(IKey key, Object[] record){
+        long pos = getPosition(key.hashCode());
+
+        int maxColumns = this.schema.columnOffset().length;
+        long currAddress = pos + Header.SIZE + Integer.BYTES;
+
+        for(int index = 0; index < maxColumns; index++) {
+
+            DataType dt = this.schema.getColumnDataType(index);
+
+            DataTypeUtils.callWriteFunction( currAddress,
+                    dt,
+                    record[index] );
+
+            currAddress += dt.value;
+
+        }
+    }
+
     /**
      * The update can be possibly optimized
      * for updating only the fields required
      * instead of the whole record.
-     *
      * This method assumes the srcAddress
      * begins with header data
      */

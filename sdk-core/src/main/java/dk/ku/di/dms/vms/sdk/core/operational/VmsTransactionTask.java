@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
 import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 
 import java.util.concurrent.Callable;
@@ -30,7 +31,7 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
 
     private final Object[] inputs;
 
-    private int remainingTasks;
+    private int remainingInputs;
 
     public VmsTransactionTask (long tid, long lastTid, long batch, VmsTransactionSignature signature, int inputSize){
         this.tid = tid;
@@ -38,12 +39,12 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
         this.batch = batch;
         this.signature = signature;
         this.inputs = new Object[inputSize];
-        this.remainingTasks = inputSize;
+        this.remainingInputs = inputSize;
     }
 
     public void putEventInput(int index, Object event){
         this.inputs[index] = event;
-        this.remainingTasks--;
+        this.remainingInputs--;
     }
 
     /**
@@ -54,7 +55,7 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
         this.identifier = identifier;
     }
 
-    public TransactionTypeEnum getTransactionType(){
+    public TransactionTypeEnum transactionType(){
         return this.signature.type();
     }
 
@@ -63,17 +64,17 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
     }
 
     public boolean isReady(){
-        return this.remainingTasks == 0;
+        return this.remainingInputs == 0;
     }
 
     @Override
     public VmsTransactionTaskResult call() {
 
         // get thread id
-        long threadId = Thread.currentThread().getId();
+        // long threadId = Thread.currentThread().getId();
 
         // register thread in the transaction facade
-        TransactionMetadata.registerTransaction(threadId, this.tid, this.identifier);
+        TransactionMetadata.registerTransactionStart(this.tid, this.identifier, this.signature.type());
 
         try {
 
@@ -87,11 +88,11 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
             // TODO we need to erase the transactions that are not seen by any more new transactions
             // need to move
             if(signature.type() != TransactionTypeEnum.R){
-                TransactionMetadata.registerWriteTaskFinished(this.tid, this.identifier);
+                // commit
+                TransactionMetadata.registerWriteTransactionFinish();
             }
 
             return new VmsTransactionTaskResult(
-                    threadId,
                     this.tid,
                     this.identifier,
                     eventOutput,
@@ -104,7 +105,6 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
             // know whether the processing of events has been completed can be directly sent to the microservice outside
             // taskResultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, true));
             return new VmsTransactionTaskResult(
-                    threadId,
                     this.tid,
                     this.identifier,
                     null,

@@ -30,7 +30,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
     // Based on the transaction id (tid), I can find the task very fast
     private final Map<Long, List<VmsTransactionTask>> waitingTasksPerTidMap;
 
-    private final Map<Long, VmsTransactionContext> transactionContextMap;
+    private final Map<Long, VmsTransactionTrackingContext> transactionContextMap;
 
     // offset tracking for execution
     private OffsetTracker currentOffset;
@@ -242,7 +242,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         VmsTransactionTask task;
 
         // create the vms transaction context
-        VmsTransactionContext txContext = new VmsTransactionContext(
+        VmsTransactionTrackingContext txContext = new VmsTransactionTrackingContext(
                 transactionMetadata.numReadTasks,
                 transactionMetadata.numReadWriteTasks,
                 transactionMetadata.numWriteTasks);
@@ -313,7 +313,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
                 var txContext = this.transactionContextMap.get( task.tid() );
                 task.setIdentifier(txContext.getNextTaskIdentifier());
 
-                if (task.getTransactionType() == TransactionTypeEnum.R) {
+                if (task.transactionType() == TransactionTypeEnum.R) {
                     txContext.readTasks.add(task);
                 } else {
                     // they are submitted FIFO
@@ -329,7 +329,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         }
     }
 
-    private void dispatchReadyTaskList(VmsTransactionContext txCtx){
+    private void dispatchReadyTaskList(VmsTransactionTrackingContext txCtx){
 
         int index = txCtx.readTasks.size() - 1;
         while (index >= 0) {

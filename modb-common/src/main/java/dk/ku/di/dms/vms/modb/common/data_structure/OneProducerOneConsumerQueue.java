@@ -5,6 +5,8 @@ import java.util.Collection;
 /**
  * This class is only safe when used by a single producer and a single consumer
  * If multiple, synchronization must be provided outside of this class
+ * The buckets are not reused and after being discarded, it is up to the
+ * garbage collector to deal with them.
  * @param <T> The type being stored
  */
 public class OneProducerOneConsumerQueue<T> implements SimpleQueue<T> {

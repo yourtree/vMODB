@@ -11,12 +11,15 @@ import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Row;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.modb.transaction.internal.CircularBuffer;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.ConsistentIndex;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityUtils;
 
@@ -27,6 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.logging.Logger;
 
 /**
@@ -35,7 +39,7 @@ import java.util.logging.Logger;
  */
 public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, InvocationHandler {
 
-    private static final Logger logger = Logger.getLogger(EmbedRepositoryFacade.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(EmbedRepositoryFacade.class.getName());
 
     private final Class<? extends IEntity<?>> entityClazz;
     private final Class<? extends Serializable> pkClazz;
@@ -43,6 +47,11 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
     private final Constructor<? extends IEntity<?>> entityConstructor;
 
     private Table table;
+
+    /**
+     * Respective consistent index
+     */
+    private ConsistentIndex consistentIndex;
 
     // DBMS components
     private ModbModules modbModules;
@@ -59,7 +68,9 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
      * Should be used by the repository facade, since it is the one who is converting the payloads from the user code.
      * Key is the hash code of a table
      */
-    private final Map<Table, CircularBuffer> objectCacheStore;
+    private CircularBuffer objectCacheStore;
+
+    private final ConcurrentLinkedDeque<Map<IKey, TransactionWrite>> tidWriteMapCacheStore;
 
     @SuppressWarnings({"unchecked"})
     public EmbedRepositoryFacade(final Class<? extends IRepository<?,?>> repositoryClazz) throws NoSuchMethodException {
@@ -68,7 +79,6 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
         this.entityClazz = (Class<? extends IEntity<?>>) types[1];
 
-        // not sure whether we need to comply with hibernate...
         this.pkClazz = (Class<? extends Serializable>) types[0];
 
         // read-only transactions may put items here
@@ -76,7 +86,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
         this.entityConstructor = this.entityClazz.getDeclaredConstructor();
 
-        this.objectCacheStore = new ConcurrentHashMap<>();
+        this.tidWriteMapCacheStore = new ConcurrentLinkedDeque<>();
 
     }
 
@@ -97,6 +107,11 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
         this.table = this.modbModules.catalog().getTable( tableName );
 
+        this.objectCacheStore = new CircularBuffer(table.getSchema().columnOffset().length);
+
+        // TODO set up consistent index
+        this.consistentIndex = null;
+
     }
 
     /**
@@ -112,65 +127,55 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
         String methodName = method.getName();
 
-        switch(methodName){
-
-            case "lookupByKey" : {
+        switch (methodName) {
+            case "lookupByKey" -> {
 
                 // this repository is oblivious to multi-versioning
                 // given the single-thread model, we can work with writes easily
                 // but reads are another story. multiple threads may be calling the repository facade
                 // and requiring different data item versions
                 // we always need to offload the lookup to the transaction facade
-                Object[] valuesOfKey = this.extractFieldValuesFromEntityObject(this.pkFieldMap, args[0], this.table);
-                Object[] object = TransactionFacade.lookupByKey( this.table, valuesOfKey );
+                Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(this.pkFieldMap, args[0]);
+                Object[] object = TransactionFacade.lookupByKey(consistentIndex, valuesOfKey);
 
                 // parse object into entity
-                if(object != null)
+                if (object != null)
                     return parseObjectIntoEntity(object);
                 return null;
 
             }
-            case "deleteByKey" : {
-                Object[] valuesOfKey = this.extractFieldValuesFromEntityObject(this.pkFieldMap, args[0], this.table);
-                TransactionFacade.deleteByKey(this.table, valuesOfKey);
-                break;
+            case "deleteByKey" -> {
+                Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(this.pkFieldMap, args[0]);
+                TransactionFacade.deleteByKey(this.consistentIndex, valuesOfKey);
             }
-            case "delete": {
+            case "delete" -> {
                 Object[] values = this.extractFieldValuesFromEntityObject(this.entityFieldMap, args[0], this.table);
-                TransactionFacade.delete(this.table, values);
-                break;
+                TransactionFacade.delete(this.consistentIndex, values);
             }
-            case "update" : {
+            case "update" -> {
                 Object[] values = extractFieldValuesFromEntityObject(this.entityFieldMap, args[0], this.table);
-                TransactionFacade.update(table, values);
-                break;
+                TransactionFacade.update(this.consistentIndex, values);
             }
-            case "insert": {
-                String tableName = this.modbModules.vmsRuntimeMetadata().entityToTableNameMap().get( entityClazz );
+            case "insert" -> {
+                String tableName = this.modbModules.vmsRuntimeMetadata().entityToTableNameMap().get(entityClazz);
                 Table table = this.modbModules.catalog().getTable(tableName);
                 Object[] values = extractFieldValuesFromEntityObject(this.entityFieldMap, args[0], table);
-                TransactionFacade.insert(table, values);
-                break;
+                TransactionFacade.insert(this.consistentIndex, values);
             }
-            case "insertAll": {
-                this.insertAll((List<Object>) args[0]);
-                break;
-            }
-            case "fetch": {
+            case "insertAll" -> this.insertAll((List<Object>) args[0]);
+            case "fetch" -> {
                 // dispatch to analyzer passing the clazz param
                 // always select because of the repository API
                 SelectStatement selectStatement = ((IStatement) args[0]).asSelectStatement();
-                return fetch(selectStatement, (Type)args[1]);
+                return fetch(selectStatement, (Type) args[1]);
             }
-            case "issue" : {
-                issue((IStatement) args[0]);
-            }
-            default: {
+            case "issue" -> issue((IStatement) args[0]);
+            default -> {
 
                 // check if is it static query
                 SelectStatement selectStatement = modbModules.vmsRuntimeMetadata().staticQueries().get(methodName);
 
-                if(selectStatement == null)
+                if (selectStatement == null)
                     throw new IllegalStateException("Unknown repository operation.");
 
                 return fetch(selectStatement);
@@ -196,9 +201,26 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         }
     }
 
+    /**
+     * Must be a linked sorted map. Ordered by the columns that appear on the key object.
+     */
+    private Object[] extractFieldValuesFromKeyObject(Map<String, VarHandle> fieldMap, Object keyObject) {
+
+        Object[] values = new Object[fieldMap.size()];
+
+        int fieldIdx = 0;
+        // get values from key object
+        for(String columnName : fieldMap.keySet()){
+            values[fieldIdx] = fieldMap.get(columnName).get(keyObject);
+            fieldIdx++;
+        }
+        return values;
+    }
+
     private Object[] extractFieldValuesFromEntityObject(Map<String, VarHandle> fieldMap, Object entityObject, Table table) {
 
         Object[] values = new Object[table.getSchema().getColumnNames().length];
+        // TODO objectCacheStore.peek()
 
         int fieldIdx = 0;
         // get values from entity
@@ -256,10 +278,10 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         if(scanOperator.isIndexScan()){
             // build keys and filters
             //memRes = OperatorExecution.run( wherePredicates, scanOperator.asIndexScan() );
-            memRes = TransactionFacade.run(wherePredicates, scanOperator.asIndexScan());
+            memRes = TransactionFacade.run(this.consistentIndex, wherePredicates, scanOperator.asIndexScan());
         } else {
             // build only filters
-            memRes = TransactionFacade.run( wherePredicates, scanOperator.asFullScan() );
+            memRes = TransactionFacade.run( this.consistentIndex, wherePredicates, scanOperator.asFullScan() );
         }
 
         // TODO parse output into object
@@ -307,7 +329,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         }
 
         // can only add to cache if all items were inserted since it is transactional
-        TransactionFacade.insertAll( table, parsedEntities );
+        TransactionFacade.insertAll( this.consistentIndex, parsedEntities );
 
     }
 

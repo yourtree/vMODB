@@ -28,20 +28,26 @@ public class CircularBuffer {
 
     private static final int CONSUMER_WAIT_THRESHOLD_TO_GROW = 3;
 
-    public CircularBuffer(int capacity) {
+    public CircularBuffer(int capacity, int columns) {
         if (capacity < 1) {
             throw new IllegalArgumentException();
         }
         int s = pow2Size(capacity + 1);
         assert s % 2 == 0 : s;
         elements = new Element[s];
+        for(int i = 0; i < s; i++){
+            elements[i].record = new Object[columns];
+        }
     }
 
-    public CircularBuffer() {
+    public CircularBuffer(int columns) {
         size = DEFAULT_INITIAL_CAPACITY;
         int s = pow2Size(size + 1);
         assert s % 2 == 0 : s;
         elements = new Element[s];
+        for(int i = 0; i < s; i++){
+            elements[i].record = new Object[columns];
+        }
     }
 
     /**
@@ -69,16 +75,11 @@ public class CircularBuffer {
         int currentHead = head;
         Element h = elements[currentHead];
 
-        if(h == null){
-            // no element to provide. the consumer has to create and later add to this
-            return null;
-        }
-
         long currentMs = System.currentTimeMillis();
         long diff = currentMs - h.ts;
         if (diff < DEFAULT_EXPIRATION_MS) {
             // we need to grow the array to accommodate
-            try {
+
                 numberOfCallsConsumerHasWaited++;
                 if(numberOfCallsConsumerHasWaited > CONSUMER_WAIT_THRESHOLD_TO_GROW){
                     // grow the array
@@ -87,10 +88,13 @@ public class CircularBuffer {
                     numberOfCallsConsumerHasWaited = 0;
                 } else {
                     // give time for the old consumer to (most probably) finish its operation
-                    Thread.sleep(diff + 1000);
+                    try {
+                        // TODO if use virtual thread, can park until ts without exception handling...
+                        Thread.sleep(diff + 1000);
+                    } catch (InterruptedException ignored) { }
                     head = (currentHead + 1) & (elements.length - 1);
                 }
-            } catch (InterruptedException ignored) { }
+
         } else {
             h.ts = currentMs;
         }
@@ -99,10 +103,8 @@ public class CircularBuffer {
     }
 
     private static class Element {
-
         private volatile long ts;
         private Object[] record;
-
     }
 
     private static int pow2Size(int n) {

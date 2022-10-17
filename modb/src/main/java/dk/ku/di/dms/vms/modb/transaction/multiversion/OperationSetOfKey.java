@@ -1,8 +1,7 @@
 package dk.ku.di.dms.vms.modb.transaction.multiversion;
 
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionId;
-
-import java.util.*;
+import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIFO;
 
 /**
  * The set of operations applied to a given index key
@@ -17,7 +16,7 @@ public class OperationSetOfKey {
      * Contains the write (insert, delete, update) operations of records.
      * If that is a delete, no new records can be added to the key.
      */
-    public TreeMap<TransactionId, TransactionHistoryEntry> updateHistoryMap;
+    public SingleWriterMultipleReadersFIFO<TransactionId, TransactionWrite> updateHistoryMap;
 
     /**
      * Nothing impedes the user from deleting and inserting again the same record.
@@ -46,8 +45,9 @@ public class OperationSetOfKey {
     public Object[] cachedEntity;
 
     public OperationSetOfKey(){
-        this.updateHistoryMap = (TreeMap<TransactionId, TransactionHistoryEntry>)
-                Collections.<TransactionId, TransactionHistoryEntry>synchronizedMap( new TreeMap<>() );
+        this.updateHistoryMap = new SingleWriterMultipleReadersFIFO<>();
+//        this.updateHistoryMap = (TreeMap<TransactionId, TransactionWrite>)
+//                Collections.<TransactionId, TransactionWrite>synchronizedMap( new TreeMap<>() );
 //        this.deleteInsertCacheMap = (TreeMap<TransactionId, TransactionHistoryEntry>)
 //                Collections.<TransactionId, TransactionHistoryEntry>synchronizedMap( new TreeMap<>() );
     }

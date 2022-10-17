@@ -9,8 +9,8 @@ public record TransactionId ( long tid, int identifier ) implements Comparable<T
 
     private static int compare(TransactionId x, TransactionId y) {
         return
-                ( (x.tid() < y.tid()) || (x.tid() == y.tid() && x.identifier() < y.identifier()) ) ? -1 :
-                        ( (x.tid() > y.tid()) || (x.tid() == y.tid() && x.identifier() > y.identifier()) ) ? 1 :
+                 ( (x.tid() > y.tid()) || (x.tid() == y.tid() && x.identifier() > y.identifier()) ) ? 1 :
+                         ( (x.tid() < y.tid()) || (x.tid() == y.tid() && x.identifier() < y.identifier()) ) ? -1 :
                         0;
 
     }

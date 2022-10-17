@@ -248,8 +248,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 // handle other events
                 if(!transactionInputsToResend.isEmpty()){
                     var kv = transactionInputsToResend.take();
-                    var list = kv.getT1().transactionEventsPerBatch.get( kv.getT2() );
-                    resendTransactionalInputEvents(vmsConnectionMetadataMap.get(kv.getT1().hashCode()), list);
+                    var list = kv.t1().transactionEventsPerBatch.get( kv.t2() );
+                    resendTransactionalInputEvents(vmsConnectionMetadataMap.get(kv.t1().hashCode()), list);
                 }
 
             } catch (Exception e) {

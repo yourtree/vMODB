@@ -47,7 +47,7 @@ public class ItemService {
     @Transactional(type=R)
     public ItemNewOrderOut getItemsById(ItemNewOrderIn itemNewOrderIn){
         Tuple<int[], float[]> res = itemRepository.getItemsById(itemNewOrderIn.itemsIds());
-        return new ItemNewOrderOut(res.getT1(), res.getT2());
+        return new ItemNewOrderOut(res.t1(), res.t2());
     }
 
 }

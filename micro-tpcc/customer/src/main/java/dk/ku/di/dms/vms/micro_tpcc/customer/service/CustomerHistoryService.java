@@ -36,7 +36,7 @@ public class CustomerHistoryService {
     @Transactional(type = R)
     public ItemNewOrderOut provideCustomerDataToOrder(ItemNewOrderIn in) {
         Tuple<int[],float[]> res = historyRepository.getItemsById(in.itemsIds());
-        return new ItemNewOrderOut(res.getT1(),res.getT2());
+        return new ItemNewOrderOut(res.t1(),res.t2());
     }
 
     // this reminds a Command and its respective command handler

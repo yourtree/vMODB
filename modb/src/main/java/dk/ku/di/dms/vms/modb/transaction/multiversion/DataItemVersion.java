@@ -2,8 +2,6 @@ package dk.ku.di.dms.vms.modb.transaction.multiversion;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionId;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionHistoryEntry;
 
 /**
  * Contains:
@@ -23,13 +21,13 @@ public class DataItemVersion {
 
     public IIndexKey indexKey;
 
-    public TransactionHistoryEntry entry;
+    public TransactionWrite entry;
 
     // previous not necessary anymore since I have all the object array
     // public DataItemVersion previous;
 
     public DataItemVersion(//TransactionId transactionId,
-                           IIndexKey indexKey, IKey pk, TransactionHistoryEntry entry) {
+                           IIndexKey indexKey, IKey pk, TransactionWrite entry) {
         //this.transactionId = transactionId;
         this.indexKey = indexKey;
         this.pk = pk;

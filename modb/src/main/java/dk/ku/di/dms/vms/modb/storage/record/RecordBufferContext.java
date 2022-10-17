@@ -59,9 +59,7 @@ public class RecordBufferContext {
     }
 
     public void log(){
-
         this.memorySegment.force();
-
     }
 
 }
