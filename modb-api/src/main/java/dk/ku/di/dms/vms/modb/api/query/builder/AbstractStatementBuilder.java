@@ -12,10 +12,9 @@ import static dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum.OR;
 /**
  * A class that embraces the commonalities found in both SELECT
  * DELETE, and UPDATE statements such as where clauses
- *
  * Bypassing the parsing from strings
- * TODO: look at https://github.com/19WAS85/coollection#readme and
- * Interesting to take a look: https://www.jinq.org/
+ * Look at <a href="https://github.com/19WAS85/coollection#readme">...</a> and
+ * Interesting to take a look: <a href="https://www.jinq.org/">JINQ</a>
  */
 public abstract class AbstractStatementBuilder {
 

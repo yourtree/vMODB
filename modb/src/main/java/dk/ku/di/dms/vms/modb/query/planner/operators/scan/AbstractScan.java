@@ -31,7 +31,7 @@ public abstract class AbstractScan extends AbstractOperator  {
 
     protected void append(IKey key, long srcAddress, int[] projectionColumns) {
         ensureMemoryCapacity();
-        Object[] record = index.readFromIndex(srcAddress);
+        Object[] record = index.readFromIndex(key, srcAddress);
         for (int projectionColumn : projectionColumns) {
             DataTypeUtils.callWriteFunction(this.currentBuffer.address(), index.schema().getColumnDataType(projectionColumn), record[projectionColumn]);
             this.currentBuffer.forwardOffset(index.schema().getColumnDataType(projectionColumn).value);

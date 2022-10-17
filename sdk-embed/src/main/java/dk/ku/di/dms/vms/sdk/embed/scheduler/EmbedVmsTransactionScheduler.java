@@ -12,10 +12,6 @@ import java.util.concurrent.ExecutorService;
 
 /**
  * For embedded scenario, we can have access to {@link TransactionFacade}
- *
- * TODO must move writes from finished tasks to the other map {@link TransactionFacade}
- *  must override check transaction result method....
- *
  */
 public class EmbedVmsTransactionScheduler extends VmsTransactionScheduler {
 
@@ -69,7 +65,7 @@ public class EmbedVmsTransactionScheduler extends VmsTransactionScheduler {
             // of course I do not need to stop the scheduler on commit
             // I need to make access to the data versions data race free
             // so new transactions get data versions from the version map or the store
-            TransactionFacade.log(currentBatch.lastTid, catalog);
+            TransactionFacade.log(this.catalog);
 
             currentBatch.setStatus(BatchContext.Status.COMMITTED);
 

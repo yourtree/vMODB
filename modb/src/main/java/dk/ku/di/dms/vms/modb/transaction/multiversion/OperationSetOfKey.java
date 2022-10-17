@@ -5,7 +5,8 @@ import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIF
 
 /**
  * The set of operations applied to a given index key
- * Maybe the references to DeleteOp and InsertOp are not necessary. Since we have the last write type and the cached entity,
+ * Maybe the references to DeleteOp and InsertOp are not necessary.
+ * Since we have the last write type and the cached entity,
  * they naturally reference the insert (or last updated)...
  */
 public class OperationSetOfKey {
@@ -27,16 +28,6 @@ public class OperationSetOfKey {
     public WriteType lastWriteType;
 
     /**
-     * Only contains inserts and writes.
-     * Why this disaggregation? Deletes and inserts
-     * for the same key may occur across transactions
-     * making it complicated to iterate over previous TIDs and their
-     * history entries to find whether there has been a delete
-     * It acts as an index for the inserts and deletes made in a key bu different transactions.
-     */
-    // public final TreeMap<TransactionId, TransactionHistoryEntry> deleteInsertCacheMap;
-
-    /**
      * Entity from the last write operation (insert or update)
      * cached so we can extract the fields changed from the last version
      * to speed up the checking of constraints
@@ -46,10 +37,6 @@ public class OperationSetOfKey {
 
     public OperationSetOfKey(){
         this.updateHistoryMap = new SingleWriterMultipleReadersFIFO<>();
-//        this.updateHistoryMap = (TreeMap<TransactionId, TransactionWrite>)
-//                Collections.<TransactionId, TransactionWrite>synchronizedMap( new TreeMap<>() );
-//        this.deleteInsertCacheMap = (TreeMap<TransactionId, TransactionHistoryEntry>)
-//                Collections.<TransactionId, TransactionHistoryEntry>synchronizedMap( new TreeMap<>() );
     }
 
 }

@@ -149,6 +149,26 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
 
     }
 
+    public void clear(){
+
+        var current = this.first;
+
+        if(current == null) return;
+
+        var next = current.next;
+
+        current.next = null;
+        removedEntries.add(current);
+
+        while (next != null){
+            current = next;
+            next = current.next;
+            current.next = null;
+            removedEntries.add(current);
+        }
+
+    }
+
     private final Deque<Entry<K,V>> removedEntries = new ArrayDeque<>();
 
     @Override

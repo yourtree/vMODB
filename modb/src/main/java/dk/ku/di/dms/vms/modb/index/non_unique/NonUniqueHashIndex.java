@@ -1,14 +1,12 @@
 package dk.ku.di.dms.vms.modb.index.non_unique;
 
 import dk.ku.di.dms.vms.modb.definition.Schema;
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
-import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
-import dk.ku.di.dms.vms.modb.storage.iterator.BucketIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.RecordBucketIterator;
-import dk.ku.di.dms.vms.modb.definition.Table;
+import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 
 /**
  * Space conscious non-unique hash index
@@ -23,7 +21,7 @@ public final class NonUniqueHashIndex extends AbstractIndex<IKey> {
     // will also deal with deleted records
     // and provide
 
-    private OrderedRecordBuffer[] buffers;
+    private final OrderedRecordBuffer[] buffers;
 
     public NonUniqueHashIndex(OrderedRecordBuffer[] buffers,
                               Schema schema,

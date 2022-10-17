@@ -56,8 +56,9 @@ public class Planner {
             case SUM -> {
                 // is there any index that applies?
                 AbstractIndex<IKey> indexSelected = getOptimalHashIndex(
-                        queryTree.wherePredicates,
-                        queryTree.groupByProjections.get(0).columnReference.table);
+                        queryTree.groupByProjections.get(0).columnReference.table,
+                        queryTree.wherePredicates
+                        );
                 if(indexSelected == null){
                     return new Sum(queryTree.groupByProjections.get(0).columnReference.dataType,
                             queryTree.groupByProjections.get(0).columnReference.columnPosition,
@@ -70,8 +71,9 @@ public class Planner {
             case COUNT -> {
                 Table tb = queryTree.groupByProjections.get(0).columnReference.table;
                 AbstractIndex<IKey> indexSelected = getOptimalHashIndex(
-                        queryTree.wherePredicates,
-                        queryTree.groupByProjections.get(0).columnReference.table);
+                        queryTree.groupByProjections.get(0).columnReference.table,
+                        queryTree.wherePredicates
+                        );
                 if(queryTree.groupByColumns.isEmpty()){
                     // then no group by
 
@@ -98,8 +100,6 @@ public class Planner {
     }
 
     /**
-     *
-     * @param queryTree
      */
     private AbstractScan planSimpleSelect(QueryTree queryTree) {
 
@@ -109,14 +109,13 @@ public class Planner {
 
         // avoid one of the columns to have expression different from EQUALS
         // to be picked by unique and non unique index
-        AbstractIndex<IKey> indexSelected = getOptimalHashIndex(queryTree.wherePredicates, tb);
+        AbstractIndex<IKey> indexSelected = getOptimalHashIndex(tb, queryTree.wherePredicates);
 
         // build projection
 
         // compute before creating this. compute in startup
         int nProj = queryTree.projections.size();
         int[] projectionColumns = new int[nProj];
-        int valueSizeInBytes; // = new int[nProj];
         int entrySize = 0;
         for(int i = 0; i < nProj; i++){
             projectionColumns[i] = queryTree.projections.get(i).columnPosition;
@@ -136,12 +135,11 @@ public class Planner {
 
     }
 
-    private AbstractIndex<IKey> getOptimalHashIndex(List<WherePredicate> wherePredicates, Table tb) {
+    private AbstractIndex<IKey> getOptimalHashIndex(Table table, List<WherePredicate> wherePredicates) {
         int[] filterColumns = wherePredicates.stream()
                  .filter( wherePredicate -> wherePredicate.expression == ExpressionTypeEnum.EQUALS )
                  .mapToInt( WherePredicate::getColumnPosition ).toArray();
-
-        return pickIndex(tb, filterColumns);
+        return this.pickIndex(table, filterColumns);
     }
 
     private AbstractIndex<IKey> pickIndex(Table table, int[] filterColumns){

@@ -3,10 +3,7 @@ package dk.ku.di.dms.vms.modb.transaction.multiversion;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionId;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
-import dk.ku.di.dms.vms.modb.common.type.DataType;
-import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Header;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
@@ -133,10 +130,12 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
             // why checking first if I am a WRITE. because by checking if I am right, I don't need to pay O(log n)
             // 1 write thread at a time. if I am a write thread, does not matter my lastTid. I can just check the last write for this entry
-            if( TransactionMetadata.TRANSACTION_CONTEXT.get().type != R && opSet.lastWriteType == WriteType.DELETE ) return false;
+            if( TransactionMetadata.TRANSACTION_CONTEXT.get().type != R ){
+                return opSet.lastWriteType != WriteType.DELETE;
+            }
 
             // O(log n)
-            var floorEntry = opSet.updateHistoryMap.floorEntry(TransactionMetadata.TRANSACTION_CONTEXT.get().tid);
+            var floorEntry = opSet.updateHistoryMap.floorEntry(TransactionMetadata.TRANSACTION_CONTEXT.get().lastTid);
             if(floorEntry == null) return this.primaryKeyIndex.exists(key);
             return floorEntry.val().type != WriteType.DELETE;
         }
@@ -179,14 +178,20 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
         IKey key = iterator.primaryKey();
         Object[] record = lookupByKey(key);
         if(record == null) return false;
-        return checkConditionVersioned(record, filterContext);
+        return checkConditionVersioned(filterContext, record);
     }
 
     @Override
     public boolean checkCondition(IKey key, long address, FilterContext filterContext) {
         Object[] record = lookupByKey(key);
         if(record == null) return false;
-        return checkConditionVersioned(record, filterContext);
+        return checkConditionVersioned(filterContext, record);
+    }
+
+    public boolean checkCondition(IKey key, FilterContext filterContext) {
+        Object[] record = lookupByKey(key);
+        if(record == null) return false;
+        return checkConditionVersioned(filterContext, record);
     }
 
     /**
@@ -197,7 +202,7 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
      * @return the correct data item version
      */
     @SuppressWarnings("unchecked")
-    boolean checkConditionVersioned(Object[] record, FilterContext filterContext){
+    public boolean checkConditionVersioned(FilterContext filterContext, Object[] record){
 
         if(filterContext == null) return true;
 
@@ -247,7 +252,7 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
             IKey fk = KeyUtils.buildRecordKey( entry.getValue(), values );
 
             // have some previous TID deleted it? or simply not exists
-            if (!entry.getKey().exists(fk) ) return true;
+            if (!entry.getKey().exists(fk)) return true;
 
         }
 
@@ -360,8 +365,19 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
     public Object[] lookupByKey(IKey key){
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
-        if ( operationSet != null && operationSet.lastWriteType != WriteType.DELETE ){
-           return operationSet.cachedEntity;
+        if ( operationSet != null ){
+
+            if(TransactionMetadata.TRANSACTION_CONTEXT.get().type == R) {
+                var entry = operationSet.updateHistoryMap.floorEntry(TransactionMetadata.TRANSACTION_CONTEXT.get().lastTid);
+
+                // maybe it has already been logged if it is null....
+                assert entry != null;
+
+                return entry.val().type != WriteType.DELETE ? entry.val().record : null;
+            }
+
+            return operationSet.lastWriteType != WriteType.DELETE ? operationSet.cachedEntity : null;
+
         } else if(this.primaryKeyIndex.exists(key)) {
             return this.primaryKeyIndex.readFromIndex(key);
         }
@@ -497,20 +513,23 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
         writesOfTid.clear();
         writeListBuffer.add(writesOfTid);
+        KEY_WRITES.set(null);
 
     }
 
     public void installWrites(){
 
-        for(IKey key : KEY_WRITES.get()) {
+        for(Map.Entry<IKey, OperationSetOfKey> entry : this.updatesPerKeyMap.entrySet()) {
 
-            OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
+            OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(entry.getKey());
 
             switch (operationSetOfKey.lastWriteType){
-                case UPDATE -> this.primaryKeyIndex.update(key, operationSetOfKey.cachedEntity);
-                case INSERT -> this.primaryKeyIndex.insert(key, operationSetOfKey.cachedEntity);
-                case DELETE -> this.primaryKeyIndex.delete(key);
+                case UPDATE -> this.primaryKeyIndex.update(entry.getKey(), operationSetOfKey.cachedEntity);
+                case INSERT -> this.primaryKeyIndex.insert(entry.getKey(), operationSetOfKey.cachedEntity);
+                case DELETE -> this.primaryKeyIndex.delete(entry.getKey());
             }
+
+            operationSetOfKey.updateHistoryMap.clear();
 
         }
 

@@ -19,6 +19,14 @@ public class CompositeKey extends Row implements IKey, IIndexKey {
         return new CompositeKey(values);
     }
 
+    public static CompositeKey of(int[] values){
+        return new CompositeKey(Arrays.hashCode(values));
+    }
+
+    private CompositeKey(int hashKey){
+        this.hashKey = hashKey;
+    }
+
     public CompositeKey(Object... values) {
         super(values);
         this.hashKey = Arrays.hashCode(values);

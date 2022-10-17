@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionId;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
+import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
@@ -112,8 +113,7 @@ public final class TransactionFacade {
     public static void insert(ConsistentIndex index, Object[] values){
         IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
         if(!index.insert(pk, values)) {
-            INDEX_WRITES.set(null);
-            index.undoTransactionWrites();
+            undoTransactionWrites();
             throw new RuntimeException("Constraint violation.");
         }
         INDEX_WRITES.get().add(index);
@@ -126,10 +126,16 @@ public final class TransactionFacade {
     public static void update(ConsistentIndex index, Object[] values){
         IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
         if(!index.update(pk, values)){
-            index.undoTransactionWrites();
+            undoTransactionWrites();
             throw new RuntimeException("Constraint violation.");
         }
         INDEX_WRITES.get().add(index);
+    }
+
+    private static void undoTransactionWrites(){
+        for(var index : INDEX_WRITES.get()) {
+            index.undoTransactionWrites();
+        }
     }
 
     /****** SCAN OPERATORS *******/
@@ -165,13 +171,13 @@ public final class TransactionFacade {
         return operator.run( consistentIndex, filterContext );
     }
 
-    /* CHECKPOINTING *******/
+    /* CHECKPOINTING AND LOGGING *******/
 
     /**
      * Only log those data versions until the corresponding batch.
      * TIDs are not necessarily a sequence.
      */
-    public static void commit(){
+    public static void checkpoint(){
 
         // make state durable
         // get buffered writes in transaction facade and merge in memory
@@ -180,11 +186,15 @@ public final class TransactionFacade {
         for(var index : indexes){
             index.installWrites();
             // log index since all updates are made
-            // index.asUniqueHashIndex().buffer().log();
+            index.asUniqueHashIndex().buffer().log();
         }
 
         // TODO must modify corresponding secondary indexes too
 
+    }
+
+    public static void log(Catalog catalog){
+        // TODO must log the updates in a separate file. no need for WAL, no need to store before and after
     }
 
 }

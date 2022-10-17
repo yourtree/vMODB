@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
+import dk.ku.di.dms.vms.modb.api.query.statement.UpdateStatement;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
@@ -12,6 +13,7 @@ import dk.ku.di.dms.vms.modb.definition.Row;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.manipulation.update.UpdateOperator;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
@@ -250,7 +252,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
         String sqlAsKey = selectStatement.SQL.toString();
 
-        AbstractOperator scanOperator = cachedPlans.get( sqlAsKey );
+        AbstractOperator scanOperator = this.cachedPlans.get( sqlAsKey );
 
         List<WherePredicate> wherePredicates;
 
@@ -298,16 +300,28 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
     }
 
     /**
-     * TODO finish. can we extract the column values and make a special api for the facade?
-     * @param statement
+     * TODO finish. can we extract the column values and make a special api for the facade? only if it is a single key
      */
-    private void issue(IStatement statement) {
+    private void issue(IStatement statement) throws AnalyzerException {
 
         switch (statement.getType()){
             case UPDATE -> {
 
+                String sqlAsKey = statement.asUpdateStatement().SQL.toString();
+
+                AbstractOperator scanOperator = this.cachedPlans.get( sqlAsKey );
+
+                List<WherePredicate> wherePredicates = modbModules.analyzer().analyzeWhere(
+                        scanOperator.asScan().table, statement.asUpdateStatement().whereClause);
+
+                // modbModules.planner().getOptimalHashIndex(null, wherePredicates);
+
+                // TODO plan update and delete in planner. only need to send where predicates and not a query tree like a select
+                // UpdateOperator.run(statement.asUpdateStatement());
             }
             case INSERT -> {
+
+                // TODO get columns, put object array in order and submit to entity api
 
             }
             case DELETE -> {

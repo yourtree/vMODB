@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
 import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
-import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 
 import java.util.concurrent.Callable;
@@ -10,7 +9,6 @@ import java.util.concurrent.Callable;
  * A class that encapsulates the events
  * that form the input of a data operation.
  * In other words, the actual data operation ready for execution.
- * FIXME this class is holding a lot of information. it must only know about tid and output object
  */
 public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
 
@@ -70,9 +68,6 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
     @Override
     public VmsTransactionTaskResult call() {
 
-        // get thread id
-        // long threadId = Thread.currentThread().getId();
-
         // register thread in the transaction facade
         TransactionMetadata.registerTransactionStart(this.tid, this.identifier, this.signature.type());
 
@@ -88,7 +83,7 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
             // TODO we need to erase the transactions that are not seen by any more new transactions
             // need to move
             if(signature.type() != TransactionTypeEnum.R){
-                // commit
+                // work like a commit, but not. it serves to set the visibility of future tasks
                 TransactionMetadata.registerWriteTransactionFinish();
             }
 

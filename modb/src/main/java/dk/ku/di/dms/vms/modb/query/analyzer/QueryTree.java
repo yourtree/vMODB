@@ -52,7 +52,7 @@ public class QueryTree {
       * on selecting an index. An index is stored with columns ordered.
       * So when we pass the columns of table involved in a query to the planner,
       * this goes already in order.
-      * @param wherePredicate
+      * @param wherePredicate the predicate to add
       */
     public void addWhereClauseSortedByColumnIndex( WherePredicate wherePredicate ){
 
@@ -102,7 +102,7 @@ public class QueryTree {
 
     /**
      * Simple select if no joins, grouping, and sort are present
-     * @return
+     * @return whether it is a simple scan
      */
     public boolean isSimpleScan(){
         return isSingleTable() && joinPredicates.isEmpty() && groupByProjections.isEmpty() && orderByPredicates.isEmpty();

@@ -7,7 +7,6 @@ import dk.ku.di.dms.vms.modb.query.planner.operators.scan.AbstractScan;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
 import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
-import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 
 public abstract class AbstractOperator {
 
@@ -24,7 +23,6 @@ public abstract class AbstractOperator {
 
     /**
      * Just abstracts on which memory segment a result will be written to
-     *
      * Default method. Operators can create their own
      */
     protected void ensureMemoryCapacity(){
