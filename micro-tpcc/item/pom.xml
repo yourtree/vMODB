@@ -22,7 +22,7 @@
         <dependency>
 
             <groupId>dk.ku.di.dms.vms.micro-tpcc</groupId>
-            <artifactId>common</artifactId>
+            <artifactId>tpcc-common</artifactId>
             <version>1.0-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>

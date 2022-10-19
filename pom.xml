@@ -35,6 +35,7 @@
     <!-- for tests -->
     <module>playground</module>
       <module>E-Commerce</module>
+      <module>E-Commerce/user</module>
 
   </modules>
 
