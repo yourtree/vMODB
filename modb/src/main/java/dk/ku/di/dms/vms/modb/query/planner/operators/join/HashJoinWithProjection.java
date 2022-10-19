@@ -129,11 +129,11 @@ public class HashJoinWithProjection extends AbstractOperator {
 
             // left
             if(!projectionOrder[projOrdIdx]){
-                DataTypeUtils.callWriteFunction( this.currentBuffer.address(), this.leftIndex.schema().getColumnDataType( leftProjIdx ), leftRecord[leftProjectionColumns[leftProjIdx]] );
+                DataTypeUtils.callWriteFunction( this.currentBuffer.address(), this.leftIndex.schema().columnDataType( leftProjIdx ), leftRecord[leftProjectionColumns[leftProjIdx]] );
                 this.currentBuffer.forwardOffset(leftValueSizeInBytes[leftProjIdx]);
                 leftProjIdx++;
             } else {
-                DataTypeUtils.callWriteFunction( this.currentBuffer.address(), this.rightIndex.schema().getColumnDataType( rightProjIdx ), rightRecord[rightProjectionColumns[rightProjIdx]] );
+                DataTypeUtils.callWriteFunction( this.currentBuffer.address(), this.rightIndex.schema().columnDataType( rightProjIdx ), rightRecord[rightProjectionColumns[rightProjIdx]] );
                 this.currentBuffer.forwardOffset(rightValueSizeInBytes[rightProjIdx]);
                 rightProjIdx++;
             }

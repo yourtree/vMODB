@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
@@ -55,14 +56,14 @@ public class Planner {
         switch (queryTree.groupByProjections.get(0).groupByOperation){
             case SUM -> {
                 // is there any index that applies?
-                AbstractIndex<IKey> indexSelected = getOptimalHashIndex(
+                ReadOnlyIndex<IKey> indexSelected = getOptimalHashIndex(
                         queryTree.groupByProjections.get(0).columnReference.table,
                         queryTree.wherePredicates
                         );
                 if(indexSelected == null){
                     return new Sum(queryTree.groupByProjections.get(0).columnReference.dataType,
                             queryTree.groupByProjections.get(0).columnReference.columnPosition,
-                            queryTree.groupByProjections.get(0).columnReference.table.primaryKeyIndex());
+                            queryTree.groupByProjections.get(0).columnReference.table.underlyingPrimaryKeyIndex());
                 }
                 return new IndexSum(queryTree.groupByProjections.get(0).columnReference.dataType,
                         queryTree.groupByProjections.get(0).columnReference.columnPosition,
@@ -70,7 +71,7 @@ public class Planner {
             }
             case COUNT -> {
                 Table tb = queryTree.groupByProjections.get(0).columnReference.table;
-                AbstractIndex<IKey> indexSelected = getOptimalHashIndex(
+                ReadOnlyIndex<IKey> indexSelected = getOptimalHashIndex(
                         queryTree.groupByProjections.get(0).columnReference.table,
                         queryTree.wherePredicates
                         );
@@ -79,13 +80,13 @@ public class Planner {
 
                     // how the user can specify a distinct?
 
-                    return new IndexCount( indexSelected == null ? tb.primaryKeyIndex() : indexSelected );
+                    return new IndexCount( indexSelected == null ? tb.underlyingPrimaryKeyIndex() : indexSelected );
 
 
                 } else {
                     int[] columns = queryTree.groupByColumns.stream()
                             .mapToInt(ColumnReference::getColumnPosition ).toArray();
-                    return new IndexCountGroupBy( indexSelected == null ? tb.primaryKeyIndex() : indexSelected, columns );
+                    return new IndexCountGroupBy( indexSelected == null ? tb.underlyingPrimaryKeyIndex() : indexSelected, columns );
                 }
 
             }
@@ -109,7 +110,7 @@ public class Planner {
 
         // avoid one of the columns to have expression different from EQUALS
         // to be picked by unique and non unique index
-        AbstractIndex<IKey> indexSelected = getOptimalHashIndex(tb, queryTree.wherePredicates);
+        ReadOnlyIndex<IKey> indexSelected = getOptimalHashIndex(tb, queryTree.wherePredicates);
 
         // build projection
 
@@ -120,7 +121,7 @@ public class Planner {
         for(int i = 0; i < nProj; i++){
             projectionColumns[i] = queryTree.projections.get(i).columnPosition;
             entrySize += indexSelected.schema()
-                    .getColumnDataType( queryTree.projections.get(i).columnPosition ).value;
+                    .columnDataType( queryTree.projections.get(i).columnPosition ).value;
         }
 
         if(indexSelected != null) {
@@ -129,20 +130,20 @@ public class Planner {
 
         } else {
             // then must get the PK index, ScanWithProjection
-            return new FullScanWithProjection( tb, tb.primaryKeyIndex(), projectionColumns, entrySize );
+            return new FullScanWithProjection( tb, tb.underlyingPrimaryKeyIndex(), projectionColumns, entrySize );
 
         }
 
     }
 
-    private AbstractIndex<IKey> getOptimalHashIndex(Table table, List<WherePredicate> wherePredicates) {
+    public ReadOnlyIndex<IKey> getOptimalHashIndex(Table table, List<WherePredicate> wherePredicates) {
         int[] filterColumns = wherePredicates.stream()
                  .filter( wherePredicate -> wherePredicate.expression == ExpressionTypeEnum.EQUALS )
                  .mapToInt( WherePredicate::getColumnPosition ).toArray();
         return this.pickIndex(table, filterColumns);
     }
 
-    private AbstractIndex<IKey> pickIndex(Table table, int[] filterColumns){
+    private ReadOnlyIndex<IKey> pickIndex(Table table, int[] filterColumns){
 
         IKey indexKey;
         if(filterColumns.length == 1) {
@@ -151,8 +152,8 @@ public class Planner {
             indexKey = CompositeKey.of(filterColumns);
         }
 
-        if (table.primaryKeyIndex().hashCode() == indexKey.hashCode()) {
-            return table.primaryKeyIndex();
+        if (table.underlyingPrimaryKeyIndex().hashCode() == indexKey.hashCode()) {
+            return table.underlyingPrimaryKeyIndex();
         }
 
         if(table.indexes.get(indexKey) != null){

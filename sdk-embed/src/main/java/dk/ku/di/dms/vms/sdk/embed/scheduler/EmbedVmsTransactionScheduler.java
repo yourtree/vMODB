@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.sdk.embed.scheduler;
 
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
@@ -15,7 +14,7 @@ import java.util.concurrent.ExecutorService;
  */
 public class EmbedVmsTransactionScheduler extends VmsTransactionScheduler {
 
-    private final Catalog catalog;
+    private final TransactionFacade transactionFacade;
 
     private final VmsEmbedInternalChannels vmsChannels;
 
@@ -24,9 +23,9 @@ public class EmbedVmsTransactionScheduler extends VmsTransactionScheduler {
                                         Map<String, VmsTransactionMetadata> eventToTransactionMap,
                                         Map<String, Class<?>> queueToEventMap,
                                         IVmsSerdesProxy serdes,
-                                        Catalog catalog) {
+                                        TransactionFacade transactionFacade) {
         super(vmsAppLogicTaskPool, vmsChannels, eventToTransactionMap, queueToEventMap, serdes);
-        this.catalog = catalog;
+        this.transactionFacade = transactionFacade;
         this.vmsChannels = vmsChannels;
     }
 
@@ -65,7 +64,7 @@ public class EmbedVmsTransactionScheduler extends VmsTransactionScheduler {
             // of course I do not need to stop the scheduler on commit
             // I need to make access to the data versions data race free
             // so new transactions get data versions from the version map or the store
-            TransactionFacade.log(this.catalog);
+            this.transactionFacade.log();
 
             currentBatch.setStatus(BatchContext.Status.COMMITTED);
 

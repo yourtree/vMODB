@@ -27,7 +27,7 @@ public final class UpdateOperator {
                 if(index.checkConditionVersioned(filterContext, cloned)){
 
                     for(var setClause : updateStatement.setClause){
-                        cloned[ index.schema().getColumnPosition( setClause.column() )] = setClause.value();
+                        cloned[ index.schema().columnPosition( setClause.column() )] = setClause.value();
                     }
 
                     index.update( key, cloned );

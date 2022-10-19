@@ -33,8 +33,8 @@ public abstract class AbstractScan extends AbstractOperator  {
         ensureMemoryCapacity();
         Object[] record = index.readFromIndex(key, srcAddress);
         for (int projectionColumn : projectionColumns) {
-            DataTypeUtils.callWriteFunction(this.currentBuffer.address(), index.schema().getColumnDataType(projectionColumn), record[projectionColumn]);
-            this.currentBuffer.forwardOffset(index.schema().getColumnDataType(projectionColumn).value);
+            DataTypeUtils.callWriteFunction(this.currentBuffer.address(), index.schema().columnDataType(projectionColumn), record[projectionColumn]);
+            this.currentBuffer.forwardOffset(index.schema().columnDataType(projectionColumn).value);
         }
     }
 
@@ -42,8 +42,8 @@ public abstract class AbstractScan extends AbstractOperator  {
         ensureMemoryCapacity();
         Object[] record = index.readFromIndex(iterator.current());
         for (int projectionColumn : projectionColumns) {
-            DataTypeUtils.callWriteFunction(this.currentBuffer.address(), index.schema().getColumnDataType(projectionColumn), record[projectionColumn]);
-            this.currentBuffer.forwardOffset(index.schema().getColumnDataType(projectionColumn).value);
+            DataTypeUtils.callWriteFunction(this.currentBuffer.address(), index.schema().columnDataType(projectionColumn), record[projectionColumn]);
+            this.currentBuffer.forwardOffset(index.schema().columnDataType(projectionColumn).value);
         }
     }
 

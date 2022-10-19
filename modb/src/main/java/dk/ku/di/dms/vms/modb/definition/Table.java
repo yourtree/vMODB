@@ -1,9 +1,10 @@
 package dk.ku.di.dms.vms.modb.definition;
 
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
+import dk.ku.di.dms.vms.modb.index.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.ConsistentIndex;
 
 import java.util.*;
 
@@ -21,36 +22,44 @@ public final class Table {
 
     public final Schema schema;
 
-    // to avoid circular dependence schema <-> table
-    // the array int[] means the column indexes, ordered, that refer to the other table
-    public final Map<Table, int[]> foreignKeysGroupedByTableMap;
+    /**
+     * Why foreign keys is on table and not on {@link Schema}?
+     * (i) To avoid circular dependence schema <-> table.
+     *      This way Schema does not know about the details of a Table
+     *      (e.g., the primary index structure, the table name, the secondary indexes, etc).
+     * (ii) The planner needs the foreign keys in order to define an optimal plan.
+     *      As the table carries the PK, the table holds references to other tables.
+     * (iii) Foreign key necessarily require coordination across different indexes that are maintaining records.
+     *       In other words, foreign key maintenance is a concurrency control behavior.
+     * /
+     * The array int[] are the column positions, ordered, that refer to the other table.
+     */
+    private final Map<ConsistentIndex, int[]> foreignKeys;
 
     // all tables must have a pk. besides, used for fast path on planner
-    private UniqueHashIndex primaryKeyIndex;
+    private final ConsistentIndex primaryKeyIndex;
 
     // Other indexes, hashed by the column set in order of the schema
+    // logical key - column list in order that appear in the schema
+    // physical key - column list in order of index definition
     public Map<IIndexKey, AbstractIndex<IKey>> indexes;
 
-    // just a cached list of the indexes map to avoid using iterators from the map when deciding for an index
-    public List<AbstractIndex<IKey>> indexList;
-
-    public Table(String name, Schema schema, Map<Table, int[]> foreignKeysGroupedByTableMap) {
+    public Table(String name, Schema schema, ConsistentIndex primaryKeyIndex, Map<ConsistentIndex, int[]> foreignKeys){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
         this.indexes = new HashMap<>();
-        this.indexList = new ArrayList<>();
-        this.foreignKeysGroupedByTableMap = foreignKeysGroupedByTableMap;
+        this.primaryKeyIndex = primaryKeyIndex;
+        this.foreignKeys = foreignKeys;
     }
 
-    public Table(String name, Schema schema, UniqueHashIndex primaryKeyIndex){
+    public Table(String name, Schema schema, ConsistentIndex primaryKeyIndex){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
         this.indexes = new HashMap<>();
-        this.indexList = new ArrayList<>();
-        this.foreignKeysGroupedByTableMap = null;
         this.primaryKeyIndex = primaryKeyIndex;
+        this.foreignKeys = Collections.emptyMap();
     }
 
     @Override
@@ -59,47 +68,23 @@ public final class Table {
     }
 
     public Schema getSchema(){
-        return schema;
+        return this.schema;
     }
 
     public String getName(){
         return this.name;
     }
 
-    public AbstractIndex<IKey> primaryKeyIndex(){
-        return primaryKeyIndex;
+    public ReadWriteIndex<IKey> underlyingPrimaryKeyIndex(){
+        return this.primaryKeyIndex.underlyingIndex();
     }
 
-//    public Map<IIndexKey, Map<IKey,AbstractIndex<IKey>>> getSecondaryIndexes(){
-//        return this.indexes;
-//    }
-
-    public Map<IIndexKey, AbstractIndex<IKey>> getSecondaryIndexes(){
-        return this.indexes;
+    public ConsistentIndex primaryKeyIndex(){
+        return this.primaryKeyIndex;
     }
 
-    public List<AbstractIndex<IKey>> getIndexes() {
-        // return indexes.values().stream().flatMap(List::stream).collect(Collectors.toList());
-        // to avoid resorting to stream() and java operators
-        return indexList;
-    }
-
-    // logical key - column list in order that appear in the schema
-    // physical key - column list in order of index definition
-//    public void addIndex( final IIndexKey indexLogicalKey, final IKey indexPhysicalKey, AbstractIndex<IKey> index ){
-//        Map<IKey,AbstractIndex<IKey>> indexMap = this.indexes.get(indexLogicalKey);
-//
-//        if( indexMap == null ){
-//            indexMap = new HashMap<>();
-//        }
-//
-//        indexMap.put( indexPhysicalKey, index );
-//        this.indexes.putIfAbsent( indexLogicalKey, indexMap );
-//        this.indexList.add( index );
-//    }
-
-    public Map<Table, int[]> getForeignKeysGroupedByTable(){
-        return this.foreignKeysGroupedByTableMap;
+    public Map<ConsistentIndex, int[]> foreignKeys(){
+        return this.foreignKeys;
     }
 
 }

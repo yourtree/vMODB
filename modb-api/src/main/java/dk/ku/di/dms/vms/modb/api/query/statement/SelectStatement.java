@@ -4,6 +4,9 @@ import dk.ku.di.dms.vms.modb.api.query.clause.*;
 
 import java.util.List;
 
+/**
+ * No support for UNION, EXCEPT, INTERSECT yet
+ */
 public final class SelectStatement extends AbstractStatement {
 
     public List<String> selectClause;
@@ -38,5 +41,4 @@ public final class SelectStatement extends AbstractStatement {
         return this;
     }
 
-    // No support for UNION, EXCEPT, INTERSECT yet
 }

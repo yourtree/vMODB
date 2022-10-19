@@ -7,7 +7,6 @@ import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Header;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
@@ -44,8 +43,6 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
     private final ReadWriteIndex<IKey> primaryKeyIndex;
 
-    private final Map<ConsistentIndex, int[]> fkIndexes;
-
     private final Map<IKey, OperationSetOfKey> updatesPerKeyMap;
 
     /**
@@ -64,45 +61,54 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
     private static final Deque<List<IKey>> writeListBuffer = new ArrayDeque<>();
 
-    public ConsistentIndex(ReadWriteIndex<IKey> primaryKeyIndex, Map<ConsistentIndex, int[]> fkIndexes) {
+    public ConsistentIndex(ReadWriteIndex<IKey> primaryKeyIndex) {
         this.primaryKeyIndex = primaryKeyIndex;
-        this.fkIndexes = fkIndexes;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
     }
 
     @Override
+    public boolean equals(Object o) {
+        return this.hashCode() == o.hashCode();
+    }
+
+    @Override
+    public int hashCode() {
+        return this.primaryKeyIndex.key().hashCode();
+    }
+
+    @Override
     public IIndexKey key() {
-        return primaryKeyIndex.key();
+        return this.primaryKeyIndex.key();
     }
 
     @Override
     public Schema schema() {
-        return primaryKeyIndex.schema();
+        return this.primaryKeyIndex.schema();
     }
 
     @Override
     public int[] columns() {
-        return primaryKeyIndex.columns();
+        return this.primaryKeyIndex.columns();
     }
 
     @Override
     public HashSet<Integer> columnsHash() {
-        return primaryKeyIndex.columnsHash();
+        return this.primaryKeyIndex.columnsHash();
     }
 
     @Override
     public IndexTypeEnum getType() {
-        return primaryKeyIndex.getType();
+        return this.primaryKeyIndex.getType();
     }
 
     @Override
     public IRecordIterator iterator(IKey key) {
-        return new ConsistentRecordIterator(this, primaryKeyIndex.iterator(key));
+        return new ConsistentRecordIterator(this, this.primaryKeyIndex.iterator(key));
     }
 
     @Override
     public IRecordIterator iterator() {
-        return new ConsistentRecordIterator(this, primaryKeyIndex.iterator());
+        return new ConsistentRecordIterator(this, this.primaryKeyIndex.iterator());
     }
 
     @Override
@@ -124,7 +130,7 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
     public boolean exists(IKey key) {
 
         // O(1)
-        OperationSetOfKey opSet = updatesPerKeyMap.get(key);
+        OperationSetOfKey opSet = this.updatesPerKeyMap.get(key);
 
         if(opSet != null){
 
@@ -244,22 +250,6 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
     /**
      * Methods for insert/update operations.
      */
-    private boolean fkConstraintViolation(Object[] values){
-
-        for(var entry : fkIndexes.entrySet()){
-
-            // believed to be the PK of the other table
-            IKey fk = KeyUtils.buildRecordKey( entry.getValue(), values );
-
-            // have some previous TID deleted it? or simply not exists
-            if (!entry.getKey().exists(fk)) return true;
-
-        }
-
-        return false;
-
-    }
-
     private boolean nonPkConstraintViolation(Object[] values) {
 
         Map<Integer, ConstraintReference> constraints = schema().constraints();
@@ -271,7 +261,7 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
             switch (c.getValue().constraint.type){
 
                 case NUMBER -> {
-                    switch (schema().getColumnDataType(c.getKey())) {
+                    switch (schema().columnDataType(c.getKey())) {
                         case INT -> violation = NumberTypeConstraintHelper.eval((int)values[c.getKey()] , 0, Integer::compareTo, c.getValue().constraint);
                         case LONG, DATE -> violation = NumberTypeConstraintHelper.eval((long)values[c.getKey()] , 0L, Long::compareTo, c.getValue().constraint);
                         case FLOAT -> violation = NumberTypeConstraintHelper.eval((float)values[c.getKey()] , 0f, Float::compareTo, c.getValue().constraint);
@@ -282,7 +272,7 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
                 case NUMBER_WITH_VALUE -> {
                     Object valToCompare = c.getValue().asValueConstraint().value;
-                    switch (schema().getColumnDataType(c.getKey())) {
+                    switch (schema().columnDataType(c.getKey())) {
                         case INT -> violation = NumberTypeConstraintHelper.eval((int)values[c.getKey()] , (int)valToCompare, Integer::compareTo, c.getValue().constraint);
                         case LONG, DATE -> violation = NumberTypeConstraintHelper.eval((long)values[c.getKey()] , (long)valToCompare, Long::compareTo, c.getValue().constraint);
                         case FLOAT -> violation = NumberTypeConstraintHelper.eval((float)values[c.getKey()] , (float)valToCompare, Float::compareTo, c.getValue().constraint);
@@ -400,7 +390,7 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
             pkConstraintViolation = primaryKeyIndex.exists(key);
         }
 
-        if(pkConstraintViolation || nonPkConstraintViolation(values) || fkConstraintViolation(values)) {
+        if(pkConstraintViolation || nonPkConstraintViolation(values)) {
             return false;
         }
 
@@ -433,7 +423,7 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
             pkConstraintViolation = !primaryKeyIndex.exists(key);
         }
 
-        if(pkConstraintViolation || nonPkConstraintViolation(values) || fkConstraintViolation(values)) {
+        if(pkConstraintViolation || nonPkConstraintViolation(values)) {
             return false;
         }
 
@@ -533,6 +523,10 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
         }
 
+    }
+
+    public ReadWriteIndex<IKey> underlyingIndex(){
+        return this.primaryKeyIndex;
     }
 
 }

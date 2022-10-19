@@ -1,19 +1,28 @@
 package dk.ku.di.dms.vms.sdk.core.metadata;
 
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
+import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 
 import javax.xml.catalog.Catalog;
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
 
 /**
- * A data class that stores the mappings between events, queues, and transactions
- *
- * Why data schema is a map?
- * Potentially a server could hold two (or more) VMSs. But for now only one.
+ * A data class that stores the mappings between events, queues, and transactions.
+ * This record is built before the database tables are created, so no tables here.
+ * Q: Why data schema is a map?
+ * A: Potentially a server could hold two (or more) VMSs. But for now only one.
+ * A catalog usually stores tables, views, columns, triggers and procedures in a DBMS
+ * See <a href="https://en.wikipedia.org/wiki/Oracle_metadata">Oracle Metadata</a>
+ * In our case, the table already stores the columns
+ * Q: We don't have triggers nor stored procedures?
+ * A: Actually we have mappings from events to application functions
+ * For now, we don't have views, but we could implement the application-defined
+ * queries as views and store them here
  */
 public record VmsRuntimeMetadata(
 
@@ -31,6 +40,6 @@ public record VmsRuntimeMetadata(
         Map<String, IVmsRepositoryFacade> repositoryFacades,
         Map<Class<?>, String> entityToTableNameMap,
 
-        Map<String, SelectStatement> staticQueries
+        Map<String, Tuple<SelectStatement, Type>> staticQueries
 
 ){}

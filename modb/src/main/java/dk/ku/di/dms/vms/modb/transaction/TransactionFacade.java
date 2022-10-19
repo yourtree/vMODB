@@ -1,23 +1,30 @@
 package dk.ku.di.dms.vms.modb.transaction;
 
+import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
+import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionId;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
-import dk.ku.di.dms.vms.modb.definition.Catalog;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.manipulation.update.UpdateOperator;
+import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
+import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
+import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
+import dk.ku.di.dms.vms.modb.query.planner.Planner;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
+import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.ConsistentIndex;
 
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.R;
 
@@ -41,26 +48,138 @@ public final class TransactionFacade {
         return Collections.emptySet();
     });
 
-    private TransactionFacade(){}
+    /**
+     * Hashed by table name
+     */
+    private final Map<String, Table> tableMap;
+
+    private final Analyzer analyzer;
+
+    private final Planner planner;
+
+    /**
+     * Operators output results
+     * They are read-only operations, do not modify data
+     */
+    private final Map<String, AbstractOperator> readQueryPlans;
+
+    private TransactionFacade(Map<String, Table> tableMap){
+        this.tableMap = tableMap;
+        this.planner = new Planner();
+        this.analyzer = new Analyzer(tableMap);
+        // read-only transactions may put items here
+        this.readQueryPlans = new ConcurrentHashMap<>();
+    }
+
+    public static TransactionFacade build(Map<String, Table> catalog){
+        return new TransactionFacade(catalog);
+    }
+
+    /**
+     * Why references to foreign key constraints are here?
+     * Because an index should not know about other indexes.
+     * It is better to have an upper class taking care of this constraint.
+     * Can be made parallel.
+     */
+    private boolean fkConstraintViolation(Table table, Object[] values){
+        for(var entry : table.foreignKeys().entrySet()){
+            IKey fk = KeyUtils.buildRecordKey( entry.getValue(), values );
+            // have some previous TID deleted it? or simply not exists
+            if (!entry.getKey().exists(fk)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Best guess return type. Differently from the parameter type received.
+     * @param selectStatement a select statement
+     * @return the query result in a memory space
+     */
+    public MemoryRefNode fetch(ConsistentIndex consistentIndex, SelectStatement selectStatement) {
+
+        String sqlAsKey = selectStatement.SQL.toString();
+
+        AbstractOperator scanOperator = this.readQueryPlans.get( sqlAsKey );
+
+        List<WherePredicate> wherePredicates;
+
+        if(scanOperator == null){
+            QueryTree queryTree;
+            try {
+                queryTree = this.analyzer.analyze(selectStatement);
+                wherePredicates = queryTree.wherePredicates;
+                scanOperator = this.planner.plan(queryTree);
+                readQueryPlans.put(sqlAsKey, scanOperator );
+            } catch (AnalyzerException ignored) { return null; }
+
+        } else {
+            // get only the where clause params
+            try {
+                wherePredicates = this.analyzer.analyzeWhere(
+                        scanOperator.asScan().table, selectStatement.whereClause);
+            } catch (AnalyzerException ignored) { return null; }
+        }
+
+        MemoryRefNode memRes = null;
+
+        // TODO complete for all types or migrate the choice to transaction facade
+        //  make an enum, it is easier
+        if(scanOperator.isIndexScan()){
+            // build keys and filters
+            //memRes = OperatorExecution.run( wherePredicates, scanOperator.asIndexScan() );
+            memRes = this.run(consistentIndex, wherePredicates, scanOperator.asIndexScan());
+        } else {
+            // build only filters
+            memRes = this.run( consistentIndex, wherePredicates, scanOperator.asFullScan() );
+        }
+
+        return memRes;
+
+    }
+
+    /**
+     * TODO finish. can we extract the column values and make a special api for the facade? only if it is a single key
+     */
+    public void issue(Table table, IStatement statement) throws AnalyzerException {
+
+        switch (statement.getType()){
+            case UPDATE -> {
+
+                List<WherePredicate> wherePredicates = this.analyzer.analyzeWhere(
+                        table, statement.asUpdateStatement().whereClause);
+
+                this.planner.getOptimalHashIndex(table, wherePredicates);
+
+                // TODO plan update and delete in planner. only need to send where predicates and not a query tree like a select
+                // UpdateOperator.run(statement.asUpdateStatement(), table.primaryKeyIndex() );
+            }
+            case INSERT -> {
+
+                // TODO get columns, put object array in order and submit to entity api
+
+            }
+            case DELETE -> {
+
+            }
+            default -> throw new IllegalStateException("Statement type cannot be identified.");
+        }
+
+    }
 
     /**
      * It installs the writes without taking into consideration concurrency control.
      * Used when the buffer received is aligned with how the data is stored in memory
      */
-    public static void bulkInsert(Table table, ByteBuffer buffer, int numberOfRecords){
+    public void bulkInsert(Table table, ByteBuffer buffer, int numberOfRecords){
         // if the memory address is occupied, must log warning
         // so we can increase the table size
         long address = MemoryUtils.getByteBufferAddress(buffer);
-        bulkInsert(table, address, numberOfRecords);
-    }
-
-    public static void bulkInsert(Table table, long srcAddress, int numberOfRecords){
 
         // if the memory address is occupied, must log warning
         // so we can increase the table size
-        AbstractIndex<IKey> index = table.primaryKeyIndex();
+        ReadWriteIndex<IKey> index = table.underlyingPrimaryKeyIndex();
         int sizeWithoutHeader = table.schema.getRecordSizeWithoutHeader();
-        long currAddress = srcAddress;
+        long currAddress = address;
 
         IKey key;
         for (int i = 0; i < numberOfRecords; i++) {
@@ -73,21 +192,36 @@ public final class TransactionFacade {
 
     /****** ENTITY *******/
 
-    public static void insertAll(ConsistentIndex index, List<Object[]> objects){
+    public void insertAll(Table table, List<Object[]> objects){
         // get tid, do all the checks, etc
         for(Object[] entry : objects) {
-            insert(index, entry);
+            this.insert(table, entry);
         }
     }
 
-    public static void delete(ConsistentIndex index, Object[] values) {
-        IKey pk = KeyUtils.buildPrimaryKey(index.schema(), values);
-        deleteByKey(index, pk);
+    public void deleteAll(Table table, List<Object[]> objects) {
+        for(Object[] entry : objects) {
+            this.delete(table.primaryKeyIndex(), entry);
+        }
     }
 
-    public static void deleteByKey(ConsistentIndex index, Object[] values) {
+    public void updateAll(Table table, List<Object[]> objects) {
+        for(Object[] entry : objects) {
+            this.update(table, entry);
+        }
+    }
+
+    /**
+     * Not yet considering this record can serve as FK to a record in another table.
+     */
+    public void delete(ConsistentIndex index, Object[] values) {
+        IKey pk = KeyUtils.buildPrimaryKey(index.schema(), values);
+        this.deleteByKey(index, pk);
+    }
+
+    public void deleteByKey(ConsistentIndex index, Object[] values) {
         IKey pk = KeyUtils.buildInputKey(values);
-        deleteByKey(index, pk);
+        this.deleteByKey(index, pk);
     }
 
     /**
@@ -95,44 +229,48 @@ public final class TransactionFacade {
      * @param index The corresponding database index
      * @param pk The primary key
      */
-    private static void deleteByKey(ConsistentIndex index, IKey pk){
+    private void deleteByKey(ConsistentIndex index, IKey pk){
         if(index.delete(pk)){
             INDEX_WRITES.get().add(index);
         }
     }
 
-    public static Object[] lookupByKey(ConsistentIndex index, Object... valuesOfKey){
+    public Object[] lookupByKey(ConsistentIndex index, Object... valuesOfKey){
         IKey pk = KeyUtils.buildPrimaryKeyFromKeyValues(valuesOfKey);
         return index.lookupByKey(pk);
     }
 
     /**
-     * @param index The corresponding database table
+     * @param table The corresponding database table
      * @param values The fields extracted from the entity
      */
-    public static void insert(ConsistentIndex index, Object[] values){
+    public void insert(Table table, Object[] values){
+        ConsistentIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
-        if(!index.insert(pk, values)) {
-            undoTransactionWrites();
-            throw new RuntimeException("Constraint violation.");
+        if(index.insert(pk, values) && fkConstraintViolation(table, values)){
+            INDEX_WRITES.get().add(index);
+            return;
         }
-        INDEX_WRITES.get().add(index);
+        undoTransactionWrites();
+        throw new RuntimeException("Constraint violation.");
     }
 
     /**
      * iterate over all indexes, get the corresponding writes of this tid and remove them
      *      this method can be called in parallel by transaction facade without risk
      */
-    public static void update(ConsistentIndex index, Object[] values){
+    public void update(Table table, Object[] values){
+        ConsistentIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
-        if(!index.update(pk, values)){
-            undoTransactionWrites();
-            throw new RuntimeException("Constraint violation.");
+        if(index.update(pk, values) && fkConstraintViolation(table, values)){
+            INDEX_WRITES.get().add(index);
+            return;
         }
-        INDEX_WRITES.get().add(index);
+        undoTransactionWrites();
+        throw new RuntimeException("Constraint violation.");
     }
 
-    private static void undoTransactionWrites(){
+    private void undoTransactionWrites(){
         for(var index : INDEX_WRITES.get()) {
             index.undoTransactionWrites();
         }
@@ -140,7 +278,7 @@ public final class TransactionFacade {
 
     /****** SCAN OPERATORS *******/
 
-    public static MemoryRefNode run(ConsistentIndex consistentIndex,
+    public MemoryRefNode run(ConsistentIndex consistentIndex,
                                     List<WherePredicate> wherePredicates,
                                     IndexScanWithProjection operator){
 
@@ -164,12 +302,16 @@ public final class TransactionFacade {
         return operator.run( consistentIndex, filterContext, inputKey );
     }
 
-    public static MemoryRefNode run(ConsistentIndex consistentIndex,
+    public MemoryRefNode run(ConsistentIndex consistentIndex,
                                     List<WherePredicate> wherePredicates,
                                     FullScanWithProjection operator){
         FilterContext filterContext = FilterContextBuilder.build(wherePredicates);
         return operator.run( consistentIndex, filterContext );
     }
+
+    /****** WRITE OPERATORS *******/
+
+
 
     /* CHECKPOINTING AND LOGGING *******/
 
@@ -177,7 +319,7 @@ public final class TransactionFacade {
      * Only log those data versions until the corresponding batch.
      * TIDs are not necessarily a sequence.
      */
-    public static void checkpoint(){
+    public void checkpoint(){
 
         // make state durable
         // get buffered writes in transaction facade and merge in memory
@@ -193,8 +335,9 @@ public final class TransactionFacade {
 
     }
 
-    public static void log(Catalog catalog){
+    public void log(){
         // TODO must log the updates in a separate file. no need for WAL, no need to store before and after
     }
+
 
 }

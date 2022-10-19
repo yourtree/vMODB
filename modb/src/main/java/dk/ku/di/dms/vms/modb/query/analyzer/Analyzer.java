@@ -8,14 +8,13 @@ import dk.ku.di.dms.vms.modb.api.query.statement.DeleteStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.UpdateStatement;
-import dk.ku.di.dms.vms.modb.definition.Catalog;
+import dk.ku.di.dms.vms.modb.definition.ColumnReference;
 import dk.ku.di.dms.vms.modb.definition.Schema;
+import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.modb.definition.ColumnReference;
-import dk.ku.di.dms.vms.modb.definition.Table;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,15 +25,15 @@ import java.util.Map;
  */
 public final class Analyzer {
 
-    private final Catalog catalog;
+    private final Map<String, Table> catalog;
 
-    public Analyzer(final Catalog catalog){
+    public Analyzer(final Map<String, Table> catalog){
         this.catalog = catalog;
     }
 
     /**
      * basically transforms the raw input into known and safe metadata, e.g., whether a table, column exists
-     * https://docs.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql?view=sql-server-ver15#logical-processing-order-of-the-select-statement
+     * <a href="https://docs.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql?view=sql-server-ver15#logical-processing-order-of-the-select-statement">T-SQL</a>
      * @param statement The statement to process
      * @return The resulting query tree
      * @throws AnalyzerException Unexpected statement type
@@ -58,7 +57,7 @@ public final class Analyzer {
         // from
         // obtain the tables to look for the columns in projection first
         for(String tableStr : statement.fromClause){
-            Table table = catalog.getTable(tableStr);
+            Table table = catalog.get(tableStr);
             if(table != null) queryTree.tables.put(tableStr,table);
         }
 
@@ -72,7 +71,7 @@ public final class Analyzer {
 
                 // find in catalog if not found in query yet
                 if (tableLeft == null) {
-                    tableLeft = catalog.getTable(join.tableLeft);
+                    tableLeft = catalog.get(join.tableLeft);
                     if (tableLeft != null) {
                         queryTree.tables.put(join.tableLeft, tableLeft);
                     } else {
@@ -81,11 +80,11 @@ public final class Analyzer {
                 }
 
                 // find left column
-                ColumnReference columnLeftReference = findColumnReference(join.columnLeft, tableLeft);
+                ColumnReference columnLeftReference = new ColumnReference(join.columnLeft, tableLeft);
 
                 Table tableRight = queryTree.tables.get(join.tableRight);
                 if (tableRight == null) {
-                    tableRight = catalog.getTable(join.tableRight);
+                    tableRight = catalog.get(join.tableRight);
                     if (tableRight != null) {
                         queryTree.tables.put(join.tableRight, tableRight);
                     } else {
@@ -94,7 +93,7 @@ public final class Analyzer {
                 }
 
                 // find right column
-                ColumnReference columnRightReference = findColumnReference(join.columnRight, tableRight);
+                ColumnReference columnRightReference = new ColumnReference(join.columnRight, tableRight);
 
                 // build typed join clause
                 JoinPredicate joinClause = new JoinPredicate(columnLeftReference, columnRightReference, join.expression, join.joinType);
@@ -115,7 +114,7 @@ public final class Analyzer {
             for (final Table table : queryTree.tables.values()) {
                 Schema tableSchema = table.getSchema();
                 int colPos = 0;
-                for (String columnName : tableSchema.getColumnNames()) {
+                for (String columnName : tableSchema.columnNames()) {
                     queryTree.projections.add(new ColumnReference(columnName, colPos, table));
                     colPos++;
                 }
@@ -194,7 +193,7 @@ public final class Analyzer {
                     columnName = split[1];
                     Table table = queryTree.tables.get(tableName);
                     if (table != null) {
-                        columnReference = findColumnReference(columnName, table);
+                        columnReference = new ColumnReference(columnName, table);
                     } else {
                         throw new AnalyzerException("Table not defined in the query: " + tableName);
                     }
@@ -215,7 +214,7 @@ public final class Analyzer {
                         columnName = split[1];
                         Table table = queryTree.tables.get(tableName);
                         if (table != null) {
-                            columnReference1 = findColumnReference(columnName, table);
+                            columnReference1 = new ColumnReference(columnName, table);
                             // build typed join clause
                             JoinPredicate joinClause = new JoinPredicate(columnReference, columnReference1, currWhere.expression(), JoinTypeEnum.INNER_JOIN);
                             queryTree.joinPredicates.add(joinClause);
@@ -247,7 +246,11 @@ public final class Analyzer {
         List<WherePredicate> newList = new ArrayList<>(whereClause.size());
         // this assumes param is a value (number or char/string)
         for(WhereClauseElement<?> element : whereClause){
-            ColumnReference columnReference = findColumnReference(element.column(), table);
+
+            if(!columnNameIsFoundInSchema(element.column(), table.schema))
+                throw new AnalyzerException("Column does not exist in the table");
+
+            ColumnReference columnReference = new ColumnReference(element.column(), table);
             newList.add( new WherePredicate(columnReference, element.expression(), element.value()) );
         }
         return newList;
@@ -259,12 +262,12 @@ public final class Analyzer {
      * @return query tree
      */
     private QueryTree analyzeDeleteStatement(DeleteStatement deleteStatement) throws AnalyzerException {
-        Table table = catalog.getTable(deleteStatement.table);
+        Table table = catalog.get(deleteStatement.table);
         return new QueryTree(analyzeWhere(table, deleteStatement.whereClause));
     }
 
     private QueryTree analyzeUpdateStatement(UpdateStatement updateStatement) throws AnalyzerException {
-        Table table = catalog.getTable(updateStatement.table);
+        Table table = catalog.get(updateStatement.table);
         return new QueryTree(analyzeWhere(table, updateStatement.whereClause));
     }
 
@@ -274,7 +277,7 @@ public final class Analyzer {
 
         for(Table table : tables.values()){
             final Schema schema = table.getSchema();
-            final Integer columnIndex = schema.getColumnPosition(columnStr);
+            final Integer columnIndex = schema.columnPosition(columnStr);
             if(columnIndex != null) {
                 if(columnReferenceToResult == null) {
                     columnReferenceToResult = new ColumnReference(columnStr, columnIndex, table);
@@ -289,13 +292,12 @@ public final class Analyzer {
         throw new AnalyzerException("Column " + columnStr +" does not exist in the catalog of tables");
     }
 
-    private ColumnReference findColumnReference(String columnStr, Table table) throws AnalyzerException {
-        final Schema schema = table.getSchema();
-        Integer columnIndex = schema.getColumnPosition(columnStr);
+    private boolean columnNameIsFoundInSchema(String columnStr, Schema schema) throws AnalyzerException {
+        Integer columnIndex = schema.columnPosition(columnStr);
         if(columnIndex == null){
-            throw new AnalyzerException("Column does not exist in the table");
+            return false;
         }
-        return new ColumnReference(columnStr, columnIndex, table);
+        return true;
     }
 
     /**
@@ -314,7 +316,7 @@ public final class Analyzer {
         }
         final Table table = tables.get(tableName);
         final Schema schema = table.getSchema();
-        Integer columnIndex = schema.getColumnPosition(columnName);
+        Integer columnIndex = schema.columnPosition(columnName);
         if(columnIndex == null){
             throw new AnalyzerException("Column does not exist in the table "+ tableName);
         }

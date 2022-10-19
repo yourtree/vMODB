@@ -78,11 +78,6 @@ public class PipeRepositoryFacade implements IVmsRepositoryFacade, InvocationHan
     }
 
     @Override
-    public Object fetch(SelectStatement selectStatement) {
-        return null;
-    }
-
-    @Override
     public void insertAll(List<Object> entities) {
 
     }

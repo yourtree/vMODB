@@ -3,14 +3,13 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.scan;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 public class FullScanWithProjection extends AbstractScan {
 
-    public FullScanWithProjection(Table table, AbstractIndex<IKey> index,
+    public FullScanWithProjection(Table table, ReadOnlyIndex<IKey> index,
                                   int[] projectionColumns,
                                   int entrySize) {
         super(table, entrySize, index, projectionColumns);

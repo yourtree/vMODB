@@ -5,23 +5,13 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
-import dk.ku.di.dms.vms.modb.api.query.statement.UpdateStatement;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.common.type.DataType;
-import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
+import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.definition.Row;
-import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
-import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.manipulation.update.UpdateOperator;
-import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
-import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.modb.transaction.internal.CircularBuffer;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.ConsistentIndex;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityUtils;
 
@@ -29,10 +19,9 @@ import java.io.Serializable;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.*;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.logging.Logger;
 
 /**
@@ -43,26 +32,20 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
     private static final Logger LOGGER = Logger.getLogger(EmbedRepositoryFacade.class.getName());
 
-    private final Class<? extends IEntity<?>> entityClazz;
-    private final Class<? extends Serializable> pkClazz;
+    private final VmsDataSchema schema;
 
     private final Constructor<? extends IEntity<?>> entityConstructor;
-
-    private Table table;
 
     /**
      * Respective consistent index
      */
-    private ConsistentIndex consistentIndex;
+    private Table table;
 
-    // DBMS components
-    private ModbModules modbModules;
+    private final Map<String, Tuple<SelectStatement, Type>> staticQueriesMap;
 
-    private final Map<String, AbstractOperator> cachedPlans;
+    private final Map<String, VarHandle> entityFieldMap;
 
-    private Map<String, VarHandle> entityFieldMap;
-
-    private Map<String, VarHandle> pkFieldMap;
+    private final Map<String, VarHandle> pkFieldMap;
 
     /**
      * Cache of objects in memory.
@@ -70,50 +53,55 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
      * Should be used by the repository facade, since it is the one who is converting the payloads from the user code.
      * Key is the hash code of a table
      */
-    private CircularBuffer objectCacheStore;
+    private final CircularBuffer objectCacheStore;
 
-    private final ConcurrentLinkedDeque<Map<IKey, TransactionWrite>> tidWriteMapCacheStore;
+    /**
+     * Attribute set after database is loaded
+     * Not when the metadata is loaded
+     * The transaction facade requires DBMS modules (planner, analyzer)
+     * along with the catalog. These are not ready on metadata loading time
+     */
+    private TransactionFacade transactionFacade;
 
     @SuppressWarnings({"unchecked"})
-    public EmbedRepositoryFacade(final Class<? extends IRepository<?,?>> repositoryClazz) throws NoSuchMethodException {
+    public EmbedRepositoryFacade(final Class<? extends IRepository<?,?>> repositoryClazz,
+                                 VmsDataSchema schema,
+                                 Map<String, Tuple<SelectStatement, Type>> staticQueriesMap
+                                 ) throws NoSuchMethodException, NoSuchFieldException, IllegalAccessException {
+
+        this.schema = schema;
 
         Type[] types = ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
 
-        this.entityClazz = (Class<? extends IEntity<?>>) types[1];
+        Class<? extends IEntity<?>> entityClazz = (Class<? extends IEntity<?>>) types[1];
 
-        this.pkClazz = (Class<? extends Serializable>) types[0];
+        Class<? extends Serializable> pkClazz = (Class<? extends Serializable>) types[0];
 
-        // read-only transactions may put items here
-        this.cachedPlans = new ConcurrentHashMap<>();
+        this.entityConstructor = entityClazz.getDeclaredConstructor();
 
-        this.entityConstructor = this.entityClazz.getDeclaredConstructor();
+        // https://stackoverflow.com/questions/43558270/correct-way-to-use-varhandle-in-java-9
+        this.entityFieldMap = EntityUtils.getFieldsFromEntity(entityClazz, schema );
 
-        this.tidWriteMapCacheStore = new ConcurrentLinkedDeque<>();
+        if(!pkClazz.isPrimitive()){
+            this.pkFieldMap = EntityUtils.getFieldsFromPk(pkClazz);
+        } else {
+            // TODO
+            this.pkFieldMap = Collections.emptyMap();
+        }
+
+        this.staticQueriesMap = staticQueriesMap;
+
+        this.objectCacheStore = new CircularBuffer(schema.columnNames.length);
 
     }
 
-    public void setModbModules(ModbModules modbModules) throws NoSuchFieldException, IllegalAccessException {
-
-        this.modbModules = modbModules;
-
-        String tableName = modbModules.vmsRuntimeMetadata().entityToTableNameMap().get( this.entityClazz );
-
-        Schema schema = modbModules.catalog().getTable(tableName).getSchema();
-
-        // https://stackoverflow.com/questions/43558270/correct-way-to-use-varhandle-in-java-9
-        this.entityFieldMap = EntityUtils.getFieldsFromEntity( this.entityClazz, schema );
-
-        if(!pkClazz.isPrimitive()){
-            this.pkFieldMap = EntityUtils.getFieldsFromPk( this.pkClazz );
-        }
-
-        this.table = this.modbModules.catalog().getTable( tableName );
-
-        this.objectCacheStore = new CircularBuffer(table.getSchema().columnOffset().length);
-
-        // TODO set up consistent index
-        this.consistentIndex = null;
-
+    /**
+     * Everything that is defined on runtime related to DBMS components
+     * For now, table and transaction facade
+     */
+    public void setDynamicDatabaseModules(TransactionFacade transactionFacade, Table table){
+        this.transactionFacade = transactionFacade;
+        this.table = table;
     }
 
     /**
@@ -137,8 +125,8 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
                 // but reads are another story. multiple threads may be calling the repository facade
                 // and requiring different data item versions
                 // we always need to offload the lookup to the transaction facade
-                Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(this.pkFieldMap, args[0]);
-                Object[] object = TransactionFacade.lookupByKey(consistentIndex, valuesOfKey);
+                Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(args[0]);
+                Object[] object = this.transactionFacade.lookupByKey(this.table.primaryKeyIndex(), valuesOfKey);
 
                 // parse object into entity
                 if (object != null)
@@ -147,22 +135,22 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
             }
             case "deleteByKey" -> {
-                Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(this.pkFieldMap, args[0]);
-                TransactionFacade.deleteByKey(this.consistentIndex, valuesOfKey);
+                Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(args[0]);
+                this.transactionFacade.deleteByKey(this.table.primaryKeyIndex(), valuesOfKey);
             }
             case "delete" -> {
-                Object[] values = this.extractFieldValuesFromEntityObject(this.entityFieldMap, args[0], this.table);
-                TransactionFacade.delete(this.consistentIndex, values);
+                Object[] values = this.extractFieldValuesFromEntityObject(args[0]);
+                this.transactionFacade.delete(this.table.primaryKeyIndex(), values);
             }
+            case "deleteAll" -> this.deleteAll((List<Object>) args[0]);
             case "update" -> {
-                Object[] values = extractFieldValuesFromEntityObject(this.entityFieldMap, args[0], this.table);
-                TransactionFacade.update(this.consistentIndex, values);
+                Object[] values = extractFieldValuesFromEntityObject(args[0]);
+                this.transactionFacade.update(this.table, values);
             }
+            case "updateAll" -> this.updateAll((List<Object>) args[0]);
             case "insert" -> {
-                String tableName = this.modbModules.vmsRuntimeMetadata().entityToTableNameMap().get(entityClazz);
-                Table table = this.modbModules.catalog().getTable(tableName);
-                Object[] values = extractFieldValuesFromEntityObject(this.entityFieldMap, args[0], table);
-                TransactionFacade.insert(this.consistentIndex, values);
+                Object[] values = extractFieldValuesFromEntityObject(args[0]);
+                this.transactionFacade.insert(this.table, values);
             }
             case "insertAll" -> this.insertAll((List<Object>) args[0]);
             case "fetch" -> {
@@ -171,16 +159,23 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
                 SelectStatement selectStatement = ((IStatement) args[0]).asSelectStatement();
                 return fetch(selectStatement, (Type) args[1]);
             }
-            case "issue" -> issue((IStatement) args[0]);
+            case "issue" -> {
+                try {
+                    // no return by default
+                    this.transactionFacade.issue(this.table, (IStatement) args[0]);
+                } catch (AnalyzerException e) {
+                    throw new RuntimeException(e);
+                }
+            }
             default -> {
 
                 // check if is it static query
-                SelectStatement selectStatement = modbModules.vmsRuntimeMetadata().staticQueries().get(methodName);
+                Tuple<SelectStatement, Type> selectStatement = this.staticQueriesMap.get(methodName);
 
                 if (selectStatement == null)
                     throw new IllegalStateException("Unknown repository operation.");
 
-                return fetch(selectStatement);
+                return fetch(selectStatement.t1(), selectStatement.t2());
 
             }
         }
@@ -206,28 +201,28 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
     /**
      * Must be a linked sorted map. Ordered by the columns that appear on the key object.
      */
-    private Object[] extractFieldValuesFromKeyObject(Map<String, VarHandle> fieldMap, Object keyObject) {
+    private Object[] extractFieldValuesFromKeyObject(Object keyObject) {
 
-        Object[] values = new Object[fieldMap.size()];
+        Object[] values = new Object[pkFieldMap.size()];
 
         int fieldIdx = 0;
         // get values from key object
-        for(String columnName : fieldMap.keySet()){
-            values[fieldIdx] = fieldMap.get(columnName).get(keyObject);
+        for(String columnName : pkFieldMap.keySet()){
+            values[fieldIdx] = pkFieldMap.get(columnName).get(keyObject);
             fieldIdx++;
         }
         return values;
     }
 
-    private Object[] extractFieldValuesFromEntityObject(Map<String, VarHandle> fieldMap, Object entityObject, Table table) {
+    private Object[] extractFieldValuesFromEntityObject(Object entityObject) {
 
-        Object[] values = new Object[table.getSchema().getColumnNames().length];
+        Object[] values = new Object[schema.columnNames.length];
         // TODO objectCacheStore.peek()
 
         int fieldIdx = 0;
         // get values from entity
-        for(String columnName : table.getSchema().getColumnNames()){
-            values[fieldIdx] = fieldMap.get(columnName).get(entityObject);
+        for(String columnName : schema.columnNames){
+            values[fieldIdx] = entityFieldMap.get(columnName).get(entityObject);
             fieldIdx++;
         }
         return values;
@@ -238,53 +233,13 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 //        this.objectCacheStore.get(table) != null
 //    }
 
-    /**
-     * Best guess return type. Differently from the parameter type received.
-     * @param selectStatement a select statement
-     * @return the query result
-     */
-    public Object fetch(SelectStatement selectStatement) {
-        return fetch(selectStatement,null);
-    }
-
     @Override
     public Object fetch(SelectStatement selectStatement, Type type) {
 
-        String sqlAsKey = selectStatement.SQL.toString();
-
-        AbstractOperator scanOperator = this.cachedPlans.get( sqlAsKey );
-
-        List<WherePredicate> wherePredicates;
-
-        if(scanOperator == null){
-            QueryTree queryTree;
-            try {
-                queryTree = modbModules.analyzer().analyze(selectStatement);
-                wherePredicates = queryTree.wherePredicates;
-                scanOperator = modbModules.planner().plan(queryTree);
-                cachedPlans.put(sqlAsKey, scanOperator );
-            } catch (AnalyzerException ignored) { return null; }
-
-        } else {
-            // get only the where clause params
-            try {
-                wherePredicates = modbModules.analyzer().analyzeWhere(
-                        scanOperator.asScan().table, selectStatement.whereClause);
-            } catch (AnalyzerException ignored) { return null; }
-        }
-
-        MemoryRefNode memRes = null;
-
-        // TODO complete for all types or migrate the choice to transaction facade
-        //  make an enum, it is easier
-        if(scanOperator.isIndexScan()){
-            // build keys and filters
-            //memRes = OperatorExecution.run( wherePredicates, scanOperator.asIndexScan() );
-            memRes = TransactionFacade.run(this.consistentIndex, wherePredicates, scanOperator.asIndexScan());
-        } else {
-            // build only filters
-            memRes = TransactionFacade.run( this.consistentIndex, wherePredicates, scanOperator.asFullScan() );
-        }
+        // we need some context about the results in this memory space
+        // number of records
+        // schema of the return (maybe not if it is a dto)
+        var memRes = this.transactionFacade.fetch(this.table.primaryKeyIndex(), selectStatement);
 
         // TODO parse output into object
         if(type == IDTO.class) {
@@ -293,43 +248,10 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         }
 
         // then it is a primitive, just return the value
-        int projectionColumnIndex = scanOperator.asScan().projectionColumns[0];
-        DataType dataType = scanOperator.asScan().index.schema().getColumnDataType(projectionColumnIndex);
-        return DataTypeUtils.getValue(dataType, memRes.address);
-
-    }
-
-    /**
-     * TODO finish. can we extract the column values and make a special api for the facade? only if it is a single key
-     */
-    private void issue(IStatement statement) throws AnalyzerException {
-
-        switch (statement.getType()){
-            case UPDATE -> {
-
-                String sqlAsKey = statement.asUpdateStatement().SQL.toString();
-
-                AbstractOperator scanOperator = this.cachedPlans.get( sqlAsKey );
-
-                List<WherePredicate> wherePredicates = modbModules.analyzer().analyzeWhere(
-                        scanOperator.asScan().table, statement.asUpdateStatement().whereClause);
-
-                // modbModules.planner().getOptimalHashIndex(null, wherePredicates);
-
-                // TODO plan update and delete in planner. only need to send where predicates and not a query tree like a select
-                // UpdateOperator.run(statement.asUpdateStatement());
-            }
-            case INSERT -> {
-
-                // TODO get columns, put object array in order and submit to entity api
-
-            }
-            case DELETE -> {
-
-            }
-            default -> throw new IllegalStateException("Statement type cannot be identified.");
-        }
-
+//        int projectionColumnIndex = scanOperator.asScan().projectionColumns[0];
+//        DataType dataType = scanOperator.asScan().index.schema().getColumnDataType(projectionColumnIndex);
+//        return DataTypeUtils.getValue(dataType, memRes.address());
+        return null;
     }
 
     @Override
@@ -338,13 +260,31 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         // acts as a single transaction, so all constraints, of every single row must be present
         List<Object[]> parsedEntities = new ArrayList<>(entities.size());
         for (Object entityObject : entities){
-            Object[] parsed = extractFieldValuesFromEntityObject(this.entityFieldMap, entityObject, table);
+            Object[] parsed = extractFieldValuesFromEntityObject(entityObject);
             parsedEntities.add(parsed);
         }
 
         // can only add to cache if all items were inserted since it is transactional
-        TransactionFacade.insertAll( this.consistentIndex, parsedEntities );
+        this.transactionFacade.insertAll( this.table, parsedEntities );
 
+    }
+
+    private void updateAll(List<Object> entities) {
+        List<Object[]> parsedEntities = new ArrayList<>(entities.size());
+        for (Object entityObject : entities){
+            Object[] parsed = extractFieldValuesFromEntityObject(entityObject);
+            parsedEntities.add(parsed);
+        }
+        this.transactionFacade.updateAll(this.table, parsedEntities);
+    }
+
+    public void deleteAll(List<Object> entities) {
+        List<Object[]> parsedEntities = new ArrayList<>(entities.size());
+        for (Object entityObject : entities){
+            Object[] parsed = extractFieldValuesFromEntityObject(entityObject);
+            parsedEntities.add(parsed);
+        }
+        this.transactionFacade.deleteAll( this.table, parsedEntities );
     }
 
     @Override

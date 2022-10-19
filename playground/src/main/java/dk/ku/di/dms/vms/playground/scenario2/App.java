@@ -12,10 +12,11 @@ import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.definition.Table;
+import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
-import dk.ku.di.dms.vms.sdk.embed.facade.ModbModules;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;
@@ -192,7 +193,7 @@ public class App
             vmsMetadata.outputEventSchema().put(in, eventSchema);
         }
 
-        ModbModules modbModules = EmbedMetadataLoader.loadModbModulesIntoRepositories(vmsMetadata);
+        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacade(vmsMetadata);
 
         assert vmsMetadata != null;
 
@@ -207,7 +208,7 @@ public class App
                         vmsMetadata.queueToVmsTransactionMap(),
                         vmsMetadata.queueToEventMap(),
                         serdes,
-                        modbModules.catalog());
+                        transactionFacade);
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
                 node.host, node.port, vmsName,

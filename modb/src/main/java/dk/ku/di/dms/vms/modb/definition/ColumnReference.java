@@ -17,14 +17,14 @@ public final class ColumnReference {
     public ColumnReference(String columnName, int columnPosition, Table table) {
         this.columnName = columnName;
         this.columnPosition = columnPosition;
-        this.dataType = table.getSchema().getColumnDataType(columnPosition);
+        this.dataType = table.getSchema().columnDataType(columnPosition);
         this.table = table;
     }
 
     public ColumnReference(String columnName, Table table) {
         this.columnName = columnName;
-        this.columnPosition = table.getSchema().getColumnPosition( columnName );
-        this.dataType = table.getSchema().getColumnDataType(columnPosition);
+        this.columnPosition = table.getSchema().columnPosition( columnName );
+        this.dataType = table.getSchema().columnDataType(columnPosition);
         this.table = table;
     }
 

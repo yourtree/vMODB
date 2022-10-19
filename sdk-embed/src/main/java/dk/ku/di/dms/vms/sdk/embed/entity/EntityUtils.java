@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.sdk.embed.entity;
 
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
+import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 
@@ -39,19 +40,20 @@ public final class EntityUtils {
         return fieldMap;
     }
 
-    public static Map<String, VarHandle> getFieldsFromEntity(Class<? extends IEntity<?>> entityClazz, Schema schema) throws NoSuchFieldException, IllegalAccessException {
+    public static Map<String, VarHandle> getFieldsFromEntity(Class<? extends IEntity<?>> entityClazz,
+                                                             VmsDataSchema schema) throws NoSuchFieldException, IllegalAccessException {
 
         MethodHandles.Lookup lookup_ = MethodHandles.privateLookupIn(entityClazz, lookup);
 
-        Map<String, VarHandle> fieldMap = new HashMap<>(schema.getColumnNames().length);
+        Map<String, VarHandle> fieldMap = new HashMap<>(schema.columnNames.length);
         int i = 0;
-        for(String columnName : schema.getColumnNames()){
+        for(String columnName : schema.columnNames){
             fieldMap.put(
                     columnName,
                     lookup_.findVarHandle(
                             entityClazz,
                             columnName,
-                            DataTypeUtils.getJavaTypeFromDataType(schema.getColumnDataType(i))
+                            DataTypeUtils.getJavaTypeFromDataType(schema.columnDataTypes[i])
                     )
             );
             i++;

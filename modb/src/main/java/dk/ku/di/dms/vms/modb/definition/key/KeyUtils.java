@@ -45,8 +45,8 @@ public class KeyUtils {
 
         // 2 - build the pk
         if(columns.length == 1){
-            DataType columnType = schema.getColumnDataType( columns[0] );
-            srcAddress += ( schema.columnOffset()[columns[0]] - Schema.recordHeader);
+            DataType columnType = schema.columnDataType( columns[0] );
+            srcAddress += ( schema.columnOffset()[columns[0]] - Schema.RECORD_HEADER);
             key = SimpleKey.of( DataTypeUtils.getValue(columnType, srcAddress) );
         } else {
 
@@ -54,8 +54,8 @@ public class KeyUtils {
             long currAddress = srcAddress;
 
             for(int i = 0; i < columns.length; i++){
-                DataType columnType = schema.getColumnDataType( columns[i] );
-                currAddress += (schema.columnOffset()[columns[i]] - Schema.recordHeader);;
+                DataType columnType = schema.columnDataType( columns[i] );
+                currAddress += (schema.columnOffset()[columns[i]] - Schema.RECORD_HEADER);;
                 values[i] = DataTypeUtils.getValue(columnType, currAddress);
                 // make it default to get the correct offset next iteration
                 currAddress = srcAddress;
@@ -74,7 +74,7 @@ public class KeyUtils {
      * @param schema schema
      * @param columns the columns
      * @param srcAddress the src address
-     * @return
+     * @return record key
      */
     public static IKey buildRecordKey(Schema schema, int[] columns, long srcAddress){
 
@@ -82,7 +82,7 @@ public class KeyUtils {
 
         // 2 - build the pk
         if(columns.length == 1){
-            DataType columnType = schema.getColumnDataType( columns[0] );
+            DataType columnType = schema.columnDataType( columns[0] );
             srcAddress += schema.columnOffset()[columns[0]];
             key = SimpleKey.of( DataTypeUtils.getValue(columnType, srcAddress) );
         } else {
@@ -91,7 +91,7 @@ public class KeyUtils {
             long currAddress = srcAddress;
 
             for(int i = 0; i < columns.length; i++){
-                DataType columnType = schema.getColumnDataType( columns[i] );
+                DataType columnType = schema.columnDataType( columns[i] );
                 currAddress += schema.columnOffset()[columns[i]];
                 values[i] = DataTypeUtils.getValue(columnType, currAddress);
                 // make it default to get the correct offset next iteration

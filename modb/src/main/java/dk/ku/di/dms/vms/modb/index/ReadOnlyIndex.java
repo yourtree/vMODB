@@ -86,7 +86,7 @@ public interface ReadOnlyIndex<K> {
         long currAddress = address;
 
         for(int i = 0; i < size; i++) {
-            DataType dt = schema().getColumnDataType(i);
+            DataType dt = schema().columnDataType(i);
             objects[i] = DataTypeUtils.getValue(
                     dt,
                     currAddress );
@@ -130,8 +130,8 @@ public interface ReadOnlyIndex<K> {
             // no need to read active bit
 
             int columnIndex = filterContext.filterColumns.get(filterIdx);
-            int columnOffset = schema().getColumnOffset( columnIndex );
-            DataType dataType = schema().getColumnDataType( columnIndex );
+            int columnOffset = schema().columnOffset( columnIndex );
+            DataType dataType = schema().columnDataType( columnIndex );
 
             // how to get the versioned value?
             Object val = DataTypeUtils.getValue( dataType, address + columnOffset );

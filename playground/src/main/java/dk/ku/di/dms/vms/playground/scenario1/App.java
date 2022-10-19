@@ -11,10 +11,10 @@ import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
-import dk.ku.di.dms.vms.sdk.embed.facade.ModbModules;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;
@@ -150,7 +150,7 @@ public class App
 
         VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata("dk.ku.di.dms.vms.playground.app");
 
-        ModbModules modbModules = EmbedMetadataLoader.loadModbModulesIntoRepositories(vmsMetadata);
+        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacade(vmsMetadata);
 
         if(vmsMetadata == null) throw new IllegalStateException("Cannot start VMs, error loading metadata.");
 
@@ -164,7 +164,7 @@ public class App
                         vmsInternalPubSubService,
                         vmsMetadata.queueToVmsTransactionMap(),
                         vmsMetadata.queueToEventMap(), serdes,
-                        modbModules.catalog());
+                        transactionFacade);
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
                 "localhost", 1080, "example",

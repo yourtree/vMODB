@@ -8,8 +8,6 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.*;
 
-import static dk.ku.di.dms.vms.modb.common.type.DataType.*;
-
 /**
  * I can keep all primary indexes in mapped byte buffer
  * Hash table representation
@@ -135,7 +133,7 @@ public class BulkInsert implements Runnable,
 
     private boolean safeguardFKs(ByteBuffer record){
 
-        for(Map.Entry<Table,int[]> fkTable : table.getForeignKeysGroupedByTable().entrySet()){
+//        for(Map.Entry<Table,int[]> fkTable : table.getForeignKeysGroupedByTable().entrySet()){
 
             // how would a seek execute?
 
@@ -146,7 +144,7 @@ public class BulkInsert implements Runnable,
 //            if( ! fkTable.getKey().getPrimaryKeyIndex().exists( pk ) )
 //                return false;
 
-        }
+//        }
 
         return true;
 
@@ -170,7 +168,7 @@ public class BulkInsert implements Runnable,
                 // just need to know how many bytes are in there
                 record.position(columnOffset[constraintEntry.getKey()]);
 
-                switch (table.getSchema().getColumnDataType(constraintEntry.getValue().column)) {
+                switch (table.getSchema().columnDataType(constraintEntry.getValue().column)) {
 
                     // primitive number and byte types are always initialized as 0, cannot tell whether it is null or not... leave it as 0, when updating then can check better
 
@@ -184,7 +182,7 @@ public class BulkInsert implements Runnable,
 
             } else {
 
-                switch (table.getSchema().getColumnDataType(constraintEntry.getKey())) {
+                switch (table.getSchema().columnDataType(constraintEntry.getKey())) {
 
                     case INT -> {
                         // how is 0 stored in bytes? 0 0 0 0 ? if so, cannot define whether it is null or not

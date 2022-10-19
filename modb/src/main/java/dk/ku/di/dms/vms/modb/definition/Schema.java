@@ -4,16 +4,17 @@ import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.type.Constants;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
  * The <code>Schema</code> class describes the schema of {@link Table}.
  */
-public class Schema {
+public final class Schema {
 
     // flag active + materialized hashed PK
-    public static final int recordHeader = Header.SIZE + Integer.BYTES;
+    public static final int RECORD_HEADER = Header.SIZE + Integer.BYTES;
 
     // identification of columns that form the primary key. all tables must have a primary key
     private final int[] primaryKeyColumns;
@@ -28,20 +29,20 @@ public class Schema {
     private final int[] columnOffset;
 
     // the constraints of this schema, where key: column position and value is the actual constraint
-    private Map<Integer, ConstraintReference> constraintMap;
+    private final Map<Integer, ConstraintReference> constraintMap;
 
     // basically a map of column name to exact position in row values
     private final Map<String, Integer> columnPositionMap;
 
     private final int recordSize; // the sum of all possible data types
 
-    public Schema(final String[] columnNames, final DataType[] columnDataTypes, final int[] primaryKeyColumns, final ConstraintReference[] constraints) {
+    public Schema(String[] columnNames, DataType[] columnDataTypes, int[] primaryKeyColumns, ConstraintReference[] constraints) {
         this.columnNames = columnNames;
         this.columnDataTypes = columnDataTypes;
 
         this.columnOffset = new int[columnDataTypes.length];
 
-        int acc = recordHeader;
+        int acc = RECORD_HEADER;
         for(int j = 0; j < columnDataTypes.length; j++){
             columnOffset[j] = acc;
             switch (columnDataTypes[j]){
@@ -51,7 +52,7 @@ public class Schema {
                 case INT -> acc += Integer.BYTES;
                 case FLOAT -> acc += Float.BYTES;
                 case DOUBLE -> acc += Double.BYTES;
-                // case BOOL -> acc += 1; // byte size
+                case BOOL -> acc += 1; // byte size
             }
         }
 
@@ -64,22 +65,31 @@ public class Schema {
             columnPositionMap.put(columnNames[i],i);
         }
         this.primaryKeyColumns = primaryKeyColumns;
-        addConstraints( constraints );
+
+        if(constraints != null && constraints.length > 0){
+            this.constraintMap = new HashMap<>( constraints.length );
+            for( ConstraintReference constraintReference : constraints ){
+                this.constraintMap.put( constraintReference.column, constraintReference );
+            }
+        } else {
+            // to avoid null pointer downstream
+            this.constraintMap = Collections.emptyMap();
+        }
     }
 
-    public Integer getColumnPosition(String columnName){
+    public int columnPosition(String columnName){
         return this.columnPositionMap.get(columnName);
     }
 
-    public String getColumnName(int columnIndex){
+    public String columnName(int columnIndex){
         return this.columnNames[columnIndex];
     }
 
-    public String[] getColumnNames(){
+    public String[] columnNames(){
         return this.columnNames;
     }
 
-    public DataType getColumnDataType(int columnIndex){
+    public DataType columnDataType(int columnIndex){
         return this.columnDataTypes[columnIndex];
     }
 
@@ -91,7 +101,7 @@ public class Schema {
         return this.constraintMap;
     }
 
-    public int getColumnOffset(int columnIndex){
+    public int columnOffset(int columnIndex){
         return this.columnOffset[columnIndex];
     }
 
@@ -104,29 +114,7 @@ public class Schema {
     }
 
     public int getRecordSizeWithoutHeader(){
-        return this.recordSize - recordHeader;
-    }
-
-    private void addConstraints( ConstraintReference[] constraints ){
-
-        if(constraints != null && constraints.length > 0){
-            this.constraintMap = new HashMap<>( constraints.length );
-            for( ConstraintReference constraintReference : constraints ){
-                this.constraintMap.put( constraintReference.column, constraintReference );
-            }
-        } else {
-            // to avoid null pointer downstream
-            this.constraintMap = new HashMap<>();
-        }
-
-    }
-
-    public int[] buildColumnPositionArray(String[] columnList){
-        final int[] columnPosArray = new int[ columnList.length ];
-        for(int j = 0; j < columnList.length; j++){
-            columnPosArray[j] = getColumnPosition( columnList[j] );
-        }
-        return columnPosArray;
+        return this.recordSize - RECORD_HEADER;
     }
 
     public DataType[] columnDataTypes() {

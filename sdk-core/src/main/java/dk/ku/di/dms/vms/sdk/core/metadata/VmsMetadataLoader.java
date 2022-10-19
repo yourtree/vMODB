@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 import dk.ku.di.dms.vms.modb.common.constraint.ValueConstraintReference;
 import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
+import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
@@ -61,7 +62,12 @@ public class VmsMetadataLoader {
 
         Map<String, IVmsRepositoryFacade> repositoryFacades = new HashMap<>(5);
 
-        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, entityToTableNameMap, facadeConstructor, repositoryFacades);
+        Map<String, Tuple<SelectStatement, Type>> staticQueriesMap = loadStaticQueries(reflections);
+
+        // also load the corresponding repository facade
+        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses,
+                entityToTableNameMap, vmsDataSchemas, staticQueriesMap,
+                facadeConstructor, repositoryFacades);
 
         // necessary remaining data structures to store a vms metadata
         Map<String, VmsTransactionMetadata> queueToVmsTransactionMap = new HashMap<>();
@@ -96,8 +102,6 @@ public class VmsMetadataLoader {
          *   SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
          */
 
-        Map<String, SelectStatement> mapSelect = loadStaticQueries(reflections);
-
         return new VmsRuntimeMetadata(
                 vmsDataSchemas,
                 inputEventSchemaMap,
@@ -108,7 +112,7 @@ public class VmsMetadataLoader {
                 loadedVmsInstances,
                 repositoryFacades,
                 entityToTableNameMap,
-                mapSelect);
+                staticQueriesMap);
 
     }
 
@@ -449,8 +453,10 @@ public class VmsMetadataLoader {
     protected static Map<String, Object> loadMicroserviceClasses(
             Set<Class<?>> vmsClasses,
             Map<Class<?>, String> entityToTableNameMap,
+            Map<String, VmsDataSchema> vmsDataSchemas,
+            Map<String, Tuple<SelectStatement, Type>> staticQueriesMap,
             Constructor<IVmsRepositoryFacade> facadeConstructor,
-            Map<String, IVmsRepositoryFacade> repositoryFacades
+            Map<String, IVmsRepositoryFacade> repositoryFacades // the repository facade instances built here
             )
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
@@ -470,11 +476,14 @@ public class VmsMetadataLoader {
 
             for (Class parameterType : parameterTypes) {
 
-                IVmsRepositoryFacade facade = facadeConstructor.newInstance(parameterType);
-
                 // fill the repository facade map
                 Class<?> entityClazz = getEntityNameFromRepositoryClazz(parameterType);
                 String tableName = entityToTableNameMap.get(entityClazz);
+
+                IVmsRepositoryFacade facade = facadeConstructor.newInstance(parameterType,
+                        vmsDataSchemas.get(tableName),
+                        staticQueriesMap);
+
                 repositoryFacades.putIfAbsent( tableName, facade );
 
                 Object proxyInstance = Proxy.newProxyInstance(
@@ -709,23 +718,26 @@ public class VmsMetadataLoader {
         }
     }
 
-    private static Map<String, SelectStatement> loadStaticQueries(Reflections reflections){
+    private static Map<String, Tuple<SelectStatement, Type>> loadStaticQueries(Reflections reflections){
 
-        Map<String, SelectStatement> res = new HashMap<>(3);
+        Map<String, Tuple<SelectStatement, Type>> res = new HashMap<>(3);
         Set<Method> queryMethods = reflections.getMethodsAnnotatedWith(Query.class);
 
         for(Method queryMethod : queryMethods){
 
             try {
-                Query annotation = (Query) Arrays.stream(queryMethod.getAnnotations())
-                        .filter( a -> a.annotationType() == Query.class).findFirst().get();
-                var queryString = annotation.value();
+                Optional<Annotation> annotation = Arrays.stream(queryMethod.getAnnotations())
+                        .filter( a -> a.annotationType() == Query.class).findFirst();
+
+                if(annotation.isEmpty()) continue;
+
+                String queryString = ((Query)annotation.get()).value();
 
                 // build the query now. simple parser only
                 SelectStatement selectStatement = Parser.parse(queryString);
                 selectStatement.SQL = new StringBuilder(queryString);
 
-                res.put(queryMethod.getName(), selectStatement);
+                res.put(queryMethod.getName(), Tuple.of(selectStatement, queryMethod.getReturnType()));
 
             } catch(Exception e){
                 throw new IllegalStateException("Error on processing the query annotation: "+e.getMessage());

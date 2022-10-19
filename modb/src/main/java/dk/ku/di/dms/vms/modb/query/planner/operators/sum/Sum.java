@@ -23,7 +23,7 @@ public class Sum extends AbstractOperator {
 
     public Sum(DataType dataType,
                     int columnIndex,
-                    AbstractIndex<IKey> index) {
+                    ReadOnlyIndex<IKey> index) {
         super(dataType.value);
         this.dataType = dataType;
         this.index = index;

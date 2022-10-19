@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.sdk.embed.client;
 import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.facade.ModbModules;
@@ -55,7 +56,7 @@ public final class VmsApplication {
             Set<String> toExclude = entitiesToExclude != null ? Arrays.stream(entitiesToExclude).collect(
                     Collectors.toSet()) : new HashSet<>();
 
-            ModbModules modbModules = EmbedMetadataLoader.loadModbModulesIntoRepositories(vmsMetadata, toExclude);
+            TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacade(vmsMetadata, toExclude);
 
             assert vmsMetadata != null;
 
@@ -73,7 +74,7 @@ public final class VmsApplication {
                             vmsMetadata.queueToVmsTransactionMap(),
                             vmsMetadata.queueToEventMap(),
                             serdes,
-                            modbModules.catalog());
+                            transactionFacade);
 
             // ideally lastTid and lastBatch must be read from the log
 

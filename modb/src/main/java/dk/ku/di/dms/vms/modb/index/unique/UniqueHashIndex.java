@@ -17,7 +17,8 @@ import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
 
 /**
  * This index does not support growing number of keys
- * Could deal with collisions by having a linked list
+ * Could deal with collisions by having a linked list.
+ * This index is oblivious to isolation level and data constraints.
  */
 public final class UniqueHashIndex extends AbstractIndex<IKey> {
 
@@ -25,6 +26,15 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
 
     private final RecordBufferContext recordBufferContext;
 
+    public UniqueHashIndex(RecordBufferContext recordBufferContext, Schema schema){
+        super(schema, schema.getPrimaryKeyColumns());
+        this.recordBufferContext = recordBufferContext;
+    }
+
+    /**
+     * Unique index for non-primary keys.
+     * In other words, a constructor for a secondary index
+     */
     public UniqueHashIndex(RecordBufferContext recordBufferContext, Schema schema, int... columnsIndex){
         super(schema, columnsIndex);
         this.recordBufferContext = recordBufferContext;
@@ -53,7 +63,7 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
 
         for(int index = 0; index < maxColumns; index++) {
 
-            DataType dt = this.schema.getColumnDataType(index);
+            DataType dt = this.schema.columnDataType(index);
 
             DataTypeUtils.callWriteFunction( currAddress,
                     dt,
@@ -75,7 +85,7 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
 
         UNSAFE.putBoolean(null, pos, true);
         UNSAFE.putInt(null, pos, key.hashCode());
-        UNSAFE.copyMemory(null, srcAddress, null, pos + Schema.recordHeader, schema.getRecordSizeWithoutHeader());
+        UNSAFE.copyMemory(null, srcAddress, null, pos + Schema.RECORD_HEADER, schema.getRecordSizeWithoutHeader());
         // this.size++; // this should only be set after commit, so we spread the overhead
     }
 
@@ -88,7 +98,7 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
 
         for(int index = 0; index < maxColumns; index++) {
 
-            DataType dt = this.schema.getColumnDataType(index);
+            DataType dt = this.schema.columnDataType(index);
 
             DataTypeUtils.callWriteFunction( currAddress,
                     dt,
