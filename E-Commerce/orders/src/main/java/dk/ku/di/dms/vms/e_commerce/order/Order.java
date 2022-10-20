@@ -1,9 +1,8 @@
 package dk.ku.di.dms.vms.e_commerce.order;
 
-import dk.ku.di.dms.vms.e_commerce.common.Address;
-import dk.ku.di.dms.vms.e_commerce.common.Card;
-import dk.ku.di.dms.vms.e_commerce.common.Customer;
-import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
+import dk.ku.di.dms.vms.e_commerce.common.entity.Address;
+import dk.ku.di.dms.vms.e_commerce.common.entity.Card;
+import dk.ku.di.dms.vms.e_commerce.common.entity.Customer;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
@@ -18,19 +17,72 @@ public class Order implements IEntity<Long> {
     @GeneratedValue(strategy = GenerationType.SEQUENCE)
     public long id;
 
-    @VmsForeignKey(table= Customer.class, column = "id")
-    public long customerId;
+    // customer
 
-    @VmsForeignKey(table= Address.class, column = "id")
-    public int addressId;
+    @Column
+    public long customer_id;
 
-    @VmsForeignKey(table= Card.class, column = "id")
-    public int cardId;
+    @Column
+    public String firstName;
+
+    @Column
+    public String lastName;
+
+    @Column
+    public String username;
+
+    // address
+    @Column
+    public String street;
+
+    @Column
+    public String number;
+
+    @Column
+    public String country;
+
+    @Column
+    public String city;
+
+    @Column
+    public String postCode;
+
+    // card
+
+    @Column
+    public String longNum;
+
+    @Column
+    public Date expires;
+
+    @Column
+    public String ccv;
 
     @Column
     public Date date;
 
     @Column
     private float total;
+
+    public Order(Customer customer, Card card, Address address, float total){
+
+        this.firstName = customer.firstName;
+        this.lastName = customer.lastName;
+        this.username = customer.username;
+
+        this.longNum = card.longNum;
+        this.expires = card.expires;
+        this.ccv = card.ccv;
+
+        this.date = new Date();
+
+        this.street = address.street;
+        this.number = address.number;
+        this.country = address.country;
+        this.city = address.city;
+        this.postCode = address.postCode;
+
+        this.total = total;
+    }
 
 }

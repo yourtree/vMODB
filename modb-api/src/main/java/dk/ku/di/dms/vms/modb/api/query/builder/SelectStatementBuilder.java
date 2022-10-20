@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * The clauses from a SELECT statement. Additional clauses found in {@link AbstractStatementBuilder}
- * https://docs.microsoft.com/en-us/sql/t-sql/queries/queries?view=sql-server-ver15
+ * <a href="https://docs.microsoft.com/en-us/sql/t-sql/queries/queries?view=sql-server-ver15">...</a>
  */
 public class SelectStatementBuilder extends AbstractStatementBuilder  {
 

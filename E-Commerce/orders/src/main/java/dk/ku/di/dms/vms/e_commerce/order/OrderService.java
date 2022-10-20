@@ -1,38 +1,50 @@
 package dk.ku.di.dms.vms.e_commerce.order;
 
+import dk.ku.di.dms.vms.e_commerce.common.entity.Item;
 import dk.ku.di.dms.vms.e_commerce.common.events.NewOrderItemResource;
 import dk.ku.di.dms.vms.e_commerce.common.events.NewOrderResult;
-import dk.ku.di.dms.vms.e_commerce.common.events.PaymentRequest;
+import dk.ku.di.dms.vms.e_commerce.common.events.NewOrderUserResource;
 import dk.ku.di.dms.vms.e_commerce.common.events.PaymentResponse;
+import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
+
+import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 
 @Microservice("order")
 public class OrderService {
 
     private final IOrderRepository orderRepository;
 
-    public OrderService(IOrderRepository orderRepository) {
+    private final IOrderItemRepository orderItemRepository;
+
+    public OrderService(IOrderRepository orderRepository,
+                        IOrderItemRepository itemRepository) {
         this.orderRepository = orderRepository;
+        this.orderItemRepository = itemRepository;
     }
 
-    // maybe also make sure discounts are applied correctly, that means receiving the discount input.
-    // if discount is no longer applied then must process the correct value or this the job of the cart?
-    // usually this is the case. the cart must make sure the discount is applied correctly
-    // discount microservice can receive some items, apply the discounts and then create the
-    // responsible for matching the new product prices...?
-    public PaymentRequest newOrder(NewOrderItemResource newOrderItemResource){ // can save this as a json
+    @Inbound(values = {"new-order-item-resource","new-order-user-resource","payment-response"})
+    @Outbound("new-order-result")
+    @Transactional(type = RW)
+    public NewOrderResult newOrder(NewOrderItemResource newOrderItemResource, NewOrderUserResource newOrderUserResource, PaymentResponse paymentResponse){ // can save this as a json
 
-        // create shipment... actually create a new order... other vmss will listen to that, like the shipment and recommender engine
+        if(!paymentResponse.authorised) return null;
+
+        // to get the id from the MODB
+        Order order = orderRepository.insertAndGet( new Order( newOrderUserResource.customer,  newOrderUserResource.card,  newOrderUserResource.address, paymentResponse.debitAmount ) );
+
+        for(Item item : newOrderItemResource.items){
+            orderItemRepository.insert( new OrderItem( item.quantity, item.unitPrice, order.id ) );
+        }
+
+
+
+        // create shipment event... actually create a new order... other vmss will listen to that, like the shipment and recommender engine
 
         return null;
-    }
 
-    public NewOrderResult processPaymentResponse(PaymentResponse paymentResponse){
-
-        // and then request the stock to process the items.. or we can as the tpcc does.. or we can create refill stock event... many options on how to model the benchmark
-        // how does apiary is doing?
-
-        return null;
     }
 
 }

@@ -247,9 +247,23 @@ public final class TransactionFacade {
     public void insert(Table table, Object[] values){
         ConsistentIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
-        if(index.insert(pk, values) && fkConstraintViolation(table, values)){
+        if(index.insert(pk, values) && !fkConstraintViolation(table, values)){
             INDEX_WRITES.get().add(index);
             return;
+        }
+        undoTransactionWrites();
+        throw new RuntimeException("Constraint violation.");
+    }
+
+    public Long insertAndGet(Table table, Object[] values){
+        ConsistentIndex index = table.primaryKeyIndex();
+        // IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
+        if(!fkConstraintViolation(table, values)){
+            Long key_ = index.insertAndGet(values);
+            if(key_ != null) {
+                INDEX_WRITES.get().add(index);
+                return key_;
+            }
         }
         undoTransactionWrites();
         throw new RuntimeException("Constraint violation.");
@@ -262,7 +276,7 @@ public final class TransactionFacade {
     public void update(Table table, Object[] values){
         ConsistentIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
-        if(index.update(pk, values) && fkConstraintViolation(table, values)){
+        if(index.update(pk, values) && !fkConstraintViolation(table, values)){
             INDEX_WRITES.get().add(index);
             return;
         }

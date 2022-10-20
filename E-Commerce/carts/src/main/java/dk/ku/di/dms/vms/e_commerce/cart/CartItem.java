@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.e_commerce.cart;
 
-import dk.ku.di.dms.vms.e_commerce.common.Item;
+import dk.ku.di.dms.vms.e_commerce.common.entity.Item;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;

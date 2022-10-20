@@ -27,12 +27,12 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
     T deleteAllByKey(List<PK> keys);
 
     T lookupByKey(PK key);
+    List<T> lookupByKeys(List<PK> keys);
 
     /**
      * Used for issuing update, insert, and delete statements.
      * It does not return any value because
      * any error is handled by the system itself
-     *
      * Can be insert, update, delete
       */
     void issue(IStatement statement);

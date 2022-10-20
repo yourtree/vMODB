@@ -1,29 +1,32 @@
 package dk.ku.di.dms.vms.e_commerce.order;
 
-import dk.ku.di.dms.vms.e_commerce.common.Item;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
-import javax.persistence.Entity;
-import javax.persistence.IdClass;
-import java.io.Serializable;
+import javax.persistence.*;
 
 @Entity
-@VmsTable(name="cart_items")
-@IdClass(OrderItem.Id.class)
-public class OrderItem implements IEntity<OrderItem.Id> {
+@VmsTable(name="order_items")
+public class OrderItem implements IEntity<Long> {
 
-    public static class Id implements Serializable {
-        public long order_id;
-        public long item_id;
-        public Id(){}
-    }
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    public long id;
+
+    @Column
+    public int quantity;
+
+    @Column
+    public float unitPrice;
 
     @VmsForeignKey(table=Order.class, column = "id")
-    public long cart_id;
+    public long order_id;
 
-    @VmsForeignKey(table= Item.class, column = "id")
-    public long item_id;
+    public OrderItem(int quantity, float unitPrice, long order_id) {
+        this.quantity = quantity;
+        this.unitPrice = unitPrice;
+        this.order_id = order_id;
+    }
 
 }

@@ -1,8 +1,8 @@
-package dk.ku.di.dms.vms.e_commerce.payment;
+package dk.ku.di.dms.vms.e_commerce.shipment;
 
 import dk.ku.di.dms.vms.e_commerce.common.entity.Address;
-import dk.ku.di.dms.vms.e_commerce.common.entity.Card;
 import dk.ku.di.dms.vms.e_commerce.common.entity.Customer;
+import dk.ku.di.dms.vms.modb.api.annotations.ExternalVmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
@@ -10,12 +10,16 @@ import javax.persistence.*;
 import java.util.Date;
 
 @Entity
-@VmsTable(name="payment")
-public class Payment implements IEntity<Long> {
+@VmsTable(name="shipment")
+public class Shipment implements IEntity<Long> {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE)
     public long id;
+
+    @Column
+    @ExternalVmsForeignKey(vms="order",column = "id")
+    public long orderId;
 
     // customer
 
@@ -31,22 +35,7 @@ public class Payment implements IEntity<Long> {
     @Column
     public String username;
 
-    // card
-
-    @Column
-    public String longNum;
-
-    @Column
-    public Date expires;
-
-    @Column
-    public String ccv;
-
-    @Column
-    public Date date;
-
     // address
-
     @Column
     public String street;
 
@@ -62,19 +51,13 @@ public class Payment implements IEntity<Long> {
     @Column
     public String postCode;
 
-    public boolean authorized;
+    public Date date;
 
-    public Payment(){}
-
-    public Payment(Customer customer, Card card, Address address){
+    public Shipment(Long orderId, Customer customer, Address address){
         this.customer_id = customer.id;
         this.firstName = customer.firstName;
         this.lastName = customer.lastName;
         this.username = customer.username;
-
-        this.longNum = card.longNum;
-        this.expires = card.expires;
-        this.ccv = card.ccv;
 
         this.date = new Date();
 

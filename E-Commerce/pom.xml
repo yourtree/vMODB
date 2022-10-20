@@ -14,6 +14,7 @@
         <module>carts</module>
         <module>e-commerce-common</module>
         <module>payment</module>
+        <module>shipment</module>
     </modules>
 
     <parent>

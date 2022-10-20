@@ -9,6 +9,7 @@ import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.definition.Row;
 import dk.ku.di.dms.vms.modb.definition.Table;
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.modb.transaction.internal.CircularBuffer;
@@ -47,6 +48,8 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
     private final Map<String, VarHandle> pkFieldMap;
 
+    private final VarHandle pkPrimitive;
+
     /**
      * Cache of objects in memory.
      * Circular buffer of records (represented as object arrays) for a given index
@@ -84,9 +87,10 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
         if(!pkClazz.isPrimitive()){
             this.pkFieldMap = EntityUtils.getFieldsFromPk(pkClazz);
+            this.pkPrimitive = null;
         } else {
-            // TODO
             this.pkFieldMap = Collections.emptyMap();
+            this.pkPrimitive = EntityUtils.getPrimitiveFieldOfPk(pkClazz, schema);
         }
 
         this.staticQueriesMap = staticQueriesMap;
@@ -152,6 +156,14 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
                 Object[] values = extractFieldValuesFromEntityObject(args[0]);
                 this.transactionFacade.insert(this.table, values);
             }
+            case "insertAndGet" -> {
+                // cache the entity
+                Object cached = args[0];
+                Object[] values = extractFieldValuesFromEntityObject(args[0]);
+                Long key_ = this.transactionFacade.insertAndGet(this.table, values);
+                this.setKeyValueOnObject( key_, cached );
+                return cached;
+            }
             case "insertAll" -> this.insertAll((List<Object>) args[0]);
             case "fetch" -> {
                 // dispatch to analyzer passing the clazz param
@@ -212,6 +224,10 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
             fieldIdx++;
         }
         return values;
+    }
+
+    private void setKeyValueOnObject( Long key, Object object ){
+        pkPrimitive.set(object, key);
     }
 
     private Object[] extractFieldValuesFromEntityObject(Object entityObject) {

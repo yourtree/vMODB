@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Header;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
@@ -21,6 +22,7 @@ import jdk.internal.misc.Unsafe;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.R;
 import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
@@ -45,6 +47,9 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
     private final Map<IKey, OperationSetOfKey> updatesPerKeyMap;
 
+    // for PK generation. for now, all strategies use this (auto, sequence, etc)
+    private AtomicLong sequencer;
+
     /**
      * Optimization is verifying whether this thread is R or RW.
      * If R, no need to allocate a List
@@ -64,6 +69,12 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
     public ConsistentIndex(ReadWriteIndex<IKey> primaryKeyIndex) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
+    }
+
+    public ConsistentIndex(ReadWriteIndex<IKey> primaryKeyIndex, boolean pkGenerationEnabled) {
+        this.primaryKeyIndex = primaryKeyIndex;
+        this.updatesPerKeyMap = new ConcurrentHashMap<>();
+        if(pkGenerationEnabled) this.sequencer = new AtomicLong(0);
     }
 
     @Override
@@ -410,6 +421,15 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
         return true;
 
+    }
+
+    public Long insertAndGet(Object[] values){
+        Long key_ = this.sequencer.incrementAndGet();
+        IKey key = KeyUtils.buildInputKey( key_ );
+        if(this.insert( key, values )){
+            return key_;
+        }
+        return null;
     }
 
     public boolean update(IKey key, Object[] values) {

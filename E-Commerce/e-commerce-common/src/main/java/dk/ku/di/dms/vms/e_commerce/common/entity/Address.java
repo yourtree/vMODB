@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.e_commerce.common;
+package dk.ku.di.dms.vms.e_commerce.common.entity;
 
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
