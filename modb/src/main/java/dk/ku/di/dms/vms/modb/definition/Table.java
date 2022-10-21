@@ -3,8 +3,8 @@ package dk.ku.di.dms.vms.modb.definition;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.ConsistentIndex;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.SecondaryIndex;
 
 import java.util.*;
 
@@ -32,33 +32,37 @@ public final class Table {
      * (iii) Foreign key necessarily require coordination across different indexes that are maintaining records.
      *       In other words, foreign key maintenance is a concurrency control behavior.
      * /
-     * The array int[] are the column positions, ordered, that refer to the other table.
+     * The array int[] are the column positions, ordered, that form the foreign key (i.e., refer to the other table).
+     * Who I am pointing to? The referenced or parent table.
      */
-    private final Map<ConsistentIndex, int[]> foreignKeys;
+    private final Map<PrimaryIndex, int[]> foreignKeys;
+
+    // Who is pointing to me? Who am I parenting?
+    // private final List<ConsistentIndex> children;
 
     // all tables must have a pk. besides, used for fast path on planner
-    private final ConsistentIndex primaryKeyIndex;
+    private final PrimaryIndex primaryIndex;
 
     // Other indexes, hashed by the column set in order of the schema
     // logical key - column list in order that appear in the schema
     // physical key - column list in order of index definition
-    public Map<IIndexKey, AbstractIndex<IKey>> indexes;
+    public Map<IIndexKey, SecondaryIndex> secondaryIndexMap;
 
-    public Table(String name, Schema schema, ConsistentIndex primaryKeyIndex, Map<ConsistentIndex, int[]> foreignKeys){
+    public Table(String name, Schema schema, PrimaryIndex primaryIndex, Map<PrimaryIndex, int[]> foreignKeys){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
-        this.indexes = new HashMap<>();
-        this.primaryKeyIndex = primaryKeyIndex;
+        this.secondaryIndexMap = new HashMap<>();
+        this.primaryIndex = primaryIndex;
         this.foreignKeys = foreignKeys;
     }
 
-    public Table(String name, Schema schema, ConsistentIndex primaryKeyIndex){
+    public Table(String name, Schema schema, PrimaryIndex primaryIndex){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
-        this.indexes = new HashMap<>();
-        this.primaryKeyIndex = primaryKeyIndex;
+        this.secondaryIndexMap = new HashMap<>();
+        this.primaryIndex = primaryIndex;
         this.foreignKeys = Collections.emptyMap();
     }
 
@@ -76,14 +80,14 @@ public final class Table {
     }
 
     public ReadWriteIndex<IKey> underlyingPrimaryKeyIndex(){
-        return this.primaryKeyIndex.underlyingIndex();
+        return this.primaryIndex.underlyingIndex();
     }
 
-    public ConsistentIndex primaryKeyIndex(){
-        return this.primaryKeyIndex;
+    public PrimaryIndex primaryKeyIndex(){
+        return this.primaryIndex;
     }
 
-    public Map<ConsistentIndex, int[]> foreignKeys(){
+    public Map<PrimaryIndex, int[]> foreignKeys(){
         return this.foreignKeys;
     }
 

@@ -19,6 +19,7 @@ public class CartItem implements IEntity<CartItem.Id> {
         public Id(){}
     }
 
+    // TODO create a secondary index, non unique hash. why? because it is a composite primary key, may have many cart_id of the same value
     @VmsForeignKey(table=Cart.class, column = "id")
     public long cart_id;
 

@@ -8,7 +8,12 @@ import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
 import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
 
-public abstract class AbstractOperator {
+/**
+ * Used for simple queries.
+ * This can speed up most OLTP workloads because the number of function calls
+ * is reduced, since there is no data being passed along different operators.
+ */
+public abstract class AbstractSimpleOperator {
 
     // the first node (but last to be acquired) of the memory segment nodes
     protected MemoryRefNode memoryRefNode = null;
@@ -17,7 +22,7 @@ public abstract class AbstractOperator {
 
     protected final int entrySize;
 
-    public AbstractOperator(int entrySize) {
+    public AbstractSimpleOperator(int entrySize) {
         this.entrySize = entrySize;
     }
 
@@ -43,7 +48,7 @@ public abstract class AbstractOperator {
 
     /**
      * For operators that don't know the amount of records from start
-     * @param size
+     * @param size the size needed next to allocate a new tuple
      */
     protected void ensureMemoryCapacity(int size){
 

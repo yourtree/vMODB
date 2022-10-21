@@ -6,7 +6,6 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
-import dk.ku.di.dms.vms.sdk.embed.facade.ModbModules;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;

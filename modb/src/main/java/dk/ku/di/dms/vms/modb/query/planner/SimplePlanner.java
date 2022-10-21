@@ -10,7 +10,7 @@ import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
+import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.query.planner.operators.count.IndexCount;
 import dk.ku.di.dms.vms.modb.query.planner.operators.count.IndexCountGroupBy;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.AbstractScan;
@@ -22,15 +22,15 @@ import dk.ku.di.dms.vms.modb.query.planner.operators.sum.Sum;
 import java.util.List;
 
 /**
- * Planner that only takes into consideration simple queries.
+ * Planner that only takes into consideration simple read and write queries.
  * Those involving single tables and filters, and no
- * aggregation or joins.
+ * multiple aggregations or joins with more than 2 tables.
  */
-public class Planner {
+public class SimplePlanner {
 
-    public Planner(){}
+    public SimplePlanner(){}
 
-    public AbstractOperator plan(QueryTree queryTree) {
+    public AbstractSimpleOperator plan(QueryTree queryTree) {
 
         if(queryTree.isSimpleScan()){
             return planSimpleSelect(queryTree);
@@ -40,11 +40,32 @@ public class Planner {
             return planSimpleAggregate(queryTree);
         }
 
+        if(queryTree.isSimpleJoin()){
+            // TODO
+            return null;
+        }
+
+        if(queryTree.hasMultipleJoins()){
+            return planMultipleJoinsQuery(queryTree);
+        }
+
         return null;
 
     }
 
-    private AbstractOperator planSimpleAggregate(QueryTree queryTree) {
+    private AbstractSimpleOperator planMultipleJoinsQuery(QueryTree queryTree) {
+
+        // order joins in order of join operation
+        // simple heuristic, table with most records goes first, but care must be taken on precedence of foreign keys
+
+        // dynamic programming. which join must execute first?
+        // ordered by the number of records? index type?
+
+        return null;
+
+    }
+
+    private AbstractSimpleOperator planSimpleAggregate(QueryTree queryTree) {
 
         //
         // Table tb = queryTree.groupByProjections.get(0).columnReference.table;
@@ -56,7 +77,7 @@ public class Planner {
         switch (queryTree.groupByProjections.get(0).groupByOperation){
             case SUM -> {
                 // is there any index that applies?
-                ReadOnlyIndex<IKey> indexSelected = getOptimalHashIndex(
+                ReadOnlyIndex<IKey> indexSelected = getOptimalIndex(
                         queryTree.groupByProjections.get(0).columnReference.table,
                         queryTree.wherePredicates
                         );
@@ -71,7 +92,7 @@ public class Planner {
             }
             case COUNT -> {
                 Table tb = queryTree.groupByProjections.get(0).columnReference.table;
-                ReadOnlyIndex<IKey> indexSelected = getOptimalHashIndex(
+                ReadOnlyIndex<IKey> indexSelected = getOptimalIndex(
                         queryTree.groupByProjections.get(0).columnReference.table,
                         queryTree.wherePredicates
                         );
@@ -110,7 +131,7 @@ public class Planner {
 
         // avoid one of the columns to have expression different from EQUALS
         // to be picked by unique and non unique index
-        ReadOnlyIndex<IKey> indexSelected = getOptimalHashIndex(tb, queryTree.wherePredicates);
+        ReadOnlyIndex<IKey> indexSelected = getOptimalIndex(tb, queryTree.wherePredicates);
 
         // build projection
 
@@ -136,7 +157,7 @@ public class Planner {
 
     }
 
-    public ReadOnlyIndex<IKey> getOptimalHashIndex(Table table, List<WherePredicate> wherePredicates) {
+    public ReadOnlyIndex<IKey> getOptimalIndex(Table table, List<WherePredicate> wherePredicates) {
         int[] filterColumns = wherePredicates.stream()
                  .filter( wherePredicate -> wherePredicate.expression == ExpressionTypeEnum.EQUALS )
                  .mapToInt( WherePredicate::getColumnPosition ).toArray();
@@ -156,15 +177,15 @@ public class Planner {
             return table.underlyingPrimaryKeyIndex();
         }
 
-        if(table.indexes.get(indexKey) != null){
-            return table.indexes.get(indexKey);
+        if(table.secondaryIndexMap.get(indexKey) != null){
+            return table.secondaryIndexMap.get(indexKey);
         }
 
         // no index apply so far, perhaps a subset then?
         List<int[]> combinations = Combinatorics.getAllPossibleColumnCombinations(filterColumns);
 
         // heuristic: return the one that embraces more columns
-        AbstractIndex<IKey> bestSoFar = null;
+        ReadOnlyIndex<IKey> bestSoFar = null;
         int maxLength = 0;
         for(int[] arr : combinations) {
 
@@ -174,9 +195,9 @@ public class Planner {
                 indexKey = CompositeKey.of(filterColumns);
             }
 
-            if(table.indexes.get(indexKey) != null){
+            if(table.secondaryIndexMap.get(indexKey) != null){
                 if(arr.length > maxLength){
-                    bestSoFar = table.indexes.get(indexKey);
+                    bestSoFar = table.secondaryIndexMap.get(indexKey);
                     maxLength = arr.length;
                 }
             }
@@ -186,5 +207,7 @@ public class Planner {
         return bestSoFar;
 
     }
+
+
 
 }

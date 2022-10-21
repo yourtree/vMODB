@@ -9,7 +9,6 @@ import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.definition.Row;
 import dk.ku.di.dms.vms.modb.definition.Table;
-import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.modb.transaction.internal.CircularBuffer;
@@ -160,7 +159,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
                 // cache the entity
                 Object cached = args[0];
                 Object[] values = extractFieldValuesFromEntityObject(args[0]);
-                Long key_ = this.transactionFacade.insertAndGet(this.table, values);
+                Object key_ = this.transactionFacade.insertAndGet(this.table, values);
                 this.setKeyValueOnObject( key_, cached );
                 return cached;
             }
@@ -226,7 +225,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         return values;
     }
 
-    private void setKeyValueOnObject( Long key, Object object ){
+    private void setKeyValueOnObject( Object key, Object object ){
         pkPrimitive.set(object, key);
     }
 

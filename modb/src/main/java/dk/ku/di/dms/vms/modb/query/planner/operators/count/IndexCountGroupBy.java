@@ -28,7 +28,7 @@ public class IndexCountGroupBy extends AbstractCount {
 
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
 
-        Map<Integer,Integer> countMap = new HashMap<Integer,Integer>();
+        Map<Integer,Integer> countMap = new HashMap<>();
 
         if(index.getType() == IndexTypeEnum.UNIQUE){
 

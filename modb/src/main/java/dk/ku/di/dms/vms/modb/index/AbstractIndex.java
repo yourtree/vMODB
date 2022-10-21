@@ -46,16 +46,19 @@ public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
 
     // use bitwise comparison to find whether a given index exists for such columns
     // https://stackoverflow.com/questions/8504288/java-bitwise-comparison-of-a-byte/8504393
+    @Override
     public int hashCode(){
         return this.hashCode;
     }
 
+    @Override
     public int[] columns(){
         return this.columns;
     }
 
-    public HashSet<Integer> columnsHash() {
-        return columnsHash;
+    @Override
+    public boolean containsColumn(int columnPos) {
+        return columnsHash.contains(columnPos);
     }
 
     @Override
@@ -65,6 +68,7 @@ public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
 
     public abstract int size();
 
+    @Override
     public Schema schema(){
         return this.schema;
     }

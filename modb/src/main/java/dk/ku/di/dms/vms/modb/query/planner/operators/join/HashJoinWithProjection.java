@@ -6,11 +6,11 @@ import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
+import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 
-public class HashJoinWithProjection extends AbstractOperator {
+public class HashJoinWithProjection extends AbstractSimpleOperator {
 
     public final ReadOnlyIndex<IKey> leftIndex;
     public final ReadOnlyIndex<IKey> rightIndex;

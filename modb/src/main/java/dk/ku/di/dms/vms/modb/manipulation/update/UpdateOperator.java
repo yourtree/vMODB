@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.modb.api.query.statement.UpdateStatement;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.ConsistentIndex;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
 /**
  * Two strategies:
@@ -14,7 +14,7 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.ConsistentIndex;
  */
 public final class UpdateOperator {
 
-    public static void run(UpdateStatement updateStatement, ConsistentIndex index, FilterContext filterContext, IKey... keys){
+    public static void run(UpdateStatement updateStatement, PrimaryIndex index, FilterContext filterContext, IKey... keys){
 
         if(index.getType() == IndexTypeEnum.UNIQUE){
 
@@ -41,7 +41,7 @@ public final class UpdateOperator {
 
     }
 
-    public static void run(UpdateStatement updateStatement, ConsistentIndex index, FilterContext filterContext){
+    public static void run(UpdateStatement updateStatement, PrimaryIndex index, FilterContext filterContext){
 
 
 

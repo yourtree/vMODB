@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.modb.common.transaction;
 
-import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
-
 /**
  * This class is used differently depending on the actual deployment
  * If embed, only one instance of this class is used across modules
@@ -24,11 +22,11 @@ public final class TransactionMetadata {
         lastWriteTaskFinished = TRANSACTION_CONTEXT.get().tid;
     }
 
-    public static void registerTransactionStart(long tid, int identifier, TransactionTypeEnum type){
+    public static void registerTransactionStart(long tid, int identifier, boolean readOnly){
         TRANSACTION_CONTEXT.set( new TransactionContext(
                 new TransactionId(tid, identifier),
                 lastWriteTaskFinished,
-                type )
+                readOnly )
         );
     }
 

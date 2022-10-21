@@ -69,7 +69,7 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
     public VmsTransactionTaskResult call() {
 
         // register thread in the transaction facade
-        TransactionMetadata.registerTransactionStart(this.tid, this.identifier, this.signature.type());
+        TransactionMetadata.registerTransactionStart(this.tid, this.identifier, this.signature.type() == TransactionTypeEnum.R);
 
         try {
 

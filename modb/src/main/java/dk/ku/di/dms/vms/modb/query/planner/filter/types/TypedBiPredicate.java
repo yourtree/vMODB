@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.modb.query.planner.filter.types;
 
 /**
  * Same as BiPredicate, but without the need to express a second typed parameter
- * Saving runtime resources
  * @param <T>
  */
 @FunctionalInterface

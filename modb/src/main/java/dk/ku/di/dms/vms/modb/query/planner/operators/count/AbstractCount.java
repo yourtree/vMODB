@@ -2,9 +2,9 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.count;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
+import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 
-public class AbstractCount extends AbstractOperator {
+public class AbstractCount extends AbstractSimpleOperator {
 
     protected final ReadOnlyIndex<IKey> index;
 

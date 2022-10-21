@@ -3,17 +3,15 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.sum;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
+import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
-import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class Sum extends AbstractOperator {
+public class Sum extends AbstractSimpleOperator {
 
     protected final ReadOnlyIndex<IKey> index;
 

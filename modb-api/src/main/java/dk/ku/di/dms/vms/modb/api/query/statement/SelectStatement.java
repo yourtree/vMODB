@@ -1,11 +1,16 @@
 package dk.ku.di.dms.vms.modb.api.query.statement;
 
 import dk.ku.di.dms.vms.modb.api.query.clause.*;
+import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
 
 import java.util.List;
 
 /**
- * No support for UNION, EXCEPT, INTERSECT yet
+ * No support for UNION, EXCEPT, INTERSECT yet.
+ * This class is immutable. That is, by the time it is created, none of its structure can be changed.
+ * However, to avoid the overhead on creating the same statement on every call,
+ * this class can be created as static on a class annotated as {@link dk.ku.di.dms.vms.modb.api.annotations.Microservice},
+ * and benefit of parameterized calls
  */
 public final class SelectStatement extends AbstractStatement {
 
@@ -39,6 +44,18 @@ public final class SelectStatement extends AbstractStatement {
     @Override
     public SelectStatement asSelectStatement() {
         return this;
+    }
+
+    private boolean parameterized = false;
+
+    public void addParameterizedCondition(String param, final ExpressionTypeEnum expr, final Object value){
+        if(parameterized) {
+            whereClause.set( whereClause.size() - 1, new WhereClauseElement<>(param,expr,value) );
+            return;
+        }
+        WhereClauseElement<Object> element = new WhereClauseElement<>(param,expr,value);
+        this.whereClause.add( element );
+        parameterized = true;
     }
 
 }

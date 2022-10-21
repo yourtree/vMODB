@@ -9,7 +9,7 @@ import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.ConsistentIndex;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
@@ -110,7 +110,7 @@ public class EmbedMetadataLoader {
 
         }
 
-        Map<String, ConsistentIndex> vmsDataSchemaToIndexMap = new HashMap<>(dataSchemaToPkMap.size());
+        Map<String, PrimaryIndex> vmsDataSchemaToIndexMap = new HashMap<>(dataSchemaToPkMap.size());
 
         // mount vms data schema to consistent index map
         for (var entry : dataSchemaToPkMap.entrySet()) {
@@ -122,7 +122,7 @@ public class EmbedMetadataLoader {
 
             UniqueHashIndex pkIndex = new UniqueHashIndex(recordBufferContext, schema);
 
-            ConsistentIndex consistentIndex = new ConsistentIndex(pkIndex);
+            PrimaryIndex consistentIndex = new PrimaryIndex(pkIndex);
 
             vmsDataSchemaToIndexMap.put( entry.getKey().vmsName, consistentIndex );
 
@@ -133,7 +133,7 @@ public class EmbedMetadataLoader {
             VmsDataSchema vmsDataSchema = entry.getKey();
             Tuple<Schema, Map<String, int[]>> tupleSchemaFKs = entry.getValue();
 
-            Map<ConsistentIndex, int[]> fks = new HashMap<>();
+            Map<PrimaryIndex, int[]> fks = new HashMap<>();
 
             // build fks
             for(var fk : tupleSchemaFKs.t2().entrySet()){

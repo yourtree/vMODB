@@ -13,4 +13,7 @@ public class NewOrderItemResource {
 //    float[] prices;
     public List<Item> items;
 
+    public NewOrderItemResource(List<Item> items) {
+        this.items = items;
+    }
 }

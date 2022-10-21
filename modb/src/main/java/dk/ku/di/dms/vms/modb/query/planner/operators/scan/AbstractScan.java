@@ -4,10 +4,10 @@ import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
+import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
-public abstract class AbstractScan extends AbstractOperator  {
+public abstract class AbstractScan extends AbstractSimpleOperator {
 
     // for now used to build dynamically a new run
     public final Table table;

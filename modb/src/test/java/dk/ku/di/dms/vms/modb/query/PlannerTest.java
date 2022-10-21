@@ -1,13 +1,5 @@
 package dk.ku.di.dms.vms.modb.query;
 
-import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
-import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
-import dk.ku.di.dms.vms.modb.query.planner.Combinatorics;
-import dk.ku.di.dms.vms.modb.query.planner.Planner;
-import org.junit.Test;
-
-import java.util.List;
-
 public class PlannerTest {
 
 //    @Test

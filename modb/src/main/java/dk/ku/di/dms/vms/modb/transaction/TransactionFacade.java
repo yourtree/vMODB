@@ -9,24 +9,21 @@ import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.ReadWriteIndex;
-import dk.ku.di.dms.vms.modb.manipulation.update.UpdateOperator;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.modb.query.planner.Planner;
+import dk.ku.di.dms.vms.modb.query.planner.SimplePlanner;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractOperator;
+import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.ConsistentIndex;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.R;
 
 /**
  * A transaction management facade
@@ -41,8 +38,8 @@ import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.R;
  */
 public final class TransactionFacade {
 
-    private static final ThreadLocal<Set<ConsistentIndex>> INDEX_WRITES = ThreadLocal.withInitial( () -> {
-        if(TransactionMetadata.TRANSACTION_CONTEXT.get().type != R) {
+    private static final ThreadLocal<Set<PrimaryIndex>> INDEX_WRITES = ThreadLocal.withInitial( () -> {
+        if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
             return new HashSet<>(2);
         }
         return Collections.emptySet();
@@ -55,17 +52,17 @@ public final class TransactionFacade {
 
     private final Analyzer analyzer;
 
-    private final Planner planner;
+    private final SimplePlanner planner;
 
     /**
      * Operators output results
      * They are read-only operations, do not modify data
      */
-    private final Map<String, AbstractOperator> readQueryPlans;
+    private final Map<String, AbstractSimpleOperator> readQueryPlans;
 
     private TransactionFacade(Map<String, Table> tableMap){
         this.tableMap = tableMap;
-        this.planner = new Planner();
+        this.planner = new SimplePlanner();
         this.analyzer = new Analyzer(tableMap);
         // read-only transactions may put items here
         this.readQueryPlans = new ConcurrentHashMap<>();
@@ -95,11 +92,11 @@ public final class TransactionFacade {
      * @param selectStatement a select statement
      * @return the query result in a memory space
      */
-    public MemoryRefNode fetch(ConsistentIndex consistentIndex, SelectStatement selectStatement) {
+    public MemoryRefNode fetch(PrimaryIndex consistentIndex, SelectStatement selectStatement) {
 
         String sqlAsKey = selectStatement.SQL.toString();
 
-        AbstractOperator scanOperator = this.readQueryPlans.get( sqlAsKey );
+        AbstractSimpleOperator scanOperator = this.readQueryPlans.get( sqlAsKey );
 
         List<WherePredicate> wherePredicates;
 
@@ -148,7 +145,7 @@ public final class TransactionFacade {
                 List<WherePredicate> wherePredicates = this.analyzer.analyzeWhere(
                         table, statement.asUpdateStatement().whereClause);
 
-                this.planner.getOptimalHashIndex(table, wherePredicates);
+                this.planner.getOptimalIndex(table, wherePredicates);
 
                 // TODO plan update and delete in planner. only need to send where predicates and not a query tree like a select
                 // UpdateOperator.run(statement.asUpdateStatement(), table.primaryKeyIndex() );
@@ -214,12 +211,12 @@ public final class TransactionFacade {
     /**
      * Not yet considering this record can serve as FK to a record in another table.
      */
-    public void delete(ConsistentIndex index, Object[] values) {
+    public void delete(PrimaryIndex index, Object[] values) {
         IKey pk = KeyUtils.buildPrimaryKey(index.schema(), values);
         this.deleteByKey(index, pk);
     }
 
-    public void deleteByKey(ConsistentIndex index, Object[] values) {
+    public void deleteByKey(PrimaryIndex index, Object[] values) {
         IKey pk = KeyUtils.buildInputKey(values);
         this.deleteByKey(index, pk);
     }
@@ -229,13 +226,13 @@ public final class TransactionFacade {
      * @param index The corresponding database index
      * @param pk The primary key
      */
-    private void deleteByKey(ConsistentIndex index, IKey pk){
+    private void deleteByKey(PrimaryIndex index, IKey pk){
         if(index.delete(pk)){
             INDEX_WRITES.get().add(index);
         }
     }
 
-    public Object[] lookupByKey(ConsistentIndex index, Object... valuesOfKey){
+    public Object[] lookupByKey(PrimaryIndex index, Object... valuesOfKey){
         IKey pk = KeyUtils.buildPrimaryKeyFromKeyValues(valuesOfKey);
         return index.lookupByKey(pk);
     }
@@ -245,7 +242,7 @@ public final class TransactionFacade {
      * @param values The fields extracted from the entity
      */
     public void insert(Table table, Object[] values){
-        ConsistentIndex index = table.primaryKeyIndex();
+        PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
         if(index.insert(pk, values) && !fkConstraintViolation(table, values)){
             INDEX_WRITES.get().add(index);
@@ -255,11 +252,11 @@ public final class TransactionFacade {
         throw new RuntimeException("Constraint violation.");
     }
 
-    public Long insertAndGet(Table table, Object[] values){
-        ConsistentIndex index = table.primaryKeyIndex();
+    public Object insertAndGet(Table table, Object[] values){
+        PrimaryIndex index = table.primaryKeyIndex();
         // IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
         if(!fkConstraintViolation(table, values)){
-            Long key_ = index.insertAndGet(values);
+            Object key_ = index.insertAndGet(values);
             if(key_ != null) {
                 INDEX_WRITES.get().add(index);
                 return key_;
@@ -274,7 +271,7 @@ public final class TransactionFacade {
      *      this method can be called in parallel by transaction facade without risk
      */
     public void update(Table table, Object[] values){
-        ConsistentIndex index = table.primaryKeyIndex();
+        PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
         if(index.update(pk, values) && !fkConstraintViolation(table, values)){
             INDEX_WRITES.get().add(index);
@@ -292,16 +289,16 @@ public final class TransactionFacade {
 
     /****** SCAN OPERATORS *******/
 
-    public MemoryRefNode run(ConsistentIndex consistentIndex,
-                                    List<WherePredicate> wherePredicates,
-                                    IndexScanWithProjection operator){
+    public MemoryRefNode run(PrimaryIndex consistentIndex,
+                             List<WherePredicate> wherePredicates,
+                             IndexScanWithProjection operator){
 
         List<Object> keyList = new ArrayList<>(operator.index.columns().length);
         List<WherePredicate> wherePredicatesNoIndex = new ArrayList<>(wherePredicates.size());
         // build filters for only those columns not in selected index
         for (WherePredicate wherePredicate : wherePredicates) {
             // not found, then build filter
-            if(operator.index.columnsHash().contains( wherePredicate.columnReference.columnPosition )){
+            if(operator.index.containsColumn( wherePredicate.columnReference.columnPosition )){
                 keyList.add( wherePredicate.value );
             } else {
                 wherePredicatesNoIndex.add(wherePredicate);
@@ -316,9 +313,9 @@ public final class TransactionFacade {
         return operator.run( consistentIndex, filterContext, inputKey );
     }
 
-    public MemoryRefNode run(ConsistentIndex consistentIndex,
-                                    List<WherePredicate> wherePredicates,
-                                    FullScanWithProjection operator){
+    public MemoryRefNode run(PrimaryIndex consistentIndex,
+                             List<WherePredicate> wherePredicates,
+                             FullScanWithProjection operator){
         FilterContext filterContext = FilterContextBuilder.build(wherePredicates);
         return operator.run( consistentIndex, filterContext );
     }

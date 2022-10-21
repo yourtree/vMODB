@@ -10,7 +10,7 @@ import dk.ku.di.dms.vms.modb.definition.Table;
 import java.util.*;
 
 /**
- *  Logical query plan tree.
+ *  Logical query plan tree
   */
 public class QueryTree {
 
@@ -105,15 +105,22 @@ public class QueryTree {
      * @return whether it is a simple scan
      */
     public boolean isSimpleScan(){
-        return isSingleTable() && joinPredicates.isEmpty() && groupByProjections.isEmpty() && orderByPredicates.isEmpty();
+        return isSingleTable() && this.joinPredicates.isEmpty() && this.groupByProjections.isEmpty() && this.orderByPredicates.isEmpty();
     }
 
     public boolean isSimpleAggregate(){
-        return isSingleTable() && groupByProjections.size() == 1 && projections.isEmpty() && joinPredicates.isEmpty()  && orderByPredicates.isEmpty();
+        return isSingleTable() && this.groupByProjections.size() == 1 && this.projections.isEmpty() && this.joinPredicates.isEmpty() && this.orderByPredicates.isEmpty();
     }
 
     public boolean isSimpleJoin(){
-        return !joinPredicates.isEmpty() && groupByProjections.isEmpty()  && orderByPredicates.isEmpty();
+        return this.joinPredicates.size() == 1 && this.groupByProjections.isEmpty() && this.orderByPredicates.isEmpty();
+    }
+
+    /**
+     * Also if this.groupByProjections.size() > 1
+     */
+    public boolean hasMultipleJoins(){
+        return this.joinPredicates.size() >= 2;
     }
 
     public boolean isSingleTable(){

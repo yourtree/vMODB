@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.transaction.multiversion;
+package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
@@ -18,13 +18,12 @@ import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.*;
 import jdk.internal.misc.Unsafe;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
-import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.R;
 import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
 
 /**
@@ -38,8 +37,12 @@ import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
  * The operators need an iterator (to provide only the allowed data items' visibility)
  * The filter must take into account the correct data item version
  * The append must take into account the correct data item version
+ * Q: Why implement a ReadOnlyIndex?
+ * A: Because it is not supposed to modify the data in main-memory, but rather keep version on heap.
+ * Thus, the API for writes are different. The ReadWriteIndex is only used for bulk writes,
+ * when no transactional guarantees are necessary.
  */
-public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
+public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
 
     private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
@@ -48,14 +51,14 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
     private final Map<IKey, OperationSetOfKey> updatesPerKeyMap;
 
     // for PK generation. for now, all strategies use this (auto, sequence, etc)
-    private AtomicLong sequencer;
+    private final IPrimaryKeyGenerator<?> primaryKeyGenerator;
 
     /**
      * Optimization is verifying whether this thread is R or RW.
      * If R, no need to allocate a List
      */
     private final ThreadLocal<List<IKey>> KEY_WRITES = ThreadLocal.withInitial(() -> {
-        if(TransactionMetadata.TRANSACTION_CONTEXT.get().type != R) {
+        if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
             var pulled = writeListBuffer.poll();
             if(pulled == null)
                 return new ArrayList<>(2);
@@ -66,15 +69,16 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
     private static final Deque<List<IKey>> writeListBuffer = new ArrayDeque<>();
 
-    public ConsistentIndex(ReadWriteIndex<IKey> primaryKeyIndex) {
+    public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
+        this.primaryKeyGenerator = null;
     }
 
-    public ConsistentIndex(ReadWriteIndex<IKey> primaryKeyIndex, boolean pkGenerationEnabled) {
+    public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
-        if(pkGenerationEnabled) this.sequencer = new AtomicLong(0);
+        this.primaryKeyGenerator = primaryKeyGenerator;
     }
 
     @Override
@@ -103,8 +107,8 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
     }
 
     @Override
-    public HashSet<Integer> columnsHash() {
-        return this.primaryKeyIndex.columnsHash();
+    public boolean containsColumn(int columnPos) {
+        return this.primaryKeyIndex.containsColumn(columnPos);
     }
 
     @Override
@@ -147,7 +151,7 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
             // why checking first if I am a WRITE. because by checking if I am right, I don't need to pay O(log n)
             // 1 write thread at a time. if I am a write thread, does not matter my lastTid. I can just check the last write for this entry
-            if( TransactionMetadata.TRANSACTION_CONTEXT.get().type != R ){
+            if( !TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly ){
                 return opSet.lastWriteType != WriteType.DELETE;
             }
 
@@ -200,12 +204,6 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
     @Override
     public boolean checkCondition(IKey key, long address, FilterContext filterContext) {
-        Object[] record = lookupByKey(key);
-        if(record == null) return false;
-        return checkConditionVersioned(filterContext, record);
-    }
-
-    public boolean checkCondition(IKey key, FilterContext filterContext) {
         Object[] record = lookupByKey(key);
         if(record == null) return false;
         return checkConditionVersioned(filterContext, record);
@@ -363,25 +361,21 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
     }
 
-
     public Object[] lookupByKey(IKey key){
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
         if ( operationSet != null ){
-
-            if(TransactionMetadata.TRANSACTION_CONTEXT.get().type == R) {
+            if(TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
                 var entry = operationSet.updateHistoryMap.floorEntry(TransactionMetadata.TRANSACTION_CONTEXT.get().lastTid);
+                if (entry != null)
+                    return (entry.val().type != WriteType.DELETE ? entry.val().record : null);
+            } else
+                return operationSet.lastWriteType != WriteType.DELETE ? operationSet.cachedEntity : null;
+        }
 
-                // maybe it has already been logged if it is null....
-                assert entry != null;
-
-                return entry.val().type != WriteType.DELETE ? entry.val().record : null;
-            }
-
-            return operationSet.lastWriteType != WriteType.DELETE ? operationSet.cachedEntity : null;
-
-        } else if(this.primaryKeyIndex.exists(key)) {
+        if(this.primaryKeyIndex.exists(key)) {
             return this.primaryKeyIndex.readFromIndex(key);
         }
+
         return null;
     }
 
@@ -423,8 +417,8 @@ public final class ConsistentIndex implements ReadOnlyIndex<IKey> {
 
     }
 
-    public Long insertAndGet(Object[] values){
-        Long key_ = this.sequencer.incrementAndGet();
+    public Object insertAndGet(Object[] values){
+        Object key_ = this.primaryKeyGenerator.next();
         IKey key = KeyUtils.buildInputKey( key_ );
         if(this.insert( key, values )){
             return key_;

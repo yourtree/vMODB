@@ -14,8 +14,10 @@ import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import java.util.HashSet;
 
 /**
- * Base interface for operators that perform read-only queries
- * @param <K>
+ * Base interface for operators that perform read-only queries.
+ * TODO perhaps is a good idea separating key from address.
+ *      That makes duplicate addressing a record, complicated to understand.
+ * @param <K> The key object identifier of a record
  */
 public interface ReadOnlyIndex<K> {
 
@@ -26,7 +28,7 @@ public interface ReadOnlyIndex<K> {
     // columns that form the key to each record entry
     int[] columns();
 
-    HashSet<Integer> columnsHash();
+    boolean containsColumn(int columnPos);
 
     /** information used by the planner to decide for the appropriate operator */
     IndexTypeEnum getType();
