@@ -1,10 +1,7 @@
 package dk.ku.di.dms.vms.e_commerce.order;
 
 import dk.ku.di.dms.vms.e_commerce.common.entity.Item;
-import dk.ku.di.dms.vms.e_commerce.common.events.NewOrderItemResource;
-import dk.ku.di.dms.vms.e_commerce.common.events.NewOrderResult;
-import dk.ku.di.dms.vms.e_commerce.common.events.NewOrderUserResource;
-import dk.ku.di.dms.vms.e_commerce.common.events.PaymentResponse;
+import dk.ku.di.dms.vms.e_commerce.common.events.*;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
@@ -25,25 +22,33 @@ public class OrderService {
         this.orderItemRepository = itemRepository;
     }
 
-    @Inbound(values = {"new-order-item-resource","new-order-user-resource","payment-response"})
-    @Outbound("new-order-result")
+    @Inbound(values = {"new-order-item-resource","new-order-user-resource"})
+    @Outbound("payment-request")
     @Transactional(type = RW)
-    public NewOrderResult newOrder(NewOrderItemResource newOrderItemResource, NewOrderUserResource newOrderUserResource, PaymentResponse paymentResponse){ // can save this as a json
+    public PaymentRequest newOrder(NewOrderItemResponse newOrderItemResource,
+                                   NewOrderUserResponse newOrderUserResource){
 
-        if(!paymentResponse.authorised) return null;
+        // TODO maybe also discounts coupons a user has?
 
-        // to get the id from the MODB
-        Order order = orderRepository.insertAndGet( new Order( newOrderUserResource.customer,  newOrderUserResource.card,  newOrderUserResource.address, paymentResponse.debitAmount ) );
+        float totalPrice = 0;
 
+        // calculate total amount
         for(Item item : newOrderItemResource.items){
-            orderItemRepository.insert( new OrderItem( item.quantity, item.unitPrice, order.id ) );
+            totalPrice += item.unitPrice;
         }
 
+        Order order_ = new Order( newOrderUserResource.customer, totalPrice );
+        order_.orderStatus = "IN_PROGRESS";
 
+        // to get the id from the database, sequence constraint sequential id provided by design
+        Order order = orderRepository.insertAndGet( order_ );
 
-        // create shipment event... actually create a new order... other vmss will listen to that, like the shipment and recommender engine
+        // can be made parallel by application code, not unsafe for correctness
+        for(Item item : newOrderItemResource.items)
+            orderItemRepository.insert( new OrderItem( item.quantity, item.unitPrice, order.id ) );
 
-        return null;
+        // create payment request
+        return new PaymentRequest( order.id, totalPrice, newOrderUserResource.customer );
 
     }
 

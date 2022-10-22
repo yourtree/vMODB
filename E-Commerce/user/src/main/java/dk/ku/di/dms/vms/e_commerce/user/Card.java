@@ -1,5 +1,6 @@
-package dk.ku.di.dms.vms.e_commerce.common.entity;
+package dk.ku.di.dms.vms.e_commerce.user;
 
+import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
@@ -23,5 +24,7 @@ public class Card implements IEntity<Long> {
     @Column
     public String ccv;
 
+    @VmsForeignKey(table = User.class, column = "id")
+    public long userId;
 
 }

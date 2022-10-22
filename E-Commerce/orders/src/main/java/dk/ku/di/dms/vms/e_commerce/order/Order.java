@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.e_commerce.order;
 
-import dk.ku.di.dms.vms.e_commerce.common.entity.Address;
-import dk.ku.di.dms.vms.e_commerce.common.entity.Card;
 import dk.ku.di.dms.vms.e_commerce.common.entity.Customer;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
@@ -20,7 +18,7 @@ public class Order implements IEntity<Long> {
     // customer
 
     @Column
-    public long customer_id;
+    public long customerId;
 
     @Column
     public String firstName;
@@ -49,40 +47,50 @@ public class Order implements IEntity<Long> {
 
     // card
 
-    @Column
-    public String longNum;
-
-    @Column
-    public Date expires;
-
-    @Column
-    public String ccv;
+//    @Column
+//    public String longNum;
+//
+//    @Column
+//    public Date expires;
+//
+//    @Column
+//    public String ccv;
 
     @Column
     public Date date;
 
     @Column
-    private float total;
+    public float total;
 
-    public Order(Customer customer, Card card, Address address, float total){
+    // NEW, PAYMENT_NOT_AUTHORIZED, SHIPMENT_REQUESTED, FINISHED
+    public String orderStatus;
 
+    // total time... it took to finish delivery/shipment process
+    // items can also have a city...
+    // we can have different warehouses
+
+    public Order(Customer customer, float total){
+
+        this.customerId = customer.customerId;
         this.firstName = customer.firstName;
         this.lastName = customer.lastName;
         this.username = customer.username;
 
-        this.longNum = card.longNum;
-        this.expires = card.expires;
-        this.ccv = card.ccv;
+//        this.longNum = customer.longNum;
+//        this.expires = customer.expires;
+//        this.ccv = customer.ccv;
 
         this.date = new Date();
 
-        this.street = address.street;
-        this.number = address.number;
-        this.country = address.country;
-        this.city = address.city;
-        this.postCode = address.postCode;
+        this.street = customer.street;
+        this.number = customer.number;
+        this.country = customer.country;
+        this.city = customer.city;
+        this.postCode = customer.postCode;
 
         this.total = total;
+
+        this.orderStatus = "NEW";
     }
 
 }

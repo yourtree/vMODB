@@ -1,29 +1,29 @@
 package dk.ku.di.dms.vms.e_commerce.cart;
 
-import dk.ku.di.dms.vms.e_commerce.common.entity.Item;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
-import javax.persistence.*;
-import java.io.Serializable;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
 
 @Entity
 @VmsTable(name="cart_items")
-@IdClass(CartItem.Id.class)
-public class CartItem implements IEntity<CartItem.Id> {
+public class CartItem implements IEntity<Long> {
 
-    public static class Id implements Serializable {
-        public long cart_id;
-        public long item_id;
-        public Id(){}
-    }
+    // @ExternalVmsForeignKey(table= Product.class, column = "id")
+    @Id
+    public long productId;
 
-    // TODO create a secondary index, non unique hash. why? because it is a composite primary key, may have many cart_id of the same value
+    @Column
+    public int quantity;
+
+    @Column
+    public float unitPrice;
+
+    // TODO create a secondary index, non-unique hash. why? because it is a composite primary key, may have many cart_id of the same value
     @VmsForeignKey(table=Cart.class, column = "id")
-    public long cart_id;
-
-    @VmsForeignKey(table= Item.class, column = "id")
-    public long item_id;
+    public long cartId;
 
 }

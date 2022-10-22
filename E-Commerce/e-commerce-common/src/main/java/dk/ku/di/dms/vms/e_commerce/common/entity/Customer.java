@@ -1,28 +1,36 @@
 package dk.ku.di.dms.vms.e_commerce.common.entity;
 
-import dk.ku.di.dms.vms.modb.api.annotations.VmsReplica;
-import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
+import java.util.Date;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
+/**
+ * Entity that aggregates the information necessary to check out an order
+ */
+public class Customer {
 
-@Entity
-@VmsReplica(virtualMicroservice="user", table="user", columns = { "id", "firstName", "lastName", "username" })
-public class Customer implements IEntity<Long> {
+    public long customerId;
 
-    @Id
-    public long id;
-
-    @Column
     public String firstName;
 
-    @Column
     public String lastName;
 
-    @Column
     public String username;
 
+    public String street;
 
+    public String number;
 
+    public String country;
+
+    public String city;
+
+    public String postCode;
+
+    public String longNum;
+
+    public Date expires;
+
+    public String ccv;
+
+    public Customer() {
+    }
 }

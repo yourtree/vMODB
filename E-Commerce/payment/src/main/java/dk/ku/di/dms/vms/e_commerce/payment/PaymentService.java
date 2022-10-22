@@ -28,16 +28,17 @@ public class PaymentService {
 
         float amount = authorizationRepository.lookupByKey(1L).declineOverAmount;
 
-        Payment payment = new Payment(paymentRequest.customer, paymentRequest.card, paymentRequest.address);
+        Payment payment = new Payment(paymentRequest.customer);
 
         if(paymentRequest.amount >= amount){
             payment.authorized = false;
             paymentRepository.insert(payment);
-            return new PaymentResponse(false, paymentRequest.amount, "");
+            return new PaymentResponse(false, paymentRequest.amount, "", payment.date, paymentRequest.orderId);
         }
 
         payment.authorized = true;
-        return new PaymentResponse(true, paymentRequest.amount, "");
+        paymentRepository.insert(payment);
+        return new PaymentResponse(true, paymentRequest.amount, "", payment.date, paymentRequest.orderId);
 
     }
 

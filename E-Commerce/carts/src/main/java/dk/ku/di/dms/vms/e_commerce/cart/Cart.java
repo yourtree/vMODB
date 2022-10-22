@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.e_commerce.cart;
 
-import dk.ku.di.dms.vms.modb.api.annotations.ExternalVmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
@@ -14,10 +13,11 @@ public class Cart implements IEntity<Long> {
     @GeneratedValue(strategy = GenerationType.AUTO)
     public long id;
 
-    @ExternalVmsForeignKey(vms="user", column = "id")
-    private long customerId;
+    // @ExternalVmsForeignKey(table= User.class, column = "id")
+    @Column
+    public long customerId;
 
     @Column
-    private boolean sealed;
+    public boolean sealed;
 
 }

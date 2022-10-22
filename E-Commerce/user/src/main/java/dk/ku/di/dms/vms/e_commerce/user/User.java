@@ -1,8 +1,5 @@
 package dk.ku.di.dms.vms.e_commerce.user;
 
-import dk.ku.di.dms.vms.e_commerce.common.entity.Address;
-import dk.ku.di.dms.vms.e_commerce.common.entity.Card;
-import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
@@ -18,6 +15,15 @@ public class User implements IEntity<Long> {
 
     @Column
     public String userId;
+
+    @Column
+    public String firstName;
+
+    @Column
+    public String lastName;
+
+    @Column
+    public String username;
 
     @Column
     public String salt;

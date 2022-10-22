@@ -18,7 +18,7 @@ public class SockTag implements IEntity<SockTag.Id> {
         public Id(){}
     }
 
-    @VmsForeignKey(table=Product.class, column = "id")
+    @VmsForeignKey(table= Product.class, column = "id")
     public long product_id;
 
     @VmsForeignKey(table=Tag.class, column = "tag_id")

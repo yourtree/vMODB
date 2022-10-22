@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.e_commerce.payment;
 
-import dk.ku.di.dms.vms.e_commerce.common.entity.Address;
-import dk.ku.di.dms.vms.e_commerce.common.entity.Card;
 import dk.ku.di.dms.vms.e_commerce.common.entity.Customer;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
@@ -20,7 +18,7 @@ public class Payment implements IEntity<Long> {
     // customer
 
     @Column
-    public long customer_id;
+    public long customerId;
 
     @Column
     public String firstName;
@@ -62,27 +60,28 @@ public class Payment implements IEntity<Long> {
     @Column
     public String postCode;
 
+    @Column
     public boolean authorized;
 
     public Payment(){}
 
-    public Payment(Customer customer, Card card, Address address){
-        this.customer_id = customer.id;
+    public Payment(Customer customer){
+        this.customerId = customer.customerId;
         this.firstName = customer.firstName;
         this.lastName = customer.lastName;
         this.username = customer.username;
 
-        this.longNum = card.longNum;
-        this.expires = card.expires;
-        this.ccv = card.ccv;
+        this.longNum = customer.longNum;
+        this.expires = customer.expires;
+        this.ccv = customer.ccv;
 
         this.date = new Date();
 
-        this.street = address.street;
-        this.number = address.number;
-        this.country = address.country;
-        this.city = address.city;
-        this.postCode = address.postCode;
+        this.street = customer.street;
+        this.number = customer.number;
+        this.country = customer.country;
+        this.city = customer.city;
+        this.postCode = customer.postCode;
     }
 
 }

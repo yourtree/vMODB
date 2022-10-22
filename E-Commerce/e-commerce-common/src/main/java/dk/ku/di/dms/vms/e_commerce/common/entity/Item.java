@@ -1,22 +1,22 @@
 package dk.ku.di.dms.vms.e_commerce.common.entity;
 
-import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
-import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
+/**
+ * Clean object without cart information
+ * In the future can have warehouse ID to show skewed and contentious workloads' difference
+ */
+public class Item {
 
-import javax.persistence.*;
+    public long productId;
 
-@Entity
-@VmsTable(name="item")
-public class Item implements IEntity<Long> {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    public long id;
-
-    @Column
     public int quantity;
 
-    @Column
     public float unitPrice;
 
+    public Item() {}
+
+    public Item(long productId, int quantity, float unitPrice) {
+        this.productId = productId;
+        this.quantity = quantity;
+        this.unitPrice = unitPrice;
+    }
 }

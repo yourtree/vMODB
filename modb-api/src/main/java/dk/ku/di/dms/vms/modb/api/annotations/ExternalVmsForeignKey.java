@@ -1,5 +1,7 @@
 package dk.ku.di.dms.vms.modb.api.annotations;
 
+import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
@@ -10,7 +12,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 public @interface ExternalVmsForeignKey {
 
-    String vms();
+    Class<? extends IEntity<?>> table();
 
     String column();
 

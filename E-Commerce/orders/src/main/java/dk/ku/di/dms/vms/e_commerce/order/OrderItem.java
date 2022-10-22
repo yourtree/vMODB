@@ -21,12 +21,12 @@ public class OrderItem implements IEntity<Long> {
     public float unitPrice;
 
     @VmsForeignKey(table=Order.class, column = "id")
-    public long order_id;
+    public long orderId;
 
-    public OrderItem(int quantity, float unitPrice, long order_id) {
+    public OrderItem(int quantity, float unitPrice, long orderId) {
         this.quantity = quantity;
         this.unitPrice = unitPrice;
-        this.order_id = order_id;
+        this.orderId = orderId;
     }
 
 }

@@ -1,14 +1,15 @@
 package dk.ku.di.dms.vms.e_commerce.catalogue;
 
-import dk.ku.di.dms.vms.e_commerce.common.events.NewOrderItemResource;
-import dk.ku.di.dms.vms.e_commerce.common.events.NewOrderUserResource;
-import dk.ku.di.dms.vms.e_commerce.common.events.PaymentRequest;
+import dk.ku.di.dms.vms.e_commerce.common.entity.Item;
+import dk.ku.di.dms.vms.e_commerce.common.events.*;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 
@@ -26,40 +27,50 @@ public class CatalogueService {
      * @param newOrderItemResource received from cart
      * @param newOrderUserResource received from user
      */
-    @Inbound(values = {"new-order-item-resource","new-order-user-resource"})
-    @Outbound("payment-request")
+    @Inbound(values = {"new-order-item-resource", "new-order-user-resource", "payment-response"})
+    @Outbound("shipment-request")
     @Transactional(type = RW)
-    public PaymentRequest newOrder(NewOrderItemResource newOrderItemResource, NewOrderUserResource newOrderUserResource){
+    public ShipmentRequest newOrder(
+            NewOrderItemResponse newOrderItemResource,
+            NewOrderUserResponse newOrderUserResource,
+            PaymentResponse paymentResponse){
 
-        List<Long> keys = newOrderItemResource.items.stream().map(p -> p.id ).toList();
+        if(!paymentResponse.authorized) return null;
+
+        List<Long> keys = newOrderItemResource.items.stream().map(p -> p.productId ).collect(Collectors.toList());
 
         // get all from database
         List<Product> products = this.productRepository.lookupByKeys(keys);
-        boolean allAvailable = true;
-        float totalPrice = 0;
 
-        // verify availability and calculate total amount // maybe also calculate discount in the future?
+        List<Item> itemsForShipment = new ArrayList<>(products.size());
+
+        Product currProduct;
+        Item currItem;
+
+        // verify availability
         for(int i = 0; i < products.size(); i++){
-            if(newOrderItemResource.items.get(i).quantity > products.get(i).count) {
-                allAvailable = false;
-                break;
+
+            currProduct = products.get(i);
+            currItem = newOrderItemResource.items.get(i);
+
+            if(currItem.quantity > currProduct.count) {
+                // mark for replenishment
+                currProduct.toReplenish = currProduct.toReplenish + currItem.quantity;
+            } else {
+                // decrease item from stock
+                currProduct.count = currProduct.count - currItem.quantity;
+                itemsForShipment.add(new Item( currItem.productId, currItem.quantity, currItem.unitPrice ));
             }
-            totalPrice += newOrderItemResource.items.get(i).unitPrice;
-            // remove product from stock
-            products.get(i).count = products.get(i).count - newOrderItemResource.items.get(i).quantity;
+
         }
 
-        if(allAvailable){
+        // TODO increase total amount sold in the current day
 
-            // update stock
-            this.productRepository.updateAll( products ); // can be parallel inside the database
+        // update stock
+        this.productRepository.updateAll( products ); // can be parallel inside the database
 
-            // create payment request
-            return new PaymentRequest( totalPrice, newOrderUserResource.customer, newOrderUserResource.address, newOrderUserResource.card );
-        }
-
-        // if no available stock
-        return null;
+        // create shipment event... actually create a new order... other vmss will listen to that, like the shipment and recommender engine
+        return new ShipmentRequest( itemsForShipment, newOrderUserResource.customer, paymentResponse.date, paymentResponse.orderId );
         
     }
 

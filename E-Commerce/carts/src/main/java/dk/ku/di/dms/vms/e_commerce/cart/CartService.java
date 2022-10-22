@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.e_commerce.cart;
 
 import dk.ku.di.dms.vms.e_commerce.common.entity.Item;
-import dk.ku.di.dms.vms.e_commerce.common.events.NewOrderItemResource;
+import dk.ku.di.dms.vms.e_commerce.common.events.NewOrderItemResponse;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.modb.api.query.builder.QueryBuilderFactory;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum.EQUALS;
@@ -25,25 +26,28 @@ public class CartService {
 
     private final ICartRepository cartRepository;
 
-    private final IItemRepository itemRepository;
+    private final ICartItemRepository cartItemRepository;
 
-    public CartService(ICartRepository cartRepository, IItemRepository itemRepository){
+    public CartService(ICartRepository cartRepository, ICartItemRepository cartItemRepository){
         this.cartRepository = cartRepository;
-        this.itemRepository = itemRepository;
+        this.cartItemRepository = cartItemRepository;
     }
 
     @Inbound(values = {"new-order-cart"})
     @Outbound("new-order-item-resource")
     @Transactional(type = RW)
-    public NewOrderItemResource newOrder(Long customerId){
+    public NewOrderItemResponse newOrder(Long customerId){
 
-        SelectStatement selectStatement = BASE_QUERY;
+        List<CartItem> cartItems = cartItemRepository.findOpenCartByCustomerId(customerId);
 
-        selectStatement.addParameterizedCondition( "cart.customerId",  EQUALS, customerId );
+        Cart cart = cartRepository.findByCustomerId(customerId);
+        cart.sealed = true;
 
-        List<Item> items = cartRepository.fetchMany( selectStatement, Item.class );
+        cartRepository.update(cart);
 
-        return new NewOrderItemResource(items);
+        return new NewOrderItemResponse(cartItems.stream()
+                .map( ci -> new Item( ci.productId, ci.quantity, ci.unitPrice ))
+                .collect(Collectors.toList()));
 
     }
 

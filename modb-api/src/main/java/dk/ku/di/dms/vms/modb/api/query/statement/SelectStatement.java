@@ -46,16 +46,4 @@ public final class SelectStatement extends AbstractStatement {
         return this;
     }
 
-    private boolean parameterized = false;
-
-    public void addParameterizedCondition(String param, final ExpressionTypeEnum expr, final Object value){
-        if(parameterized) {
-            whereClause.set( whereClause.size() - 1, new WhereClauseElement<>(param,expr,value) );
-            return;
-        }
-        WhereClauseElement<Object> element = new WhereClauseElement<>(param,expr,value);
-        this.whereClause.add( element );
-        parameterized = true;
-    }
-
 }

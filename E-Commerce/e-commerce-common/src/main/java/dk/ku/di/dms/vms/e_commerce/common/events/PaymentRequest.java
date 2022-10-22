@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.e_commerce.common.events;
 
-import dk.ku.di.dms.vms.e_commerce.common.entity.Address;
-import dk.ku.di.dms.vms.e_commerce.common.entity.Card;
 import dk.ku.di.dms.vms.e_commerce.common.entity.Customer;
 import dk.ku.di.dms.vms.modb.api.annotations.Event;
 
@@ -12,16 +10,13 @@ public class PaymentRequest {
 
     public Customer customer;
 
-    public Address address;
-
-    public Card card;
+    public long orderId;
 
     public PaymentRequest(){}
 
-    public PaymentRequest(float amount, Customer customer, Address address, Card card) {
+    public PaymentRequest(long orderId, float amount, Customer customer) {
+        this.orderId = orderId;
         this.amount = amount;
         this.customer = customer;
-        this.address = address;
-        this.card = card;
     }
 }

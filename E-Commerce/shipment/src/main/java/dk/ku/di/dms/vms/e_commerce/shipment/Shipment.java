@@ -1,8 +1,6 @@
 package dk.ku.di.dms.vms.e_commerce.shipment;
 
-import dk.ku.di.dms.vms.e_commerce.common.entity.Address;
 import dk.ku.di.dms.vms.e_commerce.common.entity.Customer;
-import dk.ku.di.dms.vms.modb.api.annotations.ExternalVmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
@@ -14,17 +12,16 @@ import java.util.Date;
 public class Shipment implements IEntity<Long> {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     public long id;
 
     @Column
-    @ExternalVmsForeignKey(vms="order",column = "id")
     public long orderId;
 
     // customer
 
     @Column
-    public long customer_id;
+    public long customerId;
 
     @Column
     public String firstName;
@@ -53,19 +50,22 @@ public class Shipment implements IEntity<Long> {
 
     public Date date;
 
-    public Shipment(Long orderId, Customer customer, Address address){
-        this.customer_id = customer.id;
+    public Shipment(Long orderId, Customer customer){
+
+        this.orderId = orderId;
+
+        this.customerId = customer.customerId;
         this.firstName = customer.firstName;
         this.lastName = customer.lastName;
         this.username = customer.username;
 
         this.date = new Date();
 
-        this.street = address.street;
-        this.number = address.number;
-        this.country = address.country;
-        this.city = address.city;
-        this.postCode = address.postCode;
+        this.street = customer.street;
+        this.number = customer.number;
+        this.country = customer.country;
+        this.city = customer.city;
+        this.postCode = customer.postCode;
     }
 
 }

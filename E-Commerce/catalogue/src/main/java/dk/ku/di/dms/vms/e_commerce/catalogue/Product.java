@@ -31,6 +31,10 @@ public class Product implements IEntity<Long> {
     public int count;
 
     @Column
+    @PositiveOrZero
+    public int toReplenish;
+
+    @Column
     public String image_url_1;
 
     @Column
