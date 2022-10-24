@@ -10,11 +10,8 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 
 /**
- *
- * https://dzone.com/articles/simple-http-server-in-java
- *
+ * <a href="https://dzone.com/articles/simple-http-server-in-java">...</a>
  * It would be nice to compare both implementations.
- *
  */
 public class JdkHttpServer {
 

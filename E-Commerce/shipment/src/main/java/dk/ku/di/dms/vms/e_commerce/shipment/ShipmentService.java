@@ -7,8 +7,8 @@ import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 
@@ -27,22 +27,28 @@ public class ShipmentService {
     public ShipmentResponse processNewShipmentRequest(ShipmentRequest shipmentRequest){
 
         // inspiration from https://www.baeldung.com/java-reactive-systems
-        LocalDate shippingDate = null;
-        if (LocalTime.now().isAfter(LocalTime.parse("10:00"))
-                && LocalTime.now().isBefore(LocalTime.parse("18:00"))) {
-            shippingDate = LocalDate.now().plusDays(1);
+        LocalTime shippingDate = null;
+        LocalTime localDate = LocalTime.now();
+        var noon = LocalTime.of(12,0);
+        if(localDate.isBefore(noon)
+                && localDate.isAfter(LocalTime.of(5,59))) {
+            shippingDate = noon; // today
         } else {
-            shippingDate = LocalDate.now().plusDays(2);
+            shippingDate = noon.plus(1, ChronoUnit.DAYS);
+
         }
 
-        // TODO finish shipment. one shipment per warehouse, all same order
-        Shipment shipment = new Shipment(shipmentRequest.orderId, shipmentRequest.customer);
+        // TODO one shipment per warehouse, all same order?
+        Shipment shipment = new Shipment(
+                shipmentRequest.orderId,
+                shipmentRequest.customer,
+                shippingDate);
 
         shipmentRepository.insert(shipment);
 
         // TODO should we have a table deliveries? one per day. a shipment
 
-        return null;
+        return new ShipmentResponse(shippingDate, shipment.orderId);
 
     }
 

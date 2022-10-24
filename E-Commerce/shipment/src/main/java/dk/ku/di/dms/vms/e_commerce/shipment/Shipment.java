@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
 import javax.persistence.*;
+import java.time.LocalTime;
 import java.util.Date;
 
 @Entity
@@ -48,9 +49,9 @@ public class Shipment implements IEntity<Long> {
     @Column
     public String postCode;
 
-    public Date date;
+    public LocalTime date;
 
-    public Shipment(Long orderId, Customer customer){
+    public Shipment(Long orderId, Customer customer, LocalTime date){
 
         this.orderId = orderId;
 
@@ -59,7 +60,7 @@ public class Shipment implements IEntity<Long> {
         this.lastName = customer.lastName;
         this.username = customer.username;
 
-        this.date = new Date();
+        this.date = date;
 
         this.street = customer.street;
         this.number = customer.number;

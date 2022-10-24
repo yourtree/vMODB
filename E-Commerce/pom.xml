@@ -15,6 +15,7 @@
         <module>e-commerce-common</module>
         <module>payment</module>
         <module>shipment</module>
+        <module>discounts</module>
     </modules>
 
     <parent>
