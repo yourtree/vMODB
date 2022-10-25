@@ -2,10 +2,8 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.count;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
-import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
+import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
@@ -30,34 +28,11 @@ public class IndexCountGroupBy extends AbstractCount {
 
         Map<Integer,Integer> countMap = new HashMap<>();
 
-        if(index.getType() == IndexTypeEnum.UNIQUE){
+        IRecordIterator iterator = index.iterator(keys);
 
-            UniqueHashIndex cIndex = index.asUniqueHashIndex();
-            long address;
-            for(IKey key : keys){
-                address = cIndex.retrieve(key);
-                if(index.checkCondition(key, address, filterContext)){
-                    compute(key, address, countMap);
-                }
-            }
-
-            // append(countMap);
-            return memoryRefNode;
-
-        }
-
-        // non unique
-        NonUniqueHashIndex cIndex = index.asNonUniqueHashIndex();
-        for(IKey key : keys){
-            IRecordIterator iterator = cIndex.iterator(key);
-            while(iterator.hasNext()){
-
-                if(index.checkCondition(iterator, filterContext)){
-                    compute(iterator, countMap);
-                }
-
-                iterator.next();
-
+        while(iterator.hasElement()){
+            if(index.checkCondition(iterator, filterContext)){
+                compute(iterator, countMap);
             }
         }
 
@@ -79,21 +54,12 @@ public class IndexCountGroupBy extends AbstractCount {
 
     }
 
-    private void compute(IKey key, long address, Map<Integer,Integer> countMap) {
-        int groupKey = index.hashAggregateGroup(key, address, indexColumns).hashCode();
+    private void compute(IRecordIterator<IKey> iterator, Map<Integer,Integer> countMap) {
 
-        if( countMap.get(groupKey) == null ){
-            countMap.put(groupKey, 1);
-        } else {
-            int newCount = countMap.get(groupKey) + 1;
-            countMap.put( groupKey, newCount );
-        }
-    }
-
-    private void compute(IRecordIterator iterator, Map<Integer,Integer> countMap) {
+        Object record = this.index.record( iterator );
 
         // hash the groupby columns
-        int groupKey = index.hashAggregateGroup(iterator, indexColumns).hashCode();
+        int groupKey = KeyUtils.buildRecordKey( this.indexColumns, record ).hashCode();
 
         if( countMap.get(groupKey) == null ){
             countMap.put(groupKey, 1);

@@ -40,6 +40,7 @@ public record VmsRuntimeMetadata(
         Map<String, IVmsRepositoryFacade> repositoryFacades,
         Map<Class<?>, String> entityToTableNameMap,
 
+        // the return type may be a DTO
         Map<String, Tuple<SelectStatement, Type>> staticQueries
 
 ){}

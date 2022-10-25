@@ -157,12 +157,7 @@ public class EmbedMetadataLoader {
 
             var list = entry.getValue();
 
-            Integer[] aux = list.stream().map(p-> schema.columnPosition( p.columnName() ) ).toArray( Integer[]::new );
-
-            int[] intArray = new int[aux.length];
-            for(int i = 0; i < aux.length; i++){
-                intArray[i] = aux[i];
-            }
+            int[] intArray = list.stream().mapToInt(p-> schema.columnPosition( p.columnName() ) ).toArray();
 
             res.put( dataSchema.vmsName, intArray );
 

@@ -2,9 +2,7 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.join;
 
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
-import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
@@ -27,8 +25,8 @@ public class HashJoinWithProjection extends AbstractSimpleOperator {
     private final boolean[] projectionOrder;
 
     public HashJoinWithProjection(
-            AbstractIndex<IKey> leftIndex,
-            AbstractIndex<IKey> rightIndex,
+            ReadOnlyIndex<IKey> leftIndex,
+            ReadOnlyIndex<IKey> rightIndex,
             int[] leftProjectionColumns,
             int[] leftProjectionColumnsSize,
             int[] rightProjectionColumns,
@@ -51,29 +49,18 @@ public class HashJoinWithProjection extends AbstractSimpleOperator {
 
     public MemoryRefNode run(FilterContext leftFilter, FilterContext rightFilter, IKey... keys) {
 
-        UniqueHashIndex outerIndex = leftIndex.asUniqueHashIndex();
-        UniqueHashIndex innerIndex = rightIndex.asUniqueHashIndex();
-        long outerAddress;
-        long innerAddress;
+        IRecordIterator iterator = leftIndex.iterator(keys);
 
-        for(IKey key : keys){
-
-            outerAddress = outerIndex.retrieve(key);
-
-            if(leftIndex.checkCondition(key, outerAddress, leftFilter)){
-
-                innerAddress = innerIndex.retrieve(key);
-
-                if(rightIndex.checkCondition(key, innerAddress, rightFilter)) {
-
-                    append( key, outerAddress, leftProjectionColumns, leftProjectionColumnsSize,
-                            innerAddress, rightProjectionColumns, rightProjectionColumnsSize
+        while(iterator.hasElement()){
+            if(leftIndex.checkCondition(iterator, leftFilter)
+                && rightIndex.checkCondition(iterator, rightFilter)) {
+                    append( iterator,
+                            leftProjectionColumns, leftProjectionColumnsSize,
+                            rightProjectionColumns, rightProjectionColumnsSize
                     );
 
                 }
-
-            }
-
+            iterator.next();
         }
 
         return memoryRefNode;
@@ -82,29 +69,17 @@ public class HashJoinWithProjection extends AbstractSimpleOperator {
 
     public MemoryRefNode run(FilterContext leftFilter, FilterContext rightFilter) {
 
-        IRecordIterator outerIterator = leftIndex.asUniqueHashIndex().iterator();
-        UniqueHashIndex innerIndex = rightIndex.asUniqueHashIndex();
-        long outerAddress;
-        long innerAddress;
+        IRecordIterator<IKey> outerIterator = leftIndex.iterator();
 
-        while(outerIterator.hasNext()){
-
+        while(outerIterator.hasElement()){
             if(leftIndex.checkCondition(outerIterator, leftFilter)){
-
-                outerAddress = outerIterator.current();
-                IKey outerKey = outerIterator.primaryKey();
-                innerAddress = innerIndex.retrieve(outerKey);
-
-                if(rightIndex.checkCondition(outerKey, outerAddress, rightFilter)) {
-
-                    append( outerKey, outerAddress, leftProjectionColumns, leftProjectionColumnsSize,
-                            innerAddress, rightProjectionColumns, rightProjectionColumnsSize
-                            );
+                if(rightIndex.checkCondition(outerIterator, rightFilter)) {
+                    append( outerIterator, leftProjectionColumns, leftProjectionColumnsSize,
+                            rightProjectionColumns, rightProjectionColumnsSize );
 
                 }
-
             }
-
+            outerIterator.next();
         }
 
         return memoryRefNode;
@@ -116,14 +91,15 @@ public class HashJoinWithProjection extends AbstractSimpleOperator {
      * Easier to ensure (implicitly) that remote calls between modules remain consistent
      * just by following conventions
      */
-    private void append(IKey key, long leftSrcAddress, int[] leftProjectionColumns, int[] leftValueSizeInBytes,
-                        long rightSrcAddress, int[] rightProjectionColumns, int[] rightValueSizeInBytes){
+    private void append(IRecordIterator<IKey> iterator,
+                        int[] leftProjectionColumns, int[] leftValueSizeInBytes,
+                        int[] rightProjectionColumns, int[] rightValueSizeInBytes){
 
         int leftProjIdx = 0;
         int rightProjIdx = 0;
 
-        Object[] leftRecord = this.leftIndex.readFromIndex(key, leftSrcAddress);
-        Object[] rightRecord = this.rightIndex.readFromIndex(key, rightSrcAddress);
+        Object[] leftRecord = this.leftIndex.record(iterator);
+        Object[] rightRecord = this.rightIndex.record(iterator);
 
         for(int projOrdIdx = 0; projOrdIdx < projectionOrder.length; projOrdIdx++) {
 

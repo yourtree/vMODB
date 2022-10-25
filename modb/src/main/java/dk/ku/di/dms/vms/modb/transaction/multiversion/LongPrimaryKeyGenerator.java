@@ -7,12 +7,12 @@ public class LongPrimaryKeyGenerator implements IPrimaryKeyGenerator<Long> {
     private AtomicLong sequencer;
 
     public LongPrimaryKeyGenerator() {
-        this.sequencer = new AtomicLong(0);
+        this.sequencer = new AtomicLong(1);
     }
 
     @Override
     public Long next() {
-        return sequencer.incrementAndGet();
+        return sequencer.getAndAdd(1L);
     }
 
 }

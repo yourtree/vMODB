@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.storage.iterator;
+package dk.ku.di.dms.vms.modb.storage.iterator.non_unique;
 
 import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 
@@ -7,7 +7,7 @@ import java.util.Iterator;
 /**
  * Encapsulates the iteration over buckets of a non unique hash index
  */
-public class BucketIterator implements Iterator<RecordBucketIterator> {
+public final class BucketIterator implements Iterator<RecordBucketIterator> {
 
     private final int size;
 
@@ -18,6 +18,12 @@ public class BucketIterator implements Iterator<RecordBucketIterator> {
     public BucketIterator(OrderedRecordBuffer[] buffers){
         this.buffers = buffers;
         this.size = buffers.length;
+        this.progress = 0;
+    }
+
+    public BucketIterator(OrderedRecordBuffer buffer){
+        this.buffers = new OrderedRecordBuffer[]{ buffer };
+        this.size = 1;
         this.progress = 0;
     }
 
@@ -36,7 +42,7 @@ public class BucketIterator implements Iterator<RecordBucketIterator> {
         while(progress < size && buffers[progress].size() < 0){
             this.progress++;
         }
-        return new RecordBucketIterator(this.buffers[progress]);
+        return new RecordBucketIterator(this.buffers[progress].address());
 
     }
 

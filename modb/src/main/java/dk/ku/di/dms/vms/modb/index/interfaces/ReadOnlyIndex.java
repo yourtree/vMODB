@@ -1,22 +1,19 @@
-package dk.ku.di.dms.vms.modb.index;
+package dk.ku.di.dms.vms.modb.index.interfaces;
 
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
+import dk.ku.di.dms.vms.modb.index.IIndexKey;
+import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
-import java.util.HashSet;
+import java.util.List;
 
 /**
  * Base interface for operators that perform read-only queries.
- * TODO perhaps is a good idea separating key from address.
- *      That makes duplicate addressing a record, complicated to understand.
  * @param <K> The key object identifier of a record
  */
 public interface ReadOnlyIndex<K> {
@@ -33,53 +30,41 @@ public interface ReadOnlyIndex<K> {
     /** information used by the planner to decide for the appropriate operator */
     IndexTypeEnum getType();
 
-    default IRecordIterator iterator(IKey key){
-        throw new IllegalStateException("No iterator for a key supported by this index.");
-    }
-
-    default IRecordIterator iterator(){
-        throw new IllegalStateException("No iterator supported by this index.");
-    }
+    int size();
 
     boolean exists(K key);
 
-    boolean exists(long address);
+    default boolean exists(long address){
+        throw new IllegalStateException("No support for direct addressing in this index.");
+    }
 
     /**
+     * The address does not necessarily means the record exists in the database.
+     * It is just the address that record would be copied into.
      * This method may behave differently across indexes
      * For non unique, must return the address of the bucket
      * For unique, the address of the record
-     * @param key record key
-     * @return the record address
      */
-    long retrieve(K key);
-
-    default UniqueHashIndex asUniqueHashIndex(){
-        throw new IllegalStateException("Concrete index does not override this method.");
+    default long address(K key) {
+        throw new IllegalStateException("No support for direct addressing in this index.");
     }
 
-    default NonUniqueHashIndex asNonUniqueHashIndex(){
-        throw new IllegalStateException("Concrete index does not override this method.");
-    }
+    IRecordIterator<IKey> iterator();
 
-    default boolean checkCondition(IRecordIterator iterator, FilterContext filterContext){
-        return checkCondition( iterator.current(), filterContext );
-    }
+    /**
+     * For hash probing on a set of keys
+     * Can also be implemented by non-unique hash indexes,
+     * but may be expensive
+     */
+    IRecordIterator<IKey> iterator(IKey[] keys);
 
-    default boolean checkCondition(K key, long address, FilterContext filterContext){
-        return checkCondition( address, filterContext );
-    }
-
-    default IKey hashAggregateGroup(K key, long address, int[] indexColumns){
-        return KeyUtils.buildRecordKey(schema(), indexColumns, address);
-    }
-
-    default IKey hashAggregateGroup(IRecordIterator iterator, int[] indexColumns){
-        return KeyUtils.buildRecordKey(schema(), indexColumns, iterator.current());
-    }
-
-    default Object[] readFromIndex(K key, long address) {
+    default Object[] record(K key) {
+        long address = this.address(key);
         return this.readFromIndex(address);
+    }
+
+    default Object[] record(IRecordIterator<IKey> iterator) {
+        return this.readFromIndex(iterator.address());
     }
 
     default Object[] readFromIndex(long address) {
@@ -98,9 +83,12 @@ public interface ReadOnlyIndex<K> {
         return objects;
     }
 
-    default Object[] readFromIndex(K key) {
-        long address = this.retrieve(key);
-        return this.readFromIndex(address);
+    /**
+     * Default call from operators
+     * Multiversion-based iterators must override this method
+     */
+    default boolean checkCondition(IRecordIterator<K> iterator, FilterContext filterContext){
+        return checkCondition( iterator.address(), filterContext );
     }
 
     /**
@@ -108,7 +96,7 @@ public interface ReadOnlyIndex<K> {
      * versioned values.
      * @param address src address of the record
      * @param filterContext the filter to be applied
-     * @return
+     * @return whether a record exists
      */
     @SuppressWarnings("unchecked")
     default boolean checkCondition(long address, FilterContext filterContext){

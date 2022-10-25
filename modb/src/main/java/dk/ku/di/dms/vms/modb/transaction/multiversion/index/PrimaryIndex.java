@@ -11,12 +11,11 @@ import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
-import dk.ku.di.dms.vms.modb.index.ReadWriteIndex;
-import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
+import dk.ku.di.dms.vms.modb.storage.iterator.multiversion.UniqueKeySnapshotIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.*;
 import jdk.internal.misc.Unsafe;
@@ -38,7 +37,8 @@ import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
  * The filter must take into account the correct data item version
  * The append must take into account the correct data item version
  * Q: Why implement a ReadOnlyIndex?
- * A: Because it is not supposed to modify the data in main-memory, but rather keep version on heap.
+ * A: Because it is not supposed to modify the data in main-memory,
+ * but rather keep versions in a cache on heap memory.
  * Thus, the API for writes are different. The ReadWriteIndex is only used for bulk writes,
  * when no transactional guarantees are necessary.
  */
@@ -117,23 +117,25 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
     }
 
     @Override
-    public IRecordIterator iterator(IKey key) {
-        return new ConsistentRecordIterator(this, this.primaryKeyIndex.iterator(key));
+    public int size() {
+        return this.primaryKeyIndex.size();
     }
 
     @Override
-    public IRecordIterator iterator() {
-        return new ConsistentRecordIterator(this, this.primaryKeyIndex.iterator());
+    public IRecordIterator<IKey> iterator() {
+        // return a non unique index iterator if there is some...
+        return null;
+        // return new UniqueKeySnapshotRecordIterator(this, this.primaryKeyIndex.iterator());
     }
 
     @Override
-    public Object[] readFromIndex(IKey key, long address) {
-        return lookupByKey(key);
+    public IRecordIterator<IKey> iterator(IKey[] keys) {
+        return new UniqueKeySnapshotIterator(this, keys);
     }
 
     @Override
-    public Object[] readFromIndex(IKey key) {
-        return lookupByKey(key);
+    public Object[] record(IKey key) {
+        return this.lookupByKey(key);
     }
 
     /**
@@ -175,35 +177,19 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
         return this.exists( key );
     }
 
-    @Override
-    public long retrieve(IKey key) {
-        return this.primaryKeyIndex.retrieve(key);
-    }
+//    @Override
+//    public long address(IKey key) {
+//        return this.primaryKeyIndex.address(key);
+//    }
 
-    @Override
-    public UniqueHashIndex asUniqueHashIndex() {
-        return this.primaryKeyIndex.asUniqueHashIndex();
-    }
-
-    @Override
-    public NonUniqueHashIndex asNonUniqueHashIndex() {
-        return this.primaryKeyIndex.asNonUniqueHashIndex();
-    }
 
     // every condition checked is proceeded by a completion handler
     // can maintain the boolean return but all operators (for read queries)
     // necessarily require appending to a memory result space
 
     @Override
-    public boolean checkCondition(IRecordIterator iterator, FilterContext filterContext) {
-        IKey key = iterator.primaryKey();
-        Object[] record = lookupByKey(key);
-        if(record == null) return false;
-        return checkConditionVersioned(filterContext, record);
-    }
-
-    @Override
-    public boolean checkCondition(IKey key, long address, FilterContext filterContext) {
+    public boolean checkCondition(IRecordIterator<IKey> iterator, FilterContext filterContext) {
+        IKey key = iterator.get();
         Object[] record = lookupByKey(key);
         if(record == null) return false;
         return checkConditionVersioned(filterContext, record);
@@ -366,14 +352,30 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
         if ( operationSet != null ){
             if(TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
                 var entry = operationSet.updateHistoryMap.floorEntry(TransactionMetadata.TRANSACTION_CONTEXT.get().lastTid);
-                if (entry != null)
+                if (entry != null){
                     return (entry.val().type != WriteType.DELETE ? entry.val().record : null);
+                }
+//                else {
+//                    // return the snapshot state, since entry is null
+//                    // by causality, the tid the read transaction is looking for no longer exists in the snapshot map, so it must be on main memory
+//                    return operationSet.snapshotVersion;
+//                }
             } else
-                return operationSet.lastWriteType != WriteType.DELETE ? operationSet.cachedEntity : null;
+                return operationSet.lastWriteType != WriteType.DELETE ? operationSet.lastVersion : null;
         }
 
+        // it is a readonly
         if(this.primaryKeyIndex.exists(key)) {
-            return this.primaryKeyIndex.readFromIndex(key);
+
+            // cache it so no need to read again from memory
+//            if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
+//                // to avoid data race, writers are single-threaded
+//                operationSet = new OperationSetOfKey();
+//                this.updatesPerKeyMap.put( key, operationSet );
+//                operationSet.snapshotVersion = this.primaryKeyIndex.record(key);
+//            }
+
+            return this.primaryKeyIndex.record(key);
         }
 
         return null;
@@ -409,7 +411,7 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
 
         operationSet.updateHistoryMap.put( TransactionMetadata.TRANSACTION_CONTEXT.get().tid, entry);
         operationSet.lastWriteType = WriteType.INSERT;
-        operationSet.cachedEntity = values;
+        operationSet.lastVersion = values;
 
         KEY_WRITES.get().add(key);
 
@@ -417,11 +419,22 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
 
     }
 
-    public Object insertAndGet(Object[] values){
-        Object key_ = this.primaryKeyGenerator.next();
-        IKey key = KeyUtils.buildInputKey( key_ );
-        if(this.insert( key, values )){
-            return key_;
+    public IKey insertAndGet(Object[] values){
+
+        if(this.primaryKeyGenerator != null){
+            Object key_ = this.primaryKeyGenerator.next();
+
+            values[this.primaryKeyIndex.columns()[0]] = key_;
+
+            IKey key = KeyUtils.buildInputKey( key_ );
+            if(this.insert( key, values )){
+                return key;
+            }
+        } else {
+            IKey key = KeyUtils.buildPrimaryKey(this.schema(), values);
+            if(this.insert( key, values )){
+                return key;
+            }
         }
         return null;
     }
@@ -451,7 +464,7 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
 
         operationSet.updateHistoryMap.put( TransactionMetadata.TRANSACTION_CONTEXT.get().tid, entry);
         operationSet.lastWriteType = WriteType.UPDATE;
-        operationSet.cachedEntity = values;
+        operationSet.lastVersion = values;
 
         KEY_WRITES.get().add(key);
 
@@ -528,8 +541,8 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(entry.getKey());
 
             switch (operationSetOfKey.lastWriteType){
-                case UPDATE -> this.primaryKeyIndex.update(entry.getKey(), operationSetOfKey.cachedEntity);
-                case INSERT -> this.primaryKeyIndex.insert(entry.getKey(), operationSetOfKey.cachedEntity);
+                case UPDATE -> this.primaryKeyIndex.update(entry.getKey(), operationSetOfKey.lastVersion);
+                case INSERT -> this.primaryKeyIndex.insert(entry.getKey(), operationSetOfKey.lastVersion);
                 case DELETE -> this.primaryKeyIndex.delete(entry.getKey());
             }
 

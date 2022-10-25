@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -65,8 +66,6 @@ public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
     public IIndexKey key(){
         return this.key;
     }
-
-    public abstract int size();
 
     @Override
     public Schema schema(){

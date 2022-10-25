@@ -31,7 +31,7 @@ public class BulkLoadTest {
 
         TransactionFacade.build(map).bulkInsert(table, buffer, maxItems);
 
-        long resAddress = table.underlyingPrimaryKeyIndex().retrieve(SimpleKey.of(7));
+        long resAddress = table.underlyingPrimaryKeyIndex().address(SimpleKey.of(7));
 
         var unsafe = MemoryUtils.UNSAFE;
         assert unsafe.getInt(resAddress + Schema.RECORD_HEADER) == 7;
@@ -55,7 +55,7 @@ public class BulkLoadTest {
 
         TransactionFacade.build(map).bulkInsert(table, buffer, maxItems);
 
-        long resAddress = table.underlyingPrimaryKeyIndex().retrieve(SimpleKey.of(7));
+        long resAddress = table.underlyingPrimaryKeyIndex().address(SimpleKey.of(7));
 
         var unsafe = MemoryUtils.UNSAFE;
         assert unsafe.getInt(resAddress + Schema.RECORD_HEADER) == 7;

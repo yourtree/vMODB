@@ -4,13 +4,16 @@ import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Header;
 import dk.ku.di.dms.vms.modb.definition.Schema;
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
+import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
-import dk.ku.di.dms.vms.modb.storage.iterator.RecordIterator;
-import dk.ku.di.dms.vms.modb.definition.key.IKey;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
@@ -26,9 +29,12 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
 
     private final RecordBufferContext recordBufferContext;
 
+    private final Map<IKey, Object[]> cacheObjectStore;
+
     public UniqueHashIndex(RecordBufferContext recordBufferContext, Schema schema){
         super(schema, schema.getPrimaryKeyColumns());
         this.recordBufferContext = recordBufferContext;
+        this.cacheObjectStore = new ConcurrentHashMap<>();
     }
 
     /**
@@ -38,6 +44,7 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
     public UniqueHashIndex(RecordBufferContext recordBufferContext, Schema schema, int... columnsIndex){
         super(schema, columnsIndex);
         this.recordBufferContext = recordBufferContext;
+        this.cacheObjectStore = new ConcurrentHashMap<>();
     }
 
     /**
@@ -126,10 +133,9 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
     public void delete(IKey key) {
         long pos = getPosition(key.hashCode());
         UNSAFE.putBoolean(null, pos, inactive);
-        // this.size--;
     }
 
-    public long retrieve(IKey key) {
+    public long address(IKey key) {
         return getPosition(key.hashCode());
     }
 
@@ -153,19 +159,29 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
     }
 
     @Override
-    public IRecordIterator iterator() {
+    public IRecordIterator<IKey> iterator() {
         return new RecordIterator(this.recordBufferContext.address, schema.getRecordSize(),
                 this.recordBufferContext.capacity);
     }
 
     @Override
-    public IndexTypeEnum getType() {
-        return IndexTypeEnum.UNIQUE;
+    public IRecordIterator<IKey> iterator(IKey[] keys) {
+        return new KeyRecordIterator(this, keys);
     }
 
     @Override
-    public UniqueHashIndex asUniqueHashIndex(){
-        return this;
+    public Object[] record(IKey key) {
+        Object[] objectLookup = this.cacheObjectStore.get(key);
+        if(objectLookup == null){
+            objectLookup = this.readFromIndex(this.address(key));
+            this.cacheObjectStore.put( key, objectLookup );
+        }
+        return objectLookup;
+    }
+
+    @Override
+    public IndexTypeEnum getType() {
+        return IndexTypeEnum.UNIQUE;
     }
 
     public RecordBufferContext buffer(){

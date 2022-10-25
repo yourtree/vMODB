@@ -3,10 +3,7 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.scan;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
-import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
@@ -47,34 +44,14 @@ public final class IndexScanWithProjection extends AbstractScan {
 
     // transactional call
     public MemoryRefNode run(ReadOnlyIndex<IKey> index, FilterContext filterContext, IKey... keys) {
-
-        if(index.getType() == IndexTypeEnum.UNIQUE){
-            long address;
-            UniqueHashIndex cIndex = index.asUniqueHashIndex();
-            for(IKey key : keys){
-                address = index.retrieve(key);
-                if(cIndex.checkCondition(key, address, filterContext)){
-                    append(key, address, projectionColumns);
-                }
+        // unifying in terms of iterator
+        IRecordIterator iterator = index.iterator(keys);
+        while(iterator.hasElement()){
+            if(index.checkCondition(iterator, filterContext)){
+                append(iterator, projectionColumns);
             }
-
-            return memoryRefNode;
-
+            iterator.next();
         }
-
-        // non unique
-        NonUniqueHashIndex cIndex = index.asNonUniqueHashIndex();
-        for(IKey key : keys){
-            IRecordIterator iterator = cIndex.iterator(key);
-            while(iterator.hasNext()){
-                if(cIndex.checkCondition(iterator, filterContext)){
-                    append(iterator, projectionColumns);
-                }
-                // move the iterator
-                iterator.next();
-            }
-        }
-
         return memoryRefNode;
     }
 

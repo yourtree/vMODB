@@ -3,10 +3,7 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.sum;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
-import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
@@ -24,41 +21,15 @@ public class IndexSum extends Sum {
 
     @SuppressWarnings("unchecked, rawtypes")
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
-
         SumOperation sumOperation = buildOperation(dataType);
-        long address;
-
-        if(index.getType() == IndexTypeEnum.UNIQUE){
-
-            UniqueHashIndex cIndex = index.asUniqueHashIndex();
-
-            for(IKey key : keys){
-                address = cIndex.retrieve(key);
-                if(index.checkCondition(key, address, filterContext)){
-                    sumOperation.accept(index.readFromIndex(key, address)[columnIndex]);
-                }
-            }
-
-            appendResult(sumOperation);
-            return memoryRefNode;
-
-        }
-
-        // non unique
-        NonUniqueHashIndex cIndex = index.asNonUniqueHashIndex();
-        for(IKey key : keys){
-            IRecordIterator iterator = cIndex.iterator(key);
-            while(iterator.hasNext()){
-                if(index.checkCondition(iterator, filterContext)){
-                    sumOperation.accept(index.readFromIndex(key, iterator.current())[columnIndex]);
-                }
-                iterator.next();
+        IRecordIterator<IKey> iterator = index.iterator(keys);
+        while(iterator.hasElement()){
+            if(index.checkCondition(iterator, filterContext)){
+                sumOperation.accept(index.record(iterator)[columnIndex]);
             }
         }
-
         appendResult(sumOperation);
         return memoryRefNode;
-
     }
 
 }

@@ -1,10 +1,10 @@
 package dk.ku.di.dms.vms.modb.definition;
 
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
-import dk.ku.di.dms.vms.modb.index.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.index.SecondaryIndex;
 
 import java.util.*;
 
@@ -21,6 +21,12 @@ public final class Table {
     public final String name;
 
     public final Schema schema;
+
+    /**
+     * All tables must have a pk, thus a primary index.
+     * besides, used for fast path on planner
+      */
+    private final PrimaryIndex primaryIndex;
 
     /**
      * Why foreign keys is on table and not on {@link Schema}?
@@ -40,19 +46,26 @@ public final class Table {
     // Who is pointing to me? Who am I parenting?
     // private final List<ConsistentIndex> children;
 
-    // all tables must have a pk. besides, used for fast path on planner
-    private final PrimaryIndex primaryIndex;
-
     // Other indexes, hashed by the column set in order of the schema
     // logical key - column list in order that appear in the schema
     // physical key - column list in order of index definition
-    public Map<IIndexKey, SecondaryIndex> secondaryIndexMap;
+    public final Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap;
+
+    public Table(String name, Schema schema, PrimaryIndex primaryIndex,
+                 Map<PrimaryIndex, int[]> foreignKeys, Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap){
+        this.name = name;
+        this.schema = schema;
+        this.hashCode = name.hashCode();
+        this.secondaryIndexMap = secondaryIndexMap;
+        this.primaryIndex = primaryIndex;
+        this.foreignKeys = foreignKeys;
+    }
 
     public Table(String name, Schema schema, PrimaryIndex primaryIndex, Map<PrimaryIndex, int[]> foreignKeys){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
-        this.secondaryIndexMap = new HashMap<>();
+        this.secondaryIndexMap = Collections.emptyMap();
         this.primaryIndex = primaryIndex;
         this.foreignKeys = foreignKeys;
     }
@@ -61,9 +74,14 @@ public final class Table {
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
-        this.secondaryIndexMap = new HashMap<>();
+        this.secondaryIndexMap = Collections.emptyMap();
         this.primaryIndex = primaryIndex;
         this.foreignKeys = Collections.emptyMap();
+    }
+
+    @Override
+    public boolean equals(Object anotherTable){
+        return this.hashCode == anotherTable.hashCode();
     }
 
     @Override

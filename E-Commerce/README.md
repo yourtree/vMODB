@@ -19,7 +19,7 @@ DeathStar has microservices "user" and "discounts"
 
 The Google benchmark does not have "user" and "discounts"
 
-Both benchmarks do NOT check out items from catalog. As a consequence, there  is no need for replenishment.
+Both benchmarks do NOT check out items from catalog. As a consequence, there is no need for replenishment.
 
 The Google benchmark has "currency" and "emailservice" microservice, DeathStar no.
 

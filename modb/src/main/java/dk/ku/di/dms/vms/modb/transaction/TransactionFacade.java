@@ -8,7 +8,7 @@ import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
@@ -19,6 +19,7 @@ import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
 import java.nio.ByteBuffer;
@@ -244,8 +245,15 @@ public final class TransactionFacade {
     public void insert(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
-        if(index.insert(pk, values) && !fkConstraintViolation(table, values)){
+        if(!fkConstraintViolation(table, values) && index.insert(pk, values)){
             INDEX_WRITES.get().add(index);
+
+            // iterate over secondary indexes to insert the new write
+            // this is the delta. records that the underlying index does not know yet
+            for(NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()){
+                secIndex.write( pk, values );
+            }
+
             return;
         }
         undoTransactionWrites();
@@ -256,10 +264,13 @@ public final class TransactionFacade {
         PrimaryIndex index = table.primaryKeyIndex();
         // IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
         if(!fkConstraintViolation(table, values)){
-            Object key_ = index.insertAndGet(values);
+            IKey key_ = index.insertAndGet(values);
             if(key_ != null) {
                 INDEX_WRITES.get().add(index);
-                return key_;
+                for(NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()){
+                    secIndex.write( key_, values );
+                }
+                return values[ table.primaryKeyIndex().columns()[0] ];
             }
         }
         undoTransactionWrites();
@@ -267,13 +278,13 @@ public final class TransactionFacade {
     }
 
     /**
-     * iterate over all indexes, get the corresponding writes of this tid and remove them
+     * Iterate over all indexes, get the corresponding writes of this tid and remove them
      *      this method can be called in parallel by transaction facade without risk
      */
     public void update(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
-        if(index.update(pk, values) && !fkConstraintViolation(table, values)){
+        if(!fkConstraintViolation(table, values) && index.update(pk, values)){
             INDEX_WRITES.get().add(index);
             return;
         }
@@ -339,7 +350,7 @@ public final class TransactionFacade {
         for(var index : indexes){
             index.installWrites();
             // log index since all updates are made
-            index.asUniqueHashIndex().buffer().log();
+            // index.asUniqueHashIndex().buffer().log();
         }
 
         // TODO must modify corresponding secondary indexes too

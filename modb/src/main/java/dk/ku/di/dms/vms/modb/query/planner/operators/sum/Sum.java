@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.sum;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
@@ -108,10 +108,10 @@ public class Sum extends AbstractSimpleOperator {
 
         SumOperation sumOperation = buildOperation(dataType);
 
-        IRecordIterator iterator = index.asUniqueHashIndex().iterator();
-        while(iterator.hasNext()){
+        IRecordIterator<IKey> iterator = index.iterator();
+        while(iterator.hasElement()){
             if(index.checkCondition(iterator, filterContext)){
-                Object val = index.readFromIndex(iterator.current())[columnIndex];
+                Object val = index.record(iterator)[columnIndex];
                 sumOperation.accept(val);
             }
             iterator.next();

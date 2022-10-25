@@ -33,7 +33,13 @@ public class OperationSetOfKey {
      * to speed up the checking of constraints
      * Only used by on-flight RW/W tasks
      */
-    public Object[] cachedEntity;
+    public Object[] lastVersion;
+
+    // version stored in main memory, from the last snapshot state
+    // the logic to keep everything in sync requires changes to write operations
+    // better to look for that later
+    // another design is making the index itself cache that for us
+    // public Object[] snapshotVersion;
 
     public OperationSetOfKey(){
         this.updateHistoryMap = new SingleWriterMultipleReadersFIFO<>();

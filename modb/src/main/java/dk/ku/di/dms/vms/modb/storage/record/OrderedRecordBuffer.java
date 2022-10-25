@@ -1,9 +1,10 @@
 package dk.ku.di.dms.vms.modb.storage.record;
 
-import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import jdk.internal.misc.Unsafe;
 
 import java.util.LinkedList;
 
@@ -13,14 +14,13 @@ import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
 /**
  * A double-linked list maintained
  * in a buffer.
- *
  * Record-aware, meaning it requires knowing
  * the column of the schema that form the index
  *
  */
 public class OrderedRecordBuffer {
 
-    private static final jdk.internal.misc.Unsafe UNSAFE = MemoryUtils.UNSAFE;
+    private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
     private final LinkedList<Long> deletedOffsets;
 
@@ -372,22 +372,17 @@ public class OrderedRecordBuffer {
 
     /**
      * Minimum swap algorithm:
-     * https://www.hackerrank.com/challenges/minimum-swaps-2
-     *
+     * <a href="https://www.hackerrank.com/challenges/minimum-swaps-2">Minimum Swaps 2</a>
      * This is potentially performed in a batch commit
      * to alleviate the overhead of cache misses
      * for the next transactions
-     *
      * Strategy:
      * - start in the first bucket pos
      * - find the minimum record
      * - swap the minimum record with the record in the first bucket pos
-     *
      * repeat until all buckets are covered (i.e., ordered)
-     *
      * This can be optimized compared to the array version since we have a half
      * which allow us to cut in half the cost of finding the next minimum element
-     *
      */
     private void reorder(){
 

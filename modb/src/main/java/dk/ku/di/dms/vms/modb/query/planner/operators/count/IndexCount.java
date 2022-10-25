@@ -2,10 +2,7 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.count;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.modb.index.ReadOnlyIndex;
-import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
@@ -26,33 +23,12 @@ public class IndexCount extends AbstractCount {
 
         int count = 0;
 
-        if(index.getType() == IndexTypeEnum.UNIQUE){
-
-            UniqueHashIndex cIndex = index.asUniqueHashIndex();
-            long address;
-            for(IKey key : keys){
-                address = cIndex.retrieve(key);
-                if(index.checkCondition(key, address, filterContext)){
-                    count++;
-                }
+        IRecordIterator iterator = this.index.iterator(keys);
+        while(iterator.hasElement()){
+            if(index.checkCondition(iterator, filterContext)){
+                count++;
             }
-
-            append(count);
-            return memoryRefNode;
-
-        }
-
-        // non unique
-        NonUniqueHashIndex cIndex = index.asNonUniqueHashIndex();
-        for(IKey key : keys){
-
-            IRecordIterator iterator = cIndex.iterator(key);
-            while(iterator.hasNext()){
-                if(cIndex.checkCondition(iterator, filterContext)){
-                    count++;
-                }
-                iterator.next();
-            }
+            iterator.next();
         }
 
         append(count);
