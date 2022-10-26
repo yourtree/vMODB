@@ -16,8 +16,24 @@ import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
  * in a buffer.
  * Record-aware, meaning it requires knowing
  * the column of the schema that form the index
- *
+ * -
+ * The structure of nodes is defined as below:
+ * -
+ * active (boolean) -> bit whether the record is active
+ * previous (long) ->  the address of the previous record (in this buffer)
+ * SK (int) -> SK to avoid rebuilding the sk on every iteration (trade-off to speed-up search, but a duplicate info)
+ * ordered by the SK... does not mean all the Sk in this bucket belongs to the same sk... implement conflict-free otherwise will be dependent on the input
+ * srcAddress (long) -> the src address of the record in the PK index
+ * next (long) -> the address of the next record (in this buffer)
+ * private static class Entry {
+ * public boolean active;
+ * public long previous;
+ * public int key;
+ * public long srcAddress;
+ * public long next;
+ }
  */
+
 public class OrderedRecordBuffer {
 
     private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
@@ -181,7 +197,7 @@ public class OrderedRecordBuffer {
     }
 
     private void putBefore(long targetAddress, long destOffset) {
-        // get the previous of the target address node
+        // get the previous node of the target address node
         long auxPrevious = UNSAFE.getLong( targetAddress + deltaPrevious );
 
         // point the "previous" of the target address node to the new record
@@ -218,20 +234,20 @@ public class OrderedRecordBuffer {
      * Moving records across addresses on every write/delete
      * may be expensive, and cost increase as more records
      * are found.
-     *
+     * -
      * The optimization possible is keeping two pointers
      * One starts at the first and goes forward
      * The other starts at the last record and goes backwards
-     *
+     * -
      * Best case: O(1) -> the first or the last
      * Worst case: O(n/2) -> the half of the list
      * Average case: < O(n/2)? depend on the workload
-     *
+     * -
      * How to optimize this?
      * Maintain the half record.
      * The half moves for every insertion and deletion
      * The find position starts with the half
-     *
+     * -
      * Guaranteed worst case: O(n/4)...
      *
      */
@@ -259,7 +275,7 @@ public class OrderedRecordBuffer {
 
             bottomAddress = first;
 
-            // get the previous of the half node
+            // get the previous node of the half node
             upAddress = UNSAFE.getLong(half + deltaPrevious);
 
         }
@@ -291,7 +307,7 @@ public class OrderedRecordBuffer {
     }
 
     // same logic, but returns an address
-    // -1 if does not exist
+    // return -1 if the node does not exist
     public long existsAddress(IKey key){
         // majority of cases
         if(records > 2) {
@@ -314,7 +330,7 @@ public class OrderedRecordBuffer {
 
                 bottomAddress = first;
 
-                // get the previous of the half node
+                // get the previous node of the half node
                 upAddress = UNSAFE.getLong(half + deltaPrevious);
 
             }
@@ -448,19 +464,5 @@ public class OrderedRecordBuffer {
     public long getFirst() {
         return first;
     }
-
-    // active (boolean) -> bit whether the record is active
-    // previous (long) ->  the address of the previous record (in this buffer)
-    // SK (int) -> SK to avoid rebuilding the sk on every iteration (trade-off to speed-up search, but a duplicate info)
-    // ordered by the SK... does not mean all the Sk in this bucket belongs to the same sk... implement conflict-free otherwise will be dependent on the input
-    // srcAddress (long) -> the src address of the record in the PK index
-    // next (long) -> the address of the next record (in this buffer)
-    //    private static class Entry {
-    //        public boolean active;
-    //        public long previous;
-    //        public int key;
-    //        public long srcAddress;
-    //        public long next;
-    //    }
 
 }

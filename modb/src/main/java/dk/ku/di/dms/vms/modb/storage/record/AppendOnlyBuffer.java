@@ -1,29 +1,31 @@
 package dk.ku.di.dms.vms.modb.storage.record;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
+import jdk.internal.misc.Unsafe;
 
 /**
  * Append-only buffer.
  * A buffer where records are sequentially written.
  * Not hashed as in the hashing technique.
- *
+ * --
  * An abstraction to avoid the caller to handle the offset
- *
+ * --
  * It abstracts a pre-assigned portion of the memory
  * for the continuous allocation of records.
- *
+ * --
  * Limitations:
  * - Non-resizable
  * - Does not support ordering (e.g., by a set of columns)
- *
+ * --
  * In the future:
- * - Implement bloom filter to support the exists operation (https://notes.volution.ro/v1/2022/07/notes/1290a79c/)
+ * - Implement bloom filter to support the exists operation:
+ *  <a href="https://notes.volution.ro/v1/2022/07/notes/1290a79c/">Bloom Filter</a>
  * - Can also be used for caching writes of transactions
  *
  */
 public class AppendOnlyBuffer {
 
-    private static final jdk.internal.misc.Unsafe UNSAFE = MemoryUtils.UNSAFE;
+    private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
     // what is found in the metadata buffer of this storage structure?
     private final long address;
@@ -32,12 +34,12 @@ public class AppendOnlyBuffer {
     private long nextOffset;
 
     // the number of bytes this buffer provides
-    private final long capacity;
+    private final long size;
 
-    public AppendOnlyBuffer(long address, long capacity) {
+    public AppendOnlyBuffer(long address, long size) {
         this.address = address;
         this.nextOffset = address;
-        this.capacity = capacity;
+        this.size = size;
     }
 
     // move offset
@@ -49,8 +51,8 @@ public class AppendOnlyBuffer {
         return this.address;
     }
 
-    public long capacity(){
-        return this.capacity;
+    public long size(){
+        return this.size;
     }
 
     public long nextOffset() {
@@ -62,7 +64,7 @@ public class AppendOnlyBuffer {
      * It is responsibility of the caller to
      * ensure the bounds are respected.
      * This design is to favor performance over safety.
-     *
+     * -
      * The caller must keep track of the remaining space
      * occupied = nextOffset - address - 1
      * remaining = capacity - occupied

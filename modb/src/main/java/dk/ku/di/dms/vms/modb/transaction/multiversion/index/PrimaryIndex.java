@@ -35,7 +35,7 @@ import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
  * So it is a mix of behavioral and state:
  * The operators need an iterator (to provide only the allowed data items' visibility)
  * The filter must take into account the correct data item version
- * The append must take into account the correct data item version
+ * The append operation must take into account the correct data item version
  * Q: Why implement a ReadOnlyIndex?
  * A: Because it is not supposed to modify the data in main-memory,
  * but rather keep versions in a cache on heap memory.
@@ -123,7 +123,7 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
 
     @Override
     public IRecordIterator<IKey> iterator() {
-        // return a non unique index iterator if there is some...
+        // return a non-unique index iterator if there is some...
         return null;
         // return new UniqueKeySnapshotRecordIterator(this, this.primaryKeyIndex.iterator());
     }
@@ -152,7 +152,7 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
         if(opSet != null){
 
             // why checking first if I am a WRITE. because by checking if I am right, I don't need to pay O(log n)
-            // 1 write thread at a time. if I am a write thread, does not matter my lastTid. I can just check the last write for this entry
+            // 1 write thread at a time. if that is a writer thread, does not matter my lastTid. I can just check the last write for this entry
             if( !TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly ){
                 return opSet.lastWriteType != WriteType.DELETE;
             }
@@ -355,26 +355,12 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
                 if (entry != null){
                     return (entry.val().type != WriteType.DELETE ? entry.val().record : null);
                 }
-//                else {
-//                    // return the snapshot state, since entry is null
-//                    // by causality, the tid the read transaction is looking for no longer exists in the snapshot map, so it must be on main memory
-//                    return operationSet.snapshotVersion;
-//                }
             } else
                 return operationSet.lastWriteType != WriteType.DELETE ? operationSet.lastVersion : null;
         }
 
         // it is a readonly
         if(this.primaryKeyIndex.exists(key)) {
-
-            // cache it so no need to read again from memory
-//            if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
-//                // to avoid data race, writers are single-threaded
-//                operationSet = new OperationSetOfKey();
-//                this.updatesPerKeyMap.put( key, operationSet );
-//                operationSet.snapshotVersion = this.primaryKeyIndex.record(key);
-//            }
-
             return this.primaryKeyIndex.record(key);
         }
 
@@ -393,7 +379,7 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
         if ( operationSet != null ){
             pkConstraintViolation = operationSet.lastWriteType != WriteType.DELETE;
         } else {
-            // lets check now the index itself. it exist, it is a violation
+            // let's check now the index itself. it exists, it is a violation
             pkConstraintViolation = primaryKeyIndex.exists(key);
         }
 
@@ -426,7 +412,7 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
 
             values[this.primaryKeyIndex.columns()[0]] = key_;
 
-            IKey key = KeyUtils.buildInputKey( key_ );
+            IKey key = KeyUtils.buildKey( key_ );
             if(this.insert( key, values )){
                 return key;
             }
@@ -523,7 +509,7 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
         if(writesOfTid == null) return;
 
         for(var key : writesOfTid) {
-            // do we have a write in the corresponding index? always yes. if no, it is a bug
+            // do we have a record written in the corresponding index? always yes. if no, it is a bug
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             operationSetOfKey.updateHistoryMap.poll();
         }

@@ -10,8 +10,6 @@ import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
-import java.util.List;
-
 /**
  * Base interface for operators that perform read-only queries.
  * @param <K> The key object identifier of a record
@@ -39,10 +37,10 @@ public interface ReadOnlyIndex<K> {
     }
 
     /**
-     * The address does not necessarily means the record exists in the database.
+     * The address does not necessarily mean the record exists in the database.
      * It is just the address that record would be copied into.
      * This method may behave differently across indexes
-     * For non unique, must return the address of the bucket
+     * For non-unique, must return the address of the bucket
      * For unique, the address of the record
      */
     default long address(K key) {

@@ -32,7 +32,7 @@ public abstract class AbstractSimpleOperator {
      */
     protected void ensureMemoryCapacity(){
 
-        if(currentBuffer.capacity() - currentBuffer.address() > entrySize){
+        if(currentBuffer.size() - currentBuffer.address() > entrySize){
             return;
         }
 
@@ -52,7 +52,7 @@ public abstract class AbstractSimpleOperator {
      */
     protected void ensureMemoryCapacity(int size){
 
-        if(currentBuffer.capacity() - currentBuffer.address() > size){
+        if(currentBuffer.size() - currentBuffer.address() > size){
             return;
         }
 

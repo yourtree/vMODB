@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.definition.key;
 /**
  * Cache key objects for reuse across queries
  * Inspiration from JVM class: {jdk.internal.net.http.websocket.MessageQueue}
- *
+ * -
  * Used by the {@link dk.ku.di.dms.vms.modb.transaction.TransactionFacade} to
  * create the input keys.
  * After the query is finished, the keys don't need to be returned to the cache,

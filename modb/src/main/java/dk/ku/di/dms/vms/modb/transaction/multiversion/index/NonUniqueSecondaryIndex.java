@@ -23,6 +23,7 @@ public final class NonUniqueSecondaryIndex implements ReadOnlyIndex<IKey> {
     private final NonUniqueHashIndex underlyingSecondaryIndex;
 
     // key: formed by secondary indexed columns
+    // value: the corresponding pks
     private final Map<IKey, Set<IKey>> writesCache;
 
     public NonUniqueSecondaryIndex(PrimaryIndex primaryIndex, NonUniqueHashIndex underlyingSecondaryIndex) {
@@ -107,7 +108,7 @@ public final class NonUniqueSecondaryIndex implements ReadOnlyIndex<IKey> {
      * for later retrieval
      * @param primaryKey may have many secIdxKey associated
      */
-    public void write(IKey primaryKey, Object[] record){
+    public void appendDelta(IKey primaryKey, Object[] record){
         IKey secIdxKey = KeyUtils.buildRecordKey( this.underlyingSecondaryIndex.columns(), record );
         Set<IKey> pkSet = this.writesCache.get( secIdxKey );
         if(pkSet == null){

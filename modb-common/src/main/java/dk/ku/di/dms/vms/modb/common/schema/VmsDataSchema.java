@@ -24,7 +24,10 @@ public class VmsDataSchema {
     // the data types of the columns
     public DataType[] columnDataTypes;
 
-    // foreign key references within the same vms
+    /**
+     * Foreign key references within the same
+     * virtual microservice application
+     */
     public ForeignKeyReference[] foreignKeyReferences;
 
     // this can be outside, another vms

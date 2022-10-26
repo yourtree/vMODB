@@ -73,12 +73,6 @@ public final class TransactionFacade {
         return new TransactionFacade(catalog);
     }
 
-    /**
-     * Why references to foreign key constraints are here?
-     * Because an index should not know about other indexes.
-     * It is better to have an upper class taking care of this constraint.
-     * Can be made parallel.
-     */
     private boolean fkConstraintViolation(Table table, Object[] values){
         for(var entry : table.foreignKeys().entrySet()){
             IKey fk = KeyUtils.buildRecordKey( entry.getValue(), values );
@@ -218,7 +212,7 @@ public final class TransactionFacade {
     }
 
     public void deleteByKey(PrimaryIndex index, Object[] values) {
-        IKey pk = KeyUtils.buildInputKey(values);
+        IKey pk = KeyUtils.buildKey(values);
         this.deleteByKey(index, pk);
     }
 
@@ -251,7 +245,7 @@ public final class TransactionFacade {
             // iterate over secondary indexes to insert the new write
             // this is the delta. records that the underlying index does not know yet
             for(NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()){
-                secIndex.write( pk, values );
+                secIndex.appendDelta( pk, values );
             }
 
             return;
@@ -268,7 +262,7 @@ public final class TransactionFacade {
             if(key_ != null) {
                 INDEX_WRITES.get().add(index);
                 for(NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()){
-                    secIndex.write( key_, values );
+                    secIndex.appendDelta( key_, values );
                 }
                 return values[ table.primaryKeyIndex().columns()[0] ];
             }
@@ -319,7 +313,7 @@ public final class TransactionFacade {
         FilterContext filterContext = FilterContextBuilder.build(wherePredicatesNoIndex);
 
         // build input
-        IKey inputKey = KeyUtils.buildInputKey(keyList.toArray());
+        IKey inputKey = KeyUtils.buildKey(keyList.toArray());
 
         return operator.run( consistentIndex, filterContext, inputKey );
     }

@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 
-public class KeyUtils {
+public final class KeyUtils {
 
     private KeyUtils(){}
 
@@ -55,7 +55,7 @@ public class KeyUtils {
 
             for(int i = 0; i < columns.length; i++){
                 DataType columnType = schema.columnDataType( columns[i] );
-                currAddress += (schema.columnOffset()[columns[i]] - Schema.RECORD_HEADER);;
+                currAddress += (schema.columnOffset()[columns[i]] - Schema.RECORD_HEADER);
                 values[i] = DataTypeUtils.getValue(columnType, currAddress);
                 // make it default to get the correct offset next iteration
                 currAddress = srcAddress;
@@ -105,11 +105,9 @@ public class KeyUtils {
         return key;
     }
 
-    public static IKey buildInputKey(Object value){
-        return SimpleKey.of(value);
-    }
-
-    public static IKey buildInputKey(Object[] values){
+    public static IKey buildKey(Object... values){
+        if(values.length == 1)
+            return SimpleKey.of(values);
         return CompositeKey.of(values);
     }
 

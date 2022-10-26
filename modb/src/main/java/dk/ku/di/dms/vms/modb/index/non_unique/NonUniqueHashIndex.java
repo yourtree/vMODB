@@ -7,7 +7,6 @@ import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.non_unique.BucketIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.non_unique.NonUniqueRecordIterator;
-import dk.ku.di.dms.vms.modb.storage.iterator.non_unique.RecordBucketIterator;
 import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 
 import java.util.List;

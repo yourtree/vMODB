@@ -16,6 +16,9 @@ public final class MemoryUtils {
                     getClassFieldOffset(Buffer.class, "address");
             BUFFER_CAPACITY_FIELD_OFFSET = getClassFieldOffset(Buffer.class, "capacity");
             DIRECT_BYTE_BUFFER_CLASS = getClassByName("java.nio.DirectByteBuffer");
+
+            DEFAULT_PAGE_SIZE = getPageSize();
+
         } catch (Exception ignored) {}
 
     }
@@ -26,11 +29,16 @@ public final class MemoryUtils {
     private static long BUFFER_CAPACITY_FIELD_OFFSET;
     private static Class<?> DIRECT_BYTE_BUFFER_CLASS;
 
+    public static int DEFAULT_PAGE_SIZE;
+
+    private static int getPageSize(){
+        return UNSAFE.pageSize();
+    }
+
     private static long getClassFieldOffset(@SuppressWarnings("SameParameterValue")
                                                     Class<?> cl, String fieldName) throws NoSuchFieldException {
         return UNSAFE.objectFieldOffset(cl.getDeclaredField(fieldName));
     }
-
 
     public static Class<?> getClassByName(
             @SuppressWarnings("SameParameterValue") String className) throws ClassNotFoundException {

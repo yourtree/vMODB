@@ -7,6 +7,9 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIn
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 /**
  * Basic building block
@@ -40,6 +43,11 @@ public final class Table {
      * /
      * The array int[] are the column positions, ordered, that form the foreign key (i.e., refer to the other table).
      * Who I am pointing to? The referenced or parent table.
+     * -
+     * Why references to foreign key constraints are here?
+     * Because an index should not know about other indexes.
+     * It is better to have an upper class taking care of this constraint.
+     * Can be made parallel.
      */
     private final Map<PrimaryIndex, int[]> foreignKeys;
 
@@ -52,11 +60,12 @@ public final class Table {
     public final Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap;
 
     public Table(String name, Schema schema, PrimaryIndex primaryIndex,
-                 Map<PrimaryIndex, int[]> foreignKeys, Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap){
+                 Map<PrimaryIndex, int[]> foreignKeys,
+                 List<NonUniqueSecondaryIndex> secondaryIndexes){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
-        this.secondaryIndexMap = secondaryIndexMap;
+        this.secondaryIndexMap = secondaryIndexes.stream().collect(Collectors.toMap(NonUniqueSecondaryIndex::key, Function.identity()));
         this.primaryIndex = primaryIndex;
         this.foreignKeys = foreignKeys;
     }
