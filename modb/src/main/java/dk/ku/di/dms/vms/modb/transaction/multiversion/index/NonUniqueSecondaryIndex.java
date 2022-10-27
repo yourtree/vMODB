@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 
+import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
@@ -20,21 +21,21 @@ public final class NonUniqueSecondaryIndex implements ReadOnlyIndex<IKey> {
     private final PrimaryIndex primaryIndex;
 
     // a non-unique hash index
-    private final NonUniqueHashIndex underlyingSecondaryIndex;
+    private final NonUniqueHashIndex underlyingIndex;
 
     // key: formed by secondary indexed columns
     // value: the corresponding pks
     private final Map<IKey, Set<IKey>> writesCache;
 
-    public NonUniqueSecondaryIndex(PrimaryIndex primaryIndex, NonUniqueHashIndex underlyingSecondaryIndex) {
+    public NonUniqueSecondaryIndex(PrimaryIndex primaryIndex, NonUniqueHashIndex underlyingIndex) {
         this.primaryIndex = primaryIndex;
-        this.underlyingSecondaryIndex = underlyingSecondaryIndex;
+        this.underlyingIndex = underlyingIndex;
         this.writesCache = new ConcurrentHashMap<>();
     }
 
     @Override
     public IIndexKey key() {
-        return this.underlyingSecondaryIndex.key();
+        return this.underlyingIndex.key();
     }
 
     @Override
@@ -44,36 +45,37 @@ public final class NonUniqueSecondaryIndex implements ReadOnlyIndex<IKey> {
 
     @Override
     public int[] columns() {
-        return this.underlyingSecondaryIndex.columns();
+        return this.underlyingIndex.columns();
     }
 
     @Override
     public boolean containsColumn(int columnPos) {
-        return this.underlyingSecondaryIndex.containsColumn(columnPos);
+        return this.underlyingIndex.containsColumn(columnPos);
     }
 
     @Override
     public IndexTypeEnum getType() {
-        return this.underlyingSecondaryIndex.getType();
+        return this.underlyingIndex.getType();
     }
 
     @Override
     public int size() {
-        return this.underlyingSecondaryIndex.size();
+        return this.underlyingIndex.size() + this.writesCache.size();
     }
 
     @Override
     public boolean exists(IKey key) {
+
+
+        if(TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
+
+        }
+
         return false;
     }
 
     @Override
     public IRecordIterator<IKey> iterator() {
-        return null;
-    }
-
-    @Override
-    public IRecordIterator<IKey> iterator(IKey[] keys) {
         return null;
     }
 
@@ -104,43 +106,32 @@ public final class NonUniqueSecondaryIndex implements ReadOnlyIndex<IKey> {
 
     /**
      * Called by the primary key index
-     * In this method, the secondary key is formed and then cached
-     * for later retrieval
+     * In this method, the secondary key is formed
+     * and then cached for later retrieval.
+     * A secondary key point to several primary keys in the primary index
      * @param primaryKey may have many secIdxKey associated
      */
     public void appendDelta(IKey primaryKey, Object[] record){
-        IKey secIdxKey = KeyUtils.buildRecordKey( this.underlyingSecondaryIndex.columns(), record );
-        Set<IKey> pkSet = this.writesCache.get( secIdxKey );
-        if(pkSet == null){
-            pkSet = ConcurrentHashMap.newKeySet();
-        }
+        IKey secIdxKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
+        Set<IKey> pkSet = this.writesCache
+                .computeIfAbsent(secIdxKey, k -> ConcurrentHashMap.newKeySet());
         pkSet.add(primaryKey);
-        this.writesCache.put( secIdxKey, pkSet );
     }
 
     /**
-     * A secondary key point to several primary keys in the primary index
-     * @param key the secondary index key
-     * @return the set of primary keys
+     * @param record the record. must extract the values from columns
+     * @return whether the set of keys has been deleted
      */
-//    public Set<IKey> retrievePrimaryKeys(IKey key){
-//        // merge keys
-//        Set<IKey> setOfFreshWrites = this.writesCache.get(key);
-//
-//        // build list from iterator
-//        IRecordIterator<Long> iterator = this.underlyingSecondaryIndex.iterator( key );
-//        List<IKey> setOfOldKeys = new ArrayList<>(  );
-//        while(iterator.hasNext()){
-//            setOfOldKeys.add( iterator.get() );
-//            iterator.next();
-//        }
-//
-//        setOfFreshWrites.addAll( setOfOldKeys );
-//        return setOfFreshWrites;
-//    }
-//
-//    public List<Object[]> retrieveRecords(IKey key){
-//
-//    }
+    public boolean delete(Object[] record) {
+
+        IKey secIdxKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
+        this.writesCache.remove(secIdxKey);
+
+        // also delete from underlying?
+        this.underlyingIndex.delete(secIdxKey);
+
+        return true;
+
+    }
 
 }

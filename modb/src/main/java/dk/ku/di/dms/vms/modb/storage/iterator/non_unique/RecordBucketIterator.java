@@ -15,6 +15,9 @@ public final class RecordBucketIterator extends CachingKeyIterator
 
     private long address;
 
+    // how many records have been iterated so far
+    // private int progress;
+
     public RecordBucketIterator(long address) {
         this.address = address;
     }
@@ -43,7 +46,7 @@ public final class RecordBucketIterator extends CachingKeyIterator
 
     @Override
     public Long get() {
-        return null;
+        return this.address;
     }
 
     public long address() {

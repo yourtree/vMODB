@@ -20,7 +20,7 @@ public class FullScanWithProjection extends AbstractScan {
     }
 
     public MemoryRefNode run(ReadOnlyIndex<IKey> index, FilterContext filterContext){
-        IRecordIterator iterator = index.iterator();
+        IRecordIterator<IKey> iterator = index.iterator();
         while(iterator.hasElement()){
             if(index.checkCondition(iterator, filterContext)){
                 append(iterator, projectionColumns);

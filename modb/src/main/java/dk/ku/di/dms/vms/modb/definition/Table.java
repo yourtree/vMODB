@@ -8,7 +8,6 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
 import java.util.*;
 import java.util.function.Function;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 /**
@@ -27,8 +26,8 @@ public final class Table {
 
     /**
      * All tables must have a pk, thus a primary index.
-     * besides, used for fast path on planner
-      */
+     * Besides, used for fast path on planner
+     */
     private final PrimaryIndex primaryIndex;
 
     /**
@@ -90,7 +89,7 @@ public final class Table {
 
     @Override
     public boolean equals(Object anotherTable){
-        return this.hashCode == anotherTable.hashCode();
+        return anotherTable instanceof Table && this.hashCode == anotherTable.hashCode();
     }
 
     @Override

@@ -12,8 +12,7 @@ import static dk.ku.di.dms.vms.modb.definition.Header.active;
 import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
 
 /**
- * A double-linked list maintained
- * in a buffer.
+ * A double-linked list maintained in a buffer.
  * Record-aware, meaning it requires knowing
  * the column of the schema that form the index
  * -
@@ -22,7 +21,8 @@ import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
  * active (boolean) -> bit whether the record is active
  * previous (long) ->  the address of the previous record (in this buffer)
  * SK (int) -> SK to avoid rebuilding the sk on every iteration (trade-off to speed-up search, but a duplicate info)
- * ordered by the SK... does not mean all the Sk in this bucket belongs to the same sk... implement conflict-free otherwise will be dependent on the input
+ * ordered by the SK... does not mean all the Sk in this bucket belongs to the same sk...
+ * implement conflict-free otherwise will be dependent on the input
  * srcAddress (long) -> the src address of the record in the PK index
  * next (long) -> the address of the next record (in this buffer)
  * private static class Entry {
@@ -67,6 +67,17 @@ public class OrderedRecordBuffer {
 
     public void delete(IKey key){
 
+        // find position to insert provides exactly the key we are looking for
+        long targetAddress = existsAddress(key);
+
+        // should I proceed with the delete operations forward or backward?
+
+        // TODO finish
+
+    }
+
+    public void deleteFirst(IKey key){
+
         long targetAddress = existsAddress(key);
 
         if(targetAddress == -1) return;
@@ -108,14 +119,6 @@ public class OrderedRecordBuffer {
 
         // move the half
         this.half = UNSAFE.getLong(half + deltaPrevious);
-
-    }
-
-    public void bulkInsert(long srcAddress){
-
-        // given the schema and the position of memory of PK index
-        // iterate over the records and build the secondary index
-
 
     }
 
@@ -165,7 +168,7 @@ public class OrderedRecordBuffer {
             return;
         }
 
-        long targetAddress = findPositionToInsert(key);
+        long targetAddress = this.findPositionToInsert(key);
 
         // get the SK of the record stored in the target address
         int targetKey = UNSAFE.getInt(targetAddress + deltaKey);
@@ -173,13 +176,13 @@ public class OrderedRecordBuffer {
         if(key.hashCode() > targetKey){
             putAfter(targetAddress, destOffset);
 
-            // walk half forwards
+            // walk "half" forward
             half = UNSAFE.getLong(half + deltaNext);
 
         } else {
             putBefore(targetAddress, destOffset);
 
-            // walk half forwards
+            // walk "half" backward
             half = UNSAFE.getLong(half + deltaPrevious);
 
         }
@@ -286,7 +289,6 @@ public class OrderedRecordBuffer {
 
             if(key.hashCode() > bottomKey){
                 bottomAddress = UNSAFE.getLong( bottomAddress + deltaNext );
-
             } else {
                 return bottomAddress;
             }

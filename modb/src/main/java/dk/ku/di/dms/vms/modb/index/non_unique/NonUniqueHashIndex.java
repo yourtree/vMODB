@@ -40,7 +40,7 @@ public final class NonUniqueHashIndex extends AbstractIndex<IKey> {
     }
 
     private int getBucket(IKey key){
-        return ((key.hashCode() & 0x7fffffff) % buffers.length) - 1;
+        return ((key.hashCode() & 0x7fffffff) % this.buffers.length) - 1;
     }
 
     /**
@@ -51,7 +51,7 @@ public final class NonUniqueHashIndex extends AbstractIndex<IKey> {
     @Override
     public void insert(IKey key, long srcAddress) {
         // must get the position of next, if exists
-        int bucket = getBucket(key);
+        int bucket = this.getBucket(key);
         buffers[bucket].insert( key, srcAddress );
         int currSize = this.size;
         this.size = currSize + 1;
@@ -67,7 +67,7 @@ public final class NonUniqueHashIndex extends AbstractIndex<IKey> {
     @Override
     public void update(IKey key, long srcAddress) {
         // get bucket
-        int bucket = getBucket(key);
+        int bucket = this.getBucket(key);
         buffers[bucket].update(key, srcAddress);
     }
 
@@ -86,39 +86,32 @@ public final class NonUniqueHashIndex extends AbstractIndex<IKey> {
      */
     @Override
     public void delete(IKey key) {
-        int bucket = getBucket(key);
-        buffers[bucket].delete( key );
+        int bucket = this.getBucket(key);
+        this.buffers[bucket].delete( key );
         int currSize = this.size;
         this.size = currSize - 1;
     }
 
     @Override
     public boolean exists(IKey key){
-        int bucket = getBucket(key);
-        return buffers[bucket].exists(key);
+        int bucket = this.getBucket(key);
+        return this.buffers[bucket].exists(key);
     }
 
     @Override
     public long address(IKey key) {
-        int bucket = getBucket(key);
+        int bucket = this.getBucket(key);
         return this.buffers[bucket].address();
     }
 
     public IRecordIterator<IKey> iterator(IKey key) {
-        int bucket = getBucket(key);
+        int bucket = this.getBucket(key);
         return new NonUniqueRecordIterator(new BucketIterator(this.buffers[bucket]));
     }
 
     @Override
     public IRecordIterator<IKey> iterator() {
         return new NonUniqueRecordIterator(new BucketIterator(this.buffers));
-    }
-
-    @Override
-    public IRecordIterator<IKey> iterator(IKey[] keys) {
-        // TODO not sure this makes sense for non unique
-        //  but removing this from readonly index would break primary index, etc...
-        return null;
     }
 
 //    @Override

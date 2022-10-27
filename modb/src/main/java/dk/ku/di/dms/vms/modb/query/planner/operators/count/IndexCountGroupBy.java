@@ -28,12 +28,13 @@ public class IndexCountGroupBy extends AbstractCount {
 
         Map<Integer,Integer> countMap = new HashMap<>();
 
-        IRecordIterator iterator = index.iterator(keys);
+        IRecordIterator<IKey> iterator = index.iterator(keys);
 
         while(iterator.hasElement()){
             if(index.checkCondition(iterator, filterContext)){
                 compute(iterator, countMap);
             }
+            iterator.next();
         }
 
         append(countMap);

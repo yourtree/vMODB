@@ -17,7 +17,7 @@ public interface IRecordIterator<K> {
     K get();
 
     /**
-     * This method should not come after a hasNext call
+     * This method should not come after a sequence of #hasElement and #get calls
      */
     void next();
 

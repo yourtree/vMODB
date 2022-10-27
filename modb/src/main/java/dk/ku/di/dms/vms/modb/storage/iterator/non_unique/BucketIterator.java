@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 import java.util.Iterator;
 
 /**
- * Encapsulates the iteration over buckets of a non unique hash index
+ * Encapsulates the iteration over buckets of a non-unique hash index
  */
 public final class BucketIterator implements Iterator<RecordBucketIterator> {
 
@@ -13,7 +13,8 @@ public final class BucketIterator implements Iterator<RecordBucketIterator> {
 
     private final OrderedRecordBuffer[] buffers;
 
-    private int progress; // how many records have been iterated
+    // how many buckets have been iterated so far
+    private int progress;
 
     public BucketIterator(OrderedRecordBuffer[] buffers){
         this.buffers = buffers;
@@ -29,25 +30,22 @@ public final class BucketIterator implements Iterator<RecordBucketIterator> {
 
     @Override
     public boolean hasNext() {
+
+        while(progress < size && buffers[progress].size() == 0){
+            this.progress++;
+        }
+
         return progress < size;
     }
 
     /**
-     * This method should always comes after a hasNext call
+     * This method should always come after a hasNext call
      * @return the record address
      */
     @Override
     public RecordBucketIterator next() {
-
-        while(progress < size && buffers[progress].size() < 0){
-            this.progress++;
-        }
-        return new RecordBucketIterator(this.buffers[progress].address());
-
-    }
-
-    public int progress(){
-        return this.progress;
+        this.progress++;
+        return new RecordBucketIterator(this.buffers[progress-1].address());
     }
 
 }

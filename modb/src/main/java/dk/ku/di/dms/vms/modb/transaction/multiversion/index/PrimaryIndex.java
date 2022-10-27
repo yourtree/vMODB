@@ -44,8 +44,6 @@ import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
  */
 public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
 
-    private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
-
     private final ReadWriteIndex<IKey> primaryKeyIndex;
 
     private final Map<IKey, OperationSetOfKey> updatesPerKeyMap;
@@ -123,14 +121,46 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
 
     @Override
     public IRecordIterator<IKey> iterator() {
-        // return a non-unique index iterator if there is some...
+        // TODO return a non-unique index iterator if there is some. it would be faster since
+        //  records are packed together in memory, connected through a linked list
+        //  different from the sparse hash index
         return null;
         // return new UniqueKeySnapshotRecordIterator(this, this.primaryKeyIndex.iterator());
     }
 
     @Override
     public IRecordIterator<IKey> iterator(IKey[] keys) {
-        return new UniqueKeySnapshotIterator(this, keys);
+        return this.iterator.init(keys);
+    }
+
+    private final PrimaryIndexKeyIterator iterator = new PrimaryIndexKeyIterator();
+
+    private static class PrimaryIndexKeyIterator implements IRecordIterator<IKey> {
+
+        private IKey[] keys;
+        private int pos;
+
+        public PrimaryIndexKeyIterator init(IKey[] keys){
+            this.keys = keys;
+            this.pos = 0;
+            return this;
+        }
+
+        @Override
+        public IKey get() {
+            return this.keys[this.pos];
+        }
+
+        @Override
+        public void next() {
+            this.pos++;
+        }
+
+        @Override
+        public boolean hasElement() {
+            return pos < keys.length;
+        }
+
     }
 
     @Override
@@ -190,9 +220,9 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
     @Override
     public boolean checkCondition(IRecordIterator<IKey> iterator, FilterContext filterContext) {
         IKey key = iterator.get();
-        Object[] record = lookupByKey(key);
+        Object[] record = this.lookupByKey(key);
         if(record == null) return false;
-        return checkConditionVersioned(filterContext, record);
+        return this.checkConditionVersioned(filterContext, record);
     }
 
     /**

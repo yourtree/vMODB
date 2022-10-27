@@ -4,6 +4,8 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
+import java.util.List;
+
 /**
  * TODO finish Just an iterator operators can iterate over safely without exposing inconsistent data
  */
@@ -11,7 +13,7 @@ public class UniqueKeySnapshotIterator implements IRecordIterator<IKey> {
 
     // just call exists for each entry in the hast table. this possibly takes a long time
     // unless we have linked list of existing records
-    // for no keys, maybe it is better to iterate over some non unique index for this table
+    // for no keys, maybe it is better to iterate over some non-unique index for this table
     // perhaps this is the best approach, would allow avoiding checking empty blocks
 
     private ReadOnlyIndex<IKey> index;
@@ -24,6 +26,9 @@ public class UniqueKeySnapshotIterator implements IRecordIterator<IKey> {
 
     @Override
     public boolean hasElement() {
+
+        List.of(1,2,3).spliterator();
+
         return false;
     }
 

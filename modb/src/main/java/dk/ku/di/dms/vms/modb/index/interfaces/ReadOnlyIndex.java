@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.index.interfaces;
 
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
@@ -9,12 +10,15 @@ import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+import jdk.internal.misc.Unsafe;
 
 /**
  * Base interface for operators that perform read-only queries.
  * @param <K> The key object identifier of a record
  */
 public interface ReadOnlyIndex<K> {
+
+    Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
     IIndexKey key();
 
@@ -54,7 +58,9 @@ public interface ReadOnlyIndex<K> {
      * Can also be implemented by non-unique hash indexes,
      * but may be expensive
      */
-    IRecordIterator<IKey> iterator(IKey[] keys);
+    default IRecordIterator<IKey> iterator(IKey[] keys) {
+        throw new IllegalStateException("No support for set of keys iteration in this index.");
+    }
 
     default Object[] record(K key) {
         long address = this.address(key);

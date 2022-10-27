@@ -23,7 +23,7 @@ public class IndexCount extends AbstractCount {
 
         int count = 0;
 
-        IRecordIterator iterator = this.index.iterator(keys);
+        IRecordIterator<IKey> iterator = this.index.iterator(keys);
         while(iterator.hasElement()){
             if(index.checkCondition(iterator, filterContext)){
                 count++;

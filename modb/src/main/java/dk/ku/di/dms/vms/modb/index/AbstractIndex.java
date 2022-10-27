@@ -7,7 +7,6 @@ import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import jdk.internal.misc.Unsafe;
 
-import java.util.Arrays;
 import java.util.HashSet;
 
 /**

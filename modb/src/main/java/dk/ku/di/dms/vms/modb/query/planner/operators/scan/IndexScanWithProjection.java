@@ -45,7 +45,7 @@ public final class IndexScanWithProjection extends AbstractScan {
     // transactional call
     public MemoryRefNode run(ReadOnlyIndex<IKey> index, FilterContext filterContext, IKey... keys) {
         // unifying in terms of iterator
-        IRecordIterator iterator = index.iterator(keys);
+        IRecordIterator<IKey> iterator = index.iterator(keys);
         while(iterator.hasElement()){
             if(index.checkCondition(iterator, filterContext)){
                 append(iterator, projectionColumns);

@@ -46,6 +46,7 @@ public class IndexCountDistinct extends AbstractCount {
                     state.valuesSeen.put(val.hashCode(), 1);
                 }
             }
+            iterator.next();
         }
 
         append(state.count);

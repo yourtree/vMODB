@@ -22,14 +22,15 @@ public class IndexSum extends Sum {
     @SuppressWarnings("unchecked, rawtypes")
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
         SumOperation sumOperation = buildOperation(dataType);
-        IRecordIterator<IKey> iterator = index.iterator(keys);
+        IRecordIterator<IKey> iterator = this.index.iterator(keys);
         while(iterator.hasElement()){
-            if(index.checkCondition(iterator, filterContext)){
-                sumOperation.accept(index.record(iterator)[columnIndex]);
+            if(this.index.checkCondition(iterator, filterContext)){
+                sumOperation.accept(this.index.record(iterator)[this.columnIndex]);
             }
+            iterator.next();
         }
         appendResult(sumOperation);
-        return memoryRefNode;
+        return this.memoryRefNode;
     }
 
 }
