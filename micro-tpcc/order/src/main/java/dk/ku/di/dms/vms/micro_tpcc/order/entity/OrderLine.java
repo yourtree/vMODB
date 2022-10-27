@@ -12,7 +12,7 @@ import java.util.Date;
 
 @Entity
 @VmsTable(name="order_line",
-        indexes = {@VmsIndex(name = "fkey_order_line_2", columnList = "ol_supply_w_id,ol_i_id")
+        indexes = {@VmsIndex(name = "fkey_order_line_2", columnList = "ol_supply_w_id, ol_i_id")
         })
 @IdClass(OrderLine.OrderLineId.class)
 public class OrderLine implements IEntity<OrderLine.OrderLineId> {
@@ -32,7 +32,7 @@ public class OrderLine implements IEntity<OrderLine.OrderLineId> {
     }
 
     @Id
-    @VmsForeignKey(table=Order.class,column = "o_id")
+    @VmsForeignKey(table=Order.class, column = "o_id")
     public int ol_o_id;
 
     @Id

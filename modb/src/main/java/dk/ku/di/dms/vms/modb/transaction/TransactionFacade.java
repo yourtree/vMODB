@@ -19,6 +19,7 @@ import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContextBuilder;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
@@ -39,7 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class TransactionFacade {
 
-    private static final ThreadLocal<Set<PrimaryIndex>> INDEX_WRITES = ThreadLocal.withInitial( () -> {
+    private static final ThreadLocal<Set<IMultiVersionIndex>> INDEX_WRITES = ThreadLocal.withInitial( () -> {
         if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
             return new HashSet<>(2);
         }
@@ -193,7 +194,7 @@ public final class TransactionFacade {
 
     public void deleteAll(Table table, List<Object[]> objects) {
         for(Object[] entry : objects) {
-            this.delete(table.primaryKeyIndex(), entry);
+            this.delete(table, entry);
         }
     }
 
@@ -206,24 +207,32 @@ public final class TransactionFacade {
     /**
      * Not yet considering this record can serve as FK to a record in another table.
      */
-    public void delete(PrimaryIndex index, Object[] values) {
-        IKey pk = KeyUtils.buildPrimaryKey(index.schema(), values);
-        this.deleteByKey(index, pk);
+    public void delete(Table table, Object[] values) {
+        IKey pk = KeyUtils.buildPrimaryKey(table.schema, values);
+        this.deleteByKey(table, pk, values);
     }
 
-    public void deleteByKey(PrimaryIndex index, Object[] values) {
-        IKey pk = KeyUtils.buildKey(values);
-        this.deleteByKey(index, pk);
+    public void deleteByKey(Table table, Object[] keyValues) {
+        IKey pk = KeyUtils.buildKey(keyValues);
+        Object[] record = this.lookupByKey( table.primaryKeyIndex(), pk );
+        this.deleteByKey(table, pk, record);
     }
 
     /**
-     * TODO not considering foreign key. must prune the other tables inside this VMS
-     * @param index The corresponding database index
+     * @param table The corresponding table
      * @param pk The primary key
      */
-    private void deleteByKey(PrimaryIndex index, IKey pk){
-        if(index.delete(pk)){
-            INDEX_WRITES.get().add(index);
+    private void deleteByKey(Table table, IKey pk, Object[] record){
+        if(table.primaryKeyIndex().delete(pk)){
+            INDEX_WRITES.get().add(table.primaryKeyIndex());
+
+            if(table.children.isEmpty()) return;
+
+            // cascading delete
+            for(var secIdx : table.children){
+                secIdx.delete(record);
+            }
+
         }
     }
 
@@ -286,6 +295,11 @@ public final class TransactionFacade {
         throw new RuntimeException("Constraint violation.");
     }
 
+    /**
+     * TODO Mus unmark secondary index records as deleted...
+     * how can I do that more optimized? creatin another inteface so secondary indexes also have the #undoTransactionWrites ?
+     * INDEX_WRITES can have primary indexes and secondary indexes...
+     */
     private void undoTransactionWrites(){
         for(var index : INDEX_WRITES.get()) {
             index.undoTransactionWrites();

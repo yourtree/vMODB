@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.query.planner.operators;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.query.planner.operators.join.HashJoinWithProjection;
+import dk.ku.di.dms.vms.modb.query.planner.operators.join.UniqueHashJoinWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.AbstractScan;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
@@ -89,6 +89,6 @@ public abstract class AbstractSimpleOperator {
         throw new IllegalStateException("No abstract scan operator");
     }
 
-    public HashJoinWithProjection asHashJoin() { throw new IllegalStateException("No hash join operator"); }
+    public UniqueHashJoinWithProjection asHashJoin() { throw new IllegalStateException("No hash join operator"); }
 
 }

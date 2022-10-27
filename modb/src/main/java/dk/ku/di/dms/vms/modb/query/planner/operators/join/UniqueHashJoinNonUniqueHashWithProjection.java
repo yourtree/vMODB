@@ -1,14 +1,19 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.join;
 
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 
-public class HashJoinWithProjection extends AbstractSimpleOperator {
+/**
+ * Hash join
+ * where outer index is unique hash
+ * and inner index is non unique hash
+ */
+public class UniqueHashJoinNonUniqueHashWithProjection extends AbstractSimpleOperator {
 
     public final ReadOnlyIndex<IKey> leftIndex;
     public final ReadOnlyIndex<IKey> rightIndex;
@@ -24,7 +29,7 @@ public class HashJoinWithProjection extends AbstractSimpleOperator {
     // left = 0, right = 1
     private final boolean[] projectionOrder;
 
-    public HashJoinWithProjection(
+    public UniqueHashJoinNonUniqueHashWithProjection(
             ReadOnlyIndex<IKey> leftIndex,
             ReadOnlyIndex<IKey> rightIndex,
             int[] leftProjectionColumns,
@@ -45,44 +50,36 @@ public class HashJoinWithProjection extends AbstractSimpleOperator {
 
     public boolean isHashJoin() { return true; }
 
-    public HashJoinWithProjection asHashJoin() { return this; }
-
     public MemoryRefNode run(FilterContext leftFilter, FilterContext rightFilter, IKey... keys) {
 
-        IRecordIterator iterator = leftIndex.iterator(keys);
+        IRecordIterator<IKey> leftIterator = this.leftIndex.iterator(keys);
+        IRecordIterator<IKey> rightIterator;
 
-        while(iterator.hasElement()){
-            if(leftIndex.checkCondition(iterator, leftFilter)
-                && rightIndex.checkCondition(iterator, rightFilter)) {
-                    append( iterator,
+        while(leftIterator.hasElement()) {
+
+            if (!this.leftIndex.checkCondition(leftIterator, leftFilter)) continue;
+
+            rightIterator = this.rightIndex.iterator(leftIterator.get());
+            if (!rightIterator.hasElement()) {
+                leftIterator.next();
+                continue;
+            }
+
+            while (rightIterator.hasElement()) {
+                if (this.rightIndex.checkCondition(rightIterator, rightFilter)) {
+                    append(leftIterator, rightIterator,
                             leftProjectionColumns, leftProjectionColumnsSize,
                             rightProjectionColumns, rightProjectionColumnsSize
                     );
-
                 }
-            iterator.next();
-        }
-
-        return memoryRefNode;
-
-    }
-
-    public MemoryRefNode run(FilterContext leftFilter, FilterContext rightFilter) {
-
-        IRecordIterator<IKey> outerIterator = leftIndex.iterator();
-
-        while(outerIterator.hasElement()){
-            if(leftIndex.checkCondition(outerIterator, leftFilter)){
-                if(rightIndex.checkCondition(outerIterator, rightFilter)) {
-                    append( outerIterator, leftProjectionColumns, leftProjectionColumnsSize,
-                            rightProjectionColumns, rightProjectionColumnsSize );
-
-                }
+                rightIterator.next();
             }
-            outerIterator.next();
+
+            leftIterator.next();
         }
 
         return memoryRefNode;
+
     }
 
     /**
@@ -91,15 +88,15 @@ public class HashJoinWithProjection extends AbstractSimpleOperator {
      * Easier to ensure (implicitly) that remote calls between modules remain consistent
      * just by following conventions
      */
-    private void append(IRecordIterator<IKey> iterator,
+    private void append(IRecordIterator<IKey> leftIterator, IRecordIterator<IKey> rightIterator,
                         int[] leftProjectionColumns, int[] leftValueSizeInBytes,
                         int[] rightProjectionColumns, int[] rightValueSizeInBytes){
 
         int leftProjIdx = 0;
         int rightProjIdx = 0;
 
-        Object[] leftRecord = this.leftIndex.record(iterator);
-        Object[] rightRecord = this.rightIndex.record(iterator);
+        Object[] leftRecord = this.leftIndex.record(leftIterator);
+        Object[] rightRecord = this.rightIndex.record(rightIterator);
 
         for(int projOrdIdx = 0; projOrdIdx < projectionOrder.length; projOrdIdx++) {
 

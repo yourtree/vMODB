@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Header;
 import dk.ku.di.dms.vms.modb.definition.Schema;
@@ -11,14 +10,14 @@ import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
-import dk.ku.di.dms.vms.modb.storage.iterator.multiversion.UniqueKeySnapshotIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.*;
-import jdk.internal.misc.Unsafe;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.IPrimaryKeyGenerator;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.OperationSetOfKey;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,7 +41,7 @@ import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
  * Thus, the API for writes are different. The ReadWriteIndex is only used for bulk writes,
  * when no transactional guarantees are necessary.
  */
-public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
+public final class PrimaryIndex implements IMultiVersionIndex {
 
     private final ReadWriteIndex<IKey> primaryKeyIndex;
 
@@ -220,6 +219,11 @@ public final class PrimaryIndex implements ReadOnlyIndex<IKey> {
     @Override
     public boolean checkCondition(IRecordIterator<IKey> iterator, FilterContext filterContext) {
         IKey key = iterator.get();
+        return this.checkCondition(key, filterContext);
+    }
+
+    @Override
+    public boolean checkCondition(IKey key, FilterContext filterContext) {
         Object[] record = this.lookupByKey(key);
         if(record == null) return false;
         return this.checkConditionVersioned(filterContext, record);

@@ -139,11 +139,11 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
             }
             case "deleteByKey" -> {
                 Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(args[0]);
-                this.transactionFacade.deleteByKey(this.table.primaryKeyIndex(), valuesOfKey);
+                this.transactionFacade.deleteByKey(this.table, valuesOfKey);
             }
             case "delete" -> {
                 Object[] values = this.extractFieldValuesFromEntityObject(args[0]);
-                this.transactionFacade.delete(this.table.primaryKeyIndex(), values);
+                this.transactionFacade.delete(this.table, values);
             }
             case "deleteAll" -> this.deleteAll((List<Object>) args[0]);
             case "update" -> {

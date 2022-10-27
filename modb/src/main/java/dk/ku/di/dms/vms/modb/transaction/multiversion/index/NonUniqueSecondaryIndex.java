@@ -4,17 +4,20 @@ import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
+import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-public final class NonUniqueSecondaryIndex implements ReadOnlyIndex<IKey> {
+public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
     // pointer to primary index
     // necessary because of transaction, concurrency control
@@ -27,10 +30,33 @@ public final class NonUniqueSecondaryIndex implements ReadOnlyIndex<IKey> {
     // value: the corresponding pks
     private final Map<IKey, Set<IKey>> writesCache;
 
+    private static class WriteNode {
+        public IKey secKey;
+        public IKey pk;
+        public WriteNode next;
+        public WriteType type;
+        public WriteNode(IKey secKey, IKey pk, WriteType type) {
+            this.secKey = secKey;
+            this.pk = pk;
+            this.type = type;
+        }
+    }
+
+    private final ThreadLocal<WriteNode> KEY_WRITES = new ThreadLocal<>();
+
+     private static final Deque<WriteNode> writeNodeBuffer = new ArrayDeque<>();
+
     public NonUniqueSecondaryIndex(PrimaryIndex primaryIndex, NonUniqueHashIndex underlyingIndex) {
         this.primaryIndex = primaryIndex;
         this.underlyingIndex = underlyingIndex;
         this.writesCache = new ConcurrentHashMap<>();
+
+        // initialize write node buffer with 10 elements
+        IKey key = SimpleKey.of(0);
+        for(int i = 0; i < 10; i++){
+            writeNodeBuffer.add( new WriteNode(key,key,WriteType.INSERT) );
+        }
+
     }
 
     @Override
@@ -113,25 +139,58 @@ public final class NonUniqueSecondaryIndex implements ReadOnlyIndex<IKey> {
      */
     public void appendDelta(IKey primaryKey, Object[] record){
         IKey secIdxKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
+        WriteNode writeNode = getWriteNode(secIdxKey, primaryKey, WriteType.INSERT);
+        updateTransactionWriteSet(writeNode);
         Set<IKey> pkSet = this.writesCache
                 .computeIfAbsent(secIdxKey, k -> ConcurrentHashMap.newKeySet());
         pkSet.add(primaryKey);
     }
 
+    private void updateTransactionWriteSet(WriteNode writeNode) {
+        WriteNode latest = KEY_WRITES.get();
+        if( latest != null ) {
+            writeNode.next = latest;
+            KEY_WRITES.set(writeNode);
+        }
+    }
+
+    private static WriteNode getWriteNode(IKey secIdxKey, IKey primaryKey, WriteType type) {
+        WriteNode writeNode = writeNodeBuffer.poll();
+        if(writeNode == null) {
+            writeNode = new WriteNode(secIdxKey, primaryKey, type );
+        } else {
+            writeNode.secKey = secIdxKey;
+            writeNode.pk = primaryKey;
+            writeNode.type = type;
+            writeNode.next = null;
+        }
+        return writeNode;
+    }
+
+    @Override
+    public void undoTransactionWrites(){
+        WriteNode currentNode = KEY_WRITES.get();
+        while (currentNode != null){
+            this.writesCache.get(currentNode.secKey).remove(currentNode.pk);
+            currentNode = currentNode.next;
+        }
+    }
+
+    @Override
+    public void installWrites() {
+        // TODO finish
+    }
+
     /**
-     * @param record the record. must extract the values from columns
-     * @return whether the set of keys has been deleted
+     *
      */
-    public boolean delete(Object[] record) {
-
+    public void delete(Object[] record) {
         IKey secIdxKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
-        this.writesCache.remove(secIdxKey);
-
+        //this.writesCache.remove(secIdxKey);
         // also delete from underlying?
-        this.underlyingIndex.delete(secIdxKey);
-
-        return true;
-
+        //this.underlyingIndex.delete(secIdxKey);
+        WriteNode writeNode = getWriteNode( secIdxKey, null, WriteType.DELETE );
+        updateTransactionWriteSet(writeNode);
     }
 
 }

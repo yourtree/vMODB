@@ -50,41 +50,66 @@ public final class Table {
      */
     private final Map<PrimaryIndex, int[]> foreignKeys;
 
-    // Who is pointing to me? Who am I parenting?
-    // private final List<ConsistentIndex> children;
+    // order_id (FK), item_id...
+    // int[] -> { 0 }
 
-    // Other indexes, hashed by the column set in order of the schema
-    // logical key - column list in order that appear in the schema
-    // physical key - column list in order of index definition
+    /**
+     * Indexes from other tables pointing
+     * to the primary index of this table.
+     * This answers: Who is pointing to me? Who am I parenting?
+      */
+    public final List<NonUniqueSecondaryIndex> children;
+
+    /**
+     * Other indexes from this table, hashed by the column set in order of the schema
+     *  logical key - column list in order that appear in the schema
+     *  physical key - column list in order of index definition
+      */
     public final Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap;
 
     public Table(String name, Schema schema, PrimaryIndex primaryIndex,
-                 Map<PrimaryIndex, int[]> foreignKeys,
-                 List<NonUniqueSecondaryIndex> secondaryIndexes){
+                    Map<PrimaryIndex, int[]> foreignKeys,
+                    List<NonUniqueSecondaryIndex> secondaryIndexes,
+                    List<NonUniqueSecondaryIndex> children){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
-        this.secondaryIndexMap = secondaryIndexes.stream().collect(Collectors.toMap(NonUniqueSecondaryIndex::key, Function.identity()));
         this.primaryIndex = primaryIndex;
         this.foreignKeys = foreignKeys;
+        this.secondaryIndexMap = secondaryIndexes.stream().collect(Collectors.toMap(NonUniqueSecondaryIndex::key, Function.identity()));
+        this.children = children;
+    }
+
+    public Table(String name, Schema schema, PrimaryIndex primaryIndex,
+                    Map<PrimaryIndex, int[]> foreignKeys,
+                    List<NonUniqueSecondaryIndex> secondaryIndexes){
+        this.name = name;
+        this.schema = schema;
+        this.hashCode = name.hashCode();
+        this.primaryIndex = primaryIndex;
+        this.foreignKeys = foreignKeys;
+        this.secondaryIndexMap =  secondaryIndexes.stream().collect(Collectors.toMap(NonUniqueSecondaryIndex::key, Function.identity()));
+        this.children = Collections.emptyList();
     }
 
     public Table(String name, Schema schema, PrimaryIndex primaryIndex, Map<PrimaryIndex, int[]> foreignKeys){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
-        this.secondaryIndexMap = Collections.emptyMap();
         this.primaryIndex = primaryIndex;
+        this.secondaryIndexMap = Collections.emptyMap();
         this.foreignKeys = foreignKeys;
+        this.children = Collections.emptyList();
     }
 
     public Table(String name, Schema schema, PrimaryIndex primaryIndex){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
-        this.secondaryIndexMap = Collections.emptyMap();
         this.primaryIndex = primaryIndex;
+        this.secondaryIndexMap = Collections.emptyMap();
         this.foreignKeys = Collections.emptyMap();
+        this.children = Collections.emptyList();
     }
 
     @Override

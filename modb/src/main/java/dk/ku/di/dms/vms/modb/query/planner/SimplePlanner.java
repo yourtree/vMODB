@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.modb.query.planner;
 
 import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
-import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.definition.ColumnReference;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
@@ -15,7 +14,8 @@ import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.query.planner.operators.count.IndexCount;
 import dk.ku.di.dms.vms.modb.query.planner.operators.count.IndexCountGroupBy;
-import dk.ku.di.dms.vms.modb.query.planner.operators.join.HashJoinWithProjection;
+import dk.ku.di.dms.vms.modb.query.planner.operators.join.UniqueHashJoinNonUniqueHashWithProjection;
+import dk.ku.di.dms.vms.modb.query.planner.operators.join.UniqueHashJoinWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.AbstractScan;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
@@ -107,23 +107,37 @@ public class SimplePlanner {
         JoinPredicate joinPredicate = queryTree.joinPredicates.get(0);
 
         // the index with most columns applying to the probe is the deepest
-        IndexSelectionVerdict indexForTable1 = getOptimalIndex(joinPredicate.getLeftTable(), queryTree.wherePredicates);
+        IndexSelectionVerdict indexForTable1 = this.getOptimalIndex(joinPredicate.getLeftTable(), queryTree.wherePredicates);
 
-        IndexSelectionVerdict indexForTable2 = getOptimalIndex(joinPredicate.getRightTable(), queryTree.wherePredicates);
+        IndexSelectionVerdict indexForTable2 = this.getOptimalIndex(joinPredicate.getRightTable(), queryTree.wherePredicates);
 
         // TODO finish
 
         if(indexForTable1.compareTo( indexForTable2 ) == 0){
             // should be left
-            return new HashJoinWithProjection( indexForTable1.index, indexForTable2.index,
+            if(indexForTable1.index.getType() == IndexTypeEnum.UNIQUE && indexForTable2.index.getType() == IndexTypeEnum.UNIQUE)
+                return new UniqueHashJoinWithProjection( indexForTable1.index, indexForTable2.index,
                     null, null,
                     null, null,
                     null, 0 );
+            if(indexForTable1.index.getType() == IndexTypeEnum.UNIQUE)
+                return new UniqueHashJoinNonUniqueHashWithProjection( indexForTable1.index, indexForTable2.index,
+                        null, null,
+                        null, null,
+                        null, 0 );
+            throw new IllegalStateException("No support for join on non unique hash indexes!");
         } else {
-            return new HashJoinWithProjection( indexForTable2.index, indexForTable1.index,
+            if(indexForTable2.index.getType() == IndexTypeEnum.UNIQUE && indexForTable1.index.getType() == IndexTypeEnum.UNIQUE)
+                return new UniqueHashJoinWithProjection( indexForTable2.index, indexForTable1.index,
                     null, null,
                     null, null,
                     null, 0 );
+            if(indexForTable2.index.getType() == IndexTypeEnum.UNIQUE)
+                return new UniqueHashJoinNonUniqueHashWithProjection( indexForTable2.index, indexForTable1.index,
+                        null, null,
+                        null, null,
+                        null, 0 );
+            throw new IllegalStateException("No support for join on non unique hash indexes!");
         }
 
     }
@@ -232,16 +246,16 @@ public class SimplePlanner {
 
     public IndexSelectionVerdict getOptimalIndex(final Table table, List<WherePredicate> wherePredicates) {
 
-        IntStream intStream = wherePredicates.stream()
+        final IntStream intStream = wherePredicates.stream()
                 .filter( wherePredicate ->
                         wherePredicate.expression == ExpressionTypeEnum.EQUALS
                                 && wherePredicate.columnReference.table.equals(table)
                 )
                 .mapToInt( WherePredicate::getColumnPosition );
 
-        int[] columnsToBeConsideredForIndexSelection = intStream.toArray();
+        final int[] columnsToBeConsideredForIndexSelection = intStream.toArray();
 
-        IKey indexKey;
+        final IKey indexKey;
         if(columnsToBeConsideredForIndexSelection.length == 1) {
             indexKey = SimpleKey.of(columnsToBeConsideredForIndexSelection[0]);
         } else {
@@ -269,9 +283,13 @@ public class SimplePlanner {
         }
 
         // columns not in the index, but require filtering
-        int[] filterColumns = intStream.filter( w -> !indexSelected.containsColumn( w ) ).toArray();
+        final IntStream filteredStream = intStream.filter( w -> !indexSelected.containsColumn( w ) );
+        final int[] filterColumns = filteredStream.toArray();
 
-        return new IndexSelectionVerdict(false, table.primaryKeyIndex(), filterColumns);
+        // any column of the index is in the filter? if so, index is not used.
+        boolean indexColumnInFilter = filteredStream.anyMatch(indexSelected::containsColumn);
+
+        return new IndexSelectionVerdict(indexColumnInFilter, table.primaryKeyIndex(), filterColumns);
     }
 
     private ReadOnlyIndex<IKey> getOptimalIndex(Table table, int[] filterColumns){

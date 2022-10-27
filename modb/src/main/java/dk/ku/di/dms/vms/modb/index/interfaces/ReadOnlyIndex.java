@@ -62,6 +62,10 @@ public interface ReadOnlyIndex<K> {
         throw new IllegalStateException("No support for set of keys iteration in this index.");
     }
 
+    default IRecordIterator<IKey> iterator(IKey key) {
+        throw new IllegalStateException("No support for key iteration in this index.");
+    }
+
     default Object[] record(K key) {
         long address = this.address(key);
         return this.readFromIndex(address);
@@ -93,6 +97,10 @@ public interface ReadOnlyIndex<K> {
      */
     default boolean checkCondition(IRecordIterator<K> iterator, FilterContext filterContext){
         return checkCondition( iterator.address(), filterContext );
+    }
+
+    default boolean checkCondition(K key, FilterContext filterContext){
+        throw new IllegalStateException("No support for checking condition on key in this index.");
     }
 
     /**
