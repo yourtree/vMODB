@@ -209,30 +209,21 @@ public final class TransactionFacade {
      */
     public void delete(Table table, Object[] values) {
         IKey pk = KeyUtils.buildPrimaryKey(table.schema, values);
-        this.deleteByKey(table, pk, values);
+        this.deleteByKey(table, pk);
     }
 
     public void deleteByKey(Table table, Object[] keyValues) {
         IKey pk = KeyUtils.buildKey(keyValues);
-        Object[] record = this.lookupByKey( table.primaryKeyIndex(), pk );
-        this.deleteByKey(table, pk, record);
+        this.deleteByKey(table, pk);
     }
 
     /**
      * @param table The corresponding table
      * @param pk The primary key
      */
-    private void deleteByKey(Table table, IKey pk, Object[] record){
+    private void deleteByKey(Table table, IKey pk){
         if(table.primaryKeyIndex().delete(pk)){
             INDEX_WRITES.get().add(table.primaryKeyIndex());
-
-            if(table.children.isEmpty()) return;
-
-            // cascading delete
-            for(var secIdx : table.children){
-                secIdx.delete(record);
-            }
-
         }
     }
 
@@ -254,6 +245,7 @@ public final class TransactionFacade {
             // iterate over secondary indexes to insert the new write
             // this is the delta. records that the underlying index does not know yet
             for(NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()){
+                INDEX_WRITES.get().add(secIndex);
                 secIndex.appendDelta( pk, values );
             }
 

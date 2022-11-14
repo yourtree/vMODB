@@ -6,7 +6,7 @@ import java.nio.charset.StandardCharsets;
 public class ByteUtils {
 
     /**
-     * https://stackoverflow.com/questions/2183240/java-integer-to-byte-array
+     * <a href="https://stackoverflow.com/questions/2183240/java-integer-to-byte-array">...</a>
      */
 //    public static final byte[] intToByteArray(int value) {
 //        return new byte[] {

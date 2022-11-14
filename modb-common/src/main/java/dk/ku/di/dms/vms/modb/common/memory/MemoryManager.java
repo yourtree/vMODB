@@ -11,18 +11,17 @@ import java.util.logging.Logger;
 /**
  *
  * Goal: Abstract the assigning of memory segments to operators
- *
+ * -
  * Through this class, operators can obtain memory to
  * store the results of their operation
- *
+ * -
  * Based on a "claim", this class estimates a possible
  * good memory size
- *
+ * -
  * Operators can repeatably claim to obtain more memory
  * In this case, the claim must be updated accordingly in order
  * to better benefit from this class
- *
- *
+ * -
  * Get a portion of memory. Partition in small buckets online (per request basis, from the operators)
  * If runs out, allocates direct byte buffer.
  *
@@ -37,7 +36,7 @@ public final class MemoryManager {
      * If this class cannot be used, then use it as inspiration?
      * A cache of direct byte buffers.
      */
-    private static class BufferCache {
+    private static final class BufferCache {
 
         // ordered by size
         private final SortedSet<ByteBuffer> buffers;
@@ -46,7 +45,7 @@ public final class MemoryManager {
             this.buffers = new ConcurrentSkipListSet<>( (a,b) -> a.capacity() > b.capacity() ? 1 : 0 );
         }
 
-        public final ByteBuffer get(int size) {
+        public ByteBuffer get(int size) {
 
             if (this.buffers.isEmpty()) return null;
 
@@ -65,7 +64,7 @@ public final class MemoryManager {
             return null;
         }
 
-        public final void offer(ByteBuffer buf) {
+        public void offer(ByteBuffer buf) {
             this.buffers.add(buf);
         }
 

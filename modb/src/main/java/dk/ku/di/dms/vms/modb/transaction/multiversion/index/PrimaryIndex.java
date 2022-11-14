@@ -11,6 +11,7 @@ import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
@@ -43,7 +44,7 @@ import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
  */
 public final class PrimaryIndex implements IMultiVersionIndex {
 
-    private final ReadWriteIndex<IKey> primaryKeyIndex;
+    private final UniqueHashIndex primaryKeyIndex;
 
     private final Map<IKey, OperationSetOfKey> updatesPerKeyMap;
 
@@ -66,13 +67,13 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     private static final Deque<List<IKey>> writeListBuffer = new ArrayDeque<>();
 
-    public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex) {
+    public PrimaryIndex(UniqueHashIndex primaryKeyIndex) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
         this.primaryKeyGenerator = null;
     }
 
-    public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
+    public PrimaryIndex(UniqueHashIndex primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
         this.primaryKeyGenerator = primaryKeyGenerator;
@@ -403,6 +404,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     /**
      * TODO if cached value is not null, then extract the updated columns to make constraint violation check faster
+     *
+     * @return
      */
     public boolean insert(IKey key, Object[] values) {
 

@@ -9,6 +9,7 @@ import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
 import java.util.ArrayDeque;
@@ -16,6 +17,9 @@ import java.util.Deque;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer.deltaKey;
+import static dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer.deltaNext;
 
 public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
@@ -34,7 +38,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
         public IKey secKey;
         public IKey pk;
         public WriteNode next;
-        public WriteType type;
+        public WriteType type; // FIXME if always writes on append cache, no need for type
         public WriteNode(IKey secKey, IKey pk, WriteType type) {
             this.secKey = secKey;
             this.pk = pk;
@@ -105,6 +109,66 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
         return null;
     }
 
+    @Override
+    public IRecordIterator<IKey> iterator(IKey key){
+        return new RecordBucketIterator(key);
+    }
+
+    /**
+     * TODO finish
+     */
+    private final class RecordBucketIterator implements IRecordIterator<IKey> {
+
+        OrderedRecordBuffer buffer;
+
+        long currentAddress;
+
+        boolean iteratorOpen;
+
+        IKey inputKey;
+
+        public RecordBucketIterator(IKey key){
+            this.inputKey = key;
+            this.buffer = underlyingIndex.getBucket( key );
+            this.currentAddress = buffer.findFirstOccurrence(key);
+            this.iteratorOpen = true;
+        }
+
+        @Override
+        public IKey get() {
+            return null;
+        }
+
+        @Override
+        public void next() {
+
+            if(iteratorOpen){
+                currentAddress = UNSAFE.getLong( currentAddress + deltaNext );
+
+                // does current element eky equals to input key?
+                int currKey = UNSAFE.getInt(currentAddress + deltaKey);
+
+                if(inputKey.hashCode() != currKey) iteratorOpen = false;
+
+            } else {
+
+            }
+
+            // if has been deleted, move to next
+        }
+
+        @Override
+        public boolean hasElement() {
+
+            if(iteratorOpen){
+                // currentAddress != 0L;
+
+            }
+
+            return false;
+        }
+    }
+
     /**
      * The semantics of this method:
      * The bucket must have at least one record
@@ -171,18 +235,29 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     public void undoTransactionWrites(){
         WriteNode currentNode = KEY_WRITES.get();
         while (currentNode != null){
-            this.writesCache.get(currentNode.secKey).remove(currentNode.pk);
+            if(currentNode.type == WriteType.INSERT)
+                this.writesCache.get(currentNode.secKey).remove(currentNode.pk);
             currentNode = currentNode.next;
         }
     }
 
     @Override
     public void installWrites() {
-        // TODO finish
+        // TODO finish must consider inserts and deletes
+    }
+
+    @Override
+    public boolean insert(IKey key, Object[] record) {
+        return false;
+    }
+
+    @Override
+    public boolean update(IKey key, Object[] record) {
+        return false;
     }
 
     /**
-     *
+     * An iterator over a secondary index must consider the PK
      */
     public void delete(Object[] record) {
         IKey secIdxKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );

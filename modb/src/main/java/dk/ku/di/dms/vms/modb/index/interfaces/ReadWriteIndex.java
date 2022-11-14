@@ -6,10 +6,6 @@ public interface ReadWriteIndex<K> extends ReadOnlyIndex<K> {
 
     void update(K key, long srcAddress);
 
-    void insert(K key, Object[] record);
-
-    void update(K key, Object[] record);
-
     void delete(K key);
 
 }

@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
 /**
  * This class maintains important information
  * regarding the managed {@link jdk.incubator.foreign.MemorySegment}.
- *
+ * -
  * It provides the contextual information about
  * the segment of memory being used, like
  * how many records can be stored,
@@ -24,15 +24,10 @@ public class RecordBufferContext {
     public final int capacity;
 
     // number of records stored so far
-    public int size;
+    // public int size;
 
     // just to avoid many method calls, since this value does not change
     public final long address;
-
-    // to avoid having to get info from schema every time
-    // long to avoid casting for every hash operation
-    // and unsafe memory copy, but it is an integer
-    public final long recordSize;
 
     /**
      * Contain entries related to the metadata of the records stored in the record buffer.
@@ -44,18 +39,16 @@ public class RecordBufferContext {
 
     private ByteBuffer byteBuffer;
 
-    public RecordBufferContext(MemorySegment memorySegment, int capacity, int recordSize) {
+    public RecordBufferContext(MemorySegment memorySegment, int capacity) {
         this.memorySegment = memorySegment;
         this.address = this.memorySegment.address().toRawLongValue();
         this.capacity = capacity;
-        this.recordSize = recordSize;
     }
 
-    public RecordBufferContext(ByteBuffer byteBuffer, long address, int capacity, int recordSize) {
+    public RecordBufferContext(ByteBuffer byteBuffer, long address, int capacity) {
         this.byteBuffer = byteBuffer;
         this.address = address;
         this.capacity = capacity;
-        this.recordSize = recordSize;
     }
 
     public void log(){

@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.modb.index.unique;
 
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
-import dk.ku.di.dms.vms.modb.definition.Header;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
@@ -21,7 +20,7 @@ import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
 /**
  * This index does not support growing number of keys
  * Could deal with collisions by having a linked list.
- * This index is oblivious to isolation level and data constraints.
+ * This index is oblivious to isolation level and relational constraints.
  */
 public final class UniqueHashIndex extends AbstractIndex<IKey> {
 
@@ -31,10 +30,22 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
 
     private final Map<IKey, Object[]> cacheObjectStore;
 
+    // cache to avoid getting data from schema
+    private volatile int size = 0;
+
+    private final long recordSize;
+
+    /**
+     * Based on HashMap how handle bucket overflow
+     * After 8, records will be overwritten or stored in a non unique hash index
+     */
+    // static final int TREEIFY_THRESHOLD = 8;
+
     public UniqueHashIndex(RecordBufferContext recordBufferContext, Schema schema){
         super(schema, schema.getPrimaryKeyColumns());
         this.recordBufferContext = recordBufferContext;
         this.cacheObjectStore = new ConcurrentHashMap<>();
+        this.recordSize = schema.getRecordSize();
     }
 
     /**
@@ -45,6 +56,7 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
         super(schema, columnsIndex);
         this.recordBufferContext = recordBufferContext;
         this.cacheObjectStore = new ConcurrentHashMap<>();
+        this.recordSize = schema.getRecordSize();
     }
 
     /**
@@ -53,33 +65,8 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
      * and then computing the remainder when dividing by M, as in modular hashing."
      */
     private long getPosition(int key){
-        int logicalPosition = (key & 0x7fffffff) % recordBufferContext.capacity;
-        return recordBufferContext.address + ( recordBufferContext.recordSize * logicalPosition );
-    }
-
-    @Override
-    public void insert(IKey key, Object[] record){
-
-        long pos = getPosition(key.hashCode());
-
-        UNSAFE.putBoolean(null, pos, true);
-        UNSAFE.putInt(null, pos, key.hashCode());
-
-        int maxColumns = this.schema.columnOffset().length;
-        long currAddress = pos + Header.SIZE + Integer.BYTES;
-
-        for(int index = 0; index < maxColumns; index++) {
-
-            DataType dt = this.schema.columnDataType(index);
-
-            DataTypeUtils.callWriteFunction( currAddress,
-                    dt,
-                    record[index] );
-
-            currAddress += dt.value;
-
-        }
-
+        int logicalPosition = (key & 0x7fffffff) % this.recordBufferContext.capacity;
+        return this.recordBufferContext.address + ( this.recordSize * logicalPosition );
     }
 
     @Override
@@ -93,27 +80,8 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
         UNSAFE.putBoolean(null, pos, true);
         UNSAFE.putInt(null, pos, key.hashCode());
         UNSAFE.copyMemory(null, srcAddress, null, pos + Schema.RECORD_HEADER, schema.getRecordSizeWithoutHeader());
-        // this.size++; // this should only be set after commit, so we spread the overhead
-    }
 
-    @Override
-    public void update(IKey key, Object[] record){
-        long pos = getPosition(key.hashCode());
-
-        int maxColumns = this.schema.columnOffset().length;
-        long currAddress = pos + Header.SIZE + Integer.BYTES;
-
-        for(int index = 0; index < maxColumns; index++) {
-
-            DataType dt = this.schema.columnDataType(index);
-
-            DataTypeUtils.callWriteFunction( currAddress,
-                    dt,
-                    record[index] );
-
-            currAddress += dt.value;
-
-        }
+        this.size = this.size + 1;
     }
 
     /**
@@ -126,17 +94,64 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
     @Override
     public void update(IKey key, long srcAddress) {
         long pos = getPosition(key.hashCode());
-        UNSAFE.copyMemory(null, srcAddress, null, pos, recordBufferContext.recordSize);
+        UNSAFE.copyMemory(null, srcAddress, null, pos, this.recordSize);
+    }
+
+    public void update(IKey key, Object[] record){
+
+        long pos = this.getPosition(key.hashCode());
+
+        int maxColumns = this.schema().columnOffset().length;
+        long currAddress = pos + Schema.RECORD_HEADER;
+
+        for(int index = 0; index < maxColumns; index++) {
+
+            DataType dt = this.schema().columnDataType(index);
+
+            DataTypeUtils.callWriteFunction( currAddress,
+                    dt,
+                    record[index] );
+
+            currAddress += dt.value;
+
+        }
+    }
+
+    public void insert(IKey key, Object[] record){
+
+        long pos = this.getPosition(key.hashCode());
+
+        UNSAFE.putBoolean(null, pos, true);
+        UNSAFE.putInt(null, pos, key.hashCode());
+
+        int maxColumns = this.schema.columnOffset().length;
+        long currAddress = pos + Schema.RECORD_HEADER;
+
+        for(int index = 0; index < maxColumns; index++) {
+
+            DataType dt = this.schema.columnDataType(index);
+
+            DataTypeUtils.callWriteFunction( currAddress,
+                    dt,
+                    record[index] );
+
+            currAddress += dt.value;
+
+        }
+
+        this.size = this.size + 1;
+
     }
 
     @Override
     public void delete(IKey key) {
         long pos = getPosition(key.hashCode());
         UNSAFE.putBoolean(null, pos, inactive);
+        this.size = this.size - 1;
     }
 
     public long address(IKey key) {
-        return getPosition(key.hashCode());
+        return this.getPosition(key.hashCode());
     }
 
     /**
@@ -155,12 +170,12 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
 
     @Override
     public int size() {
-        return this.recordBufferContext.size;
+        return this.size;
     }
 
     @Override
     public IRecordIterator<IKey> iterator() {
-        return new RecordIterator(this.recordBufferContext.address, schema.getRecordSize(),
+        return new RecordIterator(this.recordBufferContext.address, this.schema.getRecordSize(),
                 this.recordBufferContext.capacity);
     }
 

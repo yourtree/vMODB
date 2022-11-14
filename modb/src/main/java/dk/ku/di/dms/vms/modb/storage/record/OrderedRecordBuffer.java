@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.storage.record;
 
+import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
@@ -34,7 +35,7 @@ import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
  }
  */
 
-public class OrderedRecordBuffer {
+public final class OrderedRecordBuffer {
 
     private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
@@ -43,7 +44,7 @@ public class OrderedRecordBuffer {
     private final AppendOnlyBuffer buffer;
 
     // entry size :
-    public final int entrySize = 1 + Integer.BYTES + (3 * Long.BYTES);
+    public static final int entrySize = 1 + Integer.BYTES + (3 * Long.BYTES);
 
     private long first;
     private long last;
@@ -68,11 +69,81 @@ public class OrderedRecordBuffer {
     public void delete(IKey key){
 
         // find position to insert provides exactly the key we are looking for
-        long targetAddress = existsAddress(key);
+        Tuple<Long,Long> beginEndAddresses = findRange(key);
 
         // should I proceed with the delete operations forward or backward?
 
         // TODO finish
+
+    }
+
+    /**
+     * Considering this bucket contains keys from different primary keys,
+     */
+    private Tuple<Long,Long> findRange(IKey key){
+
+        return null;
+
+    }
+
+    /**
+     * Different from {@link #findPositionToInsert(IKey)}.
+     * Decidedly returns the first node
+     * Whereas the {@link #findPositionToInsert(IKey)}
+     * can return the last node of the key
+     */
+    public long findFirstOccurrence(IKey key){
+
+        if(records == 0) return first;
+
+        if (first == last) return first;
+
+        long bottomAddress;
+        long upAddress;
+        int bottomKey;
+        int upKey;
+
+        // start from half
+        int halfKey = UNSAFE.getInt(half + deltaKey);
+
+        if (key.hashCode() > halfKey) {
+
+            // get the next of the half node
+            bottomAddress = UNSAFE.getLong(half + deltaNext);
+            upAddress = last;
+
+        } else {
+
+            bottomAddress = first;
+
+            // get the previous node of the half node
+            upAddress = UNSAFE.getLong(half + deltaPrevious);
+
+        }
+
+        do {
+
+            bottomKey = UNSAFE.getInt(bottomAddress + deltaKey);
+
+            if(key.hashCode() > bottomKey){
+                bottomAddress = UNSAFE.getLong( bottomAddress + deltaNext );
+            } else {
+                return key.hashCode() == bottomKey ? bottomAddress : -1;
+            }
+
+            upKey = UNSAFE.getInt(upAddress + deltaKey);
+
+            if(key.hashCode() < upKey){
+                upAddress = UNSAFE.getLong( upAddress + deltaPrevious );
+            } else if(key.hashCode() > upKey) { // the "up" has reached the first node first
+                // bring the bottom key to this point, since the bottom may still be far
+                bottomAddress = UNSAFE.getLong( upAddress + deltaNext );
+                bottomKey = UNSAFE.getInt(bottomAddress + deltaKey);
+                // stop the iteration
+                return key.hashCode() == bottomKey ? bottomAddress : -1;
+            }
+
+        } while(true);
 
     }
 

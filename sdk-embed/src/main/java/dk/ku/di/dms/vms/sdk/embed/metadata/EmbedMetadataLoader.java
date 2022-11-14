@@ -241,11 +241,11 @@ public class EmbedMetadataLoader {
         long sizeInBytes = (long) maxNumberOfRecords * recordSize;
         try {
             MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, append);
-            return new RecordBufferContext(segment, maxNumberOfRecords, recordSize);
+            return new RecordBufferContext(segment, maxNumberOfRecords);
         } catch (Exception e){
             logger.warning("Could not map file. Resorting to direct memory allocation attempt: "+e.getMessage());
             MemorySegment segment = MemorySegment.allocateNative(sizeInBytes, scope);
-            return new RecordBufferContext(segment, maxNumberOfRecords, recordSize);
+            return new RecordBufferContext(segment, maxNumberOfRecords);
         }
 
     }

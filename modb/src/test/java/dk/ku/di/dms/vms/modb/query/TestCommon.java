@@ -27,7 +27,7 @@ public final class TestCommon {
 
         ResourceScope scope = ResourceScope.newSharedScope();
         MemorySegment segment = MemorySegment.allocateNative(itemSchema.getRecordSize() * 10L, scope);
-        RecordBufferContext rbc = new RecordBufferContext(segment, 10, itemSchema.getRecordSize());
+        RecordBufferContext rbc = new RecordBufferContext(segment, 10);
         UniqueHashIndex index = new UniqueHashIndex(rbc, itemSchema, itemSchema.getPrimaryKeyColumns());
         PrimaryIndex consistentIndex = new PrimaryIndex(index);
         Table itemTable = new Table("item", itemSchema, consistentIndex);

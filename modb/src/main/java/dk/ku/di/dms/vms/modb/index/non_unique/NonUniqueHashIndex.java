@@ -39,8 +39,12 @@ public final class NonUniqueHashIndex extends AbstractIndex<IKey> {
         this.cacheObjectStore = new ConcurrentHashMap<>();
     }
 
-    private int getBucket(IKey key){
+    private int getBucketIndex(IKey key){
         return ((key.hashCode() & 0x7fffffff) % this.buffers.length) - 1;
+    }
+
+    public OrderedRecordBuffer getBucket(IKey key){
+        return this.buffers[this.getBucketIndex(key)];
     }
 
     /**
@@ -51,7 +55,7 @@ public final class NonUniqueHashIndex extends AbstractIndex<IKey> {
     @Override
     public void insert(IKey key, long srcAddress) {
         // must get the position of next, if exists
-        int bucket = this.getBucket(key);
+        int bucket = this.getBucketIndex(key);
         buffers[bucket].insert( key, srcAddress );
         int currSize = this.size;
         this.size = currSize + 1;
@@ -67,18 +71,8 @@ public final class NonUniqueHashIndex extends AbstractIndex<IKey> {
     @Override
     public void update(IKey key, long srcAddress) {
         // get bucket
-        int bucket = this.getBucket(key);
+        int bucket = this.getBucketIndex(key);
         buffers[bucket].update(key, srcAddress);
-    }
-
-    @Override
-    public void insert(IKey key, Object[] record) {
-        // TODO finish
-    }
-
-    @Override
-    public void update(IKey key, Object[] record) {
-        // TODO finish
     }
 
     /**
@@ -86,7 +80,7 @@ public final class NonUniqueHashIndex extends AbstractIndex<IKey> {
      */
     @Override
     public void delete(IKey key) {
-        int bucket = this.getBucket(key);
+        int bucket = this.getBucketIndex(key);
         this.buffers[bucket].delete( key );
         int currSize = this.size;
         this.size = currSize - 1;
@@ -94,18 +88,18 @@ public final class NonUniqueHashIndex extends AbstractIndex<IKey> {
 
     @Override
     public boolean exists(IKey key){
-        int bucket = this.getBucket(key);
+        int bucket = this.getBucketIndex(key);
         return this.buffers[bucket].exists(key);
     }
 
     @Override
     public long address(IKey key) {
-        int bucket = this.getBucket(key);
+        int bucket = this.getBucketIndex(key);
         return this.buffers[bucket].address();
     }
 
     public IRecordIterator<IKey> iterator(IKey key) {
-        int bucket = this.getBucket(key);
+        int bucket = this.getBucketIndex(key);
         return new NonUniqueRecordIterator(new BucketIterator(this.buffers[bucket]));
     }
 

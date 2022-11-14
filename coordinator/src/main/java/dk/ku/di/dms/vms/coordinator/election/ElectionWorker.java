@@ -30,13 +30,13 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * An election task is a thread that encapsulates all subtasks (i.e., threads)
  * necessary to complete a leader election. Only after this thread finishes,
  * a server can act as a leader or follower.
- *
+ * -
  * Define leader based on highest offset and timestamp
  * while election is not defined and election timeout has not timed out, continue
- *
+ * -
  * We assume the nodes are fixed. Later we revisit this choice.
  * TODO Cluster membership management (e.g., removing nodes, replacing nodes)
- *
+ * -
  * Protocol SCTP is maybe a better fit for leader election since it is message-oriented, rather than stream oriented
  * On the other hand, the UDP allows multicast, which is good for leader election (sending messages to all nodes
  * by design instead of iterating over the nodes to send individual messages)
