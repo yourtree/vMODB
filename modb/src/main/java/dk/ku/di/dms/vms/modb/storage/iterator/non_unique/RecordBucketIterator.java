@@ -13,13 +13,19 @@ import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 public final class RecordBucketIterator extends CachingKeyIterator
         implements IRecordIterator<Long> {
 
-    private long address;
+    private long currAddress;
+
+    private int progress;
+
+    private int size;
 
     // how many records have been iterated so far
     // private int progress;
 
-    public RecordBucketIterator(long address) {
-        this.address = address;
+    public RecordBucketIterator(OrderedRecordBuffer buffer) {
+        this.currAddress = buffer.address();
+        this.size = buffer.size();
+        this.progress = 0;
     }
 
     /**
@@ -28,11 +34,12 @@ public final class RecordBucketIterator extends CachingKeyIterator
      */
     @Override
     public boolean hasElement() {
-        return UNSAFE.getBoolean(null, address);
+        return this.progress < size;
+        // return UNSAFE.getBoolean(null, address);
     }
 
     public IKey key(){
-        return this.keyOf(UNSAFE.getInt(address + OrderedRecordBuffer.deltaKey));
+        return this.keyOf(UNSAFE.getInt(currAddress + OrderedRecordBuffer.deltaKey));
     }
 
     /**
@@ -40,27 +47,26 @@ public final class RecordBucketIterator extends CachingKeyIterator
      * @return the primary key of the record in this bucket
      */
     public IKey primaryKey(){
-        long srcAddress = UNSAFE.getLong(address + OrderedRecordBuffer.deltaOffset);
+        long srcAddress = UNSAFE.getLong(currAddress + OrderedRecordBuffer.deltaOffset);
         return this.keyOf(UNSAFE.getInt(srcAddress + Header.SIZE));
     }
 
     @Override
     public Long get() {
-        return this.address;
+        return this.currAddress;
     }
 
     public long address() {
-        return this.address;
+        return this.currAddress;
     }
 
-    /**
-     * Return the srcAddress of the record
-     * @return the next address
-     */
     @Override
     public void next() {
+        this.progress++;
         // src address
-        this.address = UNSAFE.getLong(this.address + OrderedRecordBuffer.deltaNext);
+        if(progress < size) {
+            this.currAddress = UNSAFE.getLong(this.currAddress + OrderedRecordBuffer.deltaNext);
+        }
     }
 
 }

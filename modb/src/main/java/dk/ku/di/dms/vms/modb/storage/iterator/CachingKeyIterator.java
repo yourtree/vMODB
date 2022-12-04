@@ -8,14 +8,16 @@ import dk.ku.di.dms.vms.modb.definition.key.IntKey;
  * Particularly important for scan and aggregate operators
  * The reasoning is that since the design is single thread,
  * no synchronization is necessary to pick a key.
+ * TODO create a buffer so multiple read-only queries can use
+ * the shared buffer to obtain a key
  */
 public abstract class CachingKeyIterator {
 
     private final IntKey keyForReuse = IntKey.of();
 
     protected IKey keyOf(int hash){
-        keyForReuse.value = hash;
-        return keyForReuse;
+        this.keyForReuse.newValue( hash );
+        return this.keyForReuse;
     }
 
 }

@@ -17,12 +17,12 @@ public class IntKey implements IKey {
 
     @Override
     public int hashCode(){
-        return value;
+        return this.value;
     }
 
     @Override
     public boolean equals(Object object){
-        return this.value == ((IntKey)object).value;
+        return this.hashCode() == object.hashCode();
     }
 
 }

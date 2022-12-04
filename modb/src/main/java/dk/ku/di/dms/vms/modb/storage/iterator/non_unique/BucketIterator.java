@@ -45,7 +45,7 @@ public final class BucketIterator implements Iterator<RecordBucketIterator> {
     @Override
     public RecordBucketIterator next() {
         this.progress++;
-        return new RecordBucketIterator(this.buffers[progress-1].address());
+        return new RecordBucketIterator(this.buffers[progress-1]);
     }
 
 }

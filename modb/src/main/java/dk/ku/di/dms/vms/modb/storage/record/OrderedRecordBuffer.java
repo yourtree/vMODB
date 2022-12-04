@@ -50,8 +50,8 @@ public final class OrderedRecordBuffer {
     private long last;
     private long half;
 
-    // excluding the deleted
-    private int records;
+    // number of records, excluding the deleted
+    private int size;
 
     public static final int deltaKey = 1 + Long.BYTES;
     public static final int deltaOffset = 1 + Long.BYTES + Integer.BYTES;
@@ -63,7 +63,7 @@ public final class OrderedRecordBuffer {
         this.first = buffer.address();
         this.last = buffer.address();
         this.deletedOffsets = new LinkedList<>();
-        this.records = 0;
+        this.size = 0;
     }
 
     public void delete(IKey key){
@@ -94,9 +94,10 @@ public final class OrderedRecordBuffer {
      */
     public long findFirstOccurrence(IKey key){
 
-        if(records == 0) return first;
+        if(this.size == 0) return this.first;
 
-        if (first == last) return first;
+        // size == 1
+        if (this.first == this.last) return this.first;
 
         long bottomAddress;
         long upAddress;
@@ -104,20 +105,20 @@ public final class OrderedRecordBuffer {
         int upKey;
 
         // start from half
-        int halfKey = UNSAFE.getInt(half + deltaKey);
+        int halfKey = UNSAFE.getInt(this.half + deltaKey);
 
         if (key.hashCode() > halfKey) {
 
             // get the next of the half node
-            bottomAddress = UNSAFE.getLong(half + deltaNext);
-            upAddress = last;
+            bottomAddress = UNSAFE.getLong(this.half + deltaNext);
+            upAddress = this.last;
 
         } else {
 
-            bottomAddress = first;
+            bottomAddress = this.first;
 
             // get the previous node of the half node
-            upAddress = UNSAFE.getLong(half + deltaPrevious);
+            upAddress = UNSAFE.getLong(this.half + deltaPrevious);
 
         }
 
@@ -155,12 +156,12 @@ public final class OrderedRecordBuffer {
 
         UNSAFE.putBoolean(null, targetAddress, inactive);
 
-        records--;
+        size--;
 
         deletedOffsets.add(targetAddress);
 
         // update first, last, half accordingly
-        if(records == 0){
+        if(size == 0){
             this.first = buffer.address();
             this.last = first;
             this.half = first;
@@ -178,12 +179,12 @@ public final class OrderedRecordBuffer {
 
         }
 
-        if(records == 1){
+        if(size == 1){
             this.half = this.first; // or last, does not matter
             return;
         }
 
-        if(records == 2){
+        if(size == 2){
             this.half = this.last; // half is always the last in case of two records
             return;
         }
@@ -203,41 +204,39 @@ public final class OrderedRecordBuffer {
 
     }
 
+    /**
+     * Insert a new record, leaving the buffer in order
+     */
     public void insert(IKey key, long srcAddress){
 
         // the records may be very far from each other
         // a vacuum procedure may be invoked from time to time
         // to move the records, so they are clustered in memory,
         // avoiding paging and improving performance
-
         long destOffset;
 
         // get destination offset
         if(!deletedOffsets.isEmpty()){
-
             destOffset = deletedOffsets.removeLast();
-
         } else {
-
             destOffset = buffer.nextOffset();
-
             // increasing the "position" in the buffer
             buffer.forwardOffset(entrySize);
-
         }
 
         // set active
         UNSAFE.putBoolean( null, destOffset, active);
-        this.records++;
 
-        if(records == 0){
+        if(this.size == 0){
             // then it is not possible to build the key from target address
-
             // put in place
             putRecordInfo( key.hashCode(), destOffset, srcAddress );
-            half = destOffset;
+            this.half = destOffset;
+            this.size++;
             return;
         }
+
+        this.size++;
 
         long targetAddress = this.findPositionToInsert(key);
 
@@ -247,14 +246,16 @@ public final class OrderedRecordBuffer {
         if(key.hashCode() > targetKey){
             putAfter(targetAddress, destOffset);
 
-            // walk "half" forward
-            half = UNSAFE.getLong(half + deltaNext);
+            // walk half forward
+            if(this.size % 2 != 0)
+                this.half = UNSAFE.getLong(half + deltaNext);
 
         } else {
             putBefore(targetAddress, destOffset);
 
             // walk "half" backward
-            half = UNSAFE.getLong(half + deltaPrevious);
+            if(this.size % 2 != 0)
+                this.half = UNSAFE.getLong(half + deltaPrevious);
 
         }
 
@@ -271,34 +272,40 @@ public final class OrderedRecordBuffer {
     }
 
     private void putBefore(long targetAddress, long destOffset) {
-        // get the previous node of the target address node
-        long auxPrevious = UNSAFE.getLong( targetAddress + deltaPrevious );
-
-        // point the "previous" of the target address node to the new record
-        UNSAFE.putLong( targetAddress + deltaPrevious, destOffset );
-
-        // update the previous to auxPrevious
-        UNSAFE.putLong( destOffset + deltaPrevious, auxPrevious );
-
-        if(first == targetAddress){
-            first = destOffset;
+        if(targetAddress != first){
+            // get the previous node of the target address node
+            long auxPrevious = UNSAFE.getLong( targetAddress + deltaPrevious );
+            // point the "previous" of the target address node to the new record
+            UNSAFE.putLong( targetAddress + deltaPrevious, destOffset );
+            // update the previous to auxPrevious
+            UNSAFE.putLong( destOffset + deltaPrevious, auxPrevious );
+        } else {
+            this.first = destOffset;
         }
+        // set previous
+        UNSAFE.putLong( targetAddress + deltaPrevious, destOffset );
+        // set the next
+        UNSAFE.putLong( destOffset + deltaNext, targetAddress );
     }
 
     private void putAfter(long targetAddress, long destOffset) {
 
-        // get the next of the target address node
-        long auxNext = UNSAFE.getLong(targetAddress + deltaNext);
-
-        // point the "next" of the target address node to the new record
-        UNSAFE.putLong(targetAddress + deltaNext, destOffset);
-
-        // update the next to auxNext
-        UNSAFE.putLong(destOffset + deltaNext, auxNext);
-
-        if(last == targetAddress){
-            last = destOffset;
+        // walk last if necessary
+        if(this.last == targetAddress){
+            this.last = destOffset;
+        } else {
+            // get the next of the target address node
+            long auxNext = UNSAFE.getLong(targetAddress + deltaNext);
+            // point the "next" of the target address node to the new record
+            UNSAFE.putLong(targetAddress + deltaNext, destOffset);
+            // update the next to auxNext
+            UNSAFE.putLong(destOffset + deltaNext, auxNext);
         }
+
+        // set next
+        UNSAFE.putLong(targetAddress + deltaNext, destOffset);
+        // set previous
+        UNSAFE.putLong(destOffset + deltaPrevious, targetAddress);
 
     }
 
@@ -327,9 +334,9 @@ public final class OrderedRecordBuffer {
      */
     private long findPositionToInsert(IKey key){
 
-        if(records == 0) return first;
+        if(this.size == 0) return this.first;
 
-        if (first == last) return first;
+        if(this.first == this.last) return this.first;
 
         long bottomAddress;
         long upAddress;
@@ -342,16 +349,18 @@ public final class OrderedRecordBuffer {
         if (key.hashCode() > halfKey) {
 
             // get the next of the half node
-            bottomAddress = UNSAFE.getLong(half + deltaNext);
+            if(half == last){
+                bottomAddress = first;
+            } else {
+                // if half == last, the next will point to null
+                bottomAddress = UNSAFE.getLong(half + deltaNext);
+            }
             upAddress = last;
 
         } else {
-
             bottomAddress = first;
-
             // get the previous node of the half node
             upAddress = UNSAFE.getLong(half + deltaPrevious);
-
         }
 
         do {
@@ -383,7 +392,7 @@ public final class OrderedRecordBuffer {
     // return -1 if the node does not exist
     public long existsAddress(IKey key){
         // majority of cases
-        if(records > 2) {
+        if(size > 2) {
 
             long bottomAddress;
             long upAddress;
@@ -434,14 +443,14 @@ public final class OrderedRecordBuffer {
             return mediumKey == key.hashCode() ? bottomAddress : -1;
         }
 
-        if(records == 0){
+        if(size == 0){
             return -1;
         }
-        if(records == 1){
+        if(size == 1){
             int firstKey = UNSAFE.getInt(first + deltaKey);
             return firstKey == key.hashCode() ? first : -1;
         }
-        if(records == 2){
+        if(size == 2){
             int firstKey = UNSAFE.getInt(first + deltaKey);
             int lastKey = UNSAFE.getInt(last + deltaKey);
             long res = firstKey == key.hashCode() ? first : -1;
@@ -482,7 +491,7 @@ public final class OrderedRecordBuffer {
 
         // move along the linked list. if the next is not the next address, then swap
         int activeRecordsVerified = 0;
-        while(activeRecordsVerified < records){
+        while(activeRecordsVerified < size){
 
             // while the next element is inactive
             while(true){
@@ -531,11 +540,15 @@ public final class OrderedRecordBuffer {
     }
 
     public int size(){
-        return this.records;
+        return this.size;
     }
 
     public long getFirst() {
         return first;
+    }
+
+    public int getLastKey() {
+        return MemoryUtils.UNSAFE.getInt( this.last + deltaKey );
     }
 
 }

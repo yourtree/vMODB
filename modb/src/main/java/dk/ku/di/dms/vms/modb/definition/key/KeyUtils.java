@@ -111,10 +111,4 @@ public final class KeyUtils {
         return CompositeKey.of(values);
     }
 
-    public static IKey buildKey(int... values){
-        if(values.length == 1)
-            return SimpleKey.of(values);
-        return CompositeKey.of(values);
-    }
-
 }
