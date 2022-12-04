@@ -34,7 +34,7 @@ public class CompositeKey extends Row implements IKey, IIndexKey {
 
     @Override
     public int hashCode() {
-        return hashKey;
+        return this.hashKey;
     }
 
     @Override

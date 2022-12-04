@@ -17,6 +17,7 @@ public class LeafNode implements INode {
 //    public static final int numberRecordsLeafNode =
 //            ( MemoryUtils.UNSAFE.pageSize() + (2 * Long.BYTES) )
 
+    // FIXME remove both. make it an environment defined attribute
     public final int pageSize;
     public final int branchingFactor;
 
@@ -60,13 +61,10 @@ public class LeafNode implements INode {
 
     private INode overflow() {
         LeafNode leafNode = LeafNode.leaf( this.pageSize );
-
-        // TODO copy records to new buffer (from half + 1 to last).
-        // MemoryUtils.UNSAFE.copyMemory( this.buffer.address(), rightBuffer.address(), (long) (this.branchingFactor - half) * nonLeafEntrySize );
-
+        // copy records to new buffer (from half + 1 to last).
+        this.buffer.split( leafNode.buffer );
         leafNode.next = this.next;
         this.next = leafNode;
-
         return leafNode;
     }
 

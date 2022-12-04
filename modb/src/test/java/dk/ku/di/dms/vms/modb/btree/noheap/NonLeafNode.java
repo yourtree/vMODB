@@ -86,39 +86,26 @@ public class NonLeafNode implements INode {
 
     @Override
     public INode insert(IKey key, long srcAddress) {
-
         // find the node
-
         long currAddr = this.buffer.address();
-
         int i;
         for (i = 0; i < this.nKeys; i++) {
-
             int currKey = MemoryUtils.UNSAFE.getInt(currAddr);
-
-            if (currKey > key.hashCode())
-                break;
-
+            if (currKey > key.hashCode()) break;
             currAddr = MemoryUtils.UNSAFE.getLong(currAddr + deltaNext);
         }
-
         INode newNode = children[i].insert(key, srcAddress);
-
         if (newNode != null) {
-
             this.children[i + 1] = newNode;
-            MemoryUtils.UNSAFE.putInt( currAddr, children[i].lastKey() );
+            buffer.append( children[i].lastKey() );
+            // MemoryUtils.UNSAFE.putInt( currAddr, children[i].lastKey() );
             nKeys++;
-
             if(this.nKeys == this.branchingFactor) {
                 // overflow
                 return overflow();
             }
-
         }
-
         return null;
-
     }
 
     private INode overflow() {
@@ -153,7 +140,7 @@ public class NonLeafNode implements INode {
      * @return an iterator of the respective leaf nodes
      */
     public IRecordIterator<Long> iterator(){
-        return this.children[1].iterator();
+        return this.children[2].iterator();
 //        for(INode node : this.children){
 //            return node.iterator();
 //        }

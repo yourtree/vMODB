@@ -56,7 +56,7 @@ public class AppendOnlyBuffer {
     }
 
     public long nextOffset() {
-        return nextOffset;
+        return this.nextOffset;
     }
 
     /**
@@ -88,12 +88,6 @@ public class AppendOnlyBuffer {
     public void append(float value){
         UNSAFE.putFloat(nextOffset, value);
         this.nextOffset += Float.BYTES;
-    }
-
-    public void copy(long srcAddress, long bytes){
-        UNSAFE.copyMemory(null, srcAddress, null,
-                nextOffset, bytes);
-        this.nextOffset += bytes;
     }
 
 }

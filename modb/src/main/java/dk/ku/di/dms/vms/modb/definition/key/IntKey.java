@@ -11,8 +11,15 @@ public class IntKey implements IKey {
         return new IntKey();
     }
 
-    public void newValue(int newValue){
+    public static IntKey of(int value){
+        IntKey key = new IntKey();
+        key.value = value;
+        return key;
+    }
+
+    public IntKey newValue(int newValue){
         this.value = newValue;
+        return this;
     }
 
     @Override
