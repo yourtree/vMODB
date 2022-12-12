@@ -76,12 +76,12 @@ public class AppendOnlyBuffer {
     }
 
     public void append(long value){
-        UNSAFE.putLong(nextOffset, value);
+        UNSAFE.putLong(this.nextOffset, value);
         this.nextOffset += Long.BYTES;
     }
 
     public void append(int value){
-        UNSAFE.putInt(nextOffset, value);
+        UNSAFE.putInt(this.nextOffset, value);
         this.nextOffset += Integer.BYTES;
     }
 

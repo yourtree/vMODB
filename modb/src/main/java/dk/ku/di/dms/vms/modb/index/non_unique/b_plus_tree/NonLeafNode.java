@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.btree.noheap;
+package dk.ku.di.dms.vms.modb.index.non_unique.b_plus_tree;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
@@ -17,7 +17,7 @@ import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
  * { INT, LONG, LONG }
  * To allow for fast search in the keys....
  * But if the integer are sequentially placed, it is just a matter of doing log n search
- *
+ * TODO skip list to navigate faster in this node
  */
 public class NonLeafNode implements INode {
 
@@ -46,7 +46,8 @@ public class NonLeafNode implements INode {
 
     private NonLeafNode(int pageSize){
         this.pageSize = pageSize;
-        this.branchingFactor = (pageSize / nonLeafEntrySize) - 1;
+        // this.branchingFactor = (pageSize / nonLeafEntrySize) - 1;
+        this.branchingFactor = 5;
         this.parent = true;
         MemoryRefNode memoryRefNode = MemoryManager.getTemporaryDirectMemory( pageSize );
         this.buffer = new AppendOnlyBuffer( memoryRefNode.address, memoryRefNode.bytes );
@@ -81,7 +82,7 @@ public class NonLeafNode implements INode {
 
     @Override
     public int lastKey() {
-        return MemoryUtils.UNSAFE.getInt( this.buffer.address() * nKeys );
+        return MemoryUtils.UNSAFE.getInt( this.buffer.address() + ((long) nonLeafEntrySize * (this.nKeys - 1)) );
     }
 
     @Override
@@ -92,13 +93,12 @@ public class NonLeafNode implements INode {
         for (i = 0; i < this.nKeys; i++) {
             int currKey = MemoryUtils.UNSAFE.getInt(currAddr);
             if (currKey > key.hashCode()) break;
-            currAddr = MemoryUtils.UNSAFE.getLong(currAddr + deltaNext);
+            currAddr = currAddr + deltaNext;
         }
         INode newNode = children[i].insert(key, srcAddress);
         if (newNode != null) {
             this.children[i + 1] = newNode;
             buffer.append( children[i].lastKey() );
-            // MemoryUtils.UNSAFE.putInt( currAddr, children[i].lastKey() );
             nKeys++;
             if(this.nKeys == this.branchingFactor) {
                 // overflow
@@ -110,7 +110,7 @@ public class NonLeafNode implements INode {
 
     private INode overflow() {
 
-        int half = (int) Math.ceil((double)this.branchingFactor - 1) / 2;
+        int half = (int) Math.ceil((double)this.branchingFactor / 2);
 
         // truncate left keys
         this.nKeys = half;
@@ -119,18 +119,19 @@ public class NonLeafNode implements INode {
         AppendOnlyBuffer rightBuffer = new AppendOnlyBuffer( memoryRefNode.address, memoryRefNode.bytes );
 
         // copy keys to new buffer (from truncated offset + 1 to branching factor)
-        MemoryUtils.UNSAFE.copyMemory( this.buffer.address(), rightBuffer.address(), (long) (this.branchingFactor - half) * nonLeafEntrySize );
+        MemoryUtils.UNSAFE.copyMemory( this.buffer.address() + ( (long) (this.branchingFactor - nKeys + 1) * nonLeafEntrySize),
+                rightBuffer.address(), (long) (this.branchingFactor - half) * nonLeafEntrySize );
 
         INode[] childrenRight = new INode[this.branchingFactor + 1];
 
         int ci = 0;
-        for(int i = half + 1; i < this.branchingFactor; i++){
+        for(int i = half; i < this.branchingFactor; i++){
             childrenRight[ci] = this.children[i];
             ci++;
             this.children[i] = null;
         }
 
-        return NonLeafNode.internal( this.pageSize, this.branchingFactor - half, childrenRight, rightBuffer );
+        return NonLeafNode.internal( this.pageSize, ci, childrenRight, rightBuffer );
 
     }
 
@@ -140,7 +141,7 @@ public class NonLeafNode implements INode {
      * @return an iterator of the respective leaf nodes
      */
     public IRecordIterator<Long> iterator(){
-        return this.children[2].iterator();
+        return this.children[1].iterator();
 //        for(INode node : this.children){
 //            return node.iterator();
 //        }

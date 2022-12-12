@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.btree;
+package dk.ku.di.dms.vms.modb.btree.heap;
 
 import org.junit.Test;
 

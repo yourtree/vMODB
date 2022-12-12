@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.btree;
+package dk.ku.di.dms.vms.modb.btree.heap;
 
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 

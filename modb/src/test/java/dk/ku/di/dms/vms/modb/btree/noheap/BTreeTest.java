@@ -1,11 +1,10 @@
 package dk.ku.di.dms.vms.modb.btree.noheap;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
-import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.IntKey;
-import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
+import dk.ku.di.dms.vms.modb.index.non_unique.b_plus_tree.INode;
+import dk.ku.di.dms.vms.modb.index.non_unique.b_plus_tree.NonLeafNode;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
-import dk.ku.di.dms.vms.modb.storage.iterator.non_unique.RecordBucketIterator;
 import org.junit.Test;
 
 public class BTreeTest {
@@ -24,7 +23,16 @@ public class BTreeTest {
         parent.insert(IntKey.of(4), 4L);
         parent.insert(IntKey.of(5), 5L);
         parent.insert(IntKey.of(6), 6L);
-//        parent.insert(IntKey.of(7), 7L);
+        parent.insert(IntKey.of(7), 7L);
+        parent.insert(IntKey.of(8), 8L);
+        parent.insert(IntKey.of(9), 9L);
+        parent.insert(IntKey.of(10), 10L);
+        parent.insert(IntKey.of(11), 11L);
+
+        INode newNonLeaf =  parent.insert(IntKey.of(12), 12L);
+
+        System.out.println("Old parent last key: "+ parent.lastKey());
+        System.out.println("New parent last key: "+ newNonLeaf.lastKey());
 
         IRecordIterator<Long> iterator = parent.iterator();
 
@@ -32,8 +40,6 @@ public class BTreeTest {
             System.out.println(MemoryUtils.UNSAFE.getInt( iterator.get() + 1 + Long.BYTES + Integer.BYTES ));
             iterator.next();
         }
-
-        // FIXME insert 7 not working
 
     }
 

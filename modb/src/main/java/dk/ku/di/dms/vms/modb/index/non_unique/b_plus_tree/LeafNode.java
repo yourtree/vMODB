@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.btree.noheap;
+package dk.ku.di.dms.vms.modb.index.non_unique.b_plus_tree;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
@@ -25,6 +25,7 @@ public class LeafNode implements INode {
 
     // TODO could be encoded in the last entry of the buffer
     public LeafNode next;
+    private LeafNode previous;
 
     private LeafNode(int pageSize, OrderedRecordBuffer buffer){
         this.pageSize = pageSize;
@@ -65,6 +66,7 @@ public class LeafNode implements INode {
         this.buffer.split( leafNode.buffer );
         leafNode.next = this.next;
         this.next = leafNode;
+        leafNode.previous = this;
         return leafNode;
     }
 
