@@ -50,9 +50,6 @@ public final class Table {
      */
     private final Map<PrimaryIndex, int[]> foreignKeys;
 
-    // order_id (FK), item_id...
-    // int[] -> { 0 }
-
     /**
      * Indexes from other tables pointing
      * to the primary index of this table.

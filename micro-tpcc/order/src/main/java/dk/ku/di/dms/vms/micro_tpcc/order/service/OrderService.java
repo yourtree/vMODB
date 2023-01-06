@@ -9,7 +9,6 @@ import dk.ku.di.dms.vms.micro_tpcc.order.repository.IOrderLineRepository;
 import dk.ku.di.dms.vms.micro_tpcc.order.repository.IOrderRepository;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
-import dk.ku.di.dms.vms.modb.api.annotations.Terminal;
 import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
 import java.util.Date;
@@ -36,7 +35,6 @@ public class OrderService {
     @Inbound(values = {"customer-new-order-out","stock-new-order-out","stock-new-order-in",
             "items-new-order-out","waredist-new-order-out"})
     @Transactional(type = RW)
-    @Terminal
     public void processNewOrderItemsAsync(CustomerNewOrderOut customerNewOrderOut,
                                           StockNewOrderOut stockNewOrderOut,
                                           StockNewOrderIn stockNewOrderIn,

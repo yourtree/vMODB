@@ -31,10 +31,9 @@ import java.util.logging.Logger;
 /**
  *
  * Scenario 1: One VMS and a coordinator. One transaction, running in the vms
- *
+ * -
  * "Unix-based systems declare ports below 1024 as privileged"
- * https://stackoverflow.com/questions/25544849/java-net-bindexception-permission-denied-when-creating-a-serversocket-on-mac-os
- *
+ * <a href="https://stackoverflow.com/questions/25544849/java-net-bindexception-permission-denied-when-creating-a-serversocket-on-mac-os">...</a>
  *
  */
 public class App 

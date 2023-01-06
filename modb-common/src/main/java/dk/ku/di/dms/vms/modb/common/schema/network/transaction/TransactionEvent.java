@@ -74,7 +74,7 @@ public final class TransactionEvent {
      * This is the base class for representing the data transferred across the framework and the sidecar
      * It serves both for input and output
      */
-    public static record Payload(
+    public record Payload(
             long tid, long lastTid, long batch, String event, String payload, int totalSize
     ){}
 

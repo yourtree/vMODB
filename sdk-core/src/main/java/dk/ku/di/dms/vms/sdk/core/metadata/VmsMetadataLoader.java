@@ -499,6 +499,14 @@ public class VmsMetadataLoader {
 
             Object vmsInstance = constructor.newInstance(proxies.toArray());
 
+            // get name from annotation
+            /* FIXME something uses the clazz name to map things. I cannot change this...
+            Optional<Annotation> optionalMicroserviceAnnotation = Arrays.stream(clazz.getAnnotations())
+                    .filter(p -> p.annotationType() == Microservice.class).findFirst();
+            if(optionalMicroserviceAnnotation.isEmpty()) throw new IllegalStateException("Cannot read microservice annotation");
+            String microservice = ((Microservice)optionalMicroserviceAnnotation.get()).value();
+            loadedMicroserviceInstances.put(microservice, vmsInstance);
+            */
             loadedMicroserviceInstances.put(clazzName, vmsInstance);
         }
 
@@ -507,11 +515,8 @@ public class VmsMetadataLoader {
     }
 
     private static Class<?> getEntityNameFromRepositoryClazz(Class<?> repositoryClazz){
-
         Type[] types = ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
-
         return (Class<?>) types[1];
-
     }
 
     /**
@@ -540,7 +545,7 @@ public class VmsMetadataLoader {
             }
 
             // output type cannot be String or primitive
-            if(outputType.isPrimitive() || outputType.isArray() || outputType.isAnnotation() || outputType.isInstance(String.class)){
+            if((outputType.isPrimitive() && !outputType.getSimpleName().equals("void")) || outputType.isArray() || outputType.isAnnotation() || outputType.isInstance(String.class)){
                 throw new IllegalStateException("Output type cannot be String, array, annotation, or primitive");
             }
 
@@ -567,8 +572,28 @@ public class VmsMetadataLoader {
 
             Optional<Annotation> optionalOutbound = Arrays.stream(annotations).filter( p -> p.annotationType() == Outbound.class ).findFirst();
 
-            if(optionalOutbound.isEmpty()) {
-                throw new QueueMappingException("Outbound annotation not found in transactional method");
+            String outputQueue = null;
+            if(optionalOutbound.isPresent()) {
+                // throw new QueueMappingException("Outbound annotation not found in transactional method");
+                outputQueue = ((Outbound) optionalOutbound.get()).value();
+                String queueName = eventToQueueMap.get(outputType);
+                if (queueName == null) {
+                    eventToQueueMap.put(outputType, outputQueue);
+
+                    // why: to make sure we always map one type to one queue
+                    if(queueToEventMap.get(outputQueue) == null){
+                        queueToEventMap.put(outputQueue, outputType);
+                    } else {
+                        throw new QueueMappingException(
+                                "Error mapping: An output queue cannot be mapped to two (or more) types.");
+                    }
+
+                    inputOutputEventDistinction.put(outputQueue,"output");
+
+                } else if(queueToEventMap.get(queueName) != outputType) {
+                    throw new QueueMappingException(
+                            "Error mapping: A payload type cannot be mapped to two (or more) output queues.");
+                }
             }
 
             // In the first design, the microservice cannot have two
@@ -577,28 +602,11 @@ public class VmsMetadataLoader {
             // But one can achieve it by having two operations reacting
             // to the same input payload
             String[] inputQueues = ((Inbound) optionalInbound.get()).values();
-            String outputQueue = ((Outbound) optionalOutbound.get()).value();
 
-            String queueName = eventToQueueMap.get(outputType);
-            if (queueName == null) {
-                eventToQueueMap.put(outputType, outputQueue);
-
-                // not sure why I need this now... just doing it for completeness
-                if(queueToEventMap.get(outputQueue) == null){
-                    queueToEventMap.put(outputQueue, outputType);
-                } else {
-                    throw new QueueMappingException(
-                            "Error mapping: An output queue cannot be mapped to two (or more) types.");
-                }
-
-                inputOutputEventDistinction.put(outputQueue,"output");
-
-            } else if(queueToEventMap.get(queueName) != outputType) {
-                throw new QueueMappingException(
-                        "Error mapping: A payload type cannot be mapped to two (or more) output queues.");
+            // check whether the input queue contains commas
+            if(Arrays.stream(inputQueues).anyMatch(p->p.contains(","))){
+                throw new IllegalStateException("Cannot contain comma in input queue definition");
             }
-
-            Optional<Annotation> optionalTerminal = Arrays.stream(annotations).filter(p -> p.annotationType() == Terminal.class ).findFirst();
 
             Optional<Annotation> optionalTransactional = Arrays.stream(annotations).filter(p -> p.annotationType() == Transactional.class ).findFirst();
 
@@ -609,11 +617,7 @@ public class VmsMetadataLoader {
                 transactionType = ((Transactional) ann).type();
             }
 
-            if(optionalTerminal.isPresent()){
-                vmsTransactionSignature = new VmsTransactionSignature(obj, true, method, transactionType, inputQueues, outputQueue);
-            } else {
-                vmsTransactionSignature = new VmsTransactionSignature(obj, false, method, transactionType, inputQueues, outputQueue);
-            }
+            vmsTransactionSignature = new VmsTransactionSignature(obj, method, transactionType, inputQueues, outputQueue);
 
             for (int i = 0; i < inputQueues.length; i++) {
 

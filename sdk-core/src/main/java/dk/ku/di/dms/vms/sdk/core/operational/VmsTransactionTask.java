@@ -23,8 +23,8 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
     private final VmsTransactionSignature signature;
 
     // internal identification of this specific task in the scheduler
-    // used to to allow atomic visibility)
-    // (can later be used to specify ordering criteria between tasks)
+    // used to allow atomic visibility
+    // (can be later used to specify ordering criteria between tasks)
     private int identifier;
 
     private final Object[] inputs;
@@ -65,6 +65,10 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
         return this.remainingInputs == 0;
     }
 
+    public VmsTransactionSignature signature(){
+        return this.signature;
+    }
+
     @Override
     public VmsTransactionTaskResult call() {
 
@@ -76,9 +80,9 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
             Object output = signature.method().invoke(this.signature.vmsInstance(), this.inputs);
 
             // can be null, given we have terminal events (void method)
-            // could also be terminal and generate event.. maybe an external system wants to consume
+            // could also be terminal and generate event... maybe an external system wants to consume
             // then send to the leader...
-            OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.lastTid, this.batch, this.signature.outputQueue(), output, this.signature.terminal());
+            OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.lastTid, this.batch, this.signature.outputQueue(), output);
 
             // TODO we need to erase the transactions that are not seen by any more new transactions
             // need to move

@@ -61,7 +61,7 @@ public class EmbedVmsTransactionScheduler extends VmsTransactionScheduler {
 
             currentBatch.setStatus(BatchContext.Status.LOGGING);
 
-            // of course I do not need to stop the scheduler on commit
+            // of course, I do not need to stop the scheduler on commit
             // I need to make access to the data versions data race free
             // so new transactions get data versions from the version map or the store
             this.transactionFacade.log();

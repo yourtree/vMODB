@@ -36,14 +36,14 @@ import java.util.logging.Logger;
  *
  * Scenario 2: Two VMSs and a coordinator.
  * Two transactions:
- * a. Run in the vms 1
- * b. Start at vms 1 and finishes at vms 2
- *
+ * A. Run in the vms 1
+ * B. Start at vms 1 and finishes at vms 2
+ * -
  * That means vms 2 may receive not sequential tid.
  * Keeping track of the previous tid in the scheduler must occur.
- *
+ * -
  * "Unix-based systems declare ports below 1024 as privileged"
- * https://stackoverflow.com/questions/25544849/java-net-bindexception-permission-denied-when-creating-a-serversocket-on-mac-os
+ * <a href="https://stackoverflow.com/questions/25544849/java-net-bindexception-permission-denied-when-creating-a-serversocket-on-mac-os">...</a>
  */
 public class App 
 {

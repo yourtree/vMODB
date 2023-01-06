@@ -1,5 +1,10 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
+/**
+ * While the {@link dk.ku.di.dms.vms.sdk.core.scheduler.tracking.IVmsTransactionTrackingContext}
+ * tracks the underlying tasks of a given transaction, this class tracks the transaction offset (i.e. TID)
+ * to allow the scheduler to progress to other TIDs and batches.
+ */
 class OffsetTracker {
 
     enum OffsetStatus {

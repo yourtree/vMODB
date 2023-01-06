@@ -17,7 +17,6 @@ public class MicroserviceExample {
     @Inbound(values = {"in"})
     @Outbound("out")
     @Transactional(type=R)
-    @Terminal
     public OutEventExample methodExample(EventExample in) {
         System.out.println("I am alive. The scheduler has scheduled me successfully!");
         return in != null ? new OutEventExample(in.id) : null;

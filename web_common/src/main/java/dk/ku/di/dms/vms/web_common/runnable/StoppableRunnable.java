@@ -12,11 +12,11 @@ public abstract class StoppableRunnable implements Runnable {
     }
 
     public boolean isRunning() {
-        return running;
+        return this.running;
     }
 
     public void stop() {
-        running = false;
+        this.running = false;
     }
 
 }

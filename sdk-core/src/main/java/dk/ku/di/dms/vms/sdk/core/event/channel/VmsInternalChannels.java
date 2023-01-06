@@ -18,13 +18,13 @@ import java.util.concurrent.LinkedBlockingQueue;
  *   events triggering data operations and results of operations.
  *
  *   This class is inspired by the Proxy pattern:
- *   https://en.wikipedia.org/wiki/Proxy_pattern
+ *   <a href="https://en.wikipedia.org/wiki/Proxy_pattern">...</a>
  *
  *   TODO to transfer data from a h2 to another, we can modify the script command to
  *          generate the sql query we want and then we transfer the file created
  *
  *   FIXME the concept of a channel (in the context of coroutines) may help in the future
- *         https://kotlinlang.org/docs/channels.html
+ *         <a href="https://kotlinlang.org/docs/channels.html">...</a>
  *
  * Provide communication channel for threads.
  * Must replace the vms internal channels class

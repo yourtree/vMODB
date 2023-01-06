@@ -50,7 +50,6 @@ public class EmbedMetadataLoader {
 
             return VmsMetadataLoader.load(packages, constructor);
 
-
         } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
             logger.warning("Cannot start VMs, error loading metadata: "+e.getMessage());
         }
@@ -60,7 +59,7 @@ public class EmbedMetadataLoader {
     }
 
     public static TransactionFacade loadTransactionFacade(VmsRuntimeMetadata vmsRuntimeMetadata) {
-        return loadTransactionFacade(vmsRuntimeMetadata, new HashSet<>());
+        return loadTransactionFacade(vmsRuntimeMetadata, null);
     }
 
     public static TransactionFacade loadTransactionFacade(
@@ -93,7 +92,7 @@ public class EmbedMetadataLoader {
          */
         for (VmsDataSchema vmsDataSchema : vmsRuntimeMetadata.dataSchema().values()) {
 
-            if(!entitiesToExclude.contains(vmsDataSchema.tableName)) continue;
+            if(entitiesToExclude != null && !entitiesToExclude.contains(vmsDataSchema.tableName)) continue;
 
             final Schema schema = new Schema(vmsDataSchema.columnNames, vmsDataSchema.columnDataTypes,
                     vmsDataSchema.primaryKeyColumns, vmsDataSchema.constraintReferences);

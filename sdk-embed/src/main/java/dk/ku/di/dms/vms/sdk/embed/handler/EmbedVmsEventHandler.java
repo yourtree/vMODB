@@ -201,12 +201,10 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
                     // just send events to appropriate targets
                     for(OutboundEventResult outputEvent : txResult.resultTasks){
-                        if(!outputEvent.terminal()){
-                            bufferEventToVms(outputEvent);
-                        }
+                        this.bufferEventToVms(outputEvent);
                     }
 
-                    moveBatchIfNecessary();
+                    this.moveBatchIfNecessary();
 
                 }
 
@@ -308,6 +306,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
     private void bufferEventToVms(OutboundEventResult outputEvent){
 
+        if(outputEvent.outputQueue() == null) return; // it is a void method that executed, nothing to send
         NetworkNode vms = consumerVms.get(outputEvent.outputQueue());
 
         if(vms == null){
