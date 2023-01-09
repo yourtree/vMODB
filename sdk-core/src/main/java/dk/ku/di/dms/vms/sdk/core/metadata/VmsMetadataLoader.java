@@ -532,7 +532,6 @@ public class VmsMetadataLoader {
         Set<Method> transactionalMethods = reflections.getMethodsAnnotatedWith(Transactional.class);
 
         for (Method method : transactionalMethods) {
-            logger.info("Mapped = " + method.getName());
 
             String className = method.getDeclaringClass().getCanonicalName();
             Object obj = loadedMicroserviceInstances.get(className);

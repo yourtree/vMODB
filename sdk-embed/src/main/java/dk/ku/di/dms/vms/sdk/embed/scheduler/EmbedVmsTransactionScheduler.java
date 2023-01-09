@@ -5,12 +5,13 @@ import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
+import dk.ku.di.dms.vms.sdk.embed.handler.BatchContext;
 
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
 /**
- * For embedded scenario, we can have access to {@link TransactionFacade}
+ * For the embedded scenario, we can have direct access to {@link TransactionFacade}
  */
 public class EmbedVmsTransactionScheduler extends VmsTransactionScheduler {
 
@@ -44,8 +45,6 @@ public class EmbedVmsTransactionScheduler extends VmsTransactionScheduler {
 
             // process batch before sending tasks to execution
             processBatchCommit();
-
-            dispatchReadyTasksForExecution();
 
             processTaskResult();
 

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.sdk.embed.scheduler;
+package dk.ku.di.dms.vms.sdk.embed.handler;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
 

@@ -4,7 +4,6 @@ import dk.ku.di.dms.vms.modb.api.annotations.*;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.SynchronousQueue;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.*;
 

@@ -86,8 +86,8 @@ public final class VmsApplication {
 
             ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-            EmbedVmsEventHandler eventHandler = new EmbedVmsEventHandler(
-                    vmsInternalPubSubService, vmsIdentifier, vmsMetadata, serdes );
+            EmbedVmsEventHandler eventHandler = EmbedVmsEventHandler.build(
+                    vmsInternalPubSubService, vmsIdentifier, null, vmsMetadata, serdes, socketPool );
 
 //            Thread eventHandlerThread = new Thread(eventHandler);
 //            eventHandlerThread.start();

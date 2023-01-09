@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.LinkedTransferQueue;
 
 /**
  *   This class has the objective to decouple completely the

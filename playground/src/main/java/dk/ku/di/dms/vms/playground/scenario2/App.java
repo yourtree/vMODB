@@ -57,7 +57,7 @@ public class App
 
     public static void main( String[] args ) throws IOException, NoSuchFieldException, IllegalAccessException {
 
-        // the reflections is scanning all the packages, not respecting the package passed
+        // the reflections framework is scanning all the packages, not respecting the package passed
         List<String> inToDiscard = Collections.emptyList();
         List<String> outToDiscard = List.of("out3");
         List<String> inToSwap = List.of("out2");

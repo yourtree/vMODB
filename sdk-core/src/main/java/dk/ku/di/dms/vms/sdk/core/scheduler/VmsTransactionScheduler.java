@@ -21,7 +21,11 @@ import java.util.logging.Logger;
  * It consumes events, verifies whether a data operation is ready for execution
  * and dispatches them for execution. If an operation is not ready yet, given the
  * payload dependencies, it is stored in a waiting list until pending events arrive
- * TODO optimization: if not waiting for task result, can block until new input event arrives, to save resources
+ * TODO abort management
+ * must store submitted tasks in case we need to re-execute (iff not PK, FK).
+ *     what could go wrong?
+ *         (i) a constraint not being met, would need to abort
+ *         (ii) lack of machine resources. can we do something in this case?
  */
 public class VmsTransactionScheduler extends StoppableRunnable {
 
@@ -64,6 +68,9 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     private final IVmsSerdesProxy serdes;
 
+    // reuse same collection to avoid many allocations
+    private final Collection<TransactionEvent.Payload> inputEvents;
+
     public VmsTransactionScheduler(ExecutorService readTaskPool,
                                    IVmsInternalChannels vmsChannels,
                                    // (input) queue to transactions map
@@ -88,6 +95,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         this.offsetMap = new HashMap<>();
         this.lastTidToTidMap = new HashMap<>();
 
+        this.inputEvents = new ArrayList<>(50);
     }
 
     /**
@@ -100,11 +108,25 @@ public class VmsTransactionScheduler extends StoppableRunnable {
      * of a great number of concurrent tasks that spend much of their time waiting."
      * Which is not this case... we are not doing I/O to wait
      * But virtual threads can be beneficial to transactional tasks
+     * ---------------------
+     * Tasks are dispatched respecting the single-thread model for RW tasks
+     * In other words, no RW tasks for the same transaction can be scheduled
+     * concurrently. One at a time. Read tasks can be scheduled concurrently.
+     * To avoid interleaving between tasks of the same transaction,
+     * a simple strategy is now adopted:
+     * (i) All read tasks are executed first. Bad for throughput
+     * (ii) Look at the prescribed precedences provided by the user. Also, bad for throughput.
+     * (iii) Concurrency control with abort and restarts in case of deadlock.
+     *          A read transaction may be allowed to see writes installed by different tasks.
+     * (iv) Have assumptions. The user may have different tasks. ACID is only provided if the
+     *      tasks do not see each other writes.
+     *      In other words, no concurrency control for tasks of the same TID.
+     *
      */
     @Override
     public void run() {
 
-        logger.info("Scheduler has started.");
+        logger.info("Scheduler has started");
 
         initializeOffset();
 
@@ -116,9 +138,6 @@ public class VmsTransactionScheduler extends StoppableRunnable {
             // in case we start (or restart the VM service), we need to move the pointer only when it is safe
             // we cannot position the offset to the actual next, because we may not have received the next payload yet
             moveOffsetPointerIfNecessary();
-
-            // let's dispatch all the events ready
-            // dispatchReadyTasksForExecution(); dont need, upon event arrival we dispatch them
 
             // an idea to optimize is to pass a completion handler to the thread
             // the task thread then update the task result list
@@ -147,10 +166,17 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         if(context.isSimple()){
             if(context.asSimple().future == null) return;
             if(!context.asSimple().future.isDone()) return;
-            // TODO optimize
+            // TODO optimize, stop calling as simple
             try {
                 context.asSimple().result = context.asSimple().future.get();
                 context.asSimple().future = null;
+
+                if(context.asSimple().result.status() != VmsTransactionTaskResult.Status.SUCCESS) {
+                    this.currentOffset.signalError();
+                    return;
+                }
+
+                this.currentOffset.signalTaskFinished();
 
                 this.vmsChannels.transactionOutputQueue().add(
                         new VmsTransactionResult(this.currentOffset.tid(), List.of(context.asSimple().result.result())) );
@@ -166,6 +192,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         }
 
         ComplexVmsTransactionTrackingContext txCtx = context.asComplex();
+        if(txCtx.submittedTasks.isEmpty()) return;
         List<Future<VmsTransactionTaskResult>> list = txCtx.submittedTasks;
 
         for(int i = list.size() - 1; i >= 0; --i){
@@ -215,22 +242,25 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     }
 
-    // reuse same collection to avoid many allocations
-    private final Collection<TransactionEvent.Payload> inputEvents = new ArrayList<>(50);
+    /**
+     * If an additional semantic is required for the scheduler (e.g., cannot block because another type
+     * of event apart from transaction input might arrive such as batch),
+     * this method needs to be overridden and the first IF block removed
+     */
+    protected final void checkForNewEvents(){
 
-    protected void checkForNewEvents(){
-
-        if(this.vmsChannels.transactionInputQueue().isEmpty()) return;
+        // a safe condition to block waiting is when the current offset is finished (no result tasks to be processed)
+        // however, cannot block waiting for input queue because of an unknown bug
+        if(this.vmsChannels.transactionInputQueue().isEmpty()){
+            return;
+        }
 
         if(this.vmsChannels.transactionInputQueue().size() == 1) {
-
-            TransactionEvent.Payload transactionalEvent; // take();
             try {
-                transactionalEvent = this.vmsChannels.transactionInputQueue().take();
+                TransactionEvent.Payload transactionalEvent = this.vmsChannels.transactionInputQueue().take();
                 this.processNewEvent(transactionalEvent);
-            } catch (InterruptedException ignored) {}
+            } catch (InterruptedException ignored) { }
             return;
-
         }
 
         this.vmsChannels.transactionInputQueue().drainTo(this.inputEvents);
@@ -303,20 +333,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
             // fast path: in case only one (event) payload
             if (task.isReady()) {
-                if(txContext.isSimple()){
-                    txContext.asSimple().task = task;
-                    dispatchReadySimpleTask(txContext.asSimple());
-                } else {
-                    ComplexVmsTransactionTrackingContext complexCtx = txContext.asComplex();
-                    task.setIdentifier(complexCtx.readAndIncrementNextTaskIdentifier());
-                    if (task.transactionType() == TransactionTypeEnum.R) {
-                        complexCtx.readTasks.add(task);
-                    } else {
-                        // they are submitted FIFO
-                        complexCtx.writeTasks.add(task);
-                    }
-                    dispatchReadyComplexTask(txContext);
-                }
+                dispatchReadyTask(task, txContext);
             } else {
                 // unknown transaction, then must create the entry
                 var list = new ArrayList<VmsTransactionTask>(transactionMetadata.numTasksWithMoreThanOneInput);
@@ -324,6 +341,23 @@ public class VmsTransactionScheduler extends StoppableRunnable {
                 list.add( task );
             }
 
+        }
+    }
+
+    private void dispatchReadyTask(VmsTransactionTask task, IVmsTransactionTrackingContext txContext) {
+        if(txContext.isSimple()){
+            txContext.asSimple().task = task;
+            dispatchReadySimpleTask(txContext.asSimple());
+        } else {
+            ComplexVmsTransactionTrackingContext complexCtx = txContext.asComplex();
+            task.setIdentifier(complexCtx.readAndIncrementNextTaskIdentifier());
+            if (task.transactionType() == TransactionTypeEnum.R) {
+                complexCtx.readTasks.add(task);
+            } else {
+                // they are submitted FIFO
+                complexCtx.writeTasks.add(task);
+            }
+            dispatchReadyComplexTask(txContext);
         }
     }
 
@@ -372,24 +406,9 @@ public class VmsTransactionScheduler extends StoppableRunnable {
             // check if the input is completed
             if(task.isReady()){
                 notReadyTasks.remove(i);
-
                 // get transaction context
                 IVmsTransactionTrackingContext txContext = this.transactionContextMap.get( task.tid() );
-
-                if(txContext.isSimple()){
-                    txContext.asSimple().task = task;
-                    dispatchReadySimpleTask(txContext.asSimple());
-                } else {
-                    ComplexVmsTransactionTrackingContext complexCtx = txContext.asComplex();
-                    task.setIdentifier(complexCtx.readAndIncrementNextTaskIdentifier());
-                    if (task.transactionType() == TransactionTypeEnum.R) {
-                        complexCtx.readTasks.add(task);
-                    } else {
-                        // they are submitted FIFO
-                        complexCtx.writeTasks.add(task);
-                    }
-                    dispatchReadyComplexTask(txContext);
-                }
+                dispatchReadyTask(task, txContext);
             } else {
                 // known transaction, can just get the entry
                 var list = this.waitingTasksPerTidMap.get(task.tid());
@@ -401,9 +420,9 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         // why doing this? in the loop above it is checked whether all input events have been delivered to the task
         // if, so, the task is removed from the waiting list
         // thus, if the waiting list is empty, the entry can be removed from the map
-        if(notReadyTasks.isEmpty()){
-            this.waitingTasksPerTidMap.remove( transactionalEvent.tid() );
-        }
+//        if(notReadyTasks.isEmpty()){
+//            this.waitingTasksPerTidMap.remove( transactionalEvent.tid() );
+//        }
     }
 
     private void dispatchReadyReadTaskList(ComplexVmsTransactionTrackingContext txCtx){
@@ -426,42 +445,6 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         }
     }
 
-    /**
-     * Tasks are dispatched respecting the single-thread model for RW tasks
-     * In other words, no RW tasks for the same transaction can be scheduled
-     * concurrently. One at a time. Read tasks can be scheduled concurrently.
-     * To avoid interleaving between tasks of the same transaction,
-     * a simple strategy is now adopted:
-     * (i) All read tasks are executed first. Bad for throughput
-     * (ii) Look at the prescribed precedences provided by the user. Also, bad for throughput.
-     * (iii) Concurrency control with abort and restarts in case of deadlock.
-     *          A read transaction may be allowed to see writes installed by different tasks.
-     * (iv) Have assumptions. The user may have different tasks. ACID is only provided if the
-     *      tasks do not see each other writes.
-     *      In other words, no concurrency control for tasks of the same TID.
-     *
-     */
-    protected void dispatchReadyTasksForExecution() {
-
-        // do we have ready tasks for the current TID?
-        IVmsTransactionTrackingContext context = this.transactionContextMap.get( this.currentOffset.tid() );
-
-        if( context == null ) return;
-
-        if( context.isSimple() && context.asSimple().task != null ){
-            dispatchReadySimpleTask( context.asSimple() );
-            return;
-        }
-
-        dispatchReadyComplexTask(context);
-
-        // must store submitted tasks in case we need to re-execute (iff not PK, FK).
-        //          what could go wrong?
-        //           (i) a constraint not being met, would need to abort
-        //           (ii) lack of machine resources. can we do something in this case?
-
-    }
-
     private void dispatchReadyComplexTask(IVmsTransactionTrackingContext context) {
         ComplexVmsTransactionTrackingContext txCtx = context.asComplex();
         int numRead = txCtx.readTasks.size();
@@ -473,14 +456,15 @@ public class VmsTransactionScheduler extends StoppableRunnable {
     }
 
     /**
-     * Assumption: we always have at least one offset in the list. Of course, I could do this by design but the code guarantee that
+     * Assumption: we always have at least one offset in the list. Of course,
+     * I could do this by design but the code guarantees that
      * Is it safe to move the offset pointer? this method takes care of that
      */
     protected void moveOffsetPointerIfNecessary(){
 
         // if next is the right one ---> the concept of "next" may change according to recovery from failures and aborts
         if(this.currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED_SUCCESSFULLY
-                && this.lastTidToTidMap.get( currentOffset.tid() ) != null ){
+                && this.lastTidToTidMap.get( this.currentOffset.tid() ) != null ){
 
             var nextTid = this.offsetMap.get( this.lastTidToTidMap.get( this.currentOffset.tid() ) );
 
@@ -488,10 +472,12 @@ public class VmsTransactionScheduler extends StoppableRunnable {
             if(nextTid == null) return;
 
             // should be here to remove the tid 0. the tid 0 never receives a result task
-            this.offsetMap.remove( currentOffset.tid() );
+            this.offsetMap.remove( this.currentOffset.tid() );
 
             // don't need anymore
-            this.lastTidToTidMap.remove( currentOffset.tid() );
+            this.lastTidToTidMap.remove( this.currentOffset.tid() );
+
+            this.waitingTasksPerTidMap.remove( this.currentOffset.tid() );
 
             this.currentOffset = nextTid;
 

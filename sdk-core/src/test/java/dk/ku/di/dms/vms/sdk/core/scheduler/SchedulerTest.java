@@ -28,7 +28,7 @@ import static java.lang.Thread.sleep;
  * - failure
  * - simple and complex tasks
  * - submission of concurrent tasks
- *
+ * -
  * must plug a dumb storage?
  */
 public class SchedulerTest {
@@ -64,14 +64,13 @@ public class SchedulerTest {
         // read from output queue and insert them all into scheduler again
 
         VmsTransactionResult out = vmsInternalChannels.transactionOutputQueue().take();
-        // VmsTransactionResult out2 = vmsInternalChannels.transactionOutputQueue().take();
 
         // 1 - check if output queue contains two events
         // 2 - insert these two events in the input queue of the scheduler
 
         scheduler.stop(); // will stop the thread
 
-        // tricky to simulate we have a scheduler in other microservice.... we need a new scheduler becauseof the tid
+        // tricky to simulate we have a scheduler in other microservice.... we need a new scheduler because of the tid
         // could reset the tid to 0, but would need to synchronize to avoid exceptions
         scheduler = new VmsTransactionScheduler(
                 readTaskPool, vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(),
