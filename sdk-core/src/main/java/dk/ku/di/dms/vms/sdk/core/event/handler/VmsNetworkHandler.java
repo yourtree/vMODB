@@ -1,9 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.event.handler;
 
-import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.web_common.network.NetworkRunnable;
-import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
 import java.nio.ByteBuffer;
 

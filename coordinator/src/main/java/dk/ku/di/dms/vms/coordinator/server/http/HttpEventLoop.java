@@ -23,7 +23,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * Based on micro-http project: https://github.com/ebarlas/microhttp
  * Removed the scheduler, task queue, and logging.
  *
- * https://josephmate.github.io/2022-04-14-max-connections/
+ * <a href="https://josephmate.github.io/2022-04-14-max-connections/">...</a>
  *
  *  Could just use the default java http server (with code for TLS)
  * {@link com.sun.net.httpserver.HttpServer}

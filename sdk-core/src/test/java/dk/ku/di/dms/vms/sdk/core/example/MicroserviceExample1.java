@@ -24,6 +24,7 @@ public class MicroserviceExample1 {
     public OutputEventExample1 methodExample1(InputEventExample1 in) {
         count1++;
         sharedCount++;
+        System.out.println("I am microservice 1: outputting out1 ");
         return new OutputEventExample1(count1);
     }
 
@@ -33,6 +34,7 @@ public class MicroserviceExample1 {
     public OutputEventExample2 methodExample2(InputEventExample1 in) {
         count2++;
         sharedCount++;
+        System.out.println("I am microservice 1: outputting out2 ");
         return new OutputEventExample2(count2);
     }
 

@@ -23,7 +23,7 @@ public record VmsTransactionSignature (
     // the method to run, i.e., the sub-transaction to be called
     Method method,
     // the type of the transaction, R, W, RW
-    TransactionTypeEnum type,
+    TransactionTypeEnum transactionType,
     // the identification of the input queues. i.e., these events must have arrived in order to execute the method
     String[] inputQueues,
     String outputQueue

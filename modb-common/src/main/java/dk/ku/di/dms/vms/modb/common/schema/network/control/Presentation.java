@@ -2,17 +2,15 @@ package dk.ku.di.dms.vms.modb.common.schema.network.control;
 
 import dk.ku.di.dms.vms.modb.common.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
-import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -98,8 +96,7 @@ public final class Presentation {
 
     }
 
-    // to be read by a VMS
-    public static ServerIdentifier readServer(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){
+    public static ServerIdentifier readServer(ByteBuffer buffer){
 
         long offset = buffer.getLong();
 
@@ -122,62 +119,42 @@ public final class Presentation {
 
     }
 
-    // to be read by a server (leader or follower)
-    public static ServerIdentifier readServer(ByteBuffer buffer){
-
-        long offset = buffer.getLong();
-
-        int port = buffer.getInt();
-
-        int size = buffer.getInt();
-
-        String host = new String( buffer.array(), serverHeader, size, StandardCharsets.UTF_8 );
-
-        return new ServerIdentifier( host, port, offset );
-
-    }
-
     public static void writeVms(ByteBuffer buffer,
-                                VmsIdentifier vms) {
-
-        buffer.put(Constants.PRESENTATION);
-        buffer.put(VMS_TYPE);
-
-        byte[] name = vms.getIdentifier().getBytes(StandardCharsets.UTF_8);
-        buffer.putInt(name.length);
-        buffer.put(name);
-
-        buffer.putLong(vms.lastTid);
-        buffer.putLong(vms.lastBatch);
-
-        buffer.putInt(vms.port);
-
-        byte[] host = vms.host.getBytes(StandardCharsets.UTF_8);
-        buffer.putInt(host.length);
-        buffer.put(host);
-    }
-
-    public static void writeVms(ByteBuffer buffer,
-                                VmsIdentifier vms,
-                                String dataSchema,
-                                String inputEventSchema,
-                                String outputEventSchema){
+                                NetworkNode node,
+                                String vmsIdentifier,
+                                long lastTid,
+                                long lastBatch) {
 
         buffer.put( Constants.PRESENTATION );
         buffer.put( VMS_TYPE );
 
-        byte[] name = vms.getIdentifier().getBytes(StandardCharsets.UTF_8);
+        byte[] name = vmsIdentifier.getBytes(StandardCharsets.UTF_8);
         buffer.putInt(name.length );
         buffer.put(name);
 
-        buffer.putLong( vms.lastTid );
-        buffer.putLong( vms.lastBatch );
+        buffer.putLong( lastTid );
+        buffer.putLong( lastBatch );
 
-        buffer.putInt( vms.port );
+        buffer.putInt( node.port );
 
-        byte[] host = vms.host.getBytes(StandardCharsets.UTF_8);
+        byte[] host = node.host.getBytes(StandardCharsets.UTF_8);
         buffer.putInt( host.length );
         buffer.put( host );
+    }
+
+    /**
+     * Method is agnostic to the vms class
+     */
+    public static void writeVms(ByteBuffer buffer,
+                                NetworkNode node,
+                                String vmsIdentifier,
+                                long lastTid,
+                                long lastBatch,
+                                String dataSchema,
+                                String inputEventSchema,
+                                String outputEventSchema){
+
+        writeVms(buffer,node,vmsIdentifier,lastTid,lastBatch);
 
         byte[] dataSchemaBytes = dataSchema.getBytes(StandardCharsets.UTF_8);
         buffer.putInt( dataSchemaBytes.length );

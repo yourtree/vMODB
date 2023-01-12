@@ -1,9 +1,10 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
-import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitResponse;
@@ -15,6 +16,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
+import dk.ku.di.dms.vms.sdk.core.scheduler.ISchedulerHandler;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.ingest.BulkDataLoader;
@@ -27,13 +29,8 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Semaphore;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.logging.Level;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
@@ -54,6 +51,10 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  */
 public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
+    private static final int DEFAULT_DELAY_FOR_BATCH_SEND = 5000;
+
+    private final ExecutorService executorService;
+
     /** SERVER SOCKET **/
     // other VMSs may want to connect in order to send events
     private final AsynchronousServerSocketChannel serverSocket;
@@ -68,13 +69,22 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     private final VmsRuntimeMetadata vmsMetadata;
 
     /** EXTERNAL VMSs **/
-    // TODO what if a consumer has more than an event to receive?
+    // TODO the identification of a consumer today occurs via
+    //  a 1:1 mapping between an output event and the vms
+    //  what if a consumer has more than an event to receive?
+    //      two entries, overhead in the message
     //  what if two consumers receive the same event?
-    //  the value must be a set, not a single network node
-    private final Map<String, NetworkNode> consumerVms; // sent by coordinator
-    private final Map<Integer, ConnectionMetadata> vmsConnectionMetadataMap;
+    //      no way to map.
+    //  thus, the value must be a set, not a single network node
+    private final Map<String, ConsumerVms> consumerVms; // sent by coordinator
 
-    /** SERIALIZATION **/
+    // built while connecting to the consumers
+    private final Map<Integer, ConnectionMetadata> consumerConnectionMetadataMap;
+
+    // built dynamically as new producers request connection
+    private final Map<Integer, ConnectionMetadata> producerConnectionMetadataMap;
+
+    /** SERIALIZATION & DESERIALIZATION **/
     private final IVmsSerdesProxy serdesProxy;
 
     /** COORDINATOR **/
@@ -87,10 +97,11 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     // metadata about all non-committed batches. when a batch commit finishes, it is removed from this map
     private final Map<Long, BatchContext> batchContextMap;
 
-    // startup config. can be record...
+    public final ISchedulerHandler schedulerHandler;
+
     public static EmbedVmsEventHandler build(VmsEmbedInternalChannels vmsInternalChannels, // for communicating with other components
                                              VmsIdentifier me, // to identify which vms this is
-                                             Map<String, NetworkNode> consumerVms,
+                                             Map<String, ConsumerVms> consumerVms,
                                              VmsRuntimeMetadata vmsMetadata, // metadata about this vms
                                              IVmsSerdesProxy serdesProxy, // ser/des of objects
                                              ExecutorService executorService) throws IOException // for recurrent and continuous tasks
@@ -100,37 +111,39 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             SocketAddress address = new InetSocketAddress(me.host, me.port);
             serverSocket.bind(address);
             // once up, can connect to consumers
-            return new EmbedVmsEventHandler(me,vmsMetadata,consumerVms,vmsInternalChannels,serdesProxy,serverSocket,group);
-        } catch (IOException e){
-            logger.warning("Error on constructing event handler: "+e.getMessage());
-            return null;
+            return new EmbedVmsEventHandler(me,vmsMetadata,consumerVms,vmsInternalChannels,serdesProxy,serverSocket,group,executorService);
         }
-
     }
 
     private EmbedVmsEventHandler(VmsIdentifier me,
                                  VmsRuntimeMetadata vmsMetadata,
-                                 Map<String, NetworkNode> consumerVms,
+                                 Map<String, ConsumerVms> consumerVms,
                                  VmsEmbedInternalChannels vmsInternalChannels,
                                  IVmsSerdesProxy serdesProxy,
                                  AsynchronousServerSocketChannel serverSocket,
-                                 AsynchronousChannelGroup group) {
+                                 AsynchronousChannelGroup group,
+                                 ExecutorService executorService) {
         super();
         this.serverSocket = serverSocket;
         this.group = group;
+
+        this.executorService = executorService;
 
         this.vmsInternalChannels = vmsInternalChannels;
         this.me = me;
 
         this.vmsMetadata = vmsMetadata;
-        this.vmsConnectionMetadataMap = new ConcurrentHashMap<>(10);
         this.consumerVms = Objects.requireNonNullElseGet(consumerVms, ConcurrentHashMap::new);
+        this.consumerConnectionMetadataMap = new ConcurrentHashMap<>(10);
+        this.producerConnectionMetadataMap = new ConcurrentHashMap<>(10);
 
         this.serdesProxy = serdesProxy;
 
         this.currentBatch = new BatchContext(me.lastBatch, me.lastTid);
         this.currentBatch.setStatus(BatchContext.Status.COMPLETION_INFORMED);
         this.batchContextMap = new ConcurrentHashMap<>(3);
+
+        this.schedulerHandler = new EmbedSchedulerHandler();
     }
 
     /**
@@ -149,7 +162,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
         if(!this.consumerVms.isEmpty()){
             // then it is received from constructor, and we must initially contact them
-            this.connectToConsumerVMSs();
+            this.connectToConsumerVMSs(this.consumerVms);
         }
 
         // setup accept since we need to accept connections from the coordinator and other VMSs
@@ -195,7 +208,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
                     // just send events to appropriate targets
                     for(OutboundEventResult outputEvent : txResult.resultTasks){
-                        this.bufferEventToVms(outputEvent);
+                        this.processOutputEvent(outputEvent);
                     }
 
                     this.moveBatchIfNecessary();
@@ -301,52 +314,164 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         }
     }
 
-    private void bufferEventToVms(OutboundEventResult outputEvent){
+    private class EmbedSchedulerHandler implements ISchedulerHandler {
+
+        @Override
+        public Future<?> run() {
+            BatchContext currentBatch = vmsInternalChannels.batchCommitRequestQueue().remove();
+
+            currentBatch.setStatus(BatchContext.Status.LOGGING);
+
+            return executorService.submit(() -> {
+                // of course, I do not need to stop the scheduler on commit
+                // I need to make access to the data versions data race free
+                // so new transactions get data versions from the version map or the store
+                // FIXME find later how to call transaction facade here: transactionFacade.log();
+
+                currentBatch.setStatus(BatchContext.Status.COMMITTED);
+            });
+
+        }
+
+        @Override
+        public boolean conditionHolds() {
+            return !vmsInternalChannels.batchCommitRequestQueue().isEmpty();
+        }
+    }
+
+    /**
+     *
+     * @param outputEvent the event to be sent to the respective consumer vms
+     */
+    private void processOutputEvent(OutboundEventResult outputEvent){
 
         if(outputEvent.outputQueue() == null) return; // it is a void method that executed, nothing to send
-        NetworkNode vms = this.consumerVms.get(outputEvent.outputQueue());
+        ConsumerVms consumerVms = this.consumerVms.get(outputEvent.outputQueue());
 
-        if(vms == null){
+        if(consumerVms == null){
             logger.warning(
                     "An output event (queue: "+outputEvent.outputQueue()+") has no target virtual microservice.");
             return;
         }
 
-        logger.info("An output event (queue: "+outputEvent.outputQueue()+") will be sent to vms: "+vms);
+        logger.info("An output event (queue: "+outputEvent.outputQueue()+") will be sent to vms: "+consumerVms);
 
-        ConnectionMetadata connectionMetadata = vmsConnectionMetadataMap.get(vms.hashCode());
+        ConnectionMetadata connectionMetadata = this.consumerConnectionMetadataMap.get(consumerVms.hashCode());
 
-        connectionMetadata.writeLock.acquireUninterruptibly();
+        Class<?> clazz = this.vmsMetadata.queueToEventMap().get(outputEvent.outputQueue());
+        String objStr = this.serdesProxy.serialize(outputEvent.output(), clazz);
 
-        Class<?> clazz = vmsMetadata.queueToEventMap().get(outputEvent.outputQueue());
+        if(connectionMetadata.timer == null){
+            // set up event sender timer task
+            connectionMetadata.timer = new Timer ("event-sender-timer", true);
+            connectionMetadata.timer.schedule(new EventSenderTask(consumerVms, connectionMetadata), System.currentTimeMillis() + DEFAULT_DELAY_FOR_BATCH_SEND );
+        }
 
-        String objStr = serdesProxy.serialize(outputEvent.output(), clazz);
-
-        TransactionEvent.write( connectionMetadata.writeBuffer, outputEvent.tid(), outputEvent.lastTid(), outputEvent.batch(), outputEvent.outputQueue(), objStr );
-
-        // TODO must be sent in a batch appropriately
-
-        connectionMetadata.writeBuffer.flip();
-
-        connectionMetadata.channel.write(connectionMetadata.writeBuffer, connectionMetadata,
-                new CompletionHandler<>() {
-
-                    @Override
-                    public void completed(Integer result, ConnectionMetadata connectionMetadata) {
-                        connectionMetadata.writeBuffer.clear();
-                        connectionMetadata.writeLock.release();
-                    }
-
-                    @Override
-                    public void failed(Throwable exc, ConnectionMetadata connectionMetadata) {
-                        connectionMetadata.writeBuffer.clear();
-                        connectionMetadata.writeLock.release();
-                    }
-                }
-        );
+        // concurrency issue if add to a list
+        BlockingQueue<TransactionEvent.Payload> queue = consumerVms.transactionEventsPerBatch.computeIfAbsent(outputEvent.batch(), (x) -> new LinkedBlockingDeque<>());
+        queue.add( TransactionEvent.of(outputEvent.tid(), outputEvent.lastTid(), outputEvent.batch(), outputEvent.outputQueue(), objStr ) );
 
     }
 
+    /**
+     * This thread encapsulates the batch of events sending task
+     * that should occur periodically. Once set up, it schedules itself
+     * after each run, thus avoiding duplicate runs of the same task.
+     * -
+     * I could get the connection from the vms...
+     * But in the future, one output event will no longer map to a single vms
+     * So it is better to make the event sender task complete enough
+     * FIXME what happens if the connection fails? then put the list of events
+     *  in the batch to resend or return to the original location. let the
+     *  main loop schedule the timer again. set the network node to off
+     */
+    private static final class EventSenderTask extends TimerTask {
+
+        private final ConsumerVms consumerVms;
+        private final ConnectionMetadata connectionMetadata;
+
+        public EventSenderTask(ConsumerVms consumerVms, ConnectionMetadata connectionMetadata){
+            this.consumerVms = consumerVms;
+            this.connectionMetadata = connectionMetadata;
+        }
+
+        private int assembleBatchPayload(int lastIndex, List<TransactionEvent.Payload> events){
+            int bufferSize = this.connectionMetadata.writeBuffer.capacity();
+
+            this.connectionMetadata.writeBuffer.clear();
+            this.connectionMetadata.writeBuffer.put(BATCH_OF_EVENTS);
+            this.connectionMetadata.writeBuffer.position(5);
+
+            // batch them all in the buffer,
+            // until buffer capacity is reached or elements are all sent
+            int count = 0;
+            // int idx = 0;
+            int remainingBytes = bufferSize - 1 - Integer.BYTES;
+            int idx = lastIndex;
+
+            while(idx > 0 && remainingBytes > events.get(idx).totalSize()){
+                TransactionEvent.write( connectionMetadata.writeBuffer, events.get(idx) );
+                remainingBytes = remainingBytes - events.get(idx).totalSize();
+                idx--;
+                count++;
+            }
+
+            connectionMetadata.writeBuffer.mark();
+            connectionMetadata.writeBuffer.putInt(1, count);
+            connectionMetadata.writeBuffer.reset();
+
+            connectionMetadata.writeBuffer.flip();
+
+            return idx;
+        }
+
+        @Override
+        public void run() {
+
+            // find the smallest batch. to avoid synchronizing with main thread
+            long batchToSend = Long.MAX_VALUE;
+            for(long batchId  : this.consumerVms.transactionEventsPerBatch.keySet()){
+                if(batchId < batchToSend) batchToSend = batchId;
+            }
+
+            // there will always be a batch if this point of code is run
+            List<TransactionEvent.Payload> events = new ArrayList<>(this.consumerVms.transactionEventsPerBatch.get(batchToSend).size());
+            this.consumerVms.transactionEventsPerBatch.get(batchToSend).drainTo(events);
+
+            int remaining = events.size() - 1;
+
+            while(remaining > 0){
+                remaining = this.assembleBatchPayload( remaining, events);
+                try {
+                    this.connectionMetadata.channel.write(this.connectionMetadata.writeBuffer).get();
+                } catch (InterruptedException | ExecutionException e) {
+                    // return non-processed events to original location or what?
+                    if(!this.connectionMetadata.channel.isOpen()){
+                        this.consumerVms.off();
+                    }
+                    break; // force exit loop
+                }
+            }
+
+            // schedule again the timer
+            if(this.consumerVms.isActive()) {
+                this.connectionMetadata.timer.schedule(this, System.currentTimeMillis() + DEFAULT_DELAY_FOR_BATCH_SEND);
+            }
+
+        }
+
+    }
+
+    /**
+     * In the future, we possibly need to send events to the leader.
+     * But to be honest, it is just a matter of the leader sending
+     * itself as a consumer. That would incur in another connection
+     * but may be worthwhile since the purposes could be different...
+     * Otherwise, we can make this class recognize whether it is the
+     * leader and then just reuse the connection. The only thing is that
+     * would require lock if the batch procedures and the event sending to
+     * leader are not synchronized. More to come...
+     */
     private void sendEventToLeader(OutboundEventResult outputEvent) throws InterruptedException {
         this.leaderConnectionMetadata.writeLock.acquire();
         this.leaderConnectionMetadata.writeBuffer.clear();
@@ -416,14 +541,18 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                         channel,
                         new Semaphore(1));
 
-                vmsConnectionMetadataMap.put(node.hashCode(), connMetadata);
+                if(producerConnectionMetadataMap.containsKey(node.hashCode())){
+                    logger.warning("The node "+node.host+" "+node.port+" already contains a connection as a producer");
+                }
+
+                consumerConnectionMetadataMap.put(node.hashCode(), connMetadata);
 
                 String dataSchema = serdesProxy.serializeDataSchema(me.dataSchema);
                 String inputEventSchema = serdesProxy.serializeEventSchema(me.inputEventSchema);
                 String outputEventSchema = serdesProxy.serializeEventSchema(me.outputEventSchema);
 
                 attachment.buffer.clear();
-                Presentation.writeVms( attachment.buffer, me, dataSchema, inputEventSchema, outputEventSchema );
+                Presentation.writeVms( attachment.buffer, me, me.vmsIdentifier, me.lastTid, me.lastBatch, dataSchema, inputEventSchema, outputEventSchema );
                 attachment.buffer.flip();
 
                 attachment.channel.write(attachment.buffer, attachment, new CompletionHandler<>() {
@@ -460,9 +589,9 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
      * The leader will let each VMS aware of their dependencies,
      * to which VMSs they have to connect to
      */
-    private void connectToConsumerVMSs() {
+    private void connectToConsumerVMSs(Map<String, ConsumerVms> consumerSet) {
 
-        for(NetworkNode vms : this.consumerVms.values()) {
+        for(NetworkNode vms : consumerSet.values()) {
 
             try {
 
@@ -509,7 +638,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                         vmsInternalChannels.transactionInputQueue().add(transactionEventPayload);
                     }
 
-                } case ( BATCH_COMMIT_INFO) -> {
+                } case (BATCH_COMMIT_INFO) -> {
 
                     // received from a vms
                     // TODO finish
@@ -520,7 +649,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             }
 
 //            else if(message == CONSUMER_SET){
-//                // TODO read consumer set and set read handler again
+//                // TODO read consumer set and set read handler again. why here, isn't the leader responsible for that?
 //                ConsumerSet.read( connectionMetadata.readBuffer, serdesProxy );
 //            }
 
@@ -533,7 +662,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         public void failed(Throwable exc, ConnectionMetadata connectionMetadata) {
             if (connectionMetadata.channel.isOpen()){
                 connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
-            }
+            } // else no nothing. upon a new connection this metadata can be recycled
         }
     }
 
@@ -594,7 +723,12 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                             new Semaphore(1)
                     );
 
-                    vmsConnectionMetadataMap.put(producerVms.hashCode(), connMetadata);
+                    // what if a vms is both producer to and consumer from this vms?
+                    if(consumerConnectionMetadataMap.containsKey(producerVms.hashCode())){
+                        logger.warning("The node "+producerVms.host+" "+producerVms.port+" already contains a connection as a consumer");
+                    }
+
+                    producerConnectionMetadataMap.put(producerVms.hashCode(), connMetadata);
 
                     // setup event receiving for this vms
                     this.channel.read(this.buffer, connMetadata, new VmsReadCompletionHandler());
@@ -738,7 +872,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             boolean includeMetadata = this.buffer.get() == YES;
 
             // leader has disconnected, or new leader
-            leader = Presentation.readServer(this.buffer, serdesProxy);
+            leader = Presentation.readServer(this.buffer);
 
             // only connects to all VMSs on first leader connection
 
@@ -770,10 +904,10 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 String vmsInputEventSchemaStr = serdesProxy.serializeEventSchema(me.inputEventSchema);
                 String vmsOutputEventSchemaStr = serdesProxy.serializeEventSchema(me.outputEventSchema);
 
-                Presentation.writeVms(this.buffer, me, vmsDataSchemaStr, vmsInputEventSchemaStr, vmsOutputEventSchemaStr);
+                Presentation.writeVms(this.buffer, me, me.vmsIdentifier, me.lastTid, me.lastBatch, vmsDataSchemaStr, vmsInputEventSchemaStr, vmsOutputEventSchemaStr);
                 // the protocol requires the leader to wait for the metadata in order to start sending messages
             } else {
-                Presentation.writeVms(this.buffer, me);
+                Presentation.writeVms(this.buffer, me, me.vmsIdentifier, me.lastTid, me.lastBatch);
             }
 
             this.buffer.flip();
@@ -847,14 +981,11 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
                 }
                 case (EVENT) -> {
-
                     TransactionEvent.Payload payload = TransactionEvent.read(connectionMetadata.readBuffer);
-
                     // send to scheduler.... drop if the event cannot be processed (not an input event in this vms)
                     if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
                         vmsInternalChannels.transactionInputQueue().add(payload);
                     }
-
                 }
                 case (TX_ABORT) -> {
                     TransactionAbort.Payload transactionAbortReq = TransactionAbort.read(connectionMetadata.readBuffer);
@@ -868,11 +999,12 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 case (CONSUMER_SET) -> {
 
                     // read
-                    Map<String, NetworkNode> receivedConsumerVms = ConsumerSet.read(connectionMetadata.readBuffer, serdesProxy);
+                    Map<String, ConsumerVms> receivedConsumerVms = ConsumerSet.read(connectionMetadata.readBuffer, serdesProxy);
 
                     if (receivedConsumerVms != null) {
                         consumerVms.putAll(receivedConsumerVms);
-                        connectToConsumerVMSs();
+                        // process only the new ones
+                        connectToConsumerVMSs(receivedConsumerVms);
                     }
 
                 }

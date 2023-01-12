@@ -21,10 +21,10 @@ public class ComplexVmsTransactionTrackingContext implements IVmsTransactionTrac
 
     private int nextTaskIdentifier;
 
-    // R
+    // the R tasks ready for execution
     public final List<VmsTransactionTask> readTasks;
 
-    // RW, W
+    // the RW and W ready for execution
     public final Queue<VmsTransactionTask> writeTasks;
 
     public final List<Future<VmsTransactionTaskResult>> submittedTasks;

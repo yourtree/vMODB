@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.common.schema.network;
+package dk.ku.di.dms.vms.modb.common.schema.network.meta;
 
 import java.util.Objects;
 

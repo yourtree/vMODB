@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.common.schema.network;
+package dk.ku.di.dms.vms.modb.common.schema.network.meta;
 
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
@@ -13,10 +13,12 @@ import java.util.Map;
  * The identification of a connecting DBMS daemon
  * ideally one vms per dbms proxy, but in the future may be many.
  * but who knows... the sdk are already sending a map...
- *
  * I'm relying on the fact that VMSs do not switch name, host, and port
+ * This class is supposed to be used by the coordinator to find about
+ * producers and consumers and then form and send the consumer set
+ * to each virtual microservice
  */
-public class VmsIdentifier extends NetworkNode {
+public class VmsIdentifier extends ConsumerVms {
 
     // identifier is the vms name
     public final String vmsIdentifier;
@@ -36,14 +38,6 @@ public class VmsIdentifier extends NetworkNode {
 
     public final Map<String, VmsEventSchema> outputEventSchema;
 
-    /** Attributes below do not form an identification of the VMS, but rather
-     * make it easier to manage metadata about each
-     */
-
-    public final Map<Long, List<TransactionEvent.Payload>> transactionEventsPerBatch;
-
-    public final List<TransactionEvent.Payload> pendingWrites;
-
     public VmsIdentifier(String host, int port, String vmsIdentifier, long lastTid, long lastBatch,
                          Map<String, VmsDataSchema> dataSchema,
                          Map<String, VmsEventSchema> inputEventSchema,
@@ -55,20 +49,14 @@ public class VmsIdentifier extends NetworkNode {
         this.dataSchema = dataSchema;
         this.inputEventSchema = inputEventSchema;
         this.outputEventSchema = outputEventSchema;
-        this.pendingWrites = new ArrayList<>(10);
-        this.transactionEventsPerBatch = new HashMap<>();
-    }
-
-    public String getIdentifier(){
-        return vmsIdentifier;
     }
 
     public long getLastTid(){
-        return lastTid;
+        return this.lastTid;
     }
 
-    public NetworkNode asNetworkNode(){
-        return new NetworkNode(this.host, this.port);
+    public String getIdentifier(){
+        return this.vmsIdentifier;
     }
 
 }

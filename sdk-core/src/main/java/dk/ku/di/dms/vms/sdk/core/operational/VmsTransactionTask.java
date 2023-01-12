@@ -54,7 +54,7 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
     }
 
     public TransactionTypeEnum transactionType(){
-        return this.signature.type();
+        return this.signature.transactionType();
     }
 
     public long tid() {
@@ -73,7 +73,7 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
     public VmsTransactionTaskResult call() {
 
         // register thread in the transaction facade
-        TransactionMetadata.registerTransactionStart(this.tid, this.identifier, this.signature.type() == TransactionTypeEnum.R);
+        TransactionMetadata.registerTransactionStart(this.tid, this.identifier, this.signature.transactionType() == TransactionTypeEnum.R);
 
         try {
 
@@ -86,7 +86,7 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
 
             // TODO we need to erase the transactions that are not seen by any more new transactions
             // need to move
-            if(signature.type() != TransactionTypeEnum.R){
+            if(signature.transactionType() != TransactionTypeEnum.R){
                 // work like a commit, but not. it serves to set the visibility of future tasks
                 TransactionMetadata.registerWriteTransactionFinish();
             }

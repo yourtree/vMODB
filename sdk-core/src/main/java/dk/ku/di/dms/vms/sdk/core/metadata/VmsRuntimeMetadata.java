@@ -6,9 +6,7 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 
-import javax.xml.catalog.Catalog;
 import java.lang.reflect.Type;
-import java.util.List;
 import java.util.Map;
 
 /**

@@ -645,7 +645,7 @@ public class VmsMetadataLoader {
                     transactionMetadata.numTasksWithMoreThanOneInput++;
                 }
 
-                switch (vmsTransactionSignature.type()){
+                switch (vmsTransactionSignature.transactionType()){
                     case RW -> transactionMetadata.numReadWriteTasks++;
                     case R -> transactionMetadata.numReadTasks++;
                     case W -> transactionMetadata.numWriteTasks++;

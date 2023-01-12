@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.sdk.core.event.handler;
 
 
-import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;

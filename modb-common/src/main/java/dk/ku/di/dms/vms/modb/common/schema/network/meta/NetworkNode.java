@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.common.schema.network;
+package dk.ku.di.dms.vms.modb.common.schema.network.meta;
 
 import java.util.Objects;
 
@@ -6,9 +6,7 @@ import java.util.Objects;
  * In distributed systems, nodes can fail.
  * When they come back, their network address may change,
  * but not their logical representation.
- *
  * A transition: off -> on -> off
- *
  * Immutable object for host and port.
  */
 public class NetworkNode {
@@ -40,15 +38,15 @@ public class NetworkNode {
     }
 
     public boolean isActive(){
-        return active;
+        return this.active;
     }
 
     public void on(){
-        active = true;
+        this.active = true;
     }
 
     public void off(){
-        active = false;
+        this.active = false;
     }
 
     /*

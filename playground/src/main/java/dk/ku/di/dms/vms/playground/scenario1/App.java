@@ -6,18 +6,18 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOption
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
+import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
-import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -149,7 +149,7 @@ public class App
 
         VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata("dk.ku.di.dms.vms.playground.app");
 
-        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacade(vmsMetadata);
+        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata);
 
         if(vmsMetadata == null) throw new IllegalStateException("Cannot start VMs, error loading metadata.");
 
@@ -157,13 +157,13 @@ public class App
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
-        EmbedVmsTransactionScheduler scheduler =
-                new EmbedVmsTransactionScheduler(
+        VmsTransactionScheduler scheduler =
+                new VmsTransactionScheduler(
                         vmsAppLogicTaskPool,
                         vmsInternalPubSubService,
                         vmsMetadata.queueToVmsTransactionMap(),
                         vmsMetadata.queueToEventMap(), serdes,
-                        transactionFacade);
+                        null);
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
                 "localhost", 1080, "example",
@@ -173,8 +173,8 @@ public class App
 
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        EmbedVmsEventHandler eventHandler = new EmbedVmsEventHandler(
-                    vmsInternalPubSubService, vmsIdentifier, vmsMetadata, serdes, socketPool);
+        EmbedVmsEventHandler eventHandler = EmbedVmsEventHandler.build(
+                vmsInternalPubSubService, vmsIdentifier, null, vmsMetadata, serdes, socketPool );
 
         Thread eventHandlerThread = new Thread(eventHandler);
         eventHandlerThread.start();

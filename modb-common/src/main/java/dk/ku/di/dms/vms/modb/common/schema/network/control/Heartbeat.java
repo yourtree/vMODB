@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.control;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
-import dk.ku.di.dms.vms.modb.common.schema.network.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;

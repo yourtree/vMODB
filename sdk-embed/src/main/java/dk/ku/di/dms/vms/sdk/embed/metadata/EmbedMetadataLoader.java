@@ -58,11 +58,11 @@ public class EmbedMetadataLoader {
 
     }
 
-    public static TransactionFacade loadTransactionFacade(VmsRuntimeMetadata vmsRuntimeMetadata) {
-        return loadTransactionFacade(vmsRuntimeMetadata, null);
+    public static TransactionFacade loadTransactionFacadeAndInjectIntoRepositories(VmsRuntimeMetadata vmsRuntimeMetadata) {
+        return loadTransactionFacadeAndInjectIntoRepositories(vmsRuntimeMetadata, null);
     }
 
-    public static TransactionFacade loadTransactionFacade(
+    public static TransactionFacade loadTransactionFacadeAndInjectIntoRepositories(
             VmsRuntimeMetadata vmsRuntimeMetadata, Set<String> entitiesToExclude) {
 
         Map<String, Table> catalog = loadCatalog(vmsRuntimeMetadata, entitiesToExclude);

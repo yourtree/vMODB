@@ -1,14 +1,14 @@
 package dk.ku.di.dms.vms.sdk.embed.client;
 
-import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
+import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
-import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -55,7 +55,7 @@ public final class VmsApplication {
             Set<String> toExclude = entitiesToExclude != null ? Arrays.stream(entitiesToExclude).collect(
                     Collectors.toSet()) : new HashSet<>();
 
-            TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacade(vmsMetadata, toExclude);
+            EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata, toExclude);
 
             assert vmsMetadata != null;
 
@@ -66,14 +66,13 @@ public final class VmsApplication {
             // for now only giving support to one vms
             String vmsName = vmsMetadata.loadedVmsInstances().entrySet().stream().findFirst().get().getKey();
 
-            EmbedVmsTransactionScheduler scheduler =
-                    new EmbedVmsTransactionScheduler(
+            VmsTransactionScheduler scheduler =
+                    new VmsTransactionScheduler(
                             readTaskPool,
                             vmsInternalPubSubService,
                             vmsMetadata.queueToVmsTransactionMap(),
                             vmsMetadata.queueToEventMap(),
-                            serdes,
-                            transactionFacade);
+                            serdes, null);
 
             // ideally lastTid and lastBatch must be read from the log
 

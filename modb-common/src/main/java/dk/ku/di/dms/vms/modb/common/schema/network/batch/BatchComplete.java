@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.common.schema.network.batch;
 
 import dk.ku.di.dms.vms.modb.common.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
-import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;

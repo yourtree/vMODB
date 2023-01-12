@@ -1,16 +1,17 @@
-package dk.ku.di.dms.vms.sdk.embed;
+package dk.ku.di.dms.vms.sdk.embed.handler;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
-import dk.ku.di.dms.vms.modb.common.schema.network.NetworkNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
-import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
+import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.events.InputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample1;
@@ -18,7 +19,6 @@ import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample2;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample3;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
-import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -35,10 +35,14 @@ import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static java.net.StandardSocketOptions.SO_KEEPALIVE;
+import static java.net.StandardSocketOptions.TCP_NODELAY;
+
 /**
  * Test vms event handler
  * a. Are events being ingested correctly?
  * b. are events being outputted correctly?
+ * TODO This list below is responsibility of another test class:
  * c. is the internal state being managed properly (respecting correctness semantics)?
  * d. all tables have data structures properly created? embed metadata loader
  * e. ingestion is being performed correctly?
@@ -59,49 +63,40 @@ public class EventHandlerTest {
      * To avoid that, this method takes into consideration the inputs and output events
      * to be discarded for a given
      */
-    private static EmbedVmsEventHandler loadMicroserviceDefault(NetworkNode node, Map<String, NetworkNode> consumerVms, String vmsName, String packageName) throws IOException {
-        var emptyList = Collections.<String>emptyList();
-        return loadMicroservice(node,consumerVms, true, new VmsEmbedInternalChannels(),vmsName,packageName,emptyList,emptyList,emptyList,emptyList);
-    }
-    private static EmbedVmsEventHandler loadMicroservice(NetworkNode node, Map<String, NetworkNode> consumerVms, boolean eventHandlerActive,
+    private static EmbedVmsEventHandler loadMicroservice(NetworkNode node, Map<String, ConsumerVms> consumerVms, boolean eventHandlerActive,
                                                          VmsEmbedInternalChannels vmsInternalPubSubService, String vmsName, String packageName,
                                                          List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap, List<String> outToSwap) throws IOException  {
 
         VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata(packageName);
 
         // discard events
-        for(String in : inToDiscard)
+        assert vmsMetadata != null;
+
+        for (String in : inToDiscard)
             vmsMetadata.inputEventSchema().remove(in);
 
-        for(String out : outToDiscard)
+        for (String out : outToDiscard)
             vmsMetadata.outputEventSchema().remove(out);
 
-        for(String in : inToSwap) {
+        for (String in : inToSwap) {
             VmsEventSchema eventSchema = vmsMetadata.inputEventSchema().remove(in);
             vmsMetadata.outputEventSchema().put(in, eventSchema);
         }
 
-        for(String in : outToSwap) {
+        for (String in : outToSwap) {
             VmsEventSchema eventSchema = vmsMetadata.outputEventSchema().remove(in);
             vmsMetadata.inputEventSchema().put(in, eventSchema);
         }
 
-        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacade(vmsMetadata);
-
-        assert vmsMetadata != null;
+        // TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacade(vmsMetadata);
 
         ExecutorService readTaskPool = Executors.newSingleThreadExecutor();
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        EmbedVmsTransactionScheduler scheduler =
-                new EmbedVmsTransactionScheduler(
-                        readTaskPool,
-                        vmsInternalPubSubService,
-                        vmsMetadata.queueToVmsTransactionMap(),
-                        vmsMetadata.queueToEventMap(),
-                        serdes,
-                        transactionFacade);
+        VmsTransactionScheduler scheduler = new VmsTransactionScheduler(readTaskPool, vmsInternalPubSubService,
+                        vmsMetadata.queueToVmsTransactionMap(), vmsMetadata.queueToEventMap(),
+                        serdes, null);
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
                 node.host, node.port, vmsName,
@@ -155,7 +150,7 @@ public class EventHandlerTest {
                 inToSwap,
                 inToDiscard);
 
-        List<String> outToSwap = List.of("out1");;
+        List<String> outToSwap = List.of("out1");
         inToSwap = inToDiscard; // empty
         outToDiscard = inToDiscard;
         inToDiscard = List.of("in");
@@ -181,7 +176,8 @@ public class EventHandlerTest {
         TransactionEvent.Payload event = TransactionEvent.of(1,0,1,"in", payload);
         channelForAddingInput.transactionInputQueue().add(event);
 
-        var input1ForVms2 = channelForAddingInput.transactionOutputQueue().take();
+        var input1ForVms2 = channelForAddingInput.transactionOutputQueue().poll(5, TimeUnit.SECONDS);
+        assert input1ForVms2 != null;
 
         for(var res : input1ForVms2.resultTasks){
             Class<?> clazz =  res.outputQueue().equalsIgnoreCase("out1") ? OutputEventExample1.class : OutputEventExample2.class;
@@ -191,27 +187,11 @@ public class EventHandlerTest {
         }
 
         // subscribe to output event out3
-        VmsTransactionResult result = channelForGettingOutput.transactionOutputQueue().poll(1000, TimeUnit.SECONDS);
+        VmsTransactionResult result = channelForGettingOutput.transactionOutputQueue().poll(5, TimeUnit.SECONDS);
 
         assert result != null && result.resultTasks != null && !result.resultTasks.isEmpty();
 
         assert ((OutputEventExample3) result.resultTasks.get(0).output()).id == 2;
-    }
-
-    /**
-     * Producers are VMSs that intend to send data
-     */
-    @Test
-    public void testConnectionToProducer(){
-
-        // 1 - assemble a producer network node
-        // 2 - start a socket in the prescribed node
-        // 3 - start the vms 1. don't need to pass info to vms 1, since vms is always waiting for producer
-        // 4 - connect to the vms 1
-        // 5 - send event input
-        // 6 - listen from the internal channel
-
-        assert true;
     }
 
     /**
@@ -226,7 +206,7 @@ public class EventHandlerTest {
     public void testConnectionToConsumer() throws IOException, InterruptedException, ExecutionException {
 
         // 1 - assemble a consumer network node
-        NetworkNode me = new NetworkNode("localhost", 1080);
+        ConsumerVms me = new ConsumerVms("localhost", 1080);
 
         // 2 - start a socket in the prescribed node
         AsynchronousServerSocketChannel serverSocket = AsynchronousServerSocketChannel.open();
@@ -252,8 +232,9 @@ public class EventHandlerTest {
             }
         });
 
-        Map<String, NetworkNode> consumerSet = new HashMap<>();
+        Map<String, ConsumerVms> consumerSet = new HashMap<>();
         consumerSet.put("out1", me);
+        consumerSet.put("out2", me);
 
         List<String> inToDiscard = Collections.emptyList();
         List<String> outToDiscard = List.of("out3");
@@ -294,9 +275,86 @@ public class EventHandlerTest {
 
     }
 
+    /**
+     * Producers are VMSs that intend to send data
+     */
     @Test
-    public void testCrossVmsTransactionWithEventHandler() throws IOException, InterruptedException {
-        // TODO setup a consumer to subscribe to both out1 and out2
+    public void testConnectionToProducer() throws IOException, ExecutionException, InterruptedException {
+
+        // 1 - assemble a producer network node
+        ConsumerVms me = new ConsumerVms("localhost", 1080);
+
+        // 2 - start a socket in the prescribed node
+        AsynchronousServerSocketChannel serverSocket = AsynchronousServerSocketChannel.open();
+        SocketAddress address = new InetSocketAddress(me.host, me.port);
+        serverSocket.bind(address);
+
+        // 3 - set myself as both producer and consumer of events
+        Map<String, ConsumerVms> consumerSet = new HashMap<>();
+        consumerSet.put("out1", me);
+        consumerSet.put("out2", me);
+
+        List<String> inToDiscard = Collections.emptyList();
+        List<String> outToDiscard = List.of("out3");
+        List<String> inToSwap = List.of("out2");
+
+        // 4 - start the vms 1. don't need to pass producer info to vms 1, since vms is always waiting for producer
+        EmbedVmsEventHandler embedVmsEventHandler = loadMicroservice(
+                new NetworkNode("localhost", 1081),
+                consumerSet,
+                true,
+                new VmsEmbedInternalChannels(),
+                "example1",
+                "dk.ku.di.dms.vms.sdk.embed",
+                inToDiscard,
+                outToDiscard,
+                inToSwap,
+                inToDiscard);
+
+        // 5 - accept connection but just ignore the payload. the above test is already checking this
+        serverSocket.accept(); // ignore result
+
+        // 4 - connect to the vms 1
+        InetSocketAddress vmsAddress = new InetSocketAddress("localhost", 1081);
+        AsynchronousSocketChannel vmsChannel = AsynchronousSocketChannel.open();
+        vmsChannel.setOption(TCP_NODELAY, true);
+        vmsChannel.setOption(SO_KEEPALIVE, true);
+        vmsChannel.connect(vmsAddress).get();
+
+        // 5 - build and send presentation to complete the handshake protocol
+        String dataAndInputSchema = "{}";
+        String outputSchema = "{\"in\":{\"eventName\":\"in\",\"columnNames\":[\"id\"],\"columnDataTypes\":[\"INT\"]}}";
+
+        ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
+        Presentation.writeVms(buffer,me,"example-producer", 0,0, dataAndInputSchema,dataAndInputSchema,outputSchema);
+        buffer.flip();
+
+        vmsChannel.write(buffer).get();
+
+        // 5 - send event input
+        buffer.clear();
+        InputEventExample1 eventExample = new InputEventExample1(1);
+        String payload = this.serdes.serialize(eventExample, InputEventExample1.class);
+        TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,1,"in", payload);
+        TransactionEvent.write(buffer, eventInput);
+        buffer.flip();
+
+        vmsChannel.write(buffer); // no need to wait
+
+        // 6 - listen from the internal channel. may take some time because of the batch commit scheduler
+        // why also checking the output? to see if the event sent is correctly processed
+        ByteBuffer readBuffer = MemoryManager.getTemporaryDirectBuffer();
+        vmsChannel.read(readBuffer).get();
+
+        // TODO assert the batch of events are received
+        
+
+        assert true;
+    }
+
+    @Test
+    public void testCrossVmsTransactionWithEventHandler() {
+        // TODO set up a consumer to subscribe to both out1 and out2
         //  set up producer too, check if events are received end-to-end through the network
     }
 

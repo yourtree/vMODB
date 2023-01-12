@@ -12,7 +12,6 @@ import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import org.junit.Test;
 
-import javax.annotation.Nonnull;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.ExecutorService;
@@ -41,12 +40,13 @@ public class SchedulerTest {
         ExecutorService readTaskPool = Executors.newSingleThreadExecutor();
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
         VmsInternalChannels vmsInternalChannels = VmsInternalChannels.getInstance();
+        @SuppressWarnings("unchecked")
         Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) NetworkRepositoryFacade.class.getConstructors()[0];
         VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load(new String[]{"dk.ku.di.dms.vms.sdk.core.example"}, constructor);
 
         VmsTransactionScheduler scheduler = new VmsTransactionScheduler(
                 readTaskPool, vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(),
-                vmsRuntimeMetadata.queueToEventMap(), serdes);
+                vmsRuntimeMetadata.queueToEventMap(), serdes, null);
 
         Thread schedulerThread = new Thread(scheduler);
         schedulerThread.start();
@@ -74,7 +74,7 @@ public class SchedulerTest {
         // could reset the tid to 0, but would need to synchronize to avoid exceptions
         scheduler = new VmsTransactionScheduler(
                 readTaskPool, vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(),
-                vmsRuntimeMetadata.queueToEventMap(), serdes);
+                vmsRuntimeMetadata.queueToEventMap(), serdes, null);
 
         schedulerThread = new Thread(scheduler);
         schedulerThread.start();
@@ -87,8 +87,8 @@ public class SchedulerTest {
         }
 
         // 3 - check state of microservice 2 and see if the method was executed
-        //  there will be no output event since it is a void method
-        sleep(10000);
+        // there will be no output event since it is a void method
+        sleep(2000); // just an upper bound. everything completes much earlier
 
         MicroserviceExample2 ms2 = (MicroserviceExample2) vmsRuntimeMetadata.loadedVmsInstances().get("dk.ku.di.dms.vms.sdk.core.example.MicroserviceExample2");
 
