@@ -1,16 +1,16 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitResponse;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -104,15 +104,14 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                                              Map<String, ConsumerVms> consumerVms,
                                              VmsRuntimeMetadata vmsMetadata, // metadata about this vms
                                              IVmsSerdesProxy serdesProxy, // ser/des of objects
-                                             ExecutorService executorService) throws IOException // for recurrent and continuous tasks
+                                             ExecutorService executorService) throws Exception // for recurrent and continuous tasks
     {
-        AsynchronousChannelGroup group = AsynchronousChannelGroup.withThreadPool(executorService);
-        try (AsynchronousServerSocketChannel serverSocket = AsynchronousServerSocketChannel.open(group)) {
-            SocketAddress address = new InetSocketAddress(me.host, me.port);
-            serverSocket.bind(address);
-            // once up, can connect to consumers
-            return new EmbedVmsEventHandler(me,vmsMetadata,consumerVms,vmsInternalChannels,serdesProxy,serverSocket,group,executorService);
+        try {
+            return new EmbedVmsEventHandler(me,vmsMetadata,consumerVms,vmsInternalChannels,serdesProxy,executorService);
+        } catch (IOException e){
+            throw new Exception("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
+
     }
 
     private EmbedVmsEventHandler(VmsIdentifier me,
@@ -120,12 +119,14 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                                  Map<String, ConsumerVms> consumerVms,
                                  VmsEmbedInternalChannels vmsInternalChannels,
                                  IVmsSerdesProxy serdesProxy,
-                                 AsynchronousServerSocketChannel serverSocket,
-                                 AsynchronousChannelGroup group,
-                                 ExecutorService executorService) {
+                                 ExecutorService executorService) throws IOException {
         super();
-        this.serverSocket = serverSocket;
-        this.group = group;
+
+        // network and executor
+        this.group = AsynchronousChannelGroup.withThreadPool(executorService);
+        this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+        SocketAddress address = new InetSocketAddress(me.host, me.port);
+        this.serverSocket.bind(address);
 
         this.executorService = executorService;
 
@@ -221,8 +222,23 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
         }
 
+        failSafeClose();
+
         logger.info("Event handler has finished execution.");
 
+    }
+
+    /**
+     * From <a href="https://docs.oracle.com/javase/tutorial/networking/sockets/clientServer.html">...</a>
+     * "The Java runtime automatically closes the input and output streams, the client socket,
+     * and the server socket because they have been created in the try-with-resources statement."
+     * Which means that different tests must bind to different addresses
+     */
+    private void failSafeClose(){
+        // safe close
+        try { if(this.serverSocket.isOpen()) this.serverSocket.close(); } catch (IOException ignored) {
+            logger.warning("Could not close socket");
+        }
     }
 
     @Override
@@ -364,7 +380,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         if(connectionMetadata.timer == null){
             // set up event sender timer task
             connectionMetadata.timer = new Timer ("event-sender-timer", true);
-            connectionMetadata.timer.schedule(new EventSenderTask(consumerVms, connectionMetadata), System.currentTimeMillis() + DEFAULT_DELAY_FOR_BATCH_SEND );
+            connectionMetadata.timer.schedule(new EventSenderTask(consumerVms, connectionMetadata), DEFAULT_DELAY_FOR_BATCH_SEND );
         }
 
         // concurrency issue if add to a list
@@ -395,7 +411,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             this.connectionMetadata = connectionMetadata;
         }
 
-        private int assembleBatchPayload(int lastIndex, List<TransactionEvent.Payload> events){
+        private int assembleBatchPayload(int remaining, List<TransactionEvent.Payload> events){
             int bufferSize = this.connectionMetadata.writeBuffer.capacity();
 
             this.connectionMetadata.writeBuffer.clear();
@@ -407,9 +423,9 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             int count = 0;
             // int idx = 0;
             int remainingBytes = bufferSize - 1 - Integer.BYTES;
-            int idx = lastIndex;
+            int idx = remaining - 1;
 
-            while(idx > 0 && remainingBytes > events.get(idx).totalSize()){
+            while(idx >= 0 && remainingBytes > events.get(idx).totalSize()){
                 TransactionEvent.write( connectionMetadata.writeBuffer, events.get(idx) );
                 remainingBytes = remainingBytes - events.get(idx).totalSize();
                 idx--;
@@ -422,7 +438,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
             connectionMetadata.writeBuffer.flip();
 
-            return idx;
+            return remaining - count;
         }
 
         @Override
@@ -438,7 +454,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             List<TransactionEvent.Payload> events = new ArrayList<>(this.consumerVms.transactionEventsPerBatch.get(batchToSend).size());
             this.consumerVms.transactionEventsPerBatch.get(batchToSend).drainTo(events);
 
-            int remaining = events.size() - 1;
+            int remaining = events.size();
 
             while(remaining > 0){
                 remaining = this.assembleBatchPayload( remaining, events);
@@ -455,7 +471,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
             // schedule again the timer
             if(this.consumerVms.isActive()) {
-                this.connectionMetadata.timer.schedule(this, System.currentTimeMillis() + DEFAULT_DELAY_FOR_BATCH_SEND);
+                this.connectionMetadata.timer.schedule(this, DEFAULT_DELAY_FOR_BATCH_SEND);
             }
 
         }
@@ -515,18 +531,14 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         public ConnectToExternalVmsProtocol(AsynchronousSocketChannel channel, NetworkNode node) {
             this.state = State.NEW;
             this.channel = channel;
-            this.connectCompletionHandler = new ConnectToVmsCH();
+            this.connectCompletionHandler = new ConnectToVmsCompletionHandler();
             this.buffer = MemoryManager.getTemporaryDirectBuffer(1024);
             this.node = node;
         }
 
-        private enum State {
-            NEW,
-            CONNECTED,
-            PRESENTATION_SENT
-        }
+        private enum State { NEW, CONNECTED, PRESENTATION_SENT }
 
-        private class ConnectToVmsCH implements CompletionHandler<Void, ConnectToExternalVmsProtocol> {
+        private class ConnectToVmsCompletionHandler implements CompletionHandler<Void, ConnectToExternalVmsProtocol> {
 
             @Override
             public void completed(Void result, ConnectToExternalVmsProtocol attachment) {
@@ -555,23 +567,23 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 Presentation.writeVms( attachment.buffer, me, me.vmsIdentifier, me.lastTid, me.lastBatch, dataSchema, inputEventSchema, outputEventSchema );
                 attachment.buffer.flip();
 
+                // have to make sure we send the presentation before writing to this VMS, otherwise an exception can occur (two writers)
                 attachment.channel.write(attachment.buffer, attachment, new CompletionHandler<>() {
                     @Override
                     public void completed(Integer result, ConnectToExternalVmsProtocol attachment) {
                         attachment.state = State.PRESENTATION_SENT;
                         attachment.buffer.clear();
                         MemoryManager.releaseTemporaryDirectBuffer(attachment.buffer);
+                        attachment.channel.read(connMetadata.readBuffer, connMetadata, new VmsReadCompletionHandler());
                     }
 
                     @Override
                     public void failed(Throwable exc, ConnectToExternalVmsProtocol attachment) {
                         // check if connection is still online. if so, try again
                         // otherwise, retry connection in a few minutes
-                        issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, attachment.node.hashCode()) );
+                        issueQueue.add(new Issue(CANNOT_CONNECT_TO_NODE, attachment.node.hashCode()));
                     }
                 });
-
-                channel.read(connMetadata.readBuffer, connMetadata, new VmsReadCompletionHandler() );
 
             }
 
@@ -590,25 +602,17 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
      * to which VMSs they have to connect to
      */
     private void connectToConsumerVMSs(Map<String, ConsumerVms> consumerSet) {
-
         for(NetworkNode vms : consumerSet.values()) {
-
             try {
-
                 InetSocketAddress address = new InetSocketAddress(vms.host, vms.port);
                 AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
-
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, true);
-
                 ConnectToExternalVmsProtocol protocol = new ConnectToExternalVmsProtocol(channel, vms);
-
                 channel.connect(address, protocol, protocol.connectCompletionHandler);
-
             } catch (IOException ignored) {
                 this.issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, vms.hashCode()) );
             }
-
         }
     }
 
@@ -782,24 +786,15 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
-
             logger.info("An unknown host has started a connection attempt.");
-
             final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024);
-
             try {
-
                 logger.info("Remote address: "+channel.getRemoteAddress().toString());
-
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, true);
-
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
-                channel.read( buffer, null,
-                        new UnknownNodeReadCompletionHandler(channel, buffer) );
-
+                channel.read( buffer, null, new UnknownNodeReadCompletionHandler(channel, buffer) );
                 logger.info("Read handler for unknown node has been setup: "+channel.getRemoteAddress());
-
             } catch(Exception e){
                 logger.info("Accept handler for unknown node caught exception: "+e.getMessage());
                 MemoryManager.releaseTemporaryDirectBuffer(buffer);
@@ -808,16 +803,22 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 // continue listening
                 serverSocket.accept(null, this);
             }
-
         }
 
         @Override
         public void failed(Throwable exc, Void attachment) {
-
             String message = exc.getMessage();
-            message = message == null ? exc.getCause() instanceof ClosedChannelException ? "Connection is closed" : "No cause could be identified" : "No cause could be identified";
-            logger.warning("Error on accepting connection: "+ message);
+            if(message == null){
+                if (exc.getCause() instanceof ClosedChannelException){
+                    message = "Connection is closed";
+                } else if ( exc instanceof AsynchronousCloseException || exc.getCause() instanceof AsynchronousCloseException) {
+                    message = "Event handler has been stopped?";
+                } else {
+                    message = "No cause identified";
+                }
+            }
 
+            logger.warning("Error on accepting connection: "+ message);
             if (serverSocket.isOpen()){
                 serverSocket.accept(null, this);
             } else {
@@ -828,7 +829,6 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     }
 
     private class ConnectionFromLeaderProtocol {
-
         private State state;
         private final AsynchronousSocketChannel channel;
         private final ByteBuffer buffer;

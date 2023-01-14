@@ -5,11 +5,10 @@ import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplicationAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
-
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
@@ -31,10 +30,9 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
 /**
  * Follower
  * Initial design: sit idle and wait for new election in case heartbeat does not arrive on time
+ * TODO finish when a new leader is elected needs to send a batch abort request. but this is in the coordinator class...
  */
 public final class Follower extends SignalingStoppableRunnable {
-
-    // TODO finish when a new leader is elected needs to send a batch abort request. but this is in the coordinator class...
 
     private final AsynchronousServerSocketChannel serverSocket;
 

@@ -15,10 +15,10 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
+import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
-import dk.ku.di.dms.vms.sdk.embed.scheduler.EmbedVmsTransactionScheduler;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -54,7 +54,7 @@ public class App
     // input transactions
     private static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
-    public static void main( String[] args ) throws IOException, NoSuchFieldException, IllegalAccessException {
+    public static void main( String[] args ) throws Exception {
 
         // the reflections framework is scanning all the packages, not respecting the package passed
         List<String> inToDiscard = Collections.emptyList();
@@ -174,7 +174,7 @@ public class App
 
     }
 
-    private static void loadMicroservice(NetworkNode node, String vmsName, String packageName, List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap) throws IOException, NoSuchFieldException, IllegalAccessException {
+    private static void loadMicroservice(NetworkNode node, String vmsName, String packageName, List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap) throws Exception {
 
         VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
 
@@ -200,14 +200,14 @@ public class App
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        EmbedVmsTransactionScheduler scheduler =
-                new EmbedVmsTransactionScheduler(
+        VmsTransactionScheduler scheduler =
+                new VmsTransactionScheduler(
                         readTaskPool,
                         vmsInternalPubSubService,
                         vmsMetadata.queueToVmsTransactionMap(),
                         vmsMetadata.queueToEventMap(),
                         serdes,
-                        transactionFacade);
+                        null);
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
                 node.host, node.port, vmsName,

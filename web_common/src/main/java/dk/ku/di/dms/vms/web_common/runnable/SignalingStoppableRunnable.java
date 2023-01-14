@@ -12,13 +12,12 @@ import java.util.logging.Logger;
  */
 public abstract class SignalingStoppableRunnable extends StoppableRunnable {
 
+    protected final Logger logger = Logger.getLogger(getClass().getName());
     /**
      * Protocol result. Now also any result from a thread...
      */
     public static final byte NO_RESULT = 0;
     public static final byte FINISHED = 1;
-
-    protected static final Logger logger = Logger.getLogger(SignalingStoppableRunnable.class.getName());
 
     public final CustomUncaughtExceptionHandler exceptionHandler;
 

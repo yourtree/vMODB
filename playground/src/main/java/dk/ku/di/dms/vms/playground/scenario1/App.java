@@ -44,7 +44,7 @@ public class App
     // input transactions
     private static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
-    public static void main( String[] args ) throws IOException, NoSuchFieldException, IllegalAccessException {
+    public static void main( String[] args ) throws Exception {
 
         loadMicroservice();
 
@@ -143,7 +143,7 @@ public class App
     /**
      * Load one microservice at first and perform several transactions and batch commit
      */
-    private static void loadMicroservice() throws IOException, NoSuchFieldException, IllegalAccessException {
+    private static void loadMicroservice() throws Exception {
 
         VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
 

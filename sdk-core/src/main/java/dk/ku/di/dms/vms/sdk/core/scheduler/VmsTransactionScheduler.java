@@ -5,14 +5,20 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
-import dk.ku.di.dms.vms.sdk.core.operational.*;
+import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
+import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
+import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
+import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.ComplexVmsTransactionTrackingContext;
 import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.IVmsTransactionTrackingContext;
 import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.SimpleVmsTransactionTrackingContext;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.R;
@@ -28,9 +34,9 @@ import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.R;
  *         (i) a constraint not being met, would need to abort
  *         (ii) lack of machine resources. can we do something in this case?
  */
-public class VmsTransactionScheduler extends StoppableRunnable {
+public final class VmsTransactionScheduler extends StoppableRunnable {
 
-    protected static final Logger logger = Logger.getLogger("VmsTransactionScheduler");
+    private final Logger logger = Logger.getLogger("VmsTransactionScheduler");
 
     // payload that cannot execute because some dependence need to be fulfilled
     // payload A < B < C < D
@@ -60,7 +66,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
      */
     private final ExecutorService writeTaskPool;
 
-    protected final IVmsInternalChannels vmsChannels;
+    private final IVmsInternalChannels vmsChannels;
 
     // mapping
     private final Map<String, VmsTransactionMetadata> transactionMetadataMap;
@@ -172,7 +178,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
 
     }
 
-    protected void initializeOffset(){
+    private void initializeOffset(){
         this.currentOffset = new OffsetTracker(0, 1);
         this.currentOffset.signalTaskFinished();
         this.offsetMap.put(0L, this.currentOffset);
@@ -185,7 +191,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
      * TODO we have to deal with failures
      *  not only container failures but also constraints being violated
      */
-    protected void processTaskResult() {
+    private void processTaskResult() {
 
         IVmsTransactionTrackingContext context = this.transactionContextMap.get( this.currentOffset.tid() );
         if( context == null ) return;
@@ -273,7 +279,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
      * of event apart from transaction input might arrive such as batch),
      * this method needs to be overridden and the first IF block removed
      */
-    protected final void checkForNewEvents() throws InterruptedException {
+    private void checkForNewEvents() throws InterruptedException {
 
         // a safe condition to block waiting is when the current offset is finished (no result tasks to be processed)
         // however, cannot block waiting for input queue because of an unknown bug
@@ -305,7 +311,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
         } else if (this.offsetMap.get(transactionalEvent.tid()) == null) {
             this.processNewEventFromUnknownTransaction(transactionalEvent);
         } else {
-            throw new IllegalStateException("Analyze this case....");
+            throw new IllegalStateException("Queue" + transactionalEvent.event() + " " + transactionalEvent.tid() + "" + transactionalEvent.payload());
         }
     }
 
@@ -467,7 +473,7 @@ public class VmsTransactionScheduler extends StoppableRunnable {
      * I could do this by design but the code guarantees that
      * Is it safe to move the offset pointer? this method takes care of that
      */
-    protected void moveOffsetPointerIfNecessary(){
+    private void moveOffsetPointerIfNecessary(){
 
         // if next is the right one ---> the concept of "next" may change according to recovery from failures and aborts
         if(this.currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED_SUCCESSFULLY
