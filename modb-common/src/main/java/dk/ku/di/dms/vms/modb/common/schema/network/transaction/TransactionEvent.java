@@ -16,63 +16,47 @@ public final class TransactionEvent {
 
     public static void write(ByteBuffer buffer, Payload payload){
         buffer.put( Constants.EVENT );
-        writeNoType(buffer, payload);
-    }
-
-    public static void writeNoType(ByteBuffer buffer, Payload payload){
-
         buffer.putLong( payload.tid );
         buffer.putLong( payload.lastTid );
         buffer.putLong( payload.batch );
-
         byte[] eventBytes = payload.event.getBytes();
         buffer.putInt( eventBytes.length );
         buffer.put( eventBytes );
-
         byte[] payloadBytes = payload.payload.getBytes();
         buffer.putInt( payloadBytes.length );
         buffer.put( payloadBytes );
-
     }
 
     public static Payload write(ByteBuffer buffer, long tid, long lastTid, long batch, String event, String payload){
-
         buffer.put( Constants.EVENT );
         buffer.putLong( tid );
         buffer.putLong( lastTid );
         buffer.putLong( batch );
-
         byte[] eventBytes = event.getBytes();
         buffer.putInt( eventBytes.length );
         buffer.put( eventBytes );
-
         byte[] payloadBytes = payload.getBytes();
         buffer.putInt( payloadBytes.length );
         buffer.put( payloadBytes );
-
         return new Payload( tid, lastTid, batch, event, payload, 1 + (Long.BYTES * 3) + eventBytes.length + payloadBytes.length );
-
     }
 
     public static Payload read(ByteBuffer buffer){
         long tid = buffer.getLong();
         long lastTid = buffer.getLong();
         long batch = buffer.getLong();
-
         int eventSize = buffer.getInt();
-
         String eventName = ByteUtils.extractStringFromByteBuffer( buffer, eventSize );
-
         int payloadSize = buffer.getInt();
-
         String payload = ByteUtils.extractStringFromByteBuffer( buffer, payloadSize );
-
         return new Payload( tid, lastTid, batch, eventName, payload, (Long.BYTES * 3) + eventSize + payloadSize );
     }
 
     /**
      * This is the base class for representing the data transferred across the framework and the sidecar
      * It serves both for input and output
+     * Why total size? to know the size beforehand, before inserting into the byte buffer
+     * otherwise would need further controls...
      */
     public record Payload(
             long tid, long lastTid, long batch, String event, String payload, int totalSize

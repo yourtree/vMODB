@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.Timer;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -43,6 +44,16 @@ public class ConnectionMetadata {
      */
     public final Semaphore writeLock;
 
+    private final AtomicBoolean writing;
+
+    public void acquireWrite(){
+        while(!this.writing.compareAndSet(false,true));
+    }
+
+    public void releaseWrite(){
+        this.writing.set(false);
+    }
+
     public ConnectionMetadata(int key,
                               NodeType nodeType,
                               ByteBuffer readBuffer,
@@ -55,6 +66,7 @@ public class ConnectionMetadata {
         this.writeBuffer = writeBuffer;
         this.channel = channel;
         this.writeLock = writeLock;
+        this.writing = new AtomicBoolean(false);
     }
 
 }

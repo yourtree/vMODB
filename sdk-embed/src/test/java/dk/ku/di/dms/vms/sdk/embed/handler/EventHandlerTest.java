@@ -18,7 +18,6 @@ import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample2;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample3;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
-import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;
@@ -31,14 +30,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_OF_EVENTS;
+import static java.net.StandardSocketOptions.SO_KEEPALIVE;
+import static java.net.StandardSocketOptions.TCP_NODELAY;
 
 /**
  * Test vms event handler
@@ -67,11 +65,11 @@ public class EventHandlerTest {
      * to be discarded for a given
      */
     private static EmbedVmsEventHandler loadMicroservice(NetworkNode node, Map<String, ConsumerVms> consumerVms, boolean eventHandlerActive,
-                                                         VmsEmbedInternalChannels vmsInternalPubSubService, String vmsName, String packageName,
+                                                         VmsEmbedInternalChannels vmsInternalPubSubService, String vmsName,
                                                          List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap, List<String> outToSwap)
             throws Exception {
 
-        VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata(packageName);
+        VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata("dk.ku.di.dms.vms.sdk.embed");
 
         // discard events
         assert vmsMetadata != null;
@@ -146,7 +144,6 @@ public class EventHandlerTest {
                 false,
                 channelForAddingInput,
                 "example1",
-                "dk.ku.di.dms.vms.sdk.embed",
                 inToDiscard,
                 outToDiscard,
                 inToSwap,
@@ -167,7 +164,6 @@ public class EventHandlerTest {
                 false,
                 channelForGettingOutput,
                 "example2",
-                "dk.ku.di.dms.vms.sdk.embed",
                 inToDiscard,
                 outToDiscard,
                 inToSwap,
@@ -252,7 +248,6 @@ public class EventHandlerTest {
                 true,
                 new VmsEmbedInternalChannels(),
                 "example1",
-                "dk.ku.di.dms.vms.sdk.embed",
                 inToDiscard,
                 outToDiscard,
                 inToSwap,
@@ -283,12 +278,11 @@ public class EventHandlerTest {
 
     /**
      * Test sending an input data and receiving the results
-     * FIXME do not run if other tests run. besides, non deterministic. sometimes it does not work
      */
     @Test
-    public void testReceiveEventFromConsumer() throws Exception {
+    public void testReceiveBatchAsConsumer() throws Exception {
 
-        // 1 - assemble a producer network node
+        // 1 - assemble a consumer network node
         ConsumerVms me = new ConsumerVms("localhost", 1084);
 
         // 2 - start a socket in the prescribed node
@@ -296,7 +290,7 @@ public class EventHandlerTest {
         SocketAddress address = new InetSocketAddress(me.host, me.port);
         serverSocket.bind(address);
 
-        // 3 - set myself as both producer and consumer of events
+        // 3 - set consumer of events
         Map<String, ConsumerVms> consumerSet = new HashMap<>();
         consumerSet.put("out1", me);
         consumerSet.put("out2", me);
@@ -313,12 +307,10 @@ public class EventHandlerTest {
                         true,
                         new VmsEmbedInternalChannels(),
                         "example1",
-                        "dk.ku.di.dms.vms.sdk.embed",
                         inToDiscard,
                         outToDiscard,
                         inToSwap,
                         inToDiscard);
-
 
         // 5 - accept connection but just ignore the payload. the above test is already checking this
         AsynchronousSocketChannel channel = serverSocket.accept().get(); // ignore result
@@ -339,7 +331,6 @@ public class EventHandlerTest {
         TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,1,"in", payload);
         TransactionEvent.write(buffer, eventInput);
         buffer.flip();
-
         channel.write(buffer).get(); // no need to wait
 
         logger.info("Input event sent");
@@ -354,17 +345,13 @@ public class EventHandlerTest {
         // assert the batch of events is received
         readBuffer.position(0);
         byte messageType = readBuffer.get();
-
         assert messageType == BATCH_OF_EVENTS;
-
         int size = readBuffer.getInt();
-
         assert size == 2;
 
         channel.close();
         embedVmsEventHandler.stop();
         serverSocket.close();
-
         assert true;
     }
 
@@ -372,19 +359,56 @@ public class EventHandlerTest {
      * Producers are VMSs that intend to send data
      */
     @Test
-    public void testConnectionToProducer() throws Exception {
-        // must do the handshake
+    public void testConnectionToVmsAsProducer() throws Exception {
 
-        // 7 - build and send presentation to complete the handshake protocol
-        // TODO MUST TEST THIS.. better to send in the presentation we are also a consumer
-        //  why error on accept handler on event handler
-        // so in case is not on the list, it will be added
-//        String dataAndInputSchema = "{}";
-//        String outputSchema = "{\"in\":{\"eventName\":\"in\",\"columnNames\":[\"id\"],\"columnDataTypes\":[\"INT\"]}}";
-//        Presentation.writeVms(buffer,me,"example-producer", 0,0, dataAndInputSchema,dataAndInputSchema,outputSchema);
-//        buffer.flip();
-//        channel.write(buffer).get();
-        assert true;
+        // 1 - assemble a producer network node
+        ConsumerVms producer = new ConsumerVms("localhost", 1086);
+
+        List<String> inToDiscard = Collections.emptyList();
+        List<String> outToDiscard = List.of("out3");
+        List<String> inToSwap = List.of("out2");
+
+        NetworkNode vmsToConnectTo =  new NetworkNode("localhost", 1087);
+        // 2 - start the vms 1. don't need to pass producer info to vms 1, since vms is always waiting for producer
+        EmbedVmsEventHandler embedVmsEventHandler = loadMicroservice(
+                vmsToConnectTo,
+                null,
+                true,
+                new VmsEmbedInternalChannels(),
+                "example1",
+                inToDiscard,
+                outToDiscard,
+                inToSwap,
+                inToDiscard);
+
+        // 2 - connect
+        InetSocketAddress address = new InetSocketAddress(vmsToConnectTo.host, vmsToConnectTo.port);
+        AsynchronousSocketChannel channel = AsynchronousSocketChannel.open();
+        channel.setOption(TCP_NODELAY, true);
+        channel.setOption(SO_KEEPALIVE, true);
+        channel.connect(address).get();
+
+        logger.info("Connected. Now sending presentation.");
+
+        // 3 - the handshake protocol
+        ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
+        String dataAndInputSchema = "{}";
+        String outputSchema = "{\"in\":{\"eventName\":\"in\",\"columnNames\":[\"id\"],\"columnDataTypes\":[\"INT\"]}}";
+        Presentation.writeVms(buffer,producer,"example-producer", 0,0, dataAndInputSchema,dataAndInputSchema,outputSchema);
+        buffer.flip();
+
+        int numberOfBytes = buffer.limit();
+
+        Future<Integer> res = channel.write(buffer);
+
+        logger.info("Presentation sent.");
+
+        int result = res.get();
+
+        embedVmsEventHandler.stop();
+
+        // 4 - how to know it was successful?
+        assert result == numberOfBytes;
     }
 
     @Test

@@ -107,7 +107,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                                              ExecutorService executorService) throws Exception // for recurrent and continuous tasks
     {
         try {
-            return new EmbedVmsEventHandler(me,vmsMetadata,consumerVms,vmsInternalChannels,serdesProxy,executorService);
+            return new EmbedVmsEventHandler(me, vmsMetadata, consumerVms, vmsInternalChannels, serdesProxy, executorService);
         } catch (IOException e){
             throw new Exception("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
@@ -134,7 +134,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         this.me = me;
 
         this.vmsMetadata = vmsMetadata;
-        this.consumerVms = Objects.requireNonNullElseGet(consumerVms, ConcurrentHashMap::new);
+        this.consumerVms = consumerVms != null ? new ConcurrentHashMap<>(consumerVms) : new ConcurrentHashMap<>();
         this.consumerConnectionMetadataMap = new ConcurrentHashMap<>(10);
         this.producerConnectionMetadataMap = new ConcurrentHashMap<>(10);
 
@@ -254,7 +254,8 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
             this.currentBatch.setStatus(BatchContext.Status.REPLYING_COMMITTED);
 
-            this.leaderConnectionMetadata.writeLock.acquireUninterruptibly();
+            this.leaderConnectionMetadata.acquireWrite();
+
             this.leaderConnectionMetadata.writeBuffer.clear();
             BatchCommitResponse.write( leaderConnectionMetadata.writeBuffer, this.currentBatch.batch, this.me );
             this.leaderConnectionMetadata.writeBuffer.flip();
@@ -273,7 +274,8 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                             } // otherwise must still receive it
 
                             leaderConnectionMetadata.writeBuffer.clear();
-                            leaderConnectionMetadata.writeLock.release();
+                            leaderConnectionMetadata.releaseWrite();
+
                         }
 
                         @Override
@@ -282,7 +284,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                             if(!leaderConnectionMetadata.channel.isOpen()){
                                 leader.off();
                             }
-                            leaderConnectionMetadata.writeLock.release();
+                            leaderConnectionMetadata.releaseWrite();
                         }
                     }
             );
@@ -294,7 +296,8 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
         this.currentBatch.setStatus(BatchContext.Status.REPLYING_COMPLETED);
 
-        this.leaderConnectionMetadata.writeLock.acquireUninterruptibly();
+        this.leaderConnectionMetadata.acquireWrite();
+
         this.leaderConnectionMetadata.writeBuffer.clear();
         BatchComplete.write( leaderConnectionMetadata.writeBuffer, this.currentBatch.batch, this.me );
         this.leaderConnectionMetadata.writeBuffer.flip();
@@ -306,7 +309,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                     public void completed(Integer result, Object attachment) {
                         currentBatch.setStatus(BatchContext.Status.COMPLETION_INFORMED);
                         leaderConnectionMetadata.writeBuffer.clear();
-                        leaderConnectionMetadata.writeLock.release();
+                        leaderConnectionMetadata.releaseWrite();
                     }
 
                     @Override
@@ -315,7 +318,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                         if(!leaderConnectionMetadata.channel.isOpen()){
                             leader.off();
                         }
-                        leaderConnectionMetadata.writeLock.release();
+                        leaderConnectionMetadata.releaseWrite();
                     }
                 }
         );
@@ -367,6 +370,12 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         if(consumerVms == null){
             logger.warning(
                     "An output event (queue: "+outputEvent.outputQueue()+") has no target virtual microservice.");
+            return;
+        }
+
+        // consumer is the leader?
+        if(consumerVms.hashCode() == leader.hashCode()){
+            sendEventToLeader(outputEvent);
             return;
         }
 
@@ -480,16 +489,17 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
     /**
      * In the future, we possibly need to send events to the leader.
-     * But to be honest, it is just a matter of the leader sending
-     * itself as a consumer. That would incur in another connection
-     * but may be worthwhile since the purposes could be different...
+     * Is it just a matter of the leader registering
+     * itself as a consumer? That would lead to another connection
      * Otherwise, we can make this class recognize whether it is the
      * leader and then just reuse the connection. The only thing is that
      * would require lock if the batch procedures and the event sending to
      * leader are not synchronized. More to come...
      */
-    private void sendEventToLeader(OutboundEventResult outputEvent) throws InterruptedException {
-        this.leaderConnectionMetadata.writeLock.acquire();
+    private void sendEventToLeader(OutboundEventResult outputEvent) {
+
+        this.leaderConnectionMetadata.acquireWrite();
+
         this.leaderConnectionMetadata.writeBuffer.clear();
 
         Class<?> clazz = this.vmsMetadata.queueToEventMap().get(outputEvent.outputQueue());
@@ -505,7 +515,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                     @Override
                     public void completed(Integer result, Object attachment) {
                         leaderConnectionMetadata.writeBuffer.clear();
-                        leaderConnectionMetadata.writeLock.release();
+                        leaderConnectionMetadata.releaseWrite();
                     }
 
                     @Override
@@ -514,7 +524,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                         if(!leaderConnectionMetadata.channel.isOpen()){
                             leader.off();
                         }
-                        leaderConnectionMetadata.writeLock.release();
+                        leaderConnectionMetadata.releaseWrite();
                     }
                 }
         );
@@ -625,28 +635,28 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
             switch (messageType) {
                 case (BATCH_OF_EVENTS) -> {
-
-
-
+                    connectionMetadata.readBuffer.position(1);
+                    int count = connectionMetadata.readBuffer.getInt();
+                    TransactionEvent.Payload payload;
+                    for(int i = 0; i < count; i++){
+                        payload = TransactionEvent.read(connectionMetadata.readBuffer);
+                        if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
+                            vmsInternalChannels.transactionInputQueue().add(payload);
+                        }
+                    }
                 }
                 case (EVENT) -> {
-
                     // can only be event, skip reading the message type
                     connectionMetadata.readBuffer.position(1);
-
                     // data dependence or input event
                     TransactionEvent.Payload transactionEventPayload = TransactionEvent.read(connectionMetadata.readBuffer);
-
                     // send to scheduler
                     if (vmsMetadata.queueToEventMap().get(transactionEventPayload.event()) != null) {
                         vmsInternalChannels.transactionInputQueue().add(transactionEventPayload);
                     }
-
                 } case (BATCH_COMMIT_INFO) -> {
-
                     // received from a vms
                     // TODO finish
-
                 }
                 default ->
                     logger.warning("Unknown message type received from vms");
@@ -754,11 +764,11 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                     );
 
                     BulkDataLoader bulkDataLoader = (BulkDataLoader) vmsMetadata.loadedVmsInstances().get("data_loader");
-                    if(bulkDataLoader != null)
-                        bulkDataLoader.init( tableName, connMetadata );
-                    else
+                    if(bulkDataLoader != null) {
+                        bulkDataLoader.init(tableName, connMetadata);
+                    } else {
                         logger.warning("Data loader is not loaded in the runtime.");
-
+                    }
                 }
                 default -> {
                     logger.warning("Presentation message from unknown source:" + nodeTypeIdentifier);
