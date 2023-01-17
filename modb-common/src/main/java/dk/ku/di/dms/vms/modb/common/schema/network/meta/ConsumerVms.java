@@ -2,10 +2,7 @@ package dk.ku.di.dms.vms.modb.common.schema.network.meta;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -22,6 +19,10 @@ public class ConsumerVms extends NetworkNode {
     public transient final Map<Long, BlockingQueue<TransactionEvent.Payload>> transactionEventsPerBatch;
 
     public transient final List<TransactionEvent.Payload> pendingWrites;
+
+    // timer for writing to each connection
+    // read happens asynchronously anyway, so no need to set up timer fot that
+    public transient Timer timer;
 
     public ConsumerVms(String host, int port) {
         super(host, port);

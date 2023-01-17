@@ -8,7 +8,6 @@ import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
@@ -23,6 +22,7 @@ import dk.ku.di.dms.vms.sdk.embed.ingest.BulkDataLoader;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
+import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -91,6 +91,20 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     private ServerIdentifier leader;
     private ConnectionMetadata leaderConnectionMetadata;
 
+    private LeaderWorker leaderWorker;
+
+    private enum MessageToLeader {
+        BATCH_COMPLETE, // inform batch completion
+        COMMIT_COMPLETE // inform commit completed
+    }
+
+    private final BlockingQueue<MessageToLeader> leaderWorkerQueue;
+
+    // cannot be final, may differ across time and new leaders
+    private Set<String> queuesLeaderSubscribesTo;
+
+    public final BlockingQueue<Object> eventsToSendToLeader;
+
     /** INTERNAL STATE **/
     private BatchContext currentBatch;
 
@@ -141,10 +155,18 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         this.serdesProxy = serdesProxy;
 
         this.currentBatch = new BatchContext(me.lastBatch, me.lastTid);
-        this.currentBatch.setStatus(BatchContext.Status.COMPLETION_INFORMED);
+        this.currentBatch.setStatus(BatchContext.Status.BATCH_COMPLETION_INFORMED);
         this.batchContextMap = new ConcurrentHashMap<>(3);
 
         this.schedulerHandler = new EmbedSchedulerHandler();
+
+        // set leader off
+        this.leader = new ServerIdentifier("localhost",0);
+        this.leader.off();
+
+        this.leaderWorkerQueue = new LinkedBlockingDeque<>();
+        this.queuesLeaderSubscribesTo = Set.of();
+        this.eventsToSendToLeader = new LinkedBlockingDeque<>();
     }
 
     /**
@@ -187,7 +209,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 // it is better to get all the results of a given transaction instead of one by one. it must be atomic anyway
                 if(!this.vmsInternalChannels.transactionOutputQueue().isEmpty()){
 
-                    VmsTransactionResult txResult = vmsInternalChannels.transactionOutputQueue().take();
+                    VmsTransactionResult txResult = this.vmsInternalChannels.transactionOutputQueue().take();
 
                     // handle
                     logger.info("New transaction result in event handler. TID = "+txResult.tid);
@@ -195,12 +217,12 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                     if(this.currentBatch.status() == BatchContext.Status.NEW && this.currentBatch.lastTid == txResult.tid){
                         // we need to alert the scheduler...
                         logger.info("The last TID for the current batch has arrived. Time to inform the coordinator about the completion.");
-                        // this.vmsInternalChannels.batchContextQueue().add( this.currentBatch );
 
                         // many outputs from the same transaction may arrive here, but can only send the batch commit once
-                        this.currentBatch.setStatus(BatchContext.Status.COMPLETED);
+                        this.currentBatch.setStatus(BatchContext.Status.BATCH_COMPLETED);
 
-                        this.informBatchCompletion();
+                        // must be queued in case leader is off and comes back online
+                        this.leaderWorkerQueue.add(MessageToLeader.BATCH_COMPLETE);
                     }
 
                     // what could go wrong in terms of interleaving? what if this tid is the last of a given batch?
@@ -211,8 +233,6 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                     for(OutboundEventResult outputEvent : txResult.resultTasks){
                         this.processOutputEvent(outputEvent);
                     }
-
-                    this.moveBatchIfNecessary();
 
                 }
 
@@ -246,70 +266,32 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         this.eventLoop();
     }
 
-    /**
-     * TODO can pass a completion handler to the scheduler, so no need to have this on the event loop
-     */
-    private void moveBatchIfNecessary() {
-        if(this.currentBatch.status() == BatchContext.Status.COMMITTED){
+    private void moveBatch() {
+        //if(this.currentBatch.status() == BatchContext.Status.LOGGED){
 
-            this.currentBatch.setStatus(BatchContext.Status.REPLYING_COMMITTED);
+            this.currentBatch.setStatus(BatchContext.Status.REPLYING_BATCH_COMMITTED);
 
-            this.leaderConnectionMetadata.acquireWrite();
+            //this.leaderConnectionMetadata.acquireWrite();
 
             this.leaderConnectionMetadata.writeBuffer.clear();
             BatchCommitResponse.write( leaderConnectionMetadata.writeBuffer, this.currentBatch.batch, this.me );
             this.leaderConnectionMetadata.writeBuffer.flip();
 
             this.leaderConnectionMetadata.channel.write(this.leaderConnectionMetadata.writeBuffer, null,
-                    new CompletionHandler<>() {
-
-                        @Override
-                        public void completed(Integer result, Object attachment) {
-                            currentBatch.setStatus(BatchContext.Status.COMMIT_INFORMED);
-
-                            // do I have the next batch already?
-                            var newBatch = batchContextMap.get( currentBatch.batch + 1 );
-                            if(newBatch != null){
-                                currentBatch = newBatch;
-                            } // otherwise must still receive it
-
-                            leaderConnectionMetadata.writeBuffer.clear();
-                            leaderConnectionMetadata.releaseWrite();
-
-                        }
-
-                        @Override
-                        public void failed(Throwable exc, Object attachment) {
-                            leaderConnectionMetadata.writeBuffer.clear();
-                            if(!leaderConnectionMetadata.channel.isOpen()){
-                                leader.off();
-                            }
-                            leaderConnectionMetadata.releaseWrite();
-                        }
-                    }
-            );
-
-        }
-    }
-
-    private void informBatchCompletion() {
-
-        this.currentBatch.setStatus(BatchContext.Status.REPLYING_COMPLETED);
-
-        this.leaderConnectionMetadata.acquireWrite();
-
-        this.leaderConnectionMetadata.writeBuffer.clear();
-        BatchComplete.write( leaderConnectionMetadata.writeBuffer, this.currentBatch.batch, this.me );
-        this.leaderConnectionMetadata.writeBuffer.flip();
-
-        this.leaderConnectionMetadata.channel.write(this.leaderConnectionMetadata.writeBuffer, null,
                 new CompletionHandler<>() {
-
                     @Override
                     public void completed(Integer result, Object attachment) {
-                        currentBatch.setStatus(BatchContext.Status.COMPLETION_INFORMED);
+                        currentBatch.setStatus(BatchContext.Status.BATCH_COMMIT_INFORMED);
+
+                        // do I have the next batch already?
+                        var newBatch = batchContextMap.get( currentBatch.batch + 1 );
+                        if(newBatch != null){
+                            currentBatch = newBatch;
+                        } // otherwise must still receive it
+
                         leaderConnectionMetadata.writeBuffer.clear();
-                        leaderConnectionMetadata.releaseWrite();
+                        //leaderConnectionMetadata.releaseWrite();
+
                     }
 
                     @Override
@@ -317,41 +299,57 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                         leaderConnectionMetadata.writeBuffer.clear();
                         if(!leaderConnectionMetadata.channel.isOpen()){
                             leader.off();
+                            leaderWorker.stop();
                         }
-                        leaderConnectionMetadata.releaseWrite();
+                        //leaderConnectionMetadata.releaseWrite();
                     }
                 }
-        );
+            );
+
+        //}
+    }
+
+    private void informBatchCompletion() {
+        this.currentBatch.setStatus(BatchContext.Status.REPLYING_BATCH_COMPLETED);
+        this.leaderConnectionMetadata.writeBuffer.clear();
+        BatchComplete.write( leaderConnectionMetadata.writeBuffer, this.currentBatch.batch, this.me );
+        this.leaderConnectionMetadata.writeBuffer.flip();
+        try {
+            this.leaderConnectionMetadata.channel.write(this.leaderConnectionMetadata.writeBuffer).get();
+            this.leaderConnectionMetadata.writeBuffer.clear();
+            this.currentBatch.setStatus(BatchContext.Status.BATCH_COMPLETION_INFORMED);
+        } catch (InterruptedException | ExecutionException e){
+            this.leaderConnectionMetadata.writeBuffer.clear();
+            if(!leaderConnectionMetadata.channel.isOpen()) {
+                leader.off();
+                leaderWorker.stop();
+            }
+        }
 
     }
 
     private void processNewBatchInfo(BatchCommitInfo.Payload batchCommitInfo){
         BatchContext batchContext = new BatchContext(batchCommitInfo.batch(), batchCommitInfo.tid());
         this.batchContextMap.put(batchCommitInfo.batch(), batchContext);
-        if(this.currentBatch.status() == BatchContext.Status.COMPLETION_INFORMED && batchCommitInfo.batch() == currentBatch.batch + 1){
+        if(this.currentBatch.status() == BatchContext.Status.BATCH_COMPLETION_INFORMED && batchCommitInfo.batch() == currentBatch.batch + 1){
             this.currentBatch = batchContext;
         }
     }
 
     private class EmbedSchedulerHandler implements ISchedulerHandler {
-
         @Override
         public Future<?> run() {
             BatchContext currentBatch = vmsInternalChannels.batchCommitRequestQueue().remove();
-
             currentBatch.setStatus(BatchContext.Status.LOGGING);
-
             return executorService.submit(() -> {
                 // of course, I do not need to stop the scheduler on commit
                 // I need to make access to the data versions data race free
                 // so new transactions get data versions from the version map or the store
                 // FIXME find later how to call transaction facade here: transactionFacade.log();
-
-                currentBatch.setStatus(BatchContext.Status.COMMITTED);
+                currentBatch.setStatus(BatchContext.Status.LOGGED);
+                leaderWorkerQueue.add(MessageToLeader.BATCH_COMPLETE);
             });
-
         }
-
         @Override
         public boolean conditionHolds() {
             return !vmsInternalChannels.batchCommitRequestQueue().isEmpty();
@@ -365,32 +363,23 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
     private void processOutputEvent(OutboundEventResult outputEvent){
 
         if(outputEvent.outputQueue() == null) return; // it is a void method that executed, nothing to send
-        ConsumerVms consumerVms = this.consumerVms.get(outputEvent.outputQueue());
 
+        // does the leader consumes this queue?
+        if( this.queuesLeaderSubscribesTo.contains( outputEvent.outputQueue() ) ){
+            this.eventsToSendToLeader.add(outputEvent);
+        }
+
+        ConsumerVms consumerVms = this.consumerVms.get(outputEvent.outputQueue());
         if(consumerVms == null){
-            logger.warning(
+            this.logger.warning(
                     "An output event (queue: "+outputEvent.outputQueue()+") has no target virtual microservice.");
             return;
         }
 
-        // consumer is the leader?
-        if(consumerVms.hashCode() == leader.hashCode()){
-            sendEventToLeader(outputEvent);
-            return;
-        }
-
-        logger.info("An output event (queue: "+outputEvent.outputQueue()+") will be sent to vms: "+consumerVms);
-
-        ConnectionMetadata connectionMetadata = this.consumerConnectionMetadataMap.get(consumerVms.hashCode());
+        this.logger.info("An output event (queue: "+outputEvent.outputQueue()+") will be sent to vms: "+consumerVms);
 
         Class<?> clazz = this.vmsMetadata.queueToEventMap().get(outputEvent.outputQueue());
         String objStr = this.serdesProxy.serialize(outputEvent.output(), clazz);
-
-        if(connectionMetadata.timer == null){
-            // set up event sender timer task
-            connectionMetadata.timer = new Timer ("event-sender-timer", true);
-            connectionMetadata.timer.schedule(new EventSenderTask(consumerVms, connectionMetadata), DEFAULT_DELAY_FOR_BATCH_SEND );
-        }
 
         // concurrency issue if add to a list
         BlockingQueue<TransactionEvent.Payload> queue = consumerVms.transactionEventsPerBatch.computeIfAbsent(outputEvent.batch(), (x) -> new LinkedBlockingDeque<>());
@@ -410,14 +399,48 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
      *  in the batch to resend or return to the original location. let the
      *  main loop schedule the timer again. set the network node to off
      */
-    private static final class EventSenderTask extends TimerTask {
+    private static final class VmsWorker extends TimerTask {
 
         private final ConsumerVms consumerVms;
         private final ConnectionMetadata connectionMetadata;
 
-        public EventSenderTask(ConsumerVms consumerVms, ConnectionMetadata connectionMetadata){
+        public VmsWorker(ConsumerVms consumerVms, ConnectionMetadata connectionMetadata){
             this.consumerVms = consumerVms;
             this.connectionMetadata = connectionMetadata;
+        }
+
+        @Override
+        public void run() {
+
+            // find the smallest batch. to avoid synchronizing with main thread
+            long batchToSend = Long.MAX_VALUE;
+            for(long batchId  : this.consumerVms.transactionEventsPerBatch.keySet()){
+                if(batchId < batchToSend) batchToSend = batchId;
+            }
+
+            if(this.consumerVms.transactionEventsPerBatch.get(batchToSend) == null){
+                return;
+            }
+
+            // there will always be a batch if this point of code is run
+            List<TransactionEvent.Payload> events = new ArrayList<>(this.consumerVms.transactionEventsPerBatch.get(batchToSend).size());
+            this.consumerVms.transactionEventsPerBatch.get(batchToSend).drainTo(events);
+
+            int remaining = events.size();
+
+            while(remaining > 0){
+                remaining = this.assembleBatchPayload( remaining, events);
+                try {
+                    this.connectionMetadata.channel.write(this.connectionMetadata.writeBuffer).get();
+                } catch (InterruptedException | ExecutionException e) {
+                    // return non-processed events to original location or what?
+                    if(!this.connectionMetadata.channel.isOpen()){
+                        this.consumerVms.off();
+                    }
+                    break; // force exit loop
+                }
+            }
+
         }
 
         private int assembleBatchPayload(int remaining, List<TransactionEvent.Payload> events){
@@ -450,41 +473,39 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             return remaining - count;
         }
 
+    }
+
+    /**
+     * For now the methods are not inserting the same message again in the queue because
+     * still not sre how leader is logging state after a crash
+     * If so, may need to reinsert to continue the protocol from the same point
+     */
+    private final class LeaderWorker extends StoppableRunnable {
+
         @Override
         public void run() {
 
-            // find the smallest batch. to avoid synchronizing with main thread
-            long batchToSend = Long.MAX_VALUE;
-            for(long batchId  : this.consumerVms.transactionEventsPerBatch.keySet()){
-                if(batchId < batchToSend) batchToSend = batchId;
-            }
+            while (isRunning()){
 
-            // there will always be a batch if this point of code is run
-            List<TransactionEvent.Payload> events = new ArrayList<>(this.consumerVms.transactionEventsPerBatch.get(batchToSend).size());
-            this.consumerVms.transactionEventsPerBatch.get(batchToSend).drainTo(events);
-
-            int remaining = events.size();
-
-            while(remaining > 0){
-                remaining = this.assembleBatchPayload( remaining, events);
                 try {
-                    this.connectionMetadata.channel.write(this.connectionMetadata.writeBuffer).get();
-                } catch (InterruptedException | ExecutionException e) {
-                    // return non-processed events to original location or what?
-                    if(!this.connectionMetadata.channel.isOpen()){
-                        this.consumerVms.off();
-                    }
-                    break; // force exit loop
-                }
-            }
 
-            // schedule again the timer
-            if(this.consumerVms.isActive()) {
-                this.connectionMetadata.timer.schedule(this, DEFAULT_DELAY_FOR_BATCH_SEND);
+                    MessageToLeader msg = leaderWorkerQueue.poll(DEFAULT_DELAY_FOR_BATCH_SEND, TimeUnit.MILLISECONDS);
+                    batchEventsToLeader();
+
+                    if(msg == null) continue;
+
+                    switch (msg){
+                        case BATCH_COMPLETE -> informBatchCompletion();
+                        case COMMIT_COMPLETE -> moveBatch();
+                    }
+
+                } catch (InterruptedException e) {
+                    logger.warning("Error on taking message from worker queue: "+e.getMessage());
+                }
+
             }
 
         }
-
     }
 
     /**
@@ -496,10 +517,9 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
      * would require lock if the batch procedures and the event sending to
      * leader are not synchronized. More to come...
      */
-    private void sendEventToLeader(OutboundEventResult outputEvent) {
+    private void batchEventsToLeader() {
 
-        this.leaderConnectionMetadata.acquireWrite();
-
+        /* TODO finish batch to leader
         this.leaderConnectionMetadata.writeBuffer.clear();
 
         Class<?> clazz = this.vmsMetadata.queueToEventMap().get(outputEvent.outputQueue());
@@ -515,7 +535,6 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                     @Override
                     public void completed(Integer result, Object attachment) {
                         leaderConnectionMetadata.writeBuffer.clear();
-                        leaderConnectionMetadata.releaseWrite();
                     }
 
                     @Override
@@ -524,10 +543,10 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                         if(!leaderConnectionMetadata.channel.isOpen()){
                             leader.off();
                         }
-                        leaderConnectionMetadata.releaseWrite();
                     }
                 }
         );
+         */
     }
 
     private class ConnectToExternalVmsProtocol {
@@ -536,9 +555,9 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         private final AsynchronousSocketChannel channel;
         private final ByteBuffer buffer;
         public final CompletionHandler<Void, ConnectToExternalVmsProtocol> connectCompletionHandler;
-        private final NetworkNode node;
+        private final ConsumerVms node;
 
-        public ConnectToExternalVmsProtocol(AsynchronousSocketChannel channel, NetworkNode node) {
+        public ConnectToExternalVmsProtocol(AsynchronousSocketChannel channel, ConsumerVms node) {
             this.state = State.NEW;
             this.channel = channel;
             this.connectCompletionHandler = new ConnectToVmsCompletionHandler();
@@ -561,7 +580,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                         MemoryManager.getTemporaryDirectBuffer(),
                         MemoryManager.getTemporaryDirectBuffer(),
                         channel,
-                        new Semaphore(1));
+                        null);
 
                 if(producerConnectionMetadataMap.containsKey(node.hashCode())){
                     logger.warning("The node "+node.host+" "+node.port+" already contains a connection as a producer");
@@ -584,6 +603,11 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                         attachment.state = State.PRESENTATION_SENT;
                         attachment.buffer.clear();
                         MemoryManager.releaseTemporaryDirectBuffer(attachment.buffer);
+
+                        // set up event sender timer task
+                        node.timer = new Timer("vms-sender-timer", true);
+                        node.timer.scheduleAtFixedRate(new VmsWorker(node, connMetadata), DEFAULT_DELAY_FOR_BATCH_SEND, DEFAULT_DELAY_FOR_BATCH_SEND );
+
                         attachment.channel.read(connMetadata.readBuffer, connMetadata, new VmsReadCompletionHandler());
                     }
 
@@ -612,7 +636,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
      * to which VMSs they have to connect to
      */
     private void connectToConsumerVMSs(Map<String, ConsumerVms> consumerSet) {
-        for(NetworkNode vms : consumerSet.values()) {
+        for(ConsumerVms vms : consumerSet.values()) {
             try {
                 InetSocketAddress address = new InetSocketAddress(vms.host, vms.port);
                 AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
@@ -697,7 +721,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
         @Override
         public void completed(Integer result, Void void_) {
 
-            logger.info("Starting process for processing presentation message.");
+            logger.info("Starting process for processing presentation message");
 
             // message identifier
             byte messageIdentifier = this.buffer.get(0);
@@ -865,15 +889,23 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
             @Override
             public void completed(Integer result, Void attachment) {
                 state = State.PRESENTATION_SENT;
+
+                // set up leader worker
+                leaderWorker = new LeaderWorker();
+                new Thread(leaderWorker).start();
+
+                buffer.clear();
+
                 channel.read(buffer, leaderConnectionMetadata, new LeaderReadCompletionHandler() );
             }
 
             @Override
             public void failed(Throwable exc, Void attachment) {
+                buffer.clear();
                 if(!channel.isOpen()) {
                     leader.off();
                 }
-                // else what to do try again?
+                // else what to do try again? no, let the new leader connect
             }
         }
 
@@ -883,6 +915,12 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
 
             // leader has disconnected, or new leader
             leader = Presentation.readServer(this.buffer);
+
+            // read queues leader is interested
+            boolean hasQueuesToSubscribe = this.buffer.get() == YES;
+            if(hasQueuesToSubscribe){
+                queuesLeaderSubscribesTo = Presentation.readQueuesToSubscribeTo(this.buffer, serdesProxy);
+            }
 
             // only connects to all VMSs on first leader connection
 
@@ -895,7 +933,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                         buffer,
                         MemoryManager.getTemporaryDirectBuffer(),
                         channel,
-                        new Semaphore(1)
+                        null
                 );
 
             } else {
@@ -906,7 +944,6 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 leaderConnectionMetadata.channel = channel; // update channel
             }
             leader.on();
-
             this.buffer.clear();
 
             if(includeMetadata) {
@@ -977,18 +1014,14 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                     vmsInternalChannels.transactionInputQueue().addAll(payloads);
                 }
                 case (BATCH_COMMIT_REQUEST) -> {
-
                     // a batch commit queue from a batch current + 1 can arrive before this vms moves next? yes
-
                     BatchCommitRequest.Payload payload = BatchCommitRequest.read(connectionMetadata.readBuffer);
-
                     if(payload.batch() == currentBatch.batch) {
                         vmsInternalChannels.batchCommitRequestQueue().add(currentBatch);
                     } else {
-                        // buffer it
+                        // buffer to commit later
                         batchContextMap.get( payload.batch() ).requestPayload = payload;
                     }
-
                 }
                 case (EVENT) -> {
                     TransactionEvent.Payload payload = TransactionEvent.read(connectionMetadata.readBuffer);
@@ -1018,6 +1051,9 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                     }
 
                 }
+                case (PRESENTATION) -> {
+                    logger.warning("Presentation being sent again by the producer!?");
+                }
             }
 
             connectionMetadata.readBuffer.clear();
@@ -1030,6 +1066,7 @@ public final class EmbedVmsEventHandler extends SignalingStoppableRunnable {
                 connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
             } else {
                 leader.off();
+                leaderWorker.stop();
             }
         }
 

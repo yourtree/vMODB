@@ -18,15 +18,21 @@ public class BatchContext {
         this.status = Status.NEW;
     }
 
+    /**
+     * A batch being completed in a VMS does not necessarily mean
+     * it can commit the batch. A new leader may need to abort the
+     * last batch. In this case, the (local) state must be restored to
+     * last logged state.
+     */
     public enum Status {
         NEW,
-        COMPLETED,
-        REPLYING_COMPLETED, // to the coordinator
-        COMPLETION_INFORMED, // write has completed
+        BATCH_COMPLETED,
+        REPLYING_BATCH_COMPLETED, // to the coordinator
+        BATCH_COMPLETION_INFORMED, // write has completed
         LOGGING,
-        COMMITTED,
-        REPLYING_COMMITTED,
-        COMMIT_INFORMED
+        LOGGED,
+        REPLYING_BATCH_COMMITTED,
+        BATCH_COMMIT_INFORMED
     }
 
     public Status status(){

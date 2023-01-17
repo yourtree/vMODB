@@ -271,7 +271,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         public ConnectToVmsProtocol(AsynchronousSocketChannel channel){
             this.state = State.NEW;
             this.channel = channel;
-            this.connectCompletionHandler = new ConnectToVmsCH();
+            this.connectCompletionHandler = new ConnectToVmsCompletionHandler();
             this.buffer = MemoryManager.getTemporaryDirectBuffer(1024);
         }
 
@@ -289,7 +289,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
          * Maybe passing the object as parameter is not necessary. it is non-static subclass,
          * so can have access to attributes...
          */
-        private class ConnectToVmsCH implements CompletionHandler<Void, ConnectToVmsProtocol> {
+        private class ConnectToVmsCompletionHandler implements CompletionHandler<Void, ConnectToVmsProtocol> {
 
             @Override
             public void completed(Void result, ConnectToVmsProtocol attachment) {
@@ -309,7 +309,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                         // read it
                         attachment.buffer.clear();
-                        attachment.channel.read(attachment.buffer, attachment, new ReadFromVmsCH());
+                        attachment.channel.read(attachment.buffer, attachment, new ReadFromVmsCompletionHandler());
 
                     }
 
@@ -329,7 +329,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
             }
         }
 
-        private class ReadFromVmsCH implements CompletionHandler<Integer, ConnectToVmsProtocol> {
+        private class ReadFromVmsCompletionHandler implements CompletionHandler<Integer, ConnectToVmsProtocol> {
 
             @Override
             public void completed(Integer result, ConnectToVmsProtocol attachment) {
@@ -545,15 +545,15 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     logger.info("Just logging it, since we don't necessarily need to wait for that. "+response);
                 }
                 case TX_ABORT -> {
-
                     // get information of what
                     TransactionAbort.Payload response = TransactionAbort.read(connectionMetadata.readBuffer);
                     txManagerCtx.transactionAbortEvents().add(response);
-
                 }
                 case EVENT ->
-                        // it could be interesting to received batch events from VMSs later
                         logger.info("New event received from VMS");
+                case BATCH_OF_EVENTS -> {
+                    logger.info("New batch of events received from VMS");
+                }
                 default ->
                     logger.warning("Unknown message received.");
 

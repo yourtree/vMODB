@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 class DefaultVmsSerdes implements IVmsSerdesProxy {
 
@@ -82,6 +83,16 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
     @Override
     public <K,V> Map<K,V> deserializeMap(String mapStr){
          return this.gson.fromJson(mapStr, new TypeToken<Map<K, V>>(){}.getType());
+    }
+
+    @Override
+    public <V> String serializeSet(Set<V> map) {
+        return this.gson.toJson( map, new TypeToken<Set<V>>(){}.getType() );
+    }
+
+    @Override
+    public <V> Set<V> deserializeSet(String setStr) {
+        return this.gson.fromJson(setStr, new TypeToken<Set<V>>(){}.getType());
     }
 
     @Override

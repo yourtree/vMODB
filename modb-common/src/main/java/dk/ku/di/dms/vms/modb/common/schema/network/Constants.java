@@ -30,7 +30,7 @@ public final class Constants {
     // coming from one or more VMSs in the same transaction
     public static final byte TX_ABORT = 6;
 
-    /**
+    /*
      * Batch-commit-related events.
      * A batch never aborts.
      * Only individual transactions of the batch may abort.
@@ -61,10 +61,10 @@ public final class Constants {
      * Sent to terminal VMSs participating in a batch
      * that whenever and end of batch is observed
      * the batch complete can be sent to the coordinator
-     *
+     * -
      * We cannot guarantee the implicit batch progression will be perceived by VMSs
      * since new events may never arrive again to a certain VMS
-     *
+     * -
      * then the coordinator sends this message
      * VMSs after receiving this message snapshot (log) their states
      */

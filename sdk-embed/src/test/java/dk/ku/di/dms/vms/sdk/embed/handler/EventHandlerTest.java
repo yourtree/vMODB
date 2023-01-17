@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -26,10 +27,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
@@ -204,7 +202,7 @@ public class EventHandlerTest {
      * so we can pass the consumer without having to wait for a coordinator message
      */
     @Test
-    public void testConnectionToConsumer() throws Exception {
+    public void testConnectionFromVmsToConsumer() throws Exception {
 
         // 1 - assemble a consumer network node
         ConsumerVms me = new ConsumerVms("localhost", 1082);
@@ -320,7 +318,7 @@ public class EventHandlerTest {
         // 6 - read the presentation to set the writer of the producer free to write results
         ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
         channel.read(buffer).get();
-        buffer.clear(); // just ignore the presentation
+        buffer.clear(); // just ignore the presentation as we test this in the previous test
 
         logger.info("Presentation received from VMS");
 
@@ -412,23 +410,79 @@ public class EventHandlerTest {
     }
 
     @Test
+    public void testConnectionToVmsAsLeader() throws Exception {
+        // 1 - assemble a producer network node
+        ConsumerVms fakeLeader = new ConsumerVms("localhost", 1086);
+
+        List<String> inToDiscard = Collections.emptyList();
+        List<String> outToDiscard = List.of("out3");
+        List<String> inToSwap = List.of("out2");
+
+        NetworkNode vmsToConnectTo =  new NetworkNode("localhost", 1087);
+        // 2 - start the vms 1. don't need to pass producer info to vms 1, since vms is always waiting for producer
+        EmbedVmsEventHandler embedVmsEventHandler = loadMicroservice(
+                vmsToConnectTo,
+                null,
+                true,
+                new VmsEmbedInternalChannels(),
+                "example1",
+                inToDiscard,
+                outToDiscard,
+                inToSwap,
+                inToDiscard);
+
+        // 2 - connect
+        InetSocketAddress address = new InetSocketAddress(vmsToConnectTo.host, vmsToConnectTo.port);
+        AsynchronousSocketChannel channel = AsynchronousSocketChannel.open();
+        channel.setOption(TCP_NODELAY, true);
+        channel.setOption(SO_KEEPALIVE, true);
+        channel.connect(address).get();
+
+        logger.info("Connected. Now sending presentation.");
+
+        ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
+        Presentation.writeServer( buffer, new ServerIdentifier(fakeLeader.host, fakeLeader.port),  true);
+
+        // write output queues
+        Set<String> queues = Set.of("out1","out2");
+        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+        Presentation.writeQueuesToSubscribeTo(buffer, queues, serdes);
+        buffer.flip();
+        channel.write(buffer).get();
+        buffer.clear();
+
+        // 4 - read metadata sent by vms
+        channel.read(buffer).get();
+        buffer.position(2);
+        VmsIdentifier vms = Presentation.readVms(buffer, serdes);
+
+        embedVmsEventHandler.stop();
+
+        // 5 - check whether the presentation sent is correct
+        assert vms.inputEventSchema.containsKey("in") &&
+                vms.outputEventSchema.containsKey("out1") &&
+                vms.outputEventSchema.containsKey("out2");
+
+    }
+
+    // @Test
     public void testCrossVmsTransactionWithEventHandler() {
         // TODO set up a consumer to subscribe to both out1 and out2
         //  set up producer too, check if events are received end-to-end through the network
         assert true;
     }
 
-    @Test
+    // @Test
     public void testBatchCompletion(){
         assert true;
     }
 
-    @Test
+    // @Test
     public void testConnectionFromLeader(){
         assert true;
     }
 
-    @Test
+    // @Test
     public void testReceiveEventFromLeader(){
         assert true;
     }

@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A presentation is a message that carries out the necessary info of a node
@@ -79,8 +80,7 @@ public final class Presentation {
     // for VMS consumption
     public static void writeServer(ByteBuffer buffer,
                                    ServerIdentifier serverIdentifier,
-                                   boolean includeMetadataOnAck
-                                   ){
+                                   boolean includeMetadataOnAck){
         buffer.put( Constants.PRESENTATION );
         buffer.put( SERVER_TYPE );
 
@@ -204,6 +204,20 @@ public final class Presentation {
 
         return new VmsIdentifier( host, port, vmsIdentifier, lastTid, lastBatch, dataSchema, inputEventSchema, outputEventSchema );
 
+    }
+
+    public static Set<String> readQueuesToSubscribeTo(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){
+        int queueSetSize = buffer.getInt();
+        String setStr = ByteUtils.extractStringFromByteBuffer(buffer, queueSetSize);
+        return serdesProxy.deserializeSet(setStr);
+    }
+
+    public static void writeQueuesToSubscribeTo(ByteBuffer buffer, Set<String> queues, IVmsSerdesProxy serdesProxy){
+        buffer.put(YES);
+        String queuesStr = serdesProxy.serializeSet(queues);
+        byte[] queuesStrBytes = queuesStr.getBytes(StandardCharsets.UTF_8);
+        buffer.putInt( queuesStrBytes.length );
+        buffer.put( queuesStrBytes );
     }
 
 }

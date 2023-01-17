@@ -39,7 +39,7 @@ public abstract class SignalingStoppableRunnable extends StoppableRunnable {
      * @return A byte representing the result
      */
     public Byte getResult() throws InterruptedException {
-        return signal.take();
+        return this.signal.take();
     }
 
     /**
@@ -47,7 +47,7 @@ public abstract class SignalingStoppableRunnable extends StoppableRunnable {
      * x The exception. maybe we should get some information from that....
      */
     protected void defaultLogError(Issue.Category category, int node) {
-        issueQueue.add( new Issue( category, node ) );
+        this.issueQueue.add( new Issue( category, node ) );
     }
 
     private class CustomUncaughtExceptionHandler implements Thread.UncaughtExceptionHandler {

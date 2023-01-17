@@ -9,6 +9,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A proxy for all types of events exchanged between the sdk and the servers
@@ -30,6 +31,9 @@ public interface IVmsSerdesProxy {
 
     <K,V> String serializeMap( Map<K,V> map );
     <K,V> Map<K,V> deserializeMap(String mapStr);
+
+    <V> String serializeSet( Set<V> map );
+    <V> Set<V> deserializeSet(String setStr);
 
     String serializeConsumerSet( Map<String, NetworkNode> map );
     Map<String, ConsumerVms> deserializeConsumerSet(String mapStr);
