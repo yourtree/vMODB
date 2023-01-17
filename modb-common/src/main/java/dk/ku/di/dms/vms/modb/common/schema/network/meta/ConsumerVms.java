@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.common.schema.network.meta;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -16,7 +16,7 @@ public class ConsumerVms extends NetworkNode {
      * make it easier to manage metadata about each
      */
 
-    public transient final Map<Long, BlockingQueue<TransactionEvent.Payload>> transactionEventsPerBatch;
+    public transient final Map<Long, BlockingDeque<TransactionEvent.Payload>> transactionEventsPerBatch;
 
     public transient final List<TransactionEvent.Payload> pendingWrites;
 

@@ -48,6 +48,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     private final Map<Long, IVmsTransactionTrackingContext> transactionContextMap;
 
     // offset tracking for execution
+    // setting it volatile does not solve non-deterministic problem
     private OffsetTracker currentOffset;
 
     // offset tracking. i.e., cannot issue a task if predecessor transaction is not ready yet
@@ -279,7 +280,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
      * of event apart from transaction input might arrive such as batch),
      * this method needs to be overridden and the first IF block removed
      */
-    private void checkForNewEvents() throws InterruptedException {
+    private void checkForNewEvents() {
 
         // a safe condition to block waiting is when the current offset is finished (no result tasks to be processed)
         // however, cannot block waiting for input queue because of an unknown bug
@@ -287,18 +288,21 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             return;
         }
 
+        /* because of an unknown reason, after event handler stop, this queue still output an already consumed event
         if(this.vmsChannels.transactionInputQueue().size() == 1) {
-            TransactionEvent.Payload transactionalEvent = this.vmsChannels.transactionInputQueue().take();
-            this.processNewEvent(transactionalEvent);
+            this.processNewEvent(this.vmsChannels.transactionInputQueue().take());
             return;
         }
+         */
 
         this.vmsChannels.transactionInputQueue().drainTo(this.inputEvents);
 
-        for(var input : this.inputEvents){
+        for(TransactionEvent.Payload input : this.inputEvents){
+            logger.info("Payload processed: "+input.payload());
             this.processNewEvent(input);
         }
 
+        // clear previous round
         this.inputEvents.clear();
 
     }
@@ -311,7 +315,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         } else if (this.offsetMap.get(transactionalEvent.tid()) == null) {
             this.processNewEventFromUnknownTransaction(transactionalEvent);
         } else {
-            throw new IllegalStateException("Queue" + transactionalEvent.event() + " " + transactionalEvent.tid() + "" + transactionalEvent.payload());
+            logger.warning("Queue '" + transactionalEvent.event() + "' " + transactionalEvent.tid() + " : " + transactionalEvent.payload());
+            // throw new IllegalStateException("Queue '" + transactionalEvent.event() + "' " + transactionalEvent.tid() + " : " + transactionalEvent.payload());
         }
     }
 
@@ -391,18 +396,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             Class<?> clazz = this.queueToEventMap.get(transactionalEvent.event());
             Object input = this.serdes.deserialize(transactionalEvent.payload(), clazz);
 
-            // another way is to deliver all input events in any order and let the task resolve the order
-            // but let's incur in this overhead for now
-            /* method 1:
-            String methodName = task.signature().method().getName();
-            var optional = transactionMetadata.signatures.stream().filter(p-> p.object().method().getName().equals(methodName)).findFirst();
-            if(optional.isEmpty()){
-                throw new IllegalStateException("Input event not mapped correctly.");
-            }
-            task.putEventInput( optional.get().id(), input );
-            */
-
-            // method 2, more efficient
             // based on the input queue, find the position based on the transaction signature
             boolean found = false;
             int j;

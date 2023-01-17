@@ -24,6 +24,7 @@ import org.junit.Test;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
@@ -52,6 +53,15 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  */
 public class EventHandlerTest {
 
+    private record VmsCtx (
+        EmbedVmsEventHandler eventHandler,
+        VmsTransactionScheduler scheduler) {
+        public void stop() {
+            this.scheduler.stop();
+            this.eventHandler.stop();
+        }
+    }
+
     private final Logger logger = Logger.getLogger(EventHandlerTest.class.getName());
     private final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
@@ -62,7 +72,7 @@ public class EventHandlerTest {
      * To avoid that, this method takes into consideration the inputs and output events
      * to be discarded for a given
      */
-    private static EmbedVmsEventHandler loadMicroservice(NetworkNode node, Map<String, ConsumerVms> consumerVms, boolean eventHandlerActive,
+    private static VmsCtx loadMicroservice(NetworkNode node, Map<String, ConsumerVms> consumerVms, boolean eventHandlerActive,
                                                          VmsEmbedInternalChannels vmsInternalPubSubService, String vmsName,
                                                          List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap, List<String> outToSwap)
             throws Exception {
@@ -115,7 +125,7 @@ public class EventHandlerTest {
         Thread schedulerThread = new Thread(scheduler);
         schedulerThread.start();
 
-        return eventHandler;
+        return new VmsCtx(eventHandler,scheduler);
 
     }
 
@@ -136,7 +146,7 @@ public class EventHandlerTest {
         VmsEmbedInternalChannels channelForAddingInput = new VmsEmbedInternalChannels();
 
         // microservice 1
-        EmbedVmsEventHandler eventHandler1 = loadMicroservice(
+        VmsCtx vmsCtx = loadMicroservice(
                 new NetworkNode("localhost", 1080),
                 null,
                 false,
@@ -156,7 +166,7 @@ public class EventHandlerTest {
         VmsEmbedInternalChannels channelForGettingOutput = new VmsEmbedInternalChannels();
 
         // microservice 2
-        EmbedVmsEventHandler eventHandler2 = loadMicroservice(
+        VmsCtx vmsCtx2 = loadMicroservice(
                 new NetworkNode("localhost", 1081),
                 null,
                 false,
@@ -187,8 +197,8 @@ public class EventHandlerTest {
 
         assert result != null && result.resultTasks != null && !result.resultTasks.isEmpty();
 
-        eventHandler1.stop();
-        eventHandler2.stop();
+        vmsCtx.stop();
+        vmsCtx2.stop();
 
         assert ((OutputEventExample3) result.resultTasks.get(0).output()).id == 2;
     }
@@ -240,7 +250,7 @@ public class EventHandlerTest {
         List<String> inToSwap = List.of("out2");
 
         // 3 - start the vms 1. make sure the info that this is a vms consumer is passed as parameter
-        EmbedVmsEventHandler embedVmsEventHandler = loadMicroservice(
+        VmsCtx vmsCtx = loadMicroservice(
                 new NetworkNode("localhost", 1083),
                 consumerSet,
                 true,
@@ -263,7 +273,7 @@ public class EventHandlerTest {
 
         VmsIdentifier producerVms = Presentation.readVms(buffer, VmsSerdesProxyBuilder.build());
 
-        embedVmsEventHandler.stop();
+        vmsCtx.stop();
         serverSocket.close();
 
         // 5 - check whether the presentation sent is correct
@@ -278,13 +288,14 @@ public class EventHandlerTest {
      * Test sending an input data and receiving the results
      */
     @Test
-    public void testReceiveBatchAsConsumer() throws Exception {
+    public void testReceiveBatchFromVmsAsConsumer() throws Exception {
 
         // 1 - assemble a consumer network node
         ConsumerVms me = new ConsumerVms("localhost", 1084);
 
         // 2 - start a socket in the prescribed node
-        AsynchronousServerSocketChannel serverSocket = AsynchronousServerSocketChannel.open();
+        AsynchronousChannelGroup group = AsynchronousChannelGroup.withThreadPool(Executors.newFixedThreadPool(2));
+        AsynchronousServerSocketChannel serverSocket = AsynchronousServerSocketChannel.open(group);
         SocketAddress address = new InetSocketAddress(me.host, me.port);
         serverSocket.bind(address);
 
@@ -299,7 +310,7 @@ public class EventHandlerTest {
 
         NetworkNode vmsToConnectTo =  new NetworkNode("localhost", 1085);
         // 4 - start the vms 1. don't need to pass producer info to vms 1, since vms is always waiting for producer
-        EmbedVmsEventHandler embedVmsEventHandler = loadMicroservice(
+        VmsCtx vmsCtx = loadMicroservice(
                         vmsToConnectTo,
                         consumerSet,
                         true,
@@ -322,33 +333,48 @@ public class EventHandlerTest {
 
         logger.info("Presentation received from VMS");
 
-        // 8 - send event input
-        buffer.clear();
+        // 7 - send event input
         InputEventExample1 eventExample = new InputEventExample1(1);
-        String payload = this.serdes.serialize(eventExample, InputEventExample1.class);
-        TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,1,"in", payload);
+        String inputPayload = this.serdes.serialize(eventExample, InputEventExample1.class);
+        TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,1,"in", inputPayload);
         TransactionEvent.write(buffer, eventInput);
         buffer.flip();
         channel.write(buffer).get(); // no need to wait
+        buffer.clear();
 
         logger.info("Input event sent");
 
-        // 9 - listen from the internal channel. may take some time because of the batch commit scheduler
-        // why also checking the output? to see if the event sent is correctly processed
-        ByteBuffer readBuffer = MemoryManager.getTemporaryDirectBuffer();
-        channel.read(readBuffer).get();
+        /*
+         8 - listen from the internal channel. may take some time because of the batch commit scheduler
+         why also checking the output? to see if the event sent is correctly processed
+         FIXME hanging forever sometimes. not deterministic
+          possible problem: locking my thread pool: slide 44
+          https://openjdk.org/projects/nio/presentations/TS-4222.pdf
+          With an executor passed as a group, it started working....
+        */
+        channel.read(buffer).get( 25, TimeUnit.SECONDS );
 
         logger.info("Batch received");
 
-        // assert the batch of events is received
-        readBuffer.position(0);
-        byte messageType = readBuffer.get();
+        // 9 - assert the batch of events is received
+        buffer.position(0);
+        byte messageType = buffer.get();
         assert messageType == BATCH_OF_EVENTS;
-        int size = readBuffer.getInt();
+        int size = buffer.getInt();
         assert size == 2;
 
+        TransactionEvent.Payload payload;
+        for(int i = 0; i < size; i++){
+            buffer.get(); // exclude event
+            payload = TransactionEvent.read(buffer);
+            Class<?> clazz =  payload.event().equalsIgnoreCase("out1") ? OutputEventExample1.class : OutputEventExample2.class;
+            Object obj = serdes.deserialize(payload.payload(), clazz);
+            assert !payload.event().equalsIgnoreCase("out1") || obj instanceof OutputEventExample1;
+            assert !payload.event().equalsIgnoreCase("out2") || obj instanceof OutputEventExample2;
+        }
+
         channel.close();
-        embedVmsEventHandler.stop();
+        vmsCtx.stop();
         serverSocket.close();
         assert true;
     }
@@ -368,7 +394,7 @@ public class EventHandlerTest {
 
         NetworkNode vmsToConnectTo =  new NetworkNode("localhost", 1087);
         // 2 - start the vms 1. don't need to pass producer info to vms 1, since vms is always waiting for producer
-        EmbedVmsEventHandler embedVmsEventHandler = loadMicroservice(
+        VmsCtx vmsCtx = loadMicroservice(
                 vmsToConnectTo,
                 null,
                 true,
@@ -403,7 +429,7 @@ public class EventHandlerTest {
 
         int result = res.get();
 
-        embedVmsEventHandler.stop();
+        vmsCtx.stop();
 
         // 4 - how to know it was successful?
         assert result == numberOfBytes;
@@ -420,7 +446,7 @@ public class EventHandlerTest {
 
         NetworkNode vmsToConnectTo =  new NetworkNode("localhost", 1087);
         // 2 - start the vms 1. don't need to pass producer info to vms 1, since vms is always waiting for producer
-        EmbedVmsEventHandler embedVmsEventHandler = loadMicroservice(
+        VmsCtx vmsCtx = loadMicroservice(
                 vmsToConnectTo,
                 null,
                 true,
@@ -456,12 +482,97 @@ public class EventHandlerTest {
         buffer.position(2);
         VmsIdentifier vms = Presentation.readVms(buffer, serdes);
 
-        embedVmsEventHandler.stop();
+        vmsCtx.stop();
 
         // 5 - check whether the presentation sent is correct
         assert vms.inputEventSchema.containsKey("in") &&
                 vms.outputEventSchema.containsKey("out1") &&
                 vms.outputEventSchema.containsKey("out2");
+
+    }
+
+    @Test
+    public void testReceiveBatchFromVmsAsLeader() throws Exception {
+
+        ConsumerVms fakeLeader = new ConsumerVms("localhost", 1088);
+
+        List<String> inToDiscard = Collections.emptyList();
+        List<String> outToDiscard = List.of("out3");
+        List<String> inToSwap = List.of("out2");
+
+        NetworkNode vmsToConnectTo =  new NetworkNode("localhost", 1089);
+        // 2 - start the vms 1. don't need to pass producer info to vms 1, since vms is always waiting for producer
+        VmsCtx vmsCtx = loadMicroservice(
+                vmsToConnectTo,
+                null,
+                true,
+                new VmsEmbedInternalChannels(),
+                "example1",
+                inToDiscard,
+                outToDiscard,
+                inToSwap,
+                inToDiscard);
+
+        // 2 - connect
+        InetSocketAddress address = new InetSocketAddress(vmsToConnectTo.host, vmsToConnectTo.port);
+        AsynchronousSocketChannel channel = AsynchronousSocketChannel.open();
+        channel.setOption(TCP_NODELAY, true);
+        channel.setOption(SO_KEEPALIVE, true);
+        channel.connect(address).get();
+
+        logger.info("Connected. Now sending presentation.");
+
+        ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
+        Presentation.writeServer( buffer, new ServerIdentifier(fakeLeader.host, fakeLeader.port),  true);
+
+        // write output queues
+        Set<String> queues = Set.of("out1","out2");
+        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+        Presentation.writeQueuesToSubscribeTo(buffer, queues, serdes);
+        buffer.flip();
+        channel.write(buffer).get();
+        buffer.clear();
+
+        // 4 - read metadata sent by vms
+        channel.read(buffer).get();
+        buffer.clear(); //can discard since the previous test already checks the correctness
+
+        // 5 - send event input
+        InputEventExample1 eventExample = new InputEventExample1(1);
+        String inputPayload = this.serdes.serialize(eventExample, InputEventExample1.class);
+        TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,1,"in", inputPayload);
+        TransactionEvent.write(buffer, eventInput);
+        buffer.flip();
+        channel.write(buffer).get(); // no need to wait
+
+        logger.info("Input event sent");
+
+        // 6 - read batch of events
+        buffer.clear();
+        channel.read(buffer).get();
+
+        logger.info("Batch received");
+
+        // 9 - assert the batch of events is received
+        buffer.position(0);
+        byte messageType = buffer.get();
+        assert messageType == BATCH_OF_EVENTS;
+        int size = buffer.getInt();
+        assert size == 2;
+
+        TransactionEvent.Payload payload;
+
+        for(int i = 0; i < size; i++){
+            buffer.get(); // exclude event
+            payload = TransactionEvent.read(buffer);
+            Class<?> clazz =  payload.event().equalsIgnoreCase("out1") ? OutputEventExample1.class : OutputEventExample2.class;
+            Object obj = serdes.deserialize(payload.payload(), clazz);
+            assert !payload.event().equalsIgnoreCase("out1") || obj instanceof OutputEventExample1;
+            assert !payload.event().equalsIgnoreCase("out2") || obj instanceof OutputEventExample2;
+        }
+
+        channel.close();
+        vmsCtx.stop();
 
     }
 
@@ -473,18 +584,13 @@ public class EventHandlerTest {
     }
 
     // @Test
-    public void testBatchCompletion(){
-        assert true;
-    }
+//    public void testBatchCompletion(){
+//        assert true;
+//    }
 
     // @Test
-    public void testConnectionFromLeader(){
-        assert true;
-    }
-
-    // @Test
-    public void testReceiveEventFromLeader(){
-        assert true;
-    }
+//    public void testReceiveEventFromLeader(){
+//        assert true;
+//    }
 
 }
