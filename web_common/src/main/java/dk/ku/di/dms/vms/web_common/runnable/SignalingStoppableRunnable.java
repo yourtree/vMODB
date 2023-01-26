@@ -36,12 +36,8 @@ public abstract class SignalingStoppableRunnable extends StoppableRunnable {
         this.issueQueue = new LinkedBlockingQueue<>();
 
         this.logger = Logger.getLogger(getClass().getName());
-//        ConsoleHandler consoleHandler = new ConsoleHandler();
-//        consoleHandler.setLevel(Level.ALL);
-//        this.logger.addHandler(consoleHandler);
         this.logger.setLevel(Level.ALL);
         this.logger.setUseParentHandlers(false);
-
     }
 
     /**

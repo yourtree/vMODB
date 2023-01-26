@@ -96,13 +96,13 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
     }
 
     @Override
-    public String serializeConsumerSet(Map<String, NetworkNode> map) {
+    public String serializeConsumerSet(Map<String, List<NetworkNode>> map) {
         return this.gson.toJson( map );
     }
 
     @Override
-    public Map<String, ConsumerVms> deserializeConsumerSet(String mapStr) {
-        return this.gson.fromJson(mapStr, new TypeToken<Map<String, ConsumerVms>>(){}.getType());
+    public Map<String, List<ConsumerVms>> deserializeConsumerSet(String mapStr) {
+        return this.gson.fromJson(mapStr, new TypeToken<Map<String, List<ConsumerVms>>>(){}.getType());
     }
 
     @Override

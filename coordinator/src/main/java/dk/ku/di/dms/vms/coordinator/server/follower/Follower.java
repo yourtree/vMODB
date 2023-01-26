@@ -9,7 +9,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplicati
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplicationAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
+import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
@@ -50,7 +50,7 @@ public final class Follower extends SignalingStoppableRunnable {
 
     private final ServerIdentifier leader;
 
-    private ConnectionMetadata leaderConnectionMetadata;
+    private LockConnectionMetadata leaderConnectionMetadata;
 
     // are we using this?
     // private final Map<Long, BatchContext> batchContextMap;
@@ -168,9 +168,9 @@ public final class Follower extends SignalingStoppableRunnable {
 
                 channel.connect(address).get();
 
-                ConnectionMetadata connectionMetadata = new ConnectionMetadata(
+                LockConnectionMetadata connectionMetadata = new LockConnectionMetadata(
                         leader.hashCode(),
-                        ConnectionMetadata.NodeType.SERVER,
+                        LockConnectionMetadata.NodeType.SERVER,
                         readBuffer,
                         writeBuffer,
                         channel,
@@ -205,10 +205,10 @@ public final class Follower extends SignalingStoppableRunnable {
 
     }
 
-    private class ReadCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
+    private class ReadCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
 
         @Override
-        public void completed(Integer result, ConnectionMetadata connectionMetadata) {
+        public void completed(Integer result, LockConnectionMetadata connectionMetadata) {
 
             ByteBuffer readBuffer = connectionMetadata.readBuffer;
 
@@ -263,7 +263,7 @@ public final class Follower extends SignalingStoppableRunnable {
         }
 
         @Override
-        public void failed(Throwable exc, ConnectionMetadata connectionMetadata) {
+        public void failed(Throwable exc, LockConnectionMetadata connectionMetadata) {
             AsynchronousSocketChannel channel = connectionMetadata.channel;
             if(channel != null && channel.isOpen()) {
                 try {
@@ -298,9 +298,9 @@ public final class Follower extends SignalingStoppableRunnable {
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, false);
 
-                leaderConnectionMetadata = new ConnectionMetadata(
+                leaderConnectionMetadata = new LockConnectionMetadata(
                         leader.hashCode(),
-                        ConnectionMetadata.NodeType.SERVER,
+                        LockConnectionMetadata.NodeType.SERVER,
                         readBuffer,
                         writeBuffer,
                         channel,

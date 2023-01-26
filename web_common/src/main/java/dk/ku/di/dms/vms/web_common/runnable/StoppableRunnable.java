@@ -8,6 +8,7 @@ public abstract class StoppableRunnable implements Runnable {
     private volatile boolean running;
 
     public StoppableRunnable() {
+        // starts running as default
         this.running = true;
     }
 

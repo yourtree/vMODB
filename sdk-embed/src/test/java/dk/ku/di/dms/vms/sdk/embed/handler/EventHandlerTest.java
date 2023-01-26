@@ -3,10 +3,7 @@ package dk.ku.di.dms.vms.sdk.embed.handler;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.*;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
@@ -54,7 +51,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
 public class EventHandlerTest {
 
     private record VmsCtx (
-        EmbedVmsEventHandler eventHandler,
+        EmbeddedVmsEventHandler eventHandler,
         VmsTransactionScheduler scheduler) {
         public void stop() {
             this.scheduler.stop();
@@ -72,9 +69,12 @@ public class EventHandlerTest {
      * To avoid that, this method takes into consideration the inputs and output events
      * to be discarded for a given
      */
-    private static VmsCtx loadMicroservice(NetworkNode node, Map<String, ConsumerVms> consumerVms, boolean eventHandlerActive,
-                                                         VmsEmbedInternalChannels vmsInternalPubSubService, String vmsName,
-                                                         List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap, List<String> outToSwap)
+    private static VmsCtx loadMicroservice(NetworkNode node,
+                                           List<ConsumerVms> consumerVMSs,
+                                           Map<String, List<ConsumerVms>> eventToConsumersMap,
+                                           boolean eventHandlerActive,
+                                           VmsEmbedInternalChannels vmsInternalPubSubService, String vmsName,
+                                           List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap, List<String> outToSwap)
             throws Exception {
 
         VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata("dk.ku.di.dms.vms.sdk.embed");
@@ -108,14 +108,14 @@ public class EventHandlerTest {
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
                 node.host, node.port, vmsName,
-                0, 0,
+                1, 0, 0,
                 vmsMetadata.dataSchema(),
                 vmsMetadata.inputEventSchema(), vmsMetadata.outputEventSchema());
 
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        EmbedVmsEventHandler eventHandler = EmbedVmsEventHandler.build(
-                vmsInternalPubSubService, vmsIdentifier, consumerVms, vmsMetadata, serdes, socketPool );
+        EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.build(
+                vmsInternalPubSubService, vmsIdentifier, consumerVMSs, eventToConsumersMap, vmsMetadata, serdes, socketPool );
 
         if(eventHandlerActive) {
             Thread eventHandlerThread = new Thread(eventHandler);
@@ -149,6 +149,7 @@ public class EventHandlerTest {
         VmsCtx vmsCtx = loadMicroservice(
                 new NetworkNode("localhost", 1080),
                 null,
+                null,
                 false,
                 channelForAddingInput,
                 "example1",
@@ -168,6 +169,7 @@ public class EventHandlerTest {
         // microservice 2
         VmsCtx vmsCtx2 = loadMicroservice(
                 new NetworkNode("localhost", 1081),
+                null,
                 null,
                 false,
                 channelForGettingOutput,
@@ -241,9 +243,10 @@ public class EventHandlerTest {
             }
         });
 
-        Map<String, ConsumerVms> consumerSet = new HashMap<>();
-        consumerSet.put("out1", me);
-        consumerSet.put("out2", me);
+        List<ConsumerVms> consumerSet = List.of(me);
+        Map<String, List<ConsumerVms>> eventToConsumersMap = new HashMap<>();
+        eventToConsumersMap.put("out1", consumerSet);
+        eventToConsumersMap.put("out2", consumerSet);
 
         List<String> inToDiscard = Collections.emptyList();
         List<String> outToDiscard = List.of("out3");
@@ -253,6 +256,7 @@ public class EventHandlerTest {
         VmsCtx vmsCtx = loadMicroservice(
                 new NetworkNode("localhost", 1083),
                 consumerSet,
+                eventToConsumersMap,
                 true,
                 new VmsEmbedInternalChannels(),
                 "example1",
@@ -300,9 +304,10 @@ public class EventHandlerTest {
         serverSocket.bind(address);
 
         // 3 - set consumer of events
-        Map<String, ConsumerVms> consumerSet = new HashMap<>();
-        consumerSet.put("out1", me);
-        consumerSet.put("out2", me);
+        List<ConsumerVms> consumerSet = List.of(me);
+        Map<String, List<ConsumerVms>> eventToConsumersMap = new HashMap<>();
+        eventToConsumersMap.put("out1", consumerSet);
+        eventToConsumersMap.put("out2", consumerSet);
 
         List<String> inToDiscard = Collections.emptyList();
         List<String> outToDiscard = List.of("out3");
@@ -313,6 +318,7 @@ public class EventHandlerTest {
         VmsCtx vmsCtx = loadMicroservice(
                         vmsToConnectTo,
                         consumerSet,
+                        eventToConsumersMap,
                         true,
                         new VmsEmbedInternalChannels(),
                         "example1",
@@ -386,7 +392,7 @@ public class EventHandlerTest {
     public void testConnectionToVmsAsProducer() throws Exception {
 
         // 1 - assemble a producer network node
-        ConsumerVms producer = new ConsumerVms("localhost", 1086);
+        NetworkAddress producer = new NetworkAddress("localhost", 1086);
 
         List<String> inToDiscard = Collections.emptyList();
         List<String> outToDiscard = List.of("out3");
@@ -396,6 +402,7 @@ public class EventHandlerTest {
         // 2 - start the vms 1. don't need to pass producer info to vms 1, since vms is always waiting for producer
         VmsCtx vmsCtx = loadMicroservice(
                 vmsToConnectTo,
+                null,
                 null,
                 true,
                 new VmsEmbedInternalChannels(),
@@ -418,7 +425,7 @@ public class EventHandlerTest {
         ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
         String dataAndInputSchema = "{}";
         String outputSchema = "{\"in\":{\"eventName\":\"in\",\"columnNames\":[\"id\"],\"columnDataTypes\":[\"INT\"]}}";
-        Presentation.writeVms(buffer,producer,"example-producer", 0,0, dataAndInputSchema,dataAndInputSchema,outputSchema);
+        Presentation.writeVms(buffer,producer,"example-producer", 1,0,0, dataAndInputSchema,dataAndInputSchema,outputSchema);
         buffer.flip();
 
         int numberOfBytes = buffer.limit();
@@ -448,6 +455,7 @@ public class EventHandlerTest {
         // 2 - start the vms 1. don't need to pass producer info to vms 1, since vms is always waiting for producer
         VmsCtx vmsCtx = loadMicroservice(
                 vmsToConnectTo,
+                null,
                 null,
                 true,
                 new VmsEmbedInternalChannels(),
@@ -504,6 +512,7 @@ public class EventHandlerTest {
         // 2 - start the vms 1. don't need to pass producer info to vms 1, since vms is always waiting for producer
         VmsCtx vmsCtx = loadMicroservice(
                 vmsToConnectTo,
+                null,
                 null,
                 true,
                 new VmsEmbedInternalChannels(),
@@ -577,11 +586,11 @@ public class EventHandlerTest {
     }
 
     // @Test
-    public void testCrossVmsTransactionWithEventHandler() {
-        // TODO set up a consumer to subscribe to both out1 and out2
-        //  set up producer too, check if events are received end-to-end through the network
-        assert true;
-    }
+//    public void testCrossVmsTransactionWithEventHandler() {
+//        // set up a consumer to subscribe to both out1 and out2
+//        //  set up producer too, check if events are received end-to-end through the network
+//        assert true;
+//    }
 
     // @Test
 //    public void testBatchCompletion(){

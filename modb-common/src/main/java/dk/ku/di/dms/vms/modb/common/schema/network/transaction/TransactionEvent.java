@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.transaction;
 
-import dk.ku.di.dms.vms.modb.common.ByteUtils;
+import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 
 import java.nio.ByteBuffer;

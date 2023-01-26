@@ -6,7 +6,7 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
-import dk.ku.di.dms.vms.sdk.embed.handler.EmbedVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.embed.handler.EmbeddedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 
 import java.util.Arrays;
@@ -58,6 +58,7 @@ public final class VmsApplication {
 
             assert vmsMetadata != null;
 
+            // could be higher. must adjust according to the number of cores available
             ExecutorService readTaskPool = Executors.newSingleThreadExecutor();
 
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
@@ -73,24 +74,28 @@ public final class VmsApplication {
                             vmsMetadata.queueToEventMap(),
                             serdes, null);
 
-            // ideally lastTid and lastBatch must be read from the log
+            // ideally lastTid and lastBatch must be read from the storage
 
             VmsIdentifier vmsIdentifier = new VmsIdentifier(
                     host, port, vmsName,
-                    0, 0,
+                    0, 0,0,
                     vmsMetadata.dataSchema(),
                     vmsMetadata.inputEventSchema(),
                     vmsMetadata.outputEventSchema());
 
+            // at least two, one for acceptor and one for new events
             ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-            EmbedVmsEventHandler eventHandler = EmbedVmsEventHandler.build(
-                    vmsInternalPubSubService, vmsIdentifier, null, vmsMetadata, serdes, socketPool );
+            EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.build(
+                    vmsInternalPubSubService, vmsIdentifier, null, null, vmsMetadata, serdes, socketPool );
 
-//            Thread eventHandlerThread = new Thread(eventHandler);
-//            eventHandlerThread.start();
-//            Thread schedulerThread = new Thread(scheduler);
-//            schedulerThread.start();
+            /*
+             one way to accomplish that, but that would require keep checking the thread status
+            Thread eventHandlerThread = new Thread(eventHandler);
+            eventHandlerThread.start();
+            Thread schedulerThread = new Thread(scheduler);
+            schedulerThread.start();
+            */
 
             // this is not the cause since the threads continue running in background...
             CompletableFuture<?>[] futures = new CompletableFuture[2];

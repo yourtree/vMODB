@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.transaction;
 
-import dk.ku.di.dms.vms.modb.common.ByteUtils;
+import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 
@@ -15,34 +15,34 @@ import java.nio.charset.StandardCharsets;
  */
 public class TransactionAbort {
 
-    // type | tid  | size vms name | vms name
-    private static final int headerSize = Byte.BYTES + Long.BYTES + Integer.BYTES;
-
     public static void write(ByteBuffer buffer, Payload payload) {
         buffer.put(Constants.TX_ABORT);
+        buffer.putLong(payload.batch);
         buffer.putLong(payload.tid);
         buffer.putInt( payload.vms().length() );
         buffer.put( payload.vms().getBytes(StandardCharsets.UTF_8) );
     }
 
-    public static void write(ByteBuffer buffer, VmsIdentifier vmsIdentifier, long tid){
+    public static void write(ByteBuffer buffer, VmsIdentifier vmsIdentifier, long batch, long tid){
         buffer.put(Constants.TX_ABORT);
+        buffer.putLong(batch);
         buffer.putLong(tid);
         buffer.putInt( vmsIdentifier.getIdentifier().length() );
         buffer.put( vmsIdentifier.getIdentifier().getBytes(StandardCharsets.UTF_8) );
     }
 
     public static Payload read(ByteBuffer buffer){
+        long batch = buffer.getLong();
         long tid = buffer.getLong();
         int size = buffer.getInt();
         String vms = ByteUtils.extractStringFromByteBuffer(buffer, size);
-        return new Payload(tid, vms);
+        return new Payload(batch, tid, vms);
     }
 
     // a leader cannot issue new events (and batches of course) without receiving batch ACKs from all vms involved
     // so no need for further information in the payload
     public record Payload(
-            long tid, String vms
+            long batch, long tid, String vms
     ) {}
 
 }

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.common;
+package dk.ku.di.dms.vms.modb.common.utils;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;

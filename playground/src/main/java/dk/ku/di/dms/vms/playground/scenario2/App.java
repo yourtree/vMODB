@@ -1,12 +1,12 @@
 package dk.ku.di.dms.vms.playground.scenario2;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.Coordinator;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.options.BatchReplicationStrategy;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
@@ -17,7 +17,7 @@ import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
-import dk.ku.di.dms.vms.sdk.embed.handler.EmbedVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.embed.handler.EmbeddedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 
 import java.io.IOException;
@@ -135,10 +135,10 @@ public class App
 
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        NetworkNode vms1 = new NetworkNode("localhost", 1080);
-        NetworkNode vms2 = new NetworkNode("localhost", 1081);
+        ConsumerVms vms1 = new ConsumerVms("localhost", 1080);
+        ConsumerVms vms2 = new ConsumerVms("localhost", 1081);
 
-        Map<Integer,NetworkNode> VMSs = new HashMap<>(2);
+        Map<Integer, ConsumerVms> VMSs = new HashMap<>(2);
         VMSs.put(vms1.hashCode(), vms1);
         VMSs.put(vms2.hashCode(), vms2);
 
@@ -155,16 +155,14 @@ public class App
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
         Coordinator coordinator = new Coordinator(
-                socketPool,
                 serverMap,
                 null,
                 VMSs,
                 transactionMap,
                 serverEm1,
                 new CoordinatorOptions(),
-                0,
                 1,
-                BatchReplicationStrategy.NONE,
+                1,
                 App.parsedTransactionRequests,
                 serdes
         );
@@ -211,14 +209,14 @@ public class App
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
                 node.host, node.port, vmsName,
-                0, 0,
+                0, 0,0,
                 vmsMetadata.dataSchema(),
                 vmsMetadata.inputEventSchema(), vmsMetadata.outputEventSchema());
 
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        EmbedVmsEventHandler eventHandler = EmbedVmsEventHandler.build(
-                    vmsInternalPubSubService, vmsIdentifier, null, vmsMetadata, serdes, socketPool );
+        EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.build(
+                    vmsInternalPubSubService, vmsIdentifier, null, null, vmsMetadata, serdes, socketPool );
 
         Thread eventHandlerThread = new Thread(eventHandler);
         eventHandlerThread.start();

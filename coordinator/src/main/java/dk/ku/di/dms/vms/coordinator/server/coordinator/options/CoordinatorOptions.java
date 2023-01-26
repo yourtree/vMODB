@@ -20,30 +20,58 @@ public class CoordinatorOptions {
     // timeout to keep track when to send heartbeats to followers
     private long heartbeatTimeout = 20000;
 
-    private long txProcessTimeout = 10000;
+    // when to get new transaction input events from http handler
+    private long readTransactionInputTimeout = 10000;
 
-    private int scheduledTasksThreadPoolSize = 1;
+    // thread pool to execute tasks, e.g., batch replication to replicas
+    private int taskThreadPoolSize = 2;
 
-    public CoordinatorOptions withScheduledTasksThreadPoolSize(int scheduledTasksThreadPoolSize){
-        this.scheduledTasksThreadPoolSize = scheduledTasksThreadPoolSize;
+    /**
+     * thread pool for handling network events.
+     * default is number of cores divided by 2
+     */
+    private int groupThreadPoolSize = Runtime.getRuntime().availableProcessors() / 2;
+
+    // defines how the batch metadata is replicated across servers
+    private BatchReplicationStrategy batchReplicationStrategy = BatchReplicationStrategy.NONE;
+
+    public int getGroupThreadPoolSize() {
+        return this.groupThreadPoolSize;
+    }
+
+    public void withGroupThreadPoolSize(int groupThreadPoolSize) {
+        this.groupThreadPoolSize = groupThreadPoolSize;
+    }
+
+    public BatchReplicationStrategy getBatchReplicationStrategy() {
+        return this.batchReplicationStrategy;
+    }
+
+    public CoordinatorOptions withBatchReplicationStrategy(BatchReplicationStrategy replicationStrategy){
+        this.batchReplicationStrategy = replicationStrategy;
         return this;
     }
 
-    public int getScheduledTasksThreadPoolSize() {
-        return scheduledTasksThreadPoolSize;
+    public CoordinatorOptions withTaskThreadPoolSize(int scheduledTasksThreadPoolSize){
+        this.taskThreadPoolSize = scheduledTasksThreadPoolSize;
+        return this;
     }
 
-    public long getTxProcessTimeout() {
-        return txProcessTimeout;
+    public int getTaskThreadPoolSize() {
+        return this.taskThreadPoolSize;
     }
 
-    public CoordinatorOptions withTxProcessTimeout(long txProcessTimeout) {
-        this.txProcessTimeout = txProcessTimeout;
+    public long getReadTransactionInputTimeout() {
+        return this.readTransactionInputTimeout;
+    }
+
+    public CoordinatorOptions withReadTransactionInputTimeout(long readTransactionInputTimeout) {
+        this.readTransactionInputTimeout = readTransactionInputTimeout;
         return this;
     }
 
     // default, no waiting for previous batch. many reasons, network congestion, node crashes, etc
-    private BatchEmissionPolicy batchEmissionPolicy = BatchEmissionPolicy.OPTIMISTIC;
+    private BatchEmissionPolicy batchEmissionPolicy = BatchEmissionPolicy.BLOCKING;
 
     public CoordinatorOptions withBatchEmissionPolicy(BatchEmissionPolicy batchEmissionPolicy){
         this.batchEmissionPolicy = batchEmissionPolicy;

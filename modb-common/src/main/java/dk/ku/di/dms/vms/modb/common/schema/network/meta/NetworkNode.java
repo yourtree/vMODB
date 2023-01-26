@@ -9,10 +9,7 @@ import java.util.Objects;
  * A transition: off -> on -> off
  * Immutable object for host and port.
  */
-public class NetworkNode {
-
-    public String host;
-    public int port;
+public class NetworkNode extends NetworkAddress {
 
     private final transient int hashCode;
 
@@ -20,8 +17,7 @@ public class NetworkNode {
     private volatile transient boolean active;
 
     public NetworkNode(String host, int port) {
-        this.host = host;
-        this.port = port;
+        super(host, port);
         this.hashCode = Objects.hash(this.host, this.port);
         this.active = false;
     }
@@ -34,7 +30,7 @@ public class NetworkNode {
 
     @Override
     public boolean equals(Object o) {
-        return hashCode() == o.hashCode();
+        return o instanceof NetworkNode && hashCode() == o.hashCode();
     }
 
     public boolean isActive(){
@@ -48,15 +44,5 @@ public class NetworkNode {
     public void off(){
         this.active = false;
     }
-
-    /*
-     * Useful in case a VMS crashes, comes back online, but the metadata is kept
-     * No need to resending
-     */
-//    public void update(String host, int port){
-//        this.host = host;
-//        this.port = port;
-//        this.hashCode = Objects.hash(this.host, this.port);
-//    }
 
 }

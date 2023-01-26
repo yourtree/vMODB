@@ -6,7 +6,6 @@ import java.nio.ByteBuffer;
 
 /**
  * A batch-commit replication request payload
- *
  * Used to replicate across followers
  */
 public final class BatchReplicationAck {

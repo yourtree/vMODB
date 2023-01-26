@@ -1,24 +1,19 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.batch;
 
-import dk.ku.di.dms.vms.modb.common.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 /**
  * A batch-commit response payload
- *
  * The concept of aborting a batch-commit does not exist.
- *
  * For avoiding messages (optimizing the protocol), this message
  * can be dropped (ignored) or simply marshalled with another.
  */
-public final class BatchCommitResponse {
-
-    // type | batch offset |  size of string | string vms name
-    private static final int headerSize = Byte.BYTES + Byte.BYTES + Integer.BYTES + Integer.BYTES;
+public final class BatchCommitAck {
 
     public static void write(ByteBuffer buffer, long batch, VmsIdentifier vmsIdentifier){
         buffer.put(Constants.BATCH_COMMIT_ACK);
@@ -33,6 +28,17 @@ public final class BatchCommitResponse {
         int size = buffer.getInt();
         String vms = ByteUtils.extractStringFromByteBuffer(buffer, size);
         return new Payload(batch, vms);
+    }
+
+    public static void write(ByteBuffer buffer, Payload payload) {
+        buffer.put(Constants.BATCH_COMMIT_ACK);
+        buffer.putLong(payload.batch() );
+        buffer.putInt( payload.vms().length() );
+        buffer.put( payload.vms().getBytes(StandardCharsets.UTF_8) );
+    }
+
+    public static BatchCommitAck.Payload of(long batch, String vms){
+        return new BatchCommitAck.Payload(batch, vms);
     }
 
     // a leader cannot issue new events (and batches of course) without receiving batch ACKs from all vms involved

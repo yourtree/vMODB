@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
 import dk.ku.di.dms.vms.coordinator.election.schema.VoteResponse;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
+import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
@@ -66,7 +66,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
     // even though we can start with a known number of servers, their payload may have changed after a crash
     private final Map<Integer, ServerIdentifier> servers;
 
-    private final Map<Integer, ConnectionMetadata> connectionMetadataMap;
+    private final Map<Integer, LockConnectionMetadata> connectionMetadataMap;
 
     // a bounded time in which a leader election must occur, otherwise it should restart. in milliseconds
     // only one thread modifying, no need to use AtomicLong
@@ -224,9 +224,9 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
     }
 
-    private ConnectionMetadata connectToServer(ServerIdentifier server){
+    private LockConnectionMetadata connectToServer(ServerIdentifier server){
 
-        ConnectionMetadata connectionMetadata = null;
+        LockConnectionMetadata connectionMetadata = null;
 
         try {
 
@@ -236,9 +236,9 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
             channel.setOption( TCP_NODELAY, Boolean.TRUE );
             channel.setOption( SO_KEEPALIVE, Boolean.TRUE );
 
-            connectionMetadata = new ConnectionMetadata(
+            connectionMetadata = new LockConnectionMetadata(
                     server.hashCode(),
-                    ConnectionMetadata.NodeType.SERVER,
+                    LockConnectionMetadata.NodeType.SERVER,
                     MemoryManager.getTemporaryDirectBuffer(128),
                     MemoryManager.getTemporaryDirectBuffer(128),
                     channel,
@@ -313,12 +313,12 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                 // is in the list of known servers?
                 if (servers.get( key ) != null) {
 
-                    ConnectionMetadata connMeta = connectionMetadataMap.get(key);
+                    LockConnectionMetadata connMeta = connectionMetadataMap.get(key);
                     if (connMeta == null) {
 
-                        connMeta = new ConnectionMetadata(
+                        connMeta = new LockConnectionMetadata(
                                 key,
-                                ConnectionMetadata.NodeType.SERVER,
+                                LockConnectionMetadata.NodeType.SERVER,
                                 MemoryManager.getTemporaryDirectBuffer(128),
                                 MemoryManager.getTemporaryDirectBuffer(128),
                                 channel,
@@ -351,9 +351,9 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
                     opN.addAndGet(1);
 
-                    ConnectionMetadata connMeta = new ConnectionMetadata(
+                    LockConnectionMetadata connMeta = new LockConnectionMetadata(
                             key,
-                            ConnectionMetadata.NodeType.SERVER,
+                            LockConnectionMetadata.NodeType.SERVER,
                             MemoryManager.getTemporaryDirectBuffer(128),
                             MemoryManager.getTemporaryDirectBuffer(128),
                             channel,
@@ -385,10 +385,10 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
      * <a href="https://blog.gceasy.io/2021/02/24/java-threads-may-not-be-memory-efficient/">...</a>
      * Single thread, so no need to deal with data races.
      */
-    private class ReadCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
+    private class ReadCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
 
         @Override
-        public void completed(Integer result, ConnectionMetadata connectionMetadata) {
+        public void completed(Integer result, LockConnectionMetadata connectionMetadata) {
 
             ByteBuffer readBuffer = connectionMetadata.readBuffer;
             readBuffer.position(0);
@@ -501,7 +501,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
         }
 
         @Override
-        public void failed(Throwable exc, ConnectionMetadata connectionMetadata) {
+        public void failed(Throwable exc, LockConnectionMetadata connectionMetadata) {
             if (connectionMetadata.channel.isOpen()){
                 connectionMetadata.readBuffer.clear();
                 connectionMetadata.channel.read( connectionMetadata.readBuffer, connectionMetadata, this );
@@ -513,19 +513,21 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
     }
 
-    private static final class WriteCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
+    private static final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
+
+    private static final class WriteCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
 
         @Override
-        public void completed(Integer result, ConnectionMetadata connectionMetadata) {
+        public void completed(Integer result, LockConnectionMetadata connectionMetadata) {
             unlockSafely(connectionMetadata);
         }
 
         @Override
-        public void failed(Throwable exc, ConnectionMetadata connectionMetadata) {
+        public void failed(Throwable exc, LockConnectionMetadata connectionMetadata) {
             unlockSafely(connectionMetadata);
         }
 
-        private void unlockSafely(ConnectionMetadata connectionMetadata){
+        private void unlockSafely(LockConnectionMetadata connectionMetadata){
             connectionMetadata.writeBuffer.rewind();
             connectionMetadata.writeLock.release();
         }
@@ -553,13 +555,13 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
                         for (ServerIdentifier server : servers.values()) {
 
-                            ConnectionMetadata connMeta = getConnection(server);
+                            LockConnectionMetadata connMeta = getConnection(server);
 
                             if (connMeta != null) {
                                 connMeta.writeLock.acquire();
                                 VoteRequest.write(connMeta.writeBuffer, me);
                                 connMeta.writeBuffer.position(0);
-                                connMeta.channel.write(connMeta.writeBuffer, connMeta, new WriteCompletionHandler());
+                                connMeta.channel.write(connMeta.writeBuffer, connMeta, writeCompletionHandler);
                             }
 
                         }
@@ -568,12 +570,12 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
                         for (ServerIdentifier server : servers.values()) {
 
-                            ConnectionMetadata connMeta = getConnection(server);
+                            LockConnectionMetadata connMeta = getConnection(server);
                             if (connMeta != null) {
                                 connMeta.writeLock.acquire();
                                 LeaderRequest.write(connMeta.writeBuffer, me);
                                 connMeta.writeBuffer.position(0);
-                                connMeta.channel.write(connMeta.writeBuffer, connMeta, new WriteCompletionHandler());
+                                connMeta.channel.write(connMeta.writeBuffer, connMeta, writeCompletionHandler);
                             }
 
                         }
@@ -595,8 +597,8 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
     /**
      * Get connection. Connect if there is not previous established connection
      */
-    private ConnectionMetadata getConnection(ServerIdentifier server){
-        ConnectionMetadata connMeta = connectionMetadataMap.get( server.hashCode() );
+    private LockConnectionMetadata getConnection(ServerIdentifier server){
+        LockConnectionMetadata connMeta = connectionMetadataMap.get( server.hashCode() );
         if(connMeta == null){
             return connectToServer(server);
         }
@@ -616,7 +618,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                 try {
                     VoteMessageContext msgContext = voteMessagesToSend.take();
 
-                    ConnectionMetadata connMeta = getConnection( msgContext.target );
+                    LockConnectionMetadata connMeta = getConnection( msgContext.target );
 
                     if(connMeta != null) {
 
@@ -629,7 +631,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                         }
 
                         connMeta.writeBuffer.position(0);
-                        connMeta.channel.write(connMeta.writeBuffer, connMeta, new WriteCompletionHandler());
+                        connMeta.channel.write(connMeta.writeBuffer, connMeta, writeCompletionHandler);
 
                     } else {
                         logger.warning("Could not connect to server: "+
@@ -655,7 +657,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
      * To reuse connections already established and buffers
      * @return connection metadata
      */
-    public Map<Integer,ConnectionMetadata> getServerConnectionMetadata() {
+    public Map<Integer, LockConnectionMetadata> getServerConnectionMetadata() {
         return this.connectionMetadataMap;
     }
 

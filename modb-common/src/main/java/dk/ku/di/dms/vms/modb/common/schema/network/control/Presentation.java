@@ -1,13 +1,13 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.control;
 
-import dk.ku.di.dms.vms.modb.common.ByteUtils;
+import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
+import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
-import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
+import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -29,13 +29,6 @@ public final class Presentation {
     //                                                      0 server 1 vms  if leader already have metadata
     //                                     message type | node type [0,1] | metadata bit | lastOffset | port | size host
     private static final int serverHeader = Byte.BYTES + Byte.BYTES +    Byte.BYTES +      Long.BYTES + Integer.BYTES + Integer.BYTES;
-
-    //                0 server 1 vms
-    // message type | node type [0,1] | last tid | last batch | port | size | <host address is variable> |
-    private static final int vmsHeader = Byte.BYTES + Byte.BYTES + Long.BYTES + Long.BYTES + Integer.BYTES + Integer.BYTES;
-
-    // + size of data schema and event schema lists
-    private static final int fixedVmsSize = vmsHeader + Integer.BYTES + Integer.BYTES;
 
     public static void writeClient(ByteBuffer buffer, String table){
         buffer.put( Constants.PRESENTATION );
@@ -120,10 +113,11 @@ public final class Presentation {
     }
 
     public static void writeVms(ByteBuffer buffer,
-                                NetworkNode node,
+                                NetworkAddress node,
                                 String vmsIdentifier,
+                                long batch,
                                 long lastTid,
-                                long lastBatch) {
+                                long previousBatch) {
 
         buffer.put( Constants.PRESENTATION );
         buffer.put( VMS_TYPE );
@@ -132,8 +126,9 @@ public final class Presentation {
         buffer.putInt(name.length );
         buffer.put(name);
 
+        buffer.putLong( batch );
         buffer.putLong( lastTid );
-        buffer.putLong( lastBatch );
+        buffer.putLong( previousBatch );
 
         buffer.putInt( node.port );
 
@@ -146,15 +141,16 @@ public final class Presentation {
      * Method is agnostic to the vms class
      */
     public static void writeVms(ByteBuffer buffer,
-                                NetworkNode node,
+                                NetworkAddress node,
                                 String vmsIdentifier,
+                                long batch,
                                 long lastTid,
-                                long lastBatch,
+                                long previousBatch,
                                 String dataSchema,
                                 String inputEventSchema,
                                 String outputEventSchema){
 
-        writeVms(buffer,node,vmsIdentifier,lastTid,lastBatch);
+        writeVms(buffer, node, vmsIdentifier, batch, lastTid, previousBatch);
 
         byte[] dataSchemaBytes = dataSchema.getBytes(StandardCharsets.UTF_8);
         buffer.putInt( dataSchemaBytes.length );
@@ -174,8 +170,9 @@ public final class Presentation {
         int sizeName = buffer.getInt();
         String vmsIdentifier = ByteUtils.extractStringFromByteBuffer( buffer, sizeName );
 
+        long batch = buffer.getLong();
         long lastTid = buffer.getLong();
-        long lastBatch = buffer.getLong();
+        long previousBatch = buffer.getLong();
 
         int port = buffer.getInt();
 
@@ -202,7 +199,7 @@ public final class Presentation {
 
         Map<String, VmsEventSchema> outputEventSchema = serdesProxy.deserializeEventSchema( outputEventSchemaStr );
 
-        return new VmsIdentifier( host, port, vmsIdentifier, lastTid, lastBatch, dataSchema, inputEventSchema, outputEventSchema );
+        return new VmsIdentifier( host, port, vmsIdentifier, batch , lastTid, previousBatch, dataSchema, inputEventSchema, outputEventSchema );
 
     }
 

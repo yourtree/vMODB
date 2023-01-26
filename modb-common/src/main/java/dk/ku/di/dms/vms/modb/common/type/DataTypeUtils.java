@@ -49,7 +49,7 @@ public final class DataTypeUtils {
     }
 
     /**
-     * Used by the append only buffer?
+     * Used by the append-only buffer?
      * @param dt Data type
      * @return the corresponding function
      */

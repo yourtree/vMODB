@@ -4,10 +4,8 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BlockingDeque;
 
 /**
  * The identification of a connecting DBMS daemon
@@ -18,17 +16,28 @@ import java.util.Map;
  * producers and consumers and then form and send the consumer set
  * to each virtual microservice
  */
-public class VmsIdentifier extends ConsumerVms {
+public final class VmsIdentifier extends NetworkNode {
 
     // identifier is the vms name
     public final String vmsIdentifier;
 
-    public long lastTid;
+    /**
+     * The batch offset, monotonically increasing.
+     * to avoid vms to process transactions from the
+     * next batch while the current has not finished yet
+     */
+    public long batch;
 
-    // batch offset, also monotonically increasing.
-    // to avoid vms to process transactions from the
-    // next batch while the current has not finished yet
-    public long lastBatch;
+    // last tid of current batch. may not participate in all TIDs of the batch
+    public long lastTidOfBatch;
+
+    /**
+     * A vms may not participate in all possible batches
+     * In other words, may have gaps
+     * This value informs the batch that precedes the
+     * current batch
+     */
+    public long previousBatch;
 
     // data model
      public final Map<String, VmsDataSchema> dataSchema;
@@ -38,25 +47,46 @@ public class VmsIdentifier extends ConsumerVms {
 
     public final Map<String, VmsEventSchema> outputEventSchema;
 
-    public VmsIdentifier(String host, int port, String vmsIdentifier, long lastTid, long lastBatch,
+    public ConsumerVms consumerVms;
+
+    public VmsIdentifier(String host, int port, String vmsIdentifier,
+                         long batch, long lastTidOfBatch, long previousBatch,
                          Map<String, VmsDataSchema> dataSchema,
                          Map<String, VmsEventSchema> inputEventSchema,
                          Map<String, VmsEventSchema> outputEventSchema) {
         super(host, port);
         this.vmsIdentifier = vmsIdentifier;
-        this.lastTid = lastTid;
-        this.lastBatch = lastBatch;
+        this.batch = batch;
+        this.lastTidOfBatch = lastTidOfBatch;
+        this.previousBatch = previousBatch;
         this.dataSchema = dataSchema;
         this.inputEventSchema = inputEventSchema;
         this.outputEventSchema = outputEventSchema;
+        this.consumerVms = null;
     }
 
-    public long getLastTid(){
-        return this.lastTid;
+    public long getLastTidOfBatch(){
+        return this.lastTidOfBatch;
     }
 
     public String getIdentifier(){
         return this.vmsIdentifier;
+    }
+
+    @Override
+    public String toString() {
+        return "{" +
+                "host='" + host + '\'' +
+                ", port=" + port +
+                ", identifier='" + vmsIdentifier + '\'' +
+                ", batch=" + batch +
+                ", lastTidOfBatch=" + lastTidOfBatch +
+                ", previousBatch=" + previousBatch +
+                '}';
+    }
+
+    public BlockingDeque<TransactionEvent.Payload> transactionEventsPerBatch(long batch) {
+        return this.consumerVms.transactionEventsPerBatch.get(batch);
     }
 
 }

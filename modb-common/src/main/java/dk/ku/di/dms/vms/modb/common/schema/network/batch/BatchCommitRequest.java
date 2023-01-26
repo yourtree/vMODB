@@ -18,14 +18,18 @@ public final class BatchCommitRequest {
         buffer.putLong( tid );
     }
 
+    public static void write(ByteBuffer buffer, BatchCommitRequest.Payload payload){
+        buffer.put(Constants.BATCH_COMMIT_REQUEST);
+        buffer.putLong(payload.batch() );
+        buffer.putLong(payload.tid() );
+    }
+
     public static Payload read(ByteBuffer buffer){
         long batch = buffer.getLong();
         long tid = buffer.getLong();
-        return new Payload(tid,batch);
+        return new Payload(batch, tid);
     }
 
-    public record Payload(
-            long tid, long batch
-    ){}
+    public record Payload(long batch, long tid){}
 
 }

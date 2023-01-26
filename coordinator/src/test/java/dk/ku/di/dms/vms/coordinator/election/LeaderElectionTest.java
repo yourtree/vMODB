@@ -47,14 +47,14 @@ public class LeaderElectionTest
     public void leaderElectionTest() throws IOException, InterruptedException {
 
         AsynchronousServerSocketChannel serverSocket1 = AsynchronousServerSocketChannel.open();
-        serverSocket1.bind( new InetSocketAddress(80) );
+        serverSocket1.bind( new InetSocketAddress(8080) );
 
         AsynchronousServerSocketChannel serverSocket2 = AsynchronousServerSocketChannel.open();
-        serverSocket2.bind( new InetSocketAddress(81) );
+        serverSocket2.bind( new InetSocketAddress(8081) );
 
-        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 80 );
-        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 81 );
-        ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 82 );
+        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 8080 );
+        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 8081 );
+        ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 8082 );
 
         Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
         servers1.put( serverEm2.hashCode(), serverEm2 );
@@ -82,16 +82,17 @@ public class LeaderElectionTest
 
     /**
      * In this test, a server may need to retry the leader election
+     * FIXME it stopped working. add some logs to the workers to get visibility
      */
     @Test
     public void leaderElectionWithRetryTest() throws IOException, InterruptedException {
 
         AsynchronousServerSocketChannel serverSocket1 = AsynchronousServerSocketChannel.open();
-        serverSocket1.bind( new InetSocketAddress(80) );
+        serverSocket1.bind( new InetSocketAddress(8083) );
 
-        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 80 );
-        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 81 );
-        ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 82 );
+        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 8083 );
+        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 8084 );
+        ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 8085 );
 
         Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
         servers1.put( serverEm2.hashCode(), serverEm2 );
@@ -101,8 +102,8 @@ public class LeaderElectionTest
         servers2.put( serverEm1.hashCode(), serverEm1 );
         servers2.put( serverEm3.hashCode(), serverEm3 );
 
-        var group1 = AsynchronousChannelGroup.withFixedThreadPool(1, new VmsDaemonThreadFactory());
-        var group2 = AsynchronousChannelGroup.withFixedThreadPool(1, new VmsDaemonThreadFactory());
+        var group1 = AsynchronousChannelGroup.withFixedThreadPool(2, new VmsDaemonThreadFactory());
+        var group2 = AsynchronousChannelGroup.withFixedThreadPool(2, new VmsDaemonThreadFactory());
 
         ElectionWorker em1 = new ElectionWorker(serverSocket1, group1, Executors.newFixedThreadPool(2), serverEm1, servers1, new ElectionOptions() );
 
@@ -113,10 +114,11 @@ public class LeaderElectionTest
 
         sleep(10000);
 
-        logger.info( "result 1 should be still a candidate, see: " + em1.getState() );
+        // server 1 must still be a candidate
+        assert em1.getState() == 1;
 
         AsynchronousServerSocketChannel serverSocket2 = AsynchronousServerSocketChannel.open();
-        serverSocket2.bind( new InetSocketAddress(81) );
+        serverSocket2.bind( new InetSocketAddress(8084) );
 
         ElectionWorker em2 = new ElectionWorker(serverSocket2, group2, Executors.newFixedThreadPool(2), serverEm2, servers2, new ElectionOptions() );
         new Thread( em2 ).start();
@@ -137,7 +139,7 @@ public class LeaderElectionTest
      * In this test, a leader than has received the majority of votes, but not sent the leader request yet,
      * fails. That forces the nodes to initiate a
      */
-    @Test
+    // @Test
     public void leaderElectedFailAndNewLeaderMustBeSetupTest() {
 
         // TODO create a message handler that makes the node fail after receiving the majority of votes
@@ -149,17 +151,17 @@ public class LeaderElectionTest
      * We can assume the leader itself sends to this node a leader request message
      * so no different messages need to be created
      */
-    @Test
+    // @Test
     public void leaderElectionWithLeaderElectedTest() throws IOException, InterruptedException {
 
-        // TODO finish a server must run for leader and then received the current leader info
+        // TODO finish. a server must run for leader and then received the current leader info
+        AsynchronousChannelGroup group = AsynchronousChannelGroup.withThreadPool(Executors.newFixedThreadPool(2));
+        AsynchronousServerSocketChannel serverSocket1 = AsynchronousServerSocketChannel.open(group);
+        serverSocket1.bind( new InetSocketAddress(8086) );
 
-        AsynchronousServerSocketChannel serverSocket1 = AsynchronousServerSocketChannel.open();
-        serverSocket1.bind( new InetSocketAddress(80) );
-
-        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 80 );
-        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 81 );
-        ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 82 );
+        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 8086 );
+        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 8087 );
+        ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 8088 );
 
         Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
         servers1.put( serverEm2.hashCode(), serverEm2 );

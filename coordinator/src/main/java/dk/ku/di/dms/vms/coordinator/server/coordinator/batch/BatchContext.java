@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.coordinator.transaction;
+package dk.ku.di.dms.vms.coordinator.server.coordinator.batch;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -7,6 +7,8 @@ import java.util.Set;
 
 /**
  * Data structure to keep data about a batch commit
+ * The batch in progress (the first or the one waiting for being committed)
+ * must be shared with vms workers
  */
 public final class BatchContext {
 
@@ -21,16 +23,22 @@ public final class BatchContext {
 
     public Map<String, Long> lastTidOfBatchPerVms;
 
+    public long tidAborted;
+
+    public long lastTid;
+
     public BatchContext(long batchOffset) {
         this.batchOffset = batchOffset;
         this.terminalVMSs = new HashSet<>();
     }
 
     // called when the batch is over
-    public void seal(Map<String, Long> lastTidOfBatchPerVms){
+    public void seal(long lastTidOverall, Map<String, Long> lastTidOfBatchPerVms){
+        this.lastTid = lastTidOverall;
+        if(lastTidOfBatchPerVms == null) return;
         this.lastTidOfBatchPerVms = Collections.unmodifiableMap(lastTidOfBatchPerVms);
         // synchronized because vote can be received by different threads
-        this.missingVotes = Collections.synchronizedSet(new HashSet<>(terminalVMSs));
+        this.missingVotes = Collections.synchronizedSet(new HashSet<>(this.terminalVMSs));
     }
 
 }

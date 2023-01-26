@@ -6,15 +6,18 @@ public class BatchContext {
 
     public final long batch;
 
+    public final long lastBatch;
+
     public final long lastTid;
 
     private Status status;
 
     public BatchCommitRequest.Payload requestPayload;
 
-    public BatchContext(long batch, long lastTid) {
+    public BatchContext(long batch, long lastTidOfBatch, long lastBatch) {
         this.batch = batch;
-        this.lastTid = lastTid;
+        this.lastTid = lastTidOfBatch;
+        this.lastBatch = lastBatch;
         this.status = Status.NEW;
     }
 

@@ -6,7 +6,6 @@ import java.nio.ByteBuffer;
 
 /**
  * A batch-abort request payload
- *
  * This only happens in case a new leader is elected while the previous leader has crashed in the middle of a batch
  * To avoid the overhead of replicating the transaction inputs on each sending, it is simpler to discard the entire batch
  * and restart with a new one
@@ -20,11 +19,10 @@ public final class BatchAbortRequest {
     }
 
     public static Payload read(ByteBuffer buffer){
-        long tid = buffer.getLong();
         long batch = buffer.getLong();
-        return new Payload(tid,batch);
+        return new Payload(batch);
     }
 
-    public record Payload (long tid, long batch){}
+    public record Payload (long batch){}
 
 }

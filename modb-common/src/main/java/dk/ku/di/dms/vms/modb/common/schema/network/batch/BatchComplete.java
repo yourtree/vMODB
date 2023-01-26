@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.batch;
 
-import dk.ku.di.dms.vms.modb.common.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -10,14 +10,9 @@ import java.nio.charset.StandardCharsets;
 /**
  * A prepare request payload
  * Used to inform coordinator
- *
  * Using name because network address can change within a batch
  */
 public final class BatchComplete {
-
-    // commit   ----
-    // type  | batch offset | size of string | string vms name
-    private static final int headerSize = Byte.BYTES + Long.BYTES + Integer.BYTES; // + variable size
 
     public static void write(ByteBuffer buffer, long batch, VmsIdentifier vmsIdentifier){
         buffer.put(Constants.BATCH_COMPLETE);
@@ -30,6 +25,17 @@ public final class BatchComplete {
         long batch = buffer.getLong();
         int size = buffer.getInt();
         String vms = ByteUtils.extractStringFromByteBuffer(buffer, size);
+        return new Payload(batch, vms);
+    }
+
+    public static void write(ByteBuffer buffer, Payload payload) {
+        buffer.put(Constants.BATCH_COMPLETE);
+        buffer.putLong(payload.batch() );
+        buffer.putInt( payload.vms().length() );
+        buffer.put( payload.vms().getBytes(StandardCharsets.UTF_8) );
+    }
+
+    public static Payload of(long batch, String vms){
         return new Payload(batch, vms);
     }
 

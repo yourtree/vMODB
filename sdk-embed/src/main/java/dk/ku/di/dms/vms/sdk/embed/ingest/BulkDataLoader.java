@@ -1,14 +1,12 @@
 package dk.ku.di.dms.vms.sdk.embed.ingest;
 
-import dk.ku.di.dms.vms.modb.common.ByteUtils;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
+import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.annotations.Loader;
-import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
+import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +40,7 @@ public class BulkDataLoader {
         this.serdes = serdes;
     }
 
-    public void init(String tableName, ConnectionMetadata connectionMetadata){
+    public void init(String tableName, LockConnectionMetadata connectionMetadata){
         new BulkDataLoaderProtocol( tableNameToEntityClazzMap.get(tableName), repositoryFacades.get(tableName) ).init( connectionMetadata );
     }
 
@@ -56,15 +54,15 @@ public class BulkDataLoader {
             this.repositoryFacade = repositoryFacade;
         }
 
-        public void init(ConnectionMetadata connectionMetadata){
+        public void init(LockConnectionMetadata connectionMetadata){
             connectionMetadata.channel.read( connectionMetadata.readBuffer,
                     connectionMetadata, new ReadCompletionHandler() );
         }
 
-        private class ReadCompletionHandler implements CompletionHandler<Integer, ConnectionMetadata> {
+        private class ReadCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
 
             @Override
-            public void completed(Integer result, ConnectionMetadata connectionMetadata) {
+            public void completed(Integer result, LockConnectionMetadata connectionMetadata) {
 
                 logger.info("New bulk data received. Result =="+result);
 
@@ -105,7 +103,7 @@ public class BulkDataLoader {
             }
 
             @Override
-            public void failed(Throwable exc, ConnectionMetadata connectionMetadata) { }
+            public void failed(Throwable exc, LockConnectionMetadata connectionMetadata) { }
 
         }
 
