@@ -5,69 +5,78 @@ import java.util.*;
 /**
  * Responsible for assembling the topology of a transaction crossing virtual microservices
  */
-public class TransactionBootstrap {
+public final class TransactionBootstrap {
 
-    private final List<EventIdentifier> topology; // the input events
+    private final List<EventIdentifier> inputEvents; // the input events
 
     // for fast seek
-    private final Map<String, EventIdentifier> map;
+    private final Map<String, EventIdentifier> inputEventToInternalVMSsMap;
 
     private String name; // transaction name
-    private final List<String> terminals;
+
+    // to allow the coordinator to efficiently assign the lastTid to each internal node of a transaction
+    private final Set<String> internalNodes;
+
+    private final List<String> terminalNodes;
 
     public TransactionBootstrap(){
-        this.topology = new ArrayList<>();
-        this.terminals = new ArrayList<>();
-        this.map = new HashMap<>();
+        this.inputEvents = new ArrayList<>();
+        this.internalNodes = new HashSet<>();
+        this.terminalNodes = new ArrayList<>();
+        this.inputEventToInternalVMSsMap = new HashMap<>();
     }
 
-    public TransactionBootstrapPlus init(String name){
+    public TransactionBootstrapBuilder init(String name){
         this.name = name;
-        return TransactionBootstrapPlus.build(this);
+        return TransactionBootstrapBuilder.build(this);
     }
 
-    public static class TransactionBootstrapPlus {
+    /**
+     * Not thread-safe
+     */
+    public static class TransactionBootstrapBuilder {
 
         private TransactionBootstrap transactionBootstrap;
-        private static final TransactionBootstrapPlus INSTANCE = new TransactionBootstrapPlus();
+        private static final TransactionBootstrapBuilder INSTANCE = new TransactionBootstrapBuilder();
 
-        protected static TransactionBootstrapPlus build(TransactionBootstrap transactionBootstrap){
+        protected static TransactionBootstrapBuilder build(TransactionBootstrap transactionBootstrap){
             INSTANCE.transactionBootstrap = transactionBootstrap;
             return INSTANCE;
         }
 
-        public TransactionBootstrapPlus input(String alias, String vms, String event){
+        public TransactionBootstrapBuilder input(String alias, String vms, String event){
             EventIdentifier id = new EventIdentifier( alias, vms, event );
-            transactionBootstrap.map.put( alias, id );
-            transactionBootstrap.topology.add( id );
+            transactionBootstrap.inputEventToInternalVMSsMap.put( alias, id );
+            transactionBootstrap.inputEvents.add( id );
             return this;
         }
 
-        public TransactionBootstrapPlus internal(String alias, String vms, String event, String... deps){
+        public TransactionBootstrapBuilder internal(String alias, String vms, String event, String... deps){
 
             if(deps == null) throw new RuntimeException("Cannot have an internal event without a parent event");
 
             EventIdentifier toAdd = new EventIdentifier( alias, vms, event );
 
             for(String dep : deps){
-                EventIdentifier id = transactionBootstrap.map.get(dep);
+                EventIdentifier id = transactionBootstrap.inputEventToInternalVMSsMap.get(dep);
                 id.addChildren( toAdd );
             }
 
-            transactionBootstrap.map.put( alias, toAdd );
+            transactionBootstrap.inputEventToInternalVMSsMap.put( alias, toAdd );
+            transactionBootstrap.internalNodes.add(vms);
 
             return this;
         }
 
-        public TransactionBootstrapPlus terminal(String alias, String vms, String... deps){
+        public TransactionBootstrapBuilder terminal(String alias, String vms, String... deps){
             if(deps == null) throw new RuntimeException("Cannot have a terminal event without a parent event");
 
             EventIdentifier terminal = new EventIdentifier(alias, vms);
 
-            transactionBootstrap.terminals.add(terminal.vms);
+            transactionBootstrap.terminalNodes.add(terminal.targetVms);
 
             for(String dep : deps){
-                EventIdentifier id = transactionBootstrap.map.get(dep);
+                EventIdentifier id = transactionBootstrap.inputEventToInternalVMSsMap.get(dep);
                 // terminal.addDependence( id );
                 id.addChildren( terminal );
             }
@@ -77,8 +86,8 @@ public class TransactionBootstrap {
 
         // finally, build the transaction representation
         public TransactionDAG build(){
-            transactionBootstrap.topology.sort(Comparator.comparing(o -> o.name));
-            return new TransactionDAG(transactionBootstrap.name, transactionBootstrap.topology, transactionBootstrap.terminals);
+            transactionBootstrap.inputEvents.sort(Comparator.comparing(o -> o.name));
+            return new TransactionDAG(transactionBootstrap.name, transactionBootstrap.inputEvents, transactionBootstrap.internalNodes, transactionBootstrap.terminalNodes);
         }
 
     }

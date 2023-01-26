@@ -670,23 +670,16 @@ public final class Coordinator extends SignalingStoppableRunnable {
             // first make sure the metadata of this vms is known
             // that ensures that, even if the vms is down, eventually it will come to life
             for (TransactionInput.Event inputEvent : transactionInput.events) {
-                EventIdentifier event = transactionDAG.topology.get(inputEvent.name);
-                VmsIdentifier vms = this.vmsMetadata.get(event.vms);
+                EventIdentifier event = transactionDAG.inputEvents.get(inputEvent.name);
+                VmsIdentifier vms = this.vmsMetadata.get(event.targetVms);
                 if(vms == null) {
+                    logger.warning("VMS "+event.targetVms+" is unknown to the coordinator");
                     allKnown = false;
                     break;
                 }
             }
 
             if(!allKnown) continue; // got to the next transaction
-
-            // should find a way to continue emitting new transactions without stopping this thread
-            // non-blocking design
-            // having the batch here guarantees that all input events of the same tid does
-            // not belong to different batches
-
-            // to allow for a snapshot of the last TIDs of each vms involved in this transaction
-            long batch_ = this.currentBatchOffset;
 
             // this is the only thread updating this value, so it is by design an atomic operation
             // ++ after variable returns the value before incrementing
@@ -697,16 +690,16 @@ public final class Coordinator extends SignalingStoppableRunnable {
             for (TransactionInput.Event inputEvent : transactionInput.events) {
 
                 // look for the event in the topology
-                EventIdentifier event = transactionDAG.topology.get(inputEvent.name);
+                EventIdentifier event = transactionDAG.inputEvents.get(inputEvent.name);
 
                 // get the vms
-                VmsIdentifier vms = this.vmsMetadata.get(event.vms);
+                VmsIdentifier vms = this.vmsMetadata.get(event.targetVms);
 
                 // write. think about failures/atomicity later
-                TransactionEvent.Payload txEvent = TransactionEvent.of(tid_, vms.lastTidOfBatch, batch_, inputEvent.name, inputEvent.payload);
+                TransactionEvent.Payload txEvent = TransactionEvent.of(tid_, vms.lastTidOfBatch, this.currentBatchOffset, inputEvent.name, inputEvent.payload);
 
                 // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
-                var queue = vms.consumerVms.transactionEventsPerBatch.computeIfAbsent(batch_, k -> new LinkedBlockingDeque<>());
+                var queue = vms.consumerVms.transactionEventsPerBatch.computeIfAbsent(this.currentBatchOffset, k -> new LinkedBlockingDeque<>());
                 queue.add(txEvent);
 
                 // a vms, although receiving an event from a "next" batch, cannot yet commit, since
@@ -724,8 +717,15 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 vmsId.lastTidOfBatch = tid_;
             }
 
+            // also update the last tid of the internal VMSs
+            // to make sure they wait in case a later transaction (e.g., tid + 1) arrives
+            for(String vms : transactionDAG.internalNodes){
+                VmsIdentifier vmsId = this.vmsMetadata.get(vms);
+                vmsId.lastTidOfBatch = tid_;
+            }
+
             // add terminal to the set... so cannot be immutable when the batch context is created...
-            this.batchContextMap.get(batch_).terminalVMSs.addAll( transactionDAG.terminals );
+            this.batchContextMap.get(this.currentBatchOffset).terminalVMSs.addAll( transactionDAG.terminals );
 
         }
 
