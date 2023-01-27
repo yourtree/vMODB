@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.coordinator.server.coordinator;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
@@ -58,16 +58,16 @@ final class VmsWorker extends StoppableRunnable {
      */
     record VmsWorkerMessage(Command type, Object object){
 
-        public BatchCommitRequest.Payload asCommitRequest() {
-            return (BatchCommitRequest.Payload)object;
+        public BatchCommitCommand.Payload asBatchCommitCommand() {
+            return (BatchCommitCommand.Payload)object;
         }
 
         public String asVmsConsumerSet(){
             return (String)object;
         }
 
-        public BatchEventsCommand asBatchOfEventRequest(){
-            return (BatchEventsCommand)object;
+        public BatchCommitInfo.Payload asBatchOfEventsRequest(){
+            return (BatchCommitInfo.Payload)object;
         }
 
         public TransactionAbort.Payload asTransactionAbort(){
@@ -76,15 +76,10 @@ final class VmsWorker extends StoppableRunnable {
 
     }
 
-    record BatchEventsCommand(
-            long batch,
-            long lastTidOfBatch,
-            long lastBatch
-    ) {}
-
     enum Command {
         SEND_BATCH_OF_EVENTS,
-        SEND_BATCH_COMMIT,
+        SEND_BATCH_OF_EVENTS_WITH_COMMIT_INFO, // to terminals only
+        SEND_BATCH_COMMIT_COMMAND,
         SEND_TRANSACTION_ABORT,
         SEND_CONSUMER_SET
     }
@@ -110,8 +105,6 @@ final class VmsWorker extends StoppableRunnable {
      */
 
     private final BlockingQueue<Coordinator.Message> coordinatorQueue;
-
-    // private final AtomicReference<BatchContext> batchInProgress;
 
     private final AsynchronousChannelGroup group;
 
@@ -258,8 +251,9 @@ final class VmsWorker extends StoppableRunnable {
                 VmsWorkerMessage workerMessage = this.workerQueue.take();
                 switch (workerMessage.type){
                     // in order of probability
-                    case SEND_BATCH_OF_EVENTS -> this.sendBatchOfEvents(workerMessage);
-                    case SEND_BATCH_COMMIT -> this.sendBatchCommitRequest(workerMessage);
+                    case SEND_BATCH_OF_EVENTS -> this.sendBatchOfEvents(workerMessage, false);
+                    case SEND_BATCH_OF_EVENTS_WITH_COMMIT_INFO -> this.sendBatchOfEvents(workerMessage, true);
+                    case SEND_BATCH_COMMIT_COMMAND -> this.sendBatchCommitRequest(workerMessage);
                     case SEND_TRANSACTION_ABORT -> this.sendTransactionAbort(workerMessage);
                     case SEND_CONSUMER_SET -> this.sendConsumerSet(workerMessage);
                 }
@@ -292,8 +286,8 @@ final class VmsWorker extends StoppableRunnable {
     }
 
     private void sendBatchCommitRequest(VmsWorkerMessage workerMessage) {
-        BatchCommitRequest.Payload commitRequest = workerMessage.asCommitRequest();
-        BatchCommitRequest.write(this.writeBuffer, commitRequest);
+        BatchCommitCommand.Payload commitRequest = workerMessage.asBatchCommitCommand();
+        BatchCommitCommand.write(this.writeBuffer, commitRequest);
         this.writeBuffer.flip();
 
         try {
@@ -458,24 +452,69 @@ final class VmsWorker extends StoppableRunnable {
     /**
      * Need to send the last batch too so the vms can safely start the new batch
      */
-    private void sendBatchOfEvents(VmsWorkerMessage message) {
-        BatchEventsCommand batchEventsCommand = message.asBatchOfEventRequest();
-        if(this.vmsIdentifier.transactionEventsPerBatch(batchEventsCommand.batch) == null){
-            this.logger.warning("Cannot send batch of events because "+batchEventsCommand.batch+" has no events for "+consumerVms);
-        } else {
-            this.batchEvents(this.vmsIdentifier.transactionEventsPerBatch(batchEventsCommand.batch),
-                    batchEventsCommand.batch, batchEventsCommand.lastTidOfBatch, batchEventsCommand.lastBatch);
+    private void sendBatchOfEvents(VmsWorkerMessage message, boolean includeCommitInfo) {
+        BatchCommitInfo.Payload batchCommitInfo = message.asBatchOfEventsRequest();
+        boolean thereAreEventsToSend = this.vmsIdentifier.transactionEventsPerBatch(batchCommitInfo.batch()) == null;
+        if(thereAreEventsToSend){
+            if(includeCommitInfo){
+                this.sendBatchedEvents(this.vmsIdentifier.transactionEventsPerBatch(batchCommitInfo.batch()), batchCommitInfo);
+            } else {
+                this.sendBatchedEvents(this.vmsIdentifier.transactionEventsPerBatch(batchCommitInfo.batch()));
+            }
+        } else if(includeCommitInfo){
+            this.sendBatchCommitInfo(batchCommitInfo);
         }
     }
 
     private final List<TransactionEvent.Payload> events = new ArrayList<>();
 
-    private void batchEvents(BlockingDeque<TransactionEvent.Payload> eventsToSendToVms, long batch, long lastTidOfBatch, long lastBatch){
+    private void sendBatchCommitInfo(BatchCommitInfo.Payload batchCommitInfo){
+        // then send only the batch commit info
+        try {
+            BatchCommitInfo.write(this.writeBuffer, batchCommitInfo);
+            this.writeBuffer.flip();
+            this.channel.write(this.writeBuffer).get();
+            this.writeBuffer.clear();
+        } catch (InterruptedException | ExecutionException e) {
+            if(!this.channel.isOpen()) {
+                this.vmsIdentifier.off();
+            }
+            this.writeBuffer.clear();
+        }
 
+    }
+
+    private void sendBatchedEvents(BlockingDeque<TransactionEvent.Payload> eventsToSendToVms){
         eventsToSendToVms.drainTo(this.events);
+        int remaining = BatchUtils.assembleBatchPayload( this.events.size(), this.events, this.writeBuffer);
+        while(remaining > 0) {
+            try {
+                this.writeBuffer.flip();
+                this.channel.write(this.writeBuffer).get();
+                this.writeBuffer.clear();
+            } catch (InterruptedException | ExecutionException e) {
+                // return events to the deque
+                for(TransactionEvent.Payload event : this.events) {
+                    eventsToSendToVms.offerFirst(event);
+                }
+                if(!this.channel.isOpen()){
+                    this.vmsIdentifier.off();
+                    remaining = 0; // force exit loop
+                }
+            } finally {
+                this.writeBuffer.clear();
+            }
+            remaining = BatchUtils.assembleBatchPayload( remaining, this.events, this.writeBuffer);
+        }
+    }
 
-        int remaining = BatchUtils.assembleBatchPayload( this.events.size(), this.events, this.writeBuffer);// this.events.size();
-
+    /**
+     * If the target VMS is a terminal in the current batch,
+     * then the batch commit info must be appended
+     */
+    private void sendBatchedEvents(BlockingDeque<TransactionEvent.Payload> eventsToSendToVms, BatchCommitInfo.Payload batchCommitInfo){
+        eventsToSendToVms.drainTo(this.events);
+        int remaining = BatchUtils.assembleBatchPayload( this.events.size(), this.events, this.writeBuffer);
         while(true) {
             try {
                 if(remaining > 0) {
@@ -484,21 +523,24 @@ final class VmsWorker extends StoppableRunnable {
                     this.writeBuffer.clear();
                 } else {
                     // now must append the batch commit info
-
                     // do we space in the buffer?
-                    if (this.writeBuffer.remaining() >= BatchCommitInfo.size) {
-                        // just write
-                        BatchCommitInfo.write(this.writeBuffer, batch, lastTidOfBatch, lastBatch);
-                        this.writeBuffer.flip();
-                    } else {
-                        this.writeBuffer.flip();
-                        this.channel.write(this.writeBuffer).get();
-                        this.writeBuffer.clear();
-                        BatchCommitInfo.write(this.writeBuffer, batch, lastTidOfBatch, lastBatch);
+                    if (this.writeBuffer.remaining() < BatchCommitInfo.size) {
                         this.writeBuffer.flip();
                         this.channel.write(this.writeBuffer).get();
                         this.writeBuffer.clear();
                     }
+                    BatchCommitInfo.write(this.writeBuffer, batchCommitInfo);
+
+                    // update number of events
+                    writeBuffer.mark();
+                    int currCount = writeBuffer.getInt(1);
+                    currCount++;
+                    writeBuffer.putInt(1, currCount);
+                    writeBuffer.reset();
+
+                    this.writeBuffer.flip();
+                    this.channel.write(this.writeBuffer).get();
+                    this.writeBuffer.clear();
                     break;
                 }
             } catch (InterruptedException | ExecutionException e) {
@@ -514,9 +556,7 @@ final class VmsWorker extends StoppableRunnable {
                 this.writeBuffer.clear();
             }
             remaining = BatchUtils.assembleBatchPayload( remaining, this.events, this.writeBuffer);
-
         }
-
     }
 
 }

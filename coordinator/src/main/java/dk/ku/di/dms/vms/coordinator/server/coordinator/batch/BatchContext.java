@@ -18,10 +18,11 @@ public final class BatchContext {
     // set of terminal VMSs that has not voted yet
     public Set<String> missingVotes;
 
-    // may change across batches
     public final Set<String> terminalVMSs;
 
     public Map<String, Long> lastTidOfBatchPerVms;
+
+    public Map<String, Long> previousBatchPerVms;
 
     public long tidAborted;
 
@@ -33,12 +34,12 @@ public final class BatchContext {
     }
 
     // called when the batch is over
-    public void seal(long lastTidOverall, Map<String, Long> lastTidOfBatchPerVms){
+    public void seal(long lastTidOverall, Map<String, Long> lastTidOfBatchPerVms, Map<String, Long> previousBatchPerVms){
         this.lastTid = lastTidOverall;
-        if(lastTidOfBatchPerVms == null) return;
-        this.lastTidOfBatchPerVms = Collections.unmodifiableMap(lastTidOfBatchPerVms);
-        // synchronized because vote can be received by different threads
-        this.missingVotes = Collections.synchronizedSet(new HashSet<>(this.terminalVMSs));
+        // immutable
+        this.lastTidOfBatchPerVms = Map.copyOf(lastTidOfBatchPerVms);
+        this.previousBatchPerVms = Map.copyOf(previousBatchPerVms);
+        this.missingVotes = new HashSet<>(this.terminalVMSs);
     }
 
 }

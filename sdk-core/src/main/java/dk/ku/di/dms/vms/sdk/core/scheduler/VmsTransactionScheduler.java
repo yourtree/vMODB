@@ -25,6 +25,7 @@ import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.R;
 
 /**
  * The brain of the virtual microservice runtime
+ * It is agnostic to batch. It oly deals with transactions and their precedence
  * It consumes events, verifies whether a data operation is ready for execution
  * and dispatches them for execution. If an operation is not ready yet, given the
  * payload dependencies, it is stored in a waiting list until pending events arrive
@@ -316,7 +317,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             this.processNewEventFromUnknownTransaction(transactionalEvent);
         } else {
             logger.warning("Queue '" + transactionalEvent.event() + "' " + transactionalEvent.tid() + " : " + transactionalEvent.payload());
-            // throw new IllegalStateException("Queue '" + transactionalEvent.event() + "' " + transactionalEvent.tid() + " : " + transactionalEvent.payload());
         }
     }
 

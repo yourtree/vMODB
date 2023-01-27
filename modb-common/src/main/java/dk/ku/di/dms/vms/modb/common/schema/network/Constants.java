@@ -46,6 +46,10 @@ public final class Constants {
     */
     public static final byte BATCH_COMPLETE = 7;
 
+    /**
+     * Batch commit info is appended to a batch of events
+     * or sent individually to terminal nodes part of a batch
+     */
     public static final byte BATCH_COMMIT_INFO = 17;
 
     /**
@@ -58,23 +62,22 @@ public final class Constants {
     public static final byte BATCH_REPLICATION_ACK = 12;
 
     /**
-     * Sent to terminal VMSs participating in a batch
+     * Sent to non-terminal VMSs participating in a batch
      * that whenever and end of batch is observed
-     * the batch complete can be sent to the coordinator
-     * -
-     * We cannot guarantee the implicit batch progression will be perceived by VMSs
-     * since new events may never arrive again to a certain VMS
-     * -
-     * then the coordinator sends this message
+     * the batch commit ack can be sent to the coordinator.
      * VMSs after receiving this message snapshot (log) their states
      */
-    public static final byte BATCH_COMMIT_REQUEST = 9;
+    public static final byte BATCH_COMMIT_COMMAND = 9;
 
     // a commit response can indicate whether a leadership no longer holds
     // after network problems(e.g., partitions or increased latency) and subsequent normalization
 
-    // VMSs respond the batch commit with this message... but can be avoided for decreased overhead
-    // We assume a  service will eventually respond, even though there is a failure
+    /**
+     * VMSs respond the batch commit with this message... but can be avoided for decreased overhead
+     * We assume a  service will eventually respond, even though there is a failure.
+     * In other words, VMSs are sending this message but coordinator is not waiting for ACK, only for
+     * BATCH_COMPLETE (only the necessary given the DAG formation).
+     */
      public static final byte BATCH_COMMIT_ACK = 10;
 
     /**

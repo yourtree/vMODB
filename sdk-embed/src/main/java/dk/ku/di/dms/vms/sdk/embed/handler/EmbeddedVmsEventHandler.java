@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.sdk.embed.handler;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
@@ -87,8 +87,6 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
     // the thread responsible to send data to the leader
     private LeaderWorker leaderWorker;
 
-
-
     // refer to what operation must be performed
     private final BlockingQueue<LeaderWorker.Message> leaderWorkerQueue;
 
@@ -99,10 +97,28 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
     public final BlockingDeque<TransactionEvent.Payload> eventsToSendToLeader;
 
     /** INTERNAL STATE **/
+
+    /*
+     * When is the current batch updated to the next?
+     * - When the last tid of this batch (for this VMS) finishes execution,
+     *   if this VMS is a terminal in this batch, send the batch complete event to leader
+     *   if this vms is not a terminal, must wait for a batch commit request from leader
+     *   -- but this wait can entail low throughput (rethink that later)
+     */
     private BatchContext currentBatch;
+
+    /**
+     * It just marks the last tid that the scheduler has executed.
+     * The scheduler is batch-agnostic. That means in order
+     * to progress with the batch here, we need to check if the
+     * batch has completed using the last tid executed.
+     */
+    private long lastTidFinished;
 
     // metadata about all non-committed batches. when a batch commit finishes, it is removed from this map
     private final Map<Long, BatchContext> batchContextMap;
+
+    private final Map<Long, Long> batchToNextBatchMap;
 
     public final ISchedulerHandler schedulerHandler;
 
@@ -154,9 +170,11 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
         this.serdesProxy = serdesProxy;
 
-        this.currentBatch = new BatchContext(me.batch, me.previousBatch, me.lastTidOfBatch);
-        this.currentBatch.setStatus(BatchContext.Status.BATCH_COMPLETION_INFORMED);
+        this.currentBatch = BatchContext.build(me.batch, me.previousBatch, me.lastTidOfBatch);
+        this.lastTidFinished = me.lastTidOfBatch;
+        this.currentBatch.setStatus(BatchContext.Status.BATCH_COMMITTED);
         this.batchContextMap = new ConcurrentHashMap<>(3);
+        this.batchToNextBatchMap = new ConcurrentHashMap<>();
 
         this.schedulerHandler = new EmbeddedSchedulerHandler();
 
@@ -196,10 +214,8 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
         logger.info("Accept handler has been setup.");
 
-        // while not stopped
         while(this.isRunning()){
 
-            //  write events to leader and VMSs...
             try {
 
 //                if(!vmsInternalChannels.transactionAbortOutputQueue().isEmpty()){
@@ -208,30 +224,16 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 //                }
 
                 // it is better to get all the results of a given transaction instead of one by one. it must be atomic anyway
+
+                // TODO poll for some time
+
                 if(!this.vmsInternalChannels.transactionOutputQueue().isEmpty()){
 
                     VmsTransactionResult txResult = this.vmsInternalChannels.transactionOutputQueue().take();
 
-                    // handle
                     this.logger.info("New transaction result in event handler. TID = "+txResult.tid);
 
-                    // it may be the case that, due to an abort of the last tid, the last tid changes
-                    // the current code is not incorporating that
-                    if(this.currentBatch.status() == BatchContext.Status.NEW && this.currentBatch.lastTid == txResult.tid){
-                        // we need to alert the scheduler...
-                        this.logger.info("The last TID for the current batch has arrived. Time to inform the coordinator about the completion.");
-
-                        // many outputs from the same transaction may arrive here, but can only send the batch commit once
-                        this.currentBatch.setStatus(BatchContext.Status.BATCH_COMPLETED);
-
-                        // must be queued in case leader is off and comes back online
-                        this.leaderWorkerQueue.add(new LeaderWorker.Message(LeaderWorker.Command.SEND_BATCH_COMPLETE,
-                                BatchComplete.of(this.currentBatch.batch, this.me.getIdentifier()) ));
-                    }
-
-                    // what could go wrong in terms of interleaving? what if this tid is the last of a given batch?
-                    // may not happen because the batch commit info is processed before events are sent to the scheduler
-                    // to remove possibility of interleaving completely, it is better to call
+                    this.lastTidFinished = txResult.tid;
 
                     // just send events to appropriate targets
                     for(OutboundEventResult outputEvent : txResult.resultTasks){
@@ -240,6 +242,8 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
                 }
 
+                moveBatchIfNecessary();
+
             } catch (Exception e) {
                 this.logger.log(Level.SEVERE, "Problem on handling event on event handler:"+e.getMessage());
             }
@@ -247,8 +251,40 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
         }
 
         failSafeClose();
-
         this.logger.info("Event handler has finished execution.");
+
+    }
+
+    private static final Object DUMB_OBJECT = new Object();
+
+    /**
+     * it may be the case that, due to an abort of the last tid, the last tid changes
+     * the current code is not incorporating that
+     */
+    private void moveBatchIfNecessary(){
+
+        // update if current batch is done AND the next batch has already arrived
+        if(this.currentBatch.isCommitted() && this.batchToNextBatchMap.get( this.currentBatch.batch ) != null){
+            long nextBatchOffset = this.batchToNextBatchMap.get( this.currentBatch.batch );
+            this.currentBatch = batchContextMap.get(nextBatchOffset);
+        }
+
+        // have we processed all the TIDs of this batch?
+        if(this.currentBatch.isOpen() && this.currentBatch.lastTid <= this.lastTidFinished){
+            // we need to alert the scheduler...
+            this.logger.info("The last TID for the current batch has arrived. Time to inform the coordinator about the completion if I am a terminal node.");
+
+            // many outputs from the same transaction may arrive here, but can only send the batch commit once
+            this.currentBatch.setStatus(BatchContext.Status.BATCH_COMPLETED);
+
+            // if terminal, must send batch complete
+            if(this.currentBatch.terminal) {
+                // must be queued in case leader is off and comes back online
+                this.leaderWorkerQueue.add(new LeaderWorker.Message(LeaderWorker.Command.SEND_BATCH_COMPLETE,
+                        BatchComplete.of(this.currentBatch.batch, this.me.getIdentifier())));
+            }
+            this.vmsInternalChannels.batchCommitCommandQueue().add( DUMB_OBJECT );
+        }
 
     }
 
@@ -273,30 +309,24 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
     private class EmbeddedSchedulerHandler implements ISchedulerHandler {
         @Override
         public Future<?> run() {
-            BatchContext currentBatch = vmsInternalChannels.batchCommitRequestQueue().remove();
-            currentBatch.setStatus(BatchContext.Status.LOGGING);
+            vmsInternalChannels.batchCommitCommandQueue().remove();
             return executorService.submit(EmbeddedVmsEventHandler.this::log);
         }
         @Override
         public boolean conditionHolds() {
-            return !vmsInternalChannels.batchCommitRequestQueue().isEmpty();
+            return !vmsInternalChannels.batchCommitCommandQueue().isEmpty();
         }
     }
 
     private void log() {
+        this.currentBatch.setStatus(BatchContext.Status.LOGGING);
         // of course, I do not need to stop the scheduler on commit
         // I need to make access to the data versions data race free
         // so new transactions get data versions from the version map or the store
         // FIXME find later how to call transaction facade here: transactionFacade.log();
-        this.currentBatch.setStatus(BatchContext.Status.LOGGED);
+        this.currentBatch.setStatus(BatchContext.Status.BATCH_COMMITTED);
         this.leaderWorkerQueue.add( new LeaderWorker.Message( LeaderWorker.Command.SEND_BATCH_COMMIT_ACK,
                 BatchCommitAck.of(this.currentBatch.batch, this.me.getIdentifier()) ));
-
-        // do I have the next batch already?
-        var newBatch = this.batchContextMap.get( this.currentBatch.batch + 1 );
-        if(newBatch != null){
-            this.currentBatch = newBatch;
-        } // otherwise must still receive it
     }
 
     /**
@@ -441,6 +471,9 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
         }
     }
 
+    /**
+     * Should we only submit the events from the current batch?
+     */
     private class VmsReadCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
 
         @Override
@@ -469,17 +502,12 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                     if (vmsMetadata.queueToEventMap().get(transactionEventPayload.event()) != null) {
                         vmsInternalChannels.transactionInputQueue().add(transactionEventPayload);
                     }
-                } case (BATCH_COMMIT_INFO) -> {
-                    // received from a vms
-                    // TODO finish
                 }
                 default ->
-                    logger.warning("Unknown message type received from vms");
+                    logger.warning("Unknown message type received from another VMS: "+messageType);
             }
-
             connectionMetadata.readBuffer.clear();
             connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
-
         }
 
         @Override
@@ -766,17 +794,14 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
             // receive input events
             switch (messageType) {
-
+                /*
+                 * Given a new batch of events sent by the leader, the last message is the batch info
+                 */
                 case (BATCH_OF_EVENTS) -> {
-
                     // to increase performance, one would buffer this buffer for processing and then read from another buffer
-
                     int count = connectionMetadata.readBuffer.getInt();
-
                     List<TransactionEvent.Payload> payloads = new ArrayList<>(count);
-
                     TransactionEvent.Payload payload;
-
                     // extract events batched
                     for (int i = 0; i < count - 1; i++) {
                         // move offset to discard message type
@@ -786,31 +811,32 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                             payloads.add(payload);
                     }
 
+                    // batch commit info always come last
                     byte eventType = connectionMetadata.readBuffer.get();
                     if (eventType == BATCH_COMMIT_INFO) {
-
-                        // it means this VMS is a terminal node in the current batch to be committed
+                        // it means this VMS is a terminal node in sent batch
                         BatchCommitInfo.Payload bPayload = BatchCommitInfo.read(connectionMetadata.readBuffer);
                         processNewBatchInfo(bPayload);
-
                     } else { // then it is still event
                         payload = TransactionEvent.read(connectionMetadata.readBuffer);
                         if (vmsMetadata.queueToEventMap().get(payload.event()) != null)
                             payloads.add(payload);
                     }
-
                     // add after to make sure the batch context map is filled by the time the output event is generated
                     vmsInternalChannels.transactionInputQueue().addAll(payloads);
                 }
-                case (BATCH_COMMIT_REQUEST) -> {
+                case (BATCH_COMMIT_INFO) -> {
+                    // events of this batch from VMSs may arrive before the batch commit info
+                    // it means this VMS is a terminal node for the batch
+                    logger.info("Batch commit info received from the leader");
+                    BatchCommitInfo.Payload bPayload = BatchCommitInfo.read(connectionMetadata.readBuffer);
+                    processNewBatchInfo(bPayload);
+                }
+                case (BATCH_COMMIT_COMMAND) -> {
+                    logger.info("Batch commit command received from the leader");
                     // a batch commit queue from next batch can arrive before this vms moves next? yes
-                    BatchCommitRequest.Payload payload = BatchCommitRequest.read(connectionMetadata.readBuffer);
-                    if(payload.batch() == currentBatch.batch) {
-                        vmsInternalChannels.batchCommitRequestQueue().add(currentBatch);
-                    } else {
-                        // buffer to commit later
-                        batchContextMap.get( payload.batch() ).requestPayload = payload;
-                    }
+                    BatchCommitCommand.Payload payload = BatchCommitCommand.read(connectionMetadata.readBuffer);
+                    processNewBatchInfo(payload);
                 }
                 case (EVENT) -> {
                     TransactionEvent.Payload payload = TransactionEvent.read(connectionMetadata.readBuffer);
@@ -843,6 +869,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
                 }
                 case (PRESENTATION) -> logger.warning("Presentation being sent again by the producer!?");
+                default -> logger.warning("Message type sent by leader cannot be identified: "+messageType);
             }
 
             connectionMetadata.readBuffer.clear();
@@ -861,16 +888,23 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
     }
 
-    /**
-     * Given a new batch of events sent by the leader, the last message is the batch info
-     */
     private void processNewBatchInfo(BatchCommitInfo.Payload batchCommitInfo){
-        BatchContext batchContext = new BatchContext(batchCommitInfo.batch(), batchCommitInfo.lastTidOfBatch(), batchCommitInfo.previousBatch());
+        BatchContext batchContext = BatchContext.build(batchCommitInfo);
         this.batchContextMap.put(batchCommitInfo.batch(), batchContext);
-        // update if current batch is done
-        if(this.currentBatch.status() == BatchContext.Status.BATCH_COMPLETION_INFORMED && batchCommitInfo.batch() == currentBatch.batch + 1){
-            this.currentBatch = batchContext;
-        }
+        this.batchToNextBatchMap.put( batchCommitInfo.previousBatch(), batchCommitInfo.batch() );
+    }
+
+    /**
+     * Context of execution of this method:
+     * This is not a terminal node in this batch, which means
+     * it does not know anything about the batch commit command just received.
+     * If the previous batch is completed and this received batch is the next,
+     * we just let the main loop update it
+     */
+    private void processNewBatchInfo(BatchCommitCommand.Payload batchCommitCommand){
+        BatchContext batchContext = BatchContext.build(batchCommitCommand);
+        this.batchContextMap.put(batchCommitCommand.batch(), batchContext);
+        this.batchToNextBatchMap.put( batchCommitCommand.previousBatch(), batchCommitCommand.batch() );
     }
 
 }

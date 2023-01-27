@@ -69,6 +69,10 @@ public final class VmsIdentifier extends NetworkNode {
         return this.lastTidOfBatch;
     }
 
+    public long getPreviousBatch(){
+        return this.previousBatch;
+    }
+
     public String getIdentifier(){
         return this.vmsIdentifier;
     }

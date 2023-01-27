@@ -4,13 +4,11 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
-import dk.ku.di.dms.vms.sdk.embed.handler.BatchContext;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.LinkedTransferQueue;
 
-public class VmsEmbedInternalChannels implements IVmsInternalChannels {
+public final class VmsEmbedInternalChannels implements IVmsInternalChannels {
 
     private final BlockingQueue<TransactionEvent.Payload> transactionInputQueue;
 
@@ -20,7 +18,7 @@ public class VmsEmbedInternalChannels implements IVmsInternalChannels {
 
     private final BlockingQueue<TransactionAbort.Payload> transactionAbortOutputQueue;
 
-    private final BlockingQueue<BatchContext> batchCommitRequestQueue;
+    private final BlockingQueue<Object> batchCommitCommandQueue;
 
     public VmsEmbedInternalChannels() {
 
@@ -35,7 +33,7 @@ public class VmsEmbedInternalChannels implements IVmsInternalChannels {
         this.transactionAbortOutputQueue = new LinkedBlockingQueue<>();
 
         /* batch */
-        this.batchCommitRequestQueue = new LinkedBlockingQueue<>();
+        this.batchCommitCommandQueue = new LinkedBlockingQueue<>();
 
     }
 
@@ -59,8 +57,8 @@ public class VmsEmbedInternalChannels implements IVmsInternalChannels {
         return this.transactionAbortOutputQueue;
     }
 
-    public BlockingQueue<BatchContext> batchCommitRequestQueue(){
-        return this.batchCommitRequestQueue;
+    public BlockingQueue<Object> batchCommitCommandQueue(){
+        return this.batchCommitCommandQueue;
     }
 
 }

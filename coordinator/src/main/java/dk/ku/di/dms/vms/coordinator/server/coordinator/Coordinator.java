@@ -9,7 +9,8 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
@@ -211,7 +212,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
         this.batchContextMap = new HashMap<>();
         this.batchContextMap.put(this.currentBatchOffset, new BatchContext(this.currentBatchOffset));
         BatchContext previousBatch = new BatchContext(this.currentBatchOffset - 1);
-        previousBatch.seal(startingTid - 1, null);
+        var empty = Map.<String,Long>of();
+        previousBatch.seal(startingTid - 1, empty, empty);
         this.batchContextMap.put(this.currentBatchOffset - 1, previousBatch);
     }
 
@@ -235,21 +237,14 @@ public final class Coordinator extends SignalingStoppableRunnable {
         this.setupStarterVMSs();
 
         while(isRunning()){
-
             try {
-
                 TimeUnit.of(ChronoUnit.MILLIS).sleep(options.getBatchWindow());
-
                 this.processEventsSentByVmsWorkers();
-
                 this.processTransactionInputEvents();
-
                 this.advanceCurrentBatchAndSpawnSendBatchOfEvents();
-
             } catch (InterruptedException e) {
                 this.logger.warning("Exception captured: "+e.getMessage());
             }
-
         }
 
         failSafeClose();
@@ -477,8 +472,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         logger.info("Batch commit run started.");
 
         // why do I need to replicate vmsTidMap? to restart from this point if the leader fails
-        long generateBatch = this.currentBatchOffset;
-        BatchContext currBatchContext = this.batchContextMap.get( generateBatch );
+        final long generateBatch = this.currentBatchOffset;
 
         // have we processed any input event since the start of this coordinator thread?
         BatchContext previousBatch = this.batchContextMap.get( generateBatch - 1 );
@@ -487,11 +481,18 @@ public final class Coordinator extends SignalingStoppableRunnable {
             return;
         }
 
-        // a map of the last tid for each vms
-        Map<String,Long> lastTidOfBatchPerVms = this.vmsMetadata.values().stream().collect(
-                Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getLastTidOfBatch) );
+        BatchContext currBatchContext = this.batchContextMap.get( generateBatch );
 
-        currBatchContext.seal(this.tid, lastTidOfBatchPerVms);
+        // a map of the last tid for each vms participating in this batch
+        Map<String,Long> lastTidOfBatchPerVms = this.vmsMetadata.values().stream()
+                .filter(p-> p.batch == generateBatch)
+                .collect(Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getLastTidOfBatch) );
+
+        Map<String,Long> previousBatchPerVms = this.vmsMetadata.values().stream()
+                .filter(p-> p.batch == generateBatch)
+                .collect(Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getPreviousBatch) );
+
+        currBatchContext.seal(this.tid, lastTidOfBatchPerVms, previousBatchPerVms);
 
         // increment batch offset
         this.currentBatchOffset = this.currentBatchOffset + 1;
@@ -503,33 +504,32 @@ public final class Coordinator extends SignalingStoppableRunnable {
         logger.info("Current batch offset is "+generateBatch+" and new batch offset is "+this.currentBatchOffset);
 
         // new TIDs will be emitted with the new batch in the transaction manager
-
+        boolean isTerminal;
         for(VmsIdentifier vms : this.vmsMetadata.values()){
 
-            // update
-            vms.previousBatch = vms.batch;
-            vms.batch = generateBatch;
+            if(vms.batch != generateBatch) continue; // remove the ones not participating in this batch
 
-            var list = vms.transactionEventsPerBatch(generateBatch);
-            if( (list != null && !list.isEmpty()) || currBatchContext.terminalVMSs.contains(vms.vmsIdentifier) ) {
-                ((VmsWorker)vms.consumerVms.vmsWorker).workerQueue.add(
-                       new VmsWorker.VmsWorkerMessage( SEND_BATCH_OF_EVENTS, new VmsWorker.BatchEventsCommand(
-                               generateBatch, // or vms current batch...
-                               lastTidOfBatchPerVms.get(vms.getIdentifier()),
-                               vms.previousBatch)
-                       )
-                );
+            // the terminals inform the batch completion. that refrains the coordinator from waiting for all VMSs
+            isTerminal = currBatchContext.terminalVMSs.contains(vms.vmsIdentifier);
+            // remove the internal nodes who have no event
+            if( vms.consumerVms.transactionEventsPerBatch
+                    .computeIfAbsent(this.currentBatchOffset, k -> new LinkedBlockingDeque<>()).isEmpty() && !isTerminal){
+                continue;
             }
+
+            ((VmsWorker) vms.consumerVms.vmsWorker).workerQueue.add(new VmsWorker.VmsWorkerMessage(
+                    isTerminal ? SEND_BATCH_OF_EVENTS_WITH_COMMIT_INFO : SEND_BATCH_OF_EVENTS,
+                            BatchCommitInfo.of(vms.batch, vms.lastTidOfBatch, vms.previousBatch) ) );
         }
 
         // the batch commit only has progress (a safety property) the way it is implemented now when future events
         // touch the same VMSs that have been touched by transactions in the last batch.
         // how can we guarantee progress?
-        replicateBatchWithReplicas(generateBatch, lastTidOfBatchPerVms);
+        replicateBatchWithReplicas(currBatchContext);
 
     }
 
-    private void replicateBatchWithReplicas(long generateBatch, Map<String, Long> lastTidOfBatchPerVms) {
+    private void replicateBatchWithReplicas(BatchContext batchContext) {
         if ( options.getBatchReplicationStrategy() == NONE) return;
 
         // to refrain the number of servers increasing concurrently, instead of
@@ -542,7 +542,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         Set<Integer> serverVotes = Collections.synchronizedSet(new HashSet<>(nServers));
 
-        String lastTidOfBatchPerVmsJson = this.serdesProxy.serializeMap(lastTidOfBatchPerVms);
+        String lastTidOfBatchPerVmsJson = this.serdesProxy.serializeMap(batchContext.lastTidOfBatchPerVms);
 
         int i = 0;
         for (ServerIdentifier server : activeServers) {
@@ -564,7 +564,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     channel.connect(address).get();
 
                     ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024);
-                    BatchReplication.write(buffer, generateBatch, lastTidOfBatchPerVmsJson);
+                    BatchReplication.write(buffer, batchContext.batchOffset, lastTidOfBatchPerVmsJson);
                     channel.write(buffer).get();
 
                     buffer.clear();
@@ -579,7 +579,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     MemoryManager.releaseTemporaryDirectBuffer(buffer);
 
                     // assuming the follower always accept
-                    if (generateBatch == response.batch()) serverVotes.add(server.hashCode());
+                    if (batchContext.batchOffset == response.batch()) serverVotes.add(server.hashCode());
 
                     return null;
 
@@ -699,8 +699,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 TransactionEvent.Payload txEvent = TransactionEvent.of(tid_, vms.lastTidOfBatch, this.currentBatchOffset, inputEvent.name, inputEvent.payload);
 
                 // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
-                var queue = vms.consumerVms.transactionEventsPerBatch.computeIfAbsent(this.currentBatchOffset, k -> new LinkedBlockingDeque<>());
-                queue.add(txEvent);
+                vms.consumerVms.transactionEventsPerBatch
+                        .computeIfAbsent(this.currentBatchOffset, k -> new LinkedBlockingDeque<>()).add(txEvent);
 
                 // a vms, although receiving an event from a "next" batch, cannot yet commit, since
                 // there may have additional events to arrive from the current batch
@@ -709,19 +709,23 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 // update for next transaction. this is basically to ensure VMS do not wait for a tid that will never come. TIDs processed by a vms may not be sequential
                 vms.lastTidOfBatch = tid_;
 
+                updateBatchAndPrecedenceIfNecessary(vms);
+
             }
 
             // also update the last tid of the terminals
-            for(String vms : transactionDAG.terminals){
-                VmsIdentifier vmsId = this.vmsMetadata.get(vms);
-                vmsId.lastTidOfBatch = tid_;
+            for(String vmsIdentifier : transactionDAG.terminals){
+                VmsIdentifier vms = this.vmsMetadata.get(vmsIdentifier);
+                vms.lastTidOfBatch = tid_;
+                updateBatchAndPrecedenceIfNecessary(vms);
             }
 
             // also update the last tid of the internal VMSs
             // to make sure they wait in case a later transaction (e.g., tid + 1) arrives
-            for(String vms : transactionDAG.internalNodes){
-                VmsIdentifier vmsId = this.vmsMetadata.get(vms);
-                vmsId.lastTidOfBatch = tid_;
+            for(String vmsIdentifier : transactionDAG.internalNodes){
+                VmsIdentifier vms = this.vmsMetadata.get(vmsIdentifier);
+                vms.lastTidOfBatch = tid_;
+                updateBatchAndPrecedenceIfNecessary(vms);
             }
 
             // add terminal to the set... so cannot be immutable when the batch context is created...
@@ -729,6 +733,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         }
 
+    }
+
+    private void updateBatchAndPrecedenceIfNecessary(VmsIdentifier vms) {
+        if(vms.batch != this.currentBatchOffset){
+            vms.previousBatch = vms.batch;
+            vms.batch = this.currentBatchOffset;
+        }
     }
 
     /**
@@ -784,18 +795,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         }
 
                     }
-
                     case TRANSACTION_ABORT -> {
                         // send abort to all VMSs...
                         // later we can optimize the number of messages since some VMSs may not need to receive this abort
-
                         // cannot commit the batch unless the VMS is sure there will be no aborts...
                         // this is guaranteed by design, since the batch complete won't arrive unless all events of the batch arrive at the terminal VMSs
-
                         TransactionAbort.Payload msg = message.asTransactionAbort();
-
                         this.batchContextMap.get( msg.batch() ).tidAborted = msg.tid();
-
                         // can reuse the same buffer since the message does not change across VMSs like the commit request
                         for(VmsIdentifier vms : this.vmsMetadata.values()){
                             // don't need to send to the vms that aborted
@@ -803,7 +809,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
                             ((VmsWorker)vms.consumerVms.vmsWorker).workerQueue.add( new VmsWorker.VmsWorkerMessage( SEND_TRANSACTION_ABORT, msg.tid()));
                         }
                     }
-
                     case BATCH_COMPLETE -> {
                         // what if ACKs from VMSs take too long? or never arrive?
                         // need to deal with intersecting batches? actually just continue emitting for higher throughput
@@ -811,13 +816,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         BatchContext batchContext = this.batchContextMap.get( msg.batch() );
                         // only if it is not a duplicate vote
                         if( batchContext.missingVotes.remove( msg.vms() ) ){
-
                             // making this implement order-independent, so not assuming batch commit are received in order,
                             // although they are necessarily applied in order both here and in the VMSs
                             // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes,
                             // it must check the batch context match to see whether it is completed
                             if( batchContext.batchOffset == this.batchOffsetPendingCommit && batchContext.missingVotes.size() == 0 ){
                                 this.sendCommitRequestToVMSs(batchContext);
+                                // TODO do I need this variable???
                                 this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
                             }
 
@@ -844,11 +849,18 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     }
 
+    /**
+     * Only send to non-terminals
+     */
     private void sendCommitRequestToVMSs(BatchContext batchContext){
         for(VmsIdentifier vms : this.vmsMetadata.values()){
-            ((VmsWorker)vms.consumerVms.vmsWorker).workerQueue.add( new VmsWorker.VmsWorkerMessage(SEND_BATCH_COMMIT, new BatchCommitRequest.Payload(
-                    batchContext.batchOffset,
-                    batchContext.lastTidOfBatchPerVms.get(vms.getIdentifier()))
+            if(batchContext.terminalVMSs.contains(vms.getIdentifier())) continue;
+            ((VmsWorker)vms.consumerVms.vmsWorker).workerQueue.add( new VmsWorker.VmsWorkerMessage(SEND_BATCH_COMMIT_COMMAND,
+                    new BatchCommitCommand.Payload(
+                        batchContext.batchOffset,
+                        batchContext.lastTidOfBatchPerVms.get(vms.getIdentifier()),
+                        batchContext.previousBatchPerVms.get(vms.getIdentifier())
+                    )
             ));
         }
     }

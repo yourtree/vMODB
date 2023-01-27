@@ -1,24 +1,40 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
 
 public class BatchContext {
 
     public final long batch;
 
-    public final long lastBatch;
+    public final long previousBatch;
 
     public final long lastTid;
 
-    private Status status;
+    private int status;
 
-    public BatchCommitRequest.Payload requestPayload;
+    // whether this vms is a terminal for this batch
+    public final boolean terminal;
 
-    public BatchContext(long batch, long lastTidOfBatch, long lastBatch) {
+    public static BatchContext build(BatchCommitInfo.Payload batchCommitInfo){
+        return new BatchContext(batchCommitInfo.batch(), batchCommitInfo.lastTidOfBatch(), batchCommitInfo.previousBatch(), true);
+    }
+
+    public static BatchContext build(long batch, long lastTidOfBatch, long previousBatch){
+        return new BatchContext(batch, lastTidOfBatch, previousBatch, false);
+    }
+
+    public static BatchContext build(BatchCommitCommand.Payload batchCommitRequest) {
+        return new BatchContext(batchCommitRequest.batch(), batchCommitRequest.lastTidOfBatch(),
+                batchCommitRequest.previousBatch(),false);
+    }
+
+    private BatchContext(long batch, long lastTidOfBatch, long previousBatch, boolean terminal) {
         this.batch = batch;
         this.lastTid = lastTidOfBatch;
-        this.lastBatch = lastBatch;
-        this.status = Status.NEW;
+        this.previousBatch = previousBatch;
+        this.status = Status.OPEN.value;
+        this.terminal = terminal;
     }
 
     /**
@@ -28,22 +44,35 @@ public class BatchContext {
      * last logged state.
      */
     public enum Status {
-        NEW,
-        BATCH_COMPLETED,
-        REPLYING_BATCH_COMPLETED, // to the coordinator
-        BATCH_COMPLETION_INFORMED, // write has completed
-        LOGGING,
-        LOGGED,
-        REPLYING_BATCH_COMMITTED,
-        BATCH_COMMIT_INFORMED
+        // newly received batch
+        OPEN(0),
+        // this status is set after all TIDs of the batch have been processed
+        BATCH_COMPLETED(1),
+        // this status is set when the logging process starts right after the leader sends the batch commit request
+        LOGGING(2),
+        // this status is set when the state is logged
+        BATCH_COMMITTED(3);
+
+        public final int value;
+        Status(int value) {
+            this.value = value;
+        }
     }
 
-    public Status status(){
-        return this.status;
+    public boolean isOpen(){
+        return this.status < Status.BATCH_COMPLETED.value;
+    }
+
+    public boolean isCompleted(){
+        return this.status == Status.BATCH_COMPLETED.value;
+    }
+
+    public boolean isCommitted(){
+        return this.status == Status.BATCH_COMMITTED.value;
     }
 
     public void setStatus(Status status){
-        this.status = status;
+        this.status = status.value;
     }
 
 }

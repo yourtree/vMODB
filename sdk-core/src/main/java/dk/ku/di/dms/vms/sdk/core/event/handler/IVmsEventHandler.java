@@ -4,7 +4,7 @@ package dk.ku.di.dms.vms.sdk.core.event.handler;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
@@ -26,7 +26,7 @@ public interface IVmsEventHandler {
      */
     void onTransactionInputEvent(TransactionEvent.Payload transactionEventPayload);
 
-    void onBatchCommitRequest(BatchCommitRequest.Payload batchCommitReq);
+    void onBatchCommitRequest(BatchCommitCommand.Payload batchCommitReq);
 
     void onBatchAbortRequest(BatchAbortRequest.Payload batchAbortReq);
 
