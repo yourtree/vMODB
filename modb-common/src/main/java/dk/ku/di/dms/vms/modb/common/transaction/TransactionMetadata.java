@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.common.transaction;
 
 /**
  * This class is used differently depending on the actual deployment
- * If embed, only one instance of this class is used across modules
+ * If embedded, only one instance of this class is used across modules
  * If modb-service, then we need another mapping scheme.
  * <a href="https://stackoverflow.com/questions/21884359/java-threadlocal-vs-concurrenthashmap">...</a>
  * This is a bridge between sdk-core and sdk-embed modules, sdk-core cannot see sdk-embed.

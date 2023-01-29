@@ -81,7 +81,7 @@ public final class VmsManager {
 
         // scheduler
         this.metadata.scheduler = new VmsTransactionScheduler(vmsAppLogicTaskPool, vmsInternalPubSubService,
-                vmsMetadata.queueToVmsTransactionMap(), null, null, null);
+                vmsMetadata.queueToVmsTransactionMap(), null);
 
         // executor
         // this.metadata.executor = new VmsTransactionExecutor(this.metadata.internalPubSub);

@@ -38,6 +38,8 @@ public interface IVmsSerdesProxy {
     String serializeConsumerSet( Map<String, List<NetworkNode>> map );
     Map<String, List<ConsumerVms>> deserializeConsumerSet(String mapStr);
 
+    Map<String, Long> deserializeDependenceMap(String dependenceMapStr);
+
     <V> String serializeList( List<V> map );
     <V> List<V> deserializeList(String listStr);
 

@@ -36,7 +36,8 @@ public class Main
                 .internal( "f", "item","item-new-order-out", "b" )
                 .internal( "g", "stock", "stock-new-order-out", "c" )
                 .internal( "h", "warehouse","waredist-new-order-out", "d" )
-                .terminal("i", "order", "b", "e", "f", "g", "h" ) // signals the end of the transaction, it does not mean cannot generate new events
+                // signals the end of the transaction. However, it does not mean it cannot generate an output event
+                .terminal("i", "order", "b", "e", "f", "g", "h" )
                 .build();
 
         // the coordinator receives many events ... it maintains these received events in main memory, and then it forwards to the respective dbms proxies

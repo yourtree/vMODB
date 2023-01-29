@@ -70,9 +70,7 @@ public final class VmsApplication {
                     new VmsTransactionScheduler(
                             readTaskPool,
                             vmsInternalPubSubService,
-                            vmsMetadata.queueToVmsTransactionMap(),
-                            vmsMetadata.queueToEventMap(),
-                            serdes, null);
+                            vmsMetadata.queueToVmsTransactionMap(), null);
 
             // ideally lastTid and lastBatch must be read from the storage
 

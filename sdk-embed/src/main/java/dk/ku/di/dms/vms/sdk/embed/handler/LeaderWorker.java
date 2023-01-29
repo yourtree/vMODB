@@ -45,7 +45,6 @@ final class LeaderWorker extends StoppableRunnable {
     enum Command {
         SEND_BATCH_COMPLETE, // inform batch completion
         SEND_BATCH_COMMIT_ACK, // inform commit completed
-
         SEND_TRANSACTION_ABORT // inform that a tid aborted
     }
 
@@ -86,16 +85,16 @@ final class LeaderWorker extends StoppableRunnable {
             try {
 
                 TimeUnit.of(ChronoUnit.MILLIS).sleep(DEFAULT_DELAY_FOR_BATCH_SEND);
-                batchEventsToLeader();
+                this.batchEventsToLeader();
 
                 // drain the queue
                 while(true) {
                     Message msg = this.leaderWorkerQueue.poll();
                     if (msg == null) break;
                     switch (msg.type()) {
-                        case SEND_BATCH_COMPLETE -> sendBatchComplete(msg.asBatchComplete());
-                        case SEND_BATCH_COMMIT_ACK -> sendBatchCommitAck(msg.asBatchCommitAck());
-                        case SEND_TRANSACTION_ABORT -> sendTransactionAbort(msg.asTransactionAbort());
+                        case SEND_BATCH_COMPLETE -> this.sendBatchComplete(msg.asBatchComplete());
+                        case SEND_BATCH_COMMIT_ACK -> this.sendBatchCommitAck(msg.asBatchCommitAck());
+                        case SEND_TRANSACTION_ABORT -> this.sendTransactionAbort(msg.asTransactionAbort());
                     }
                 }
 

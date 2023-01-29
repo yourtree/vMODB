@@ -5,18 +5,16 @@ import java.util.List;
 
 public class EventIdentifier {
 
-    public String alias; // alias for fast identification in topology definition
+    public final String alias; // alias for fast identification in topology definition
 
-    public String targetVms; // virtual microservice
+    public final String targetVms; // virtual microservice
 
-    public boolean terminal; // terminal node
+    public final boolean terminal; // terminal node
 
     /** Attributes used only if it is not terminal */
-    public String name; // event name only if it is not terminal
+    public final String name; // event name only if it is not terminal
 
     public List<EventIdentifier> children;
-
-    // in case a children is terminal
 
     public EventIdentifier(String alias, String targetVms, String name) {
         this.alias = alias;

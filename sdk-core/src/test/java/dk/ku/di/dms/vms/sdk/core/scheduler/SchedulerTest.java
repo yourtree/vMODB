@@ -1,8 +1,5 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
-import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
-import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.example.InputEventExample1;
 import dk.ku.di.dms.vms.sdk.core.example.MicroserviceExample2;
@@ -10,6 +7,7 @@ import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.facade.NetworkRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
+import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import org.junit.Test;
 
 import java.lang.reflect.Constructor;
@@ -38,15 +36,13 @@ public class SchedulerTest {
 
         // what do I need to set up a vms transaction scheduler?
         ExecutorService readTaskPool = Executors.newSingleThreadExecutor();
-        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
         VmsInternalChannels vmsInternalChannels = VmsInternalChannels.getInstance();
         @SuppressWarnings("unchecked")
         Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) NetworkRepositoryFacade.class.getConstructors()[0];
         VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load(new String[]{"dk.ku.di.dms.vms.sdk.core.example"}, constructor);
 
         VmsTransactionScheduler scheduler = new VmsTransactionScheduler(
-                readTaskPool, vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(),
-                vmsRuntimeMetadata.queueToEventMap(), serdes, null);
+                readTaskPool, vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null);
 
         Thread schedulerThread = new Thread(scheduler);
         schedulerThread.start();
@@ -54,10 +50,8 @@ public class SchedulerTest {
         // event producer that creates transactions simple and complex
         InputEventExample1 eventExample = new InputEventExample1(0);
 
-        String payload = serdes.serialize(eventExample, InputEventExample1.class);
-
         // scheduler needs to deserialize the
-        TransactionEvent.Payload event = TransactionEvent.of(1,0,1,"in", payload);
+        InboundEvent event = new InboundEvent(1,0,1,"in",InputEventExample1.class, eventExample);
 
         vmsInternalChannels.transactionInputQueue().add(event);
 
@@ -73,16 +67,14 @@ public class SchedulerTest {
         // tricky to simulate we have a scheduler in other microservice.... we need a new scheduler because of the tid
         // could reset the tid to 0, but would need to synchronize to avoid exceptions
         scheduler = new VmsTransactionScheduler(
-                readTaskPool, vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(),
-                vmsRuntimeMetadata.queueToEventMap(), serdes, null);
+                readTaskPool, vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null);
 
         schedulerThread = new Thread(scheduler);
         schedulerThread.start();
 
         for(var res : out.resultTasks){
             Class<?> clazz = vmsRuntimeMetadata.queueToEventMap().get( res.outputQueue() );
-            String serialized = serdes.serialize(res.output(), clazz);
-            TransactionEvent.Payload payload_ = TransactionEvent.of(1,0,1,res.outputQueue(), serialized);
+            InboundEvent payload_ = new InboundEvent(1,0,1, res.outputQueue(), clazz, res.output());
             vmsInternalChannels.transactionInputQueue().add(payload_);
         }
 

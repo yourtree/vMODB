@@ -9,12 +9,17 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
 
+import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-class DefaultVmsSerdes implements IVmsSerdesProxy {
+/**
+ * Default implementation of {@link IVmsSerdesProxy}
+ * It abstracts the use of {@link Gson}
+ */
+final class DefaultVmsSerdes implements IVmsSerdesProxy {
 
     private final Gson gson;
 
@@ -82,7 +87,8 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
 
     @Override
     public <K,V> Map<K,V> deserializeMap(String mapStr){
-         return this.gson.fromJson(mapStr, new TypeToken<Map<K, V>>(){}.getType());
+        Type type = new TypeToken<Map<K, V>>(){}.getType();
+        return this.gson.fromJson(mapStr, type);
     }
 
     @Override
@@ -100,9 +106,18 @@ class DefaultVmsSerdes implements IVmsSerdesProxy {
         return this.gson.toJson( map );
     }
 
+    private static final Type typeConsMap = new TypeToken<Map<String, List<ConsumerVms>>>(){}.getType();
+
     @Override
     public Map<String, List<ConsumerVms>> deserializeConsumerSet(String mapStr) {
-        return this.gson.fromJson(mapStr, new TypeToken<Map<String, List<ConsumerVms>>>(){}.getType());
+        return this.gson.fromJson(mapStr, typeConsMap);
+    }
+
+    private static final Type typeDepMap = new TypeToken<Map<String, Long>>(){}.getType();
+
+    @Override
+    public Map<String, Long> deserializeDependenceMap(String dependenceMapStr) {
+        return this.gson.fromJson(dependenceMapStr, typeDepMap);
     }
 
     @Override

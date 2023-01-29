@@ -16,14 +16,14 @@ public final class TransactionDAG {
 
     // the topology. input events have children and so on, until a terminal node is reached
     public final Map<String, EventIdentifier> inputEvents;
-    public final List<String> terminals;
+    public final List<String> terminalNodes;
     public final Set<String> internalNodes;
 
-    public TransactionDAG(String name, List<EventIdentifier> inputEvents, Set<String> internalNodes, List<String> terminals) {
+    public TransactionDAG(String name, List<EventIdentifier> inputEvents, Set<String> internalNodes, List<String> terminalNodes) {
         this.name = name;
         this.inputEvents = inputEvents.stream().collect( Collectors.toMap( EventIdentifier::getName, Function.identity() ) );
         this.internalNodes = Set.copyOf(internalNodes);
-        this.terminals = List.copyOf(terminals);
+        this.terminalNodes = List.copyOf(terminalNodes);
     }
 
 }

@@ -8,6 +8,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
+import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
@@ -103,8 +104,7 @@ public class EventHandlerTest {
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         VmsTransactionScheduler scheduler = new VmsTransactionScheduler(readTaskPool, vmsInternalPubSubService,
-                        vmsMetadata.queueToVmsTransactionMap(), vmsMetadata.queueToEventMap(),
-                        serdes, null);
+                        vmsMetadata.queueToVmsTransactionMap(),null);
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(
                 node.host, node.port, vmsName,
@@ -180,8 +180,7 @@ public class EventHandlerTest {
                 outToSwap);
 
         InputEventExample1 eventExample = new InputEventExample1(0);
-        String payload = this.serdes.serialize(eventExample, InputEventExample1.class);
-        TransactionEvent.Payload event = TransactionEvent.of(1,0,1,"in", payload);
+        InboundEvent event = new InboundEvent(1,0,1,"in", InputEventExample1.class, eventExample);
         channelForAddingInput.transactionInputQueue().add(event);
 
         var input1ForVms2 = channelForAddingInput.transactionOutputQueue().poll(5, TimeUnit.SECONDS);
@@ -189,9 +188,8 @@ public class EventHandlerTest {
 
         for(var res : input1ForVms2.resultTasks){
             Class<?> clazz =  res.outputQueue().equalsIgnoreCase("out1") ? OutputEventExample1.class : OutputEventExample2.class;
-            String serialized = serdes.serialize(res.output(), clazz);
-            TransactionEvent.Payload payload_ = TransactionEvent.of(1,0,1,res.outputQueue(), serialized);
-            channelForGettingOutput.transactionInputQueue().add(payload_);
+            InboundEvent event_ = new InboundEvent(1,0,1,res.outputQueue(),clazz,res.output());
+            channelForGettingOutput.transactionInputQueue().add(event_);
         }
 
         // subscribe to output event out3
@@ -342,7 +340,11 @@ public class EventHandlerTest {
         // 7 - send event input
         InputEventExample1 eventExample = new InputEventExample1(1);
         String inputPayload = this.serdes.serialize(eventExample, InputEventExample1.class);
-        TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,1,"in", inputPayload);
+
+        Map<String,Long> precedenceMap = new HashMap<>();
+        precedenceMap.put("example1", 0L);
+
+        TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,"in", inputPayload, this.serdes.serializeMap(precedenceMap));
         TransactionEvent.write(buffer, eventInput);
         buffer.flip();
         channel.write(buffer).get(); // no need to wait
@@ -353,8 +355,8 @@ public class EventHandlerTest {
         /*
          8 - listen from the internal channel. may take some time because of the batch commit scheduler
          why also checking the output? to see if the event sent is correctly processed
-         FIXME hanging forever sometimes. not deterministic
-          possible problem: locking my thread pool: slide 44
+         TODO hanging forever sometimes. not deterministic
+          study possible problem: locking my thread pool: slide 44
           https://openjdk.org/projects/nio/presentations/TS-4222.pdf
           With an executor passed as a group, it started working....
         */
@@ -529,7 +531,7 @@ public class EventHandlerTest {
         channel.setOption(SO_KEEPALIVE, true);
         channel.connect(address).get();
 
-        logger.info("Connected. Now sending presentation.");
+        this.logger.info("Connected. Now sending presentation.");
 
         ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
         Presentation.writeServer( buffer, new ServerIdentifier(fakeLeader.host, fakeLeader.port),  true);
@@ -549,18 +551,22 @@ public class EventHandlerTest {
         // 5 - send event input
         InputEventExample1 eventExample = new InputEventExample1(1);
         String inputPayload = this.serdes.serialize(eventExample, InputEventExample1.class);
-        TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,1,"in", inputPayload);
+
+        Map<String,Long> precedenceMap = new HashMap<>();
+        precedenceMap.put("example1", 0L);
+
+        TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,"in", inputPayload, this.serdes.serializeMap(precedenceMap));
         TransactionEvent.write(buffer, eventInput);
         buffer.flip();
         channel.write(buffer).get(); // no need to wait
 
-        logger.info("Input event sent");
+        this.logger.info("Input event sent");
 
         // 6 - read batch of events
         buffer.clear();
         channel.read(buffer).get();
 
-        logger.info("Batch received");
+        this.logger.info("Batch received");
 
         // 9 - assert the batch of events is received
         buffer.position(0);

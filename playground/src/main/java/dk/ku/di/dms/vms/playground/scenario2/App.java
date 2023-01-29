@@ -203,8 +203,6 @@ public class App
                         readTaskPool,
                         vmsInternalPubSubService,
                         vmsMetadata.queueToVmsTransactionMap(),
-                        vmsMetadata.queueToEventMap(),
-                        serdes,
                         null);
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(

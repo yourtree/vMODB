@@ -15,7 +15,7 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
     // this is the global tid
     private final long tid;
 
-    private final long lastTid;
+//    private final long lastTid;
 
     private final long batch;
 
@@ -31,9 +31,17 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
 
     private int remainingInputs;
 
-    public VmsTransactionTask (long tid, long lastTid, long batch, VmsTransactionSignature signature, int inputSize){
+//    public VmsTransactionTask (long tid, long lastTid, long batch, VmsTransactionSignature signature, int inputSize){
+//        this.tid = tid;
+//        this.lastTid = lastTid;
+//        this.batch = batch;
+//        this.signature = signature;
+//        this.inputs = new Object[inputSize];
+//        this.remainingInputs = inputSize;
+//    }
+
+    public VmsTransactionTask (long tid, long batch, VmsTransactionSignature signature, int inputSize){
         this.tid = tid;
-        this.lastTid = lastTid;
         this.batch = batch;
         this.signature = signature;
         this.inputs = new Object[inputSize];
@@ -77,16 +85,16 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
 
         try {
 
-            Object output = signature.method().invoke(this.signature.vmsInstance(), this.inputs);
+            Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.inputs);
 
             // can be null, given we have terminal events (void method)
             // could also be terminal and generate event... maybe an external system wants to consume
             // then send to the leader...
-            OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.lastTid, this.batch, this.signature.outputQueue(), output);
+            OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
 
             // TODO we need to erase the transactions that are not seen by any more new transactions
             // need to move
-            if(signature.transactionType() != TransactionTypeEnum.R){
+            if(this.signature.transactionType() != TransactionTypeEnum.R){
                 // work like a commit, but not. it serves to set the visibility of future tasks
                 TransactionMetadata.registerWriteTransactionFinish();
             }

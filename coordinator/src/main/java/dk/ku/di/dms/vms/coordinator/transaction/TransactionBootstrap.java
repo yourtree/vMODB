@@ -52,35 +52,26 @@ public final class TransactionBootstrap {
         }
 
         public TransactionBootstrapBuilder internal(String alias, String vms, String event, String... deps){
-
             if(deps == null) throw new RuntimeException("Cannot have an internal event without a parent event");
-
             EventIdentifier toAdd = new EventIdentifier( alias, vms, event );
-
             for(String dep : deps){
                 EventIdentifier id = transactionBootstrap.inputEventToInternalVMSsMap.get(dep);
                 id.addChildren( toAdd );
             }
-
             transactionBootstrap.inputEventToInternalVMSsMap.put( alias, toAdd );
             transactionBootstrap.internalNodes.add(vms);
-
             return this;
         }
 
         public TransactionBootstrapBuilder terminal(String alias, String vms, String... deps){
             if(deps == null) throw new RuntimeException("Cannot have a terminal event without a parent event");
-
             EventIdentifier terminal = new EventIdentifier(alias, vms);
-
             transactionBootstrap.terminalNodes.add(terminal.targetVms);
-
             for(String dep : deps){
                 EventIdentifier id = transactionBootstrap.inputEventToInternalVMSsMap.get(dep);
                 // terminal.addDependence( id );
                 id.addChildren( terminal );
             }
-
             return this;
         }
 

@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.sdk.core.event.channel;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
+import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
 
@@ -39,7 +40,7 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
 
     private static final VmsInternalChannels INSTANCE;
 
-    private static final BlockingQueue<TransactionEvent.Payload> transactionInputQueue;
+    private static final BlockingQueue<InboundEvent> transactionInputQueue;
 
     private static final BlockingQueue<VmsTransactionResult> transactionOutputQueue;
 
@@ -61,7 +62,7 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
     }
 
     @Override
-    public BlockingQueue<TransactionEvent.Payload> transactionInputQueue() {
+    public BlockingQueue<InboundEvent> transactionInputQueue() {
         return transactionInputQueue;
     }
 

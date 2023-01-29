@@ -159,7 +159,6 @@ public class App
                         vmsAppLogicTaskPool,
                         vmsInternalPubSubService,
                         vmsMetadata.queueToVmsTransactionMap(),
-                        vmsMetadata.queueToEventMap(), serdes,
                         null);
 
         VmsIdentifier vmsIdentifier = new VmsIdentifier(

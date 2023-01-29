@@ -14,6 +14,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
+import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.ISchedulerHandler;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
@@ -122,6 +123,12 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
     public final ISchedulerHandler schedulerHandler;
 
+    /*
+     * It is necessary a way to store the tid received to a
+     * corresponding dependence map.
+     */
+    private final Map<Long, Map<String, Long>> tidToPrecedenceMap;
+
     public static EmbeddedVmsEventHandler build(// for communicating with other components
                                                 VmsEmbedInternalChannels vmsInternalChannels,
                                                 // to identify which vms this is
@@ -175,6 +182,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
         this.currentBatch.setStatus(BatchContext.Status.BATCH_COMMITTED);
         this.batchContextMap = new ConcurrentHashMap<>(3);
         this.batchToNextBatchMap = new ConcurrentHashMap<>();
+        this.tidToPrecedenceMap = new ConcurrentHashMap<>();
 
         this.schedulerHandler = new EmbeddedSchedulerHandler();
 
@@ -208,11 +216,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
         // setup accept since we need to accept connections from the coordinator and other VMSs
         this.serverSocket.accept( null, new AcceptCompletionHandler());
-
-        // must wait for the consumer set before starting receiving transactions
-        // this is guaranteed by the coordinator, the one who is sending transaction requests
-
-        logger.info("Accept handler has been setup.");
+        this.logger.info("Accept handler has been setup.");
 
         while(this.isRunning()){
 
@@ -235,9 +239,15 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
                     this.lastTidFinished = txResult.tid;
 
+                    Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(this.lastTidFinished);
+                    // remove ourselves
+                    precedenceMap.remove(this.me.getIdentifier());
+
+                    String precedenceMapUpdated = this.serdesProxy.serializeMap(precedenceMap);
+
                     // just send events to appropriate targets
                     for(OutboundEventResult outputEvent : txResult.resultTasks){
-                        this.processOutputEvent(outputEvent);
+                        this.processOutputEvent(outputEvent, precedenceMapUpdated);
                     }
 
                 }
@@ -306,7 +316,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
         this.eventLoop();
     }
 
-    private class EmbeddedSchedulerHandler implements ISchedulerHandler {
+    private final class EmbeddedSchedulerHandler implements ISchedulerHandler {
         @Override
         public Future<?> run() {
             vmsInternalChannels.batchCommitCommandQueue().remove();
@@ -330,17 +340,19 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
     }
 
     /**
-     *
+     * It creates the payload to be sent downstream
      * @param outputEvent the event to be sent to the respective consumer vms
      */
-    private void processOutputEvent(OutboundEventResult outputEvent){
+    private void processOutputEvent(OutboundEventResult outputEvent, String precedenceMap){
 
         if(outputEvent.outputQueue() == null) return; // it is a void method that executed, nothing to send
 
         Class<?> clazz = this.vmsMetadata.queueToEventMap().get(outputEvent.outputQueue());
         String objStr = this.serdesProxy.serialize(outputEvent.output(), clazz);
 
-        TransactionEvent.Payload payload = TransactionEvent.of(outputEvent.tid(), outputEvent.lastTid(), outputEvent.batch(), outputEvent.outputQueue(), objStr );
+        // right now just including the original precedence map. ideally we must reduce the size by removing this vms
+        TransactionEvent.Payload payload = TransactionEvent.of(
+                outputEvent.tid(), outputEvent.batch(), outputEvent.outputQueue(), objStr, precedenceMap );
 
         // does the leader consumes this queue?
         if( this.queuesLeaderSubscribesTo.contains( outputEvent.outputQueue() ) ){
@@ -363,7 +375,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
         }
     }
 
-    private class ConnectToExternalVmsProtocol {
+    private final class ConnectToExternalVmsProtocol {
 
         private State state;
         private final AsynchronousSocketChannel channel;
@@ -474,7 +486,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
     /**
      * Should we only submit the events from the current batch?
      */
-    private class VmsReadCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
+    private final class VmsReadCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
 
         @Override
         public void completed(Integer result, LockConnectionMetadata connectionMetadata) {
@@ -489,7 +501,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                     for(int i = 0; i < count; i++){
                         payload = TransactionEvent.read(connectionMetadata.readBuffer);
                         if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
-                            vmsInternalChannels.transactionInputQueue().add(payload);
+                            vmsInternalChannels.transactionInputQueue().add(buildInboundEvent(payload));
                         }
                     }
                 }
@@ -497,10 +509,10 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                     // can only be event, skip reading the message type
                     connectionMetadata.readBuffer.position(1);
                     // data dependence or input event
-                    TransactionEvent.Payload transactionEventPayload = TransactionEvent.read(connectionMetadata.readBuffer);
+                    TransactionEvent.Payload payload = TransactionEvent.read(connectionMetadata.readBuffer);
                     // send to scheduler
-                    if (vmsMetadata.queueToEventMap().get(transactionEventPayload.event()) != null) {
-                        vmsInternalChannels.transactionInputQueue().add(transactionEventPayload);
+                    if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
+                        vmsInternalChannels.transactionInputQueue().add(buildInboundEvent(payload));
                     }
                 }
                 default ->
@@ -522,7 +534,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
      * On a connection attempt, it is unknown what is the type of node
      * attempting the connection. We find out after the first read.
      */
-    private class UnknownNodeReadCompletionHandler implements CompletionHandler<Integer, Void> {
+    private final class UnknownNodeReadCompletionHandler implements CompletionHandler<Integer, Void> {
 
         private final AsynchronousSocketChannel channel;
         private final ByteBuffer buffer;
@@ -635,7 +647,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
     /**
      * Class is iteratively called by the socket pool threads.
      */
-    private class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, Void> {
+    private final class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, Void> {
 
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
@@ -681,7 +693,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
     }
 
-    private class ConnectionFromLeaderProtocol {
+    private final class ConnectionFromLeaderProtocol {
         private State state;
         private final AsynchronousSocketChannel channel;
         private final ByteBuffer buffer;
@@ -782,7 +794,22 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
     }
 
-    private class LeaderReadCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
+    private InboundEvent buildInboundEvent(TransactionEvent.Payload payload){
+        Class<?> clazz = this.vmsMetadata.queueToEventMap().get(payload.event());
+        Object input = this.serdesProxy.deserialize(payload.payload(), clazz);
+        Map<String, Long> precedenceMap = this.serdesProxy.deserializeDependenceMap(payload.precedenceMap());
+        if(precedenceMap == null){
+            throw new IllegalStateException("Precedence map is null.");
+        }
+        if(!precedenceMap.containsKey(this.me.getIdentifier())){
+            throw new IllegalStateException("Precedent tid of "+payload.tid()+" is unknown.");
+        }
+        this.tidToPrecedenceMap.put(payload.tid(), precedenceMap);
+        return new InboundEvent( payload.tid(), precedenceMap.get(this.me.getIdentifier()),
+                payload.batch(), payload.event(), clazz, input );
+    }
+
+    private final class LeaderReadCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
 
         @Override
         public void completed(Integer result, LockConnectionMetadata connectionMetadata) {
@@ -800,15 +827,16 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                 case (BATCH_OF_EVENTS) -> {
                     // to increase performance, one would buffer this buffer for processing and then read from another buffer
                     int count = connectionMetadata.readBuffer.getInt();
-                    List<TransactionEvent.Payload> payloads = new ArrayList<>(count);
+                    List<InboundEvent> payloads = new ArrayList<>(count);
                     TransactionEvent.Payload payload;
                     // extract events batched
                     for (int i = 0; i < count - 1; i++) {
                         // move offset to discard message type
                         connectionMetadata.readBuffer.get();
                         payload = TransactionEvent.read(connectionMetadata.readBuffer);
-                        if (vmsMetadata.queueToEventMap().get(payload.event()) != null)
-                            payloads.add(payload);
+                        if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
+                            payloads.add(buildInboundEvent(payload));
+                        }
                     }
 
                     // batch commit info always come last
@@ -820,7 +848,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                     } else { // then it is still event
                         payload = TransactionEvent.read(connectionMetadata.readBuffer);
                         if (vmsMetadata.queueToEventMap().get(payload.event()) != null)
-                            payloads.add(payload);
+                            payloads.add(buildInboundEvent(payload));
                     }
                     // add after to make sure the batch context map is filled by the time the output event is generated
                     vmsInternalChannels.transactionInputQueue().addAll(payloads);
@@ -842,7 +870,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                     TransactionEvent.Payload payload = TransactionEvent.read(connectionMetadata.readBuffer);
                     // send to scheduler.... drop if the event cannot be processed (not an input event in this vms)
                     if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
-                        vmsInternalChannels.transactionInputQueue().add(payload);
+                        vmsInternalChannels.transactionInputQueue().add(buildInboundEvent(payload));
                     }
                 }
                 case (TX_ABORT) -> {
