@@ -15,7 +15,7 @@ public class OperationSetOfKey {
      * Maybe the entry of this map can be a thread local variable?
      * To save the log(n) on the subsequent operations...
      * Contains the write (insert, delete, update) operations of records.
-     * If that is a delete, no new records can be added to the key.
+     * If delete operation, no new records can be added to the key.
      */
     public SingleWriterMultipleReadersFIFO<TransactionId, TransactionWrite> updateHistoryMap;
 
@@ -29,7 +29,7 @@ public class OperationSetOfKey {
 
     /**
      * Entity from the last write operation (insert or update)
-     * cached so we can extract the fields changed from the last version
+     * cached, so we can extract the fields changed from the last version
      * to speed up the checking of constraints
      * Only used by on-flight RW/W tasks
      */

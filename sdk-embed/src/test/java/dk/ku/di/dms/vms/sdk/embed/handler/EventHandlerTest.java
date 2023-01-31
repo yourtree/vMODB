@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.meta.*;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.transaction.CheckpointingAPI;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
@@ -60,8 +61,15 @@ public class EventHandlerTest {
         }
     }
 
-    private final Logger logger = Logger.getLogger(EventHandlerTest.class.getName());
-    private final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+    private static final Logger logger = Logger.getLogger(EventHandlerTest.class.getName());
+    private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+
+    private static final class DumbCheckpointAPI implements CheckpointingAPI {
+        @Override
+        public void checkpoint() {
+             logger.info("Checkpoint called at: "+System.currentTimeMillis());
+        }
+    }
 
     /**
      * Facility to load virtual microservice instances.
@@ -115,7 +123,8 @@ public class EventHandlerTest {
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
         EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.build(
-                vmsInternalPubSubService, vmsIdentifier, consumerVMSs, eventToConsumersMap, vmsMetadata, serdes, socketPool );
+                vmsIdentifier, consumerVMSs, eventToConsumersMap, new DumbCheckpointAPI(),
+                vmsInternalPubSubService,  vmsMetadata, serdes, socketPool );
 
         if(eventHandlerActive) {
             Thread eventHandlerThread = new Thread(eventHandler);
@@ -339,12 +348,12 @@ public class EventHandlerTest {
 
         // 7 - send event input
         InputEventExample1 eventExample = new InputEventExample1(1);
-        String inputPayload = this.serdes.serialize(eventExample, InputEventExample1.class);
+        String inputPayload = serdes.serialize(eventExample, InputEventExample1.class);
 
         Map<String,Long> precedenceMap = new HashMap<>();
         precedenceMap.put("example1", 0L);
 
-        TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,"in", inputPayload, this.serdes.serializeMap(precedenceMap));
+        TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,"in", inputPayload, serdes.serializeMap(precedenceMap));
         TransactionEvent.write(buffer, eventInput);
         buffer.flip();
         channel.write(buffer).get(); // no need to wait
@@ -531,7 +540,7 @@ public class EventHandlerTest {
         channel.setOption(SO_KEEPALIVE, true);
         channel.connect(address).get();
 
-        this.logger.info("Connected. Now sending presentation.");
+        logger.info("Connected. Now sending presentation.");
 
         ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
         Presentation.writeServer( buffer, new ServerIdentifier(fakeLeader.host, fakeLeader.port),  true);
@@ -550,23 +559,23 @@ public class EventHandlerTest {
 
         // 5 - send event input
         InputEventExample1 eventExample = new InputEventExample1(1);
-        String inputPayload = this.serdes.serialize(eventExample, InputEventExample1.class);
+        String inputPayload = serdes.serialize(eventExample, InputEventExample1.class);
 
         Map<String,Long> precedenceMap = new HashMap<>();
         precedenceMap.put("example1", 0L);
 
-        TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,"in", inputPayload, this.serdes.serializeMap(precedenceMap));
+        TransactionEvent.Payload eventInput = TransactionEvent.of(1,0,"in", inputPayload, serdes.serializeMap(precedenceMap));
         TransactionEvent.write(buffer, eventInput);
         buffer.flip();
         channel.write(buffer).get(); // no need to wait
 
-        this.logger.info("Input event sent");
+        logger.info("Input event sent");
 
         // 6 - read batch of events
         buffer.clear();
         channel.read(buffer).get();
 
-        this.logger.info("Batch received");
+        logger.info("Batch received");
 
         // 9 - assert the batch of events is received
         buffer.position(0);

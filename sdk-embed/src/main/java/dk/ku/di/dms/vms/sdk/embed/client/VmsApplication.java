@@ -3,16 +3,14 @@ package dk.ku.di.dms.vms.sdk.embed.client;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbeddedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -54,7 +52,7 @@ public final class VmsApplication {
             Set<String> toExclude = entitiesToExclude != null ? Arrays.stream(entitiesToExclude).collect(
                     Collectors.toSet()) : new HashSet<>();
 
-            EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata, toExclude);
+            TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata, toExclude);
 
             assert vmsMetadata != null;
 
@@ -64,7 +62,9 @@ public final class VmsApplication {
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
             // for now only giving support to one vms
-            String vmsName = vmsMetadata.loadedVmsInstances().entrySet().stream().findFirst().get().getKey();
+            Optional<Map.Entry<String, Object>> entryOptional = vmsMetadata.loadedVmsInstances().entrySet().stream().findFirst();
+            if(entryOptional.isEmpty()) throw new IllegalStateException("Cannot find a single instance of VMS");
+            String vmsName = entryOptional.get().getKey();
 
             VmsTransactionScheduler scheduler =
                     new VmsTransactionScheduler(
@@ -85,7 +85,8 @@ public final class VmsApplication {
             ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
             EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.build(
-                    vmsInternalPubSubService, vmsIdentifier, null, null, vmsMetadata, serdes, socketPool );
+                    vmsIdentifier, Collections.emptyList(), null,
+                    transactionFacade, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
 
             /*
              one way to accomplish that, but that would require keep checking the thread status

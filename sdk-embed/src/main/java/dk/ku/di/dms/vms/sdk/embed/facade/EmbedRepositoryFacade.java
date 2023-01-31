@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.definition.Row;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
+import dk.ku.di.dms.vms.modb.transaction.OperationAPI;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.modb.transaction.internal.CircularBuffer;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
@@ -63,7 +64,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
      * The transaction facade requires DBMS modules (planner, analyzer)
      * along with the catalog. These are not ready on metadata loading time
      */
-    private TransactionFacade transactionFacade;
+    private OperationAPI transactionFacade;
 
     @SuppressWarnings({"unchecked"})
     public EmbedRepositoryFacade(final Class<? extends IRepository<?,?>> repositoryClazz,

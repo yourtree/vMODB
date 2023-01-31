@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class LongPrimaryKeyGenerator implements IPrimaryKeyGenerator<Long> {
 
-    private AtomicLong sequencer;
+    private final AtomicLong sequencer;
 
     public LongPrimaryKeyGenerator() {
         this.sequencer = new AtomicLong(1);
@@ -12,7 +12,7 @@ public class LongPrimaryKeyGenerator implements IPrimaryKeyGenerator<Long> {
 
     @Override
     public Long next() {
-        return sequencer.getAndAdd(1L);
+        return this.sequencer.getAndAdd(1L);
     }
 
 }

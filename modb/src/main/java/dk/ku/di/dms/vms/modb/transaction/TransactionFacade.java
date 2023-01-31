@@ -38,7 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * in order to accommodate two or more VMSs in the same resource,
  *  it would need to make this class an instance (no static methods) and put it into modb modules
  */
-public final class TransactionFacade {
+public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
 
     private static final ThreadLocal<Set<IMultiVersionIndex>> INDEX_WRITES = ThreadLocal.withInitial( () -> {
         if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
@@ -288,8 +288,8 @@ public final class TransactionFacade {
     }
 
     /**
-     * TODO Mus unmark secondary index records as deleted...
-     * how can I do that more optimized? creatin another inteface so secondary indexes also have the #undoTransactionWrites ?
+     * TODO Must unmark secondary index records as deleted...
+     * how can I do that more optimized? creating another interface so secondary indexes also have the #undoTransactionWrites ?
      * INDEX_WRITES can have primary indexes and secondary indexes...
      */
     private void undoTransactionWrites(){
@@ -335,9 +335,8 @@ public final class TransactionFacade {
 
 
 
-    /* CHECKPOINTING AND LOGGING *******/
-
     /**
+     * CHECKPOINTING
      * Only log those data versions until the corresponding batch.
      * TIDs are not necessarily a sequence.
      */
@@ -354,12 +353,8 @@ public final class TransactionFacade {
         }
 
         // TODO must modify corresponding secondary indexes too
+        //  must log the updates in a separate file. no need for WAL, no need to store before and after
 
     }
-
-    public void log(){
-        // TODO must log the updates in a separate file. no need for WAL, no need to store before and after
-    }
-
 
 }

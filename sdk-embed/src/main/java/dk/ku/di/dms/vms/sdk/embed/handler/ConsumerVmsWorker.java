@@ -63,8 +63,8 @@ final class ConsumerVmsWorker extends TimerTask {
             this.connectionMetadata.writeBuffer.flip();
             try {
                 int result = this.connectionMetadata.channel.write(this.connectionMetadata.writeBuffer).get();
-                logger.info("Batch has been sent. Result: " + result);
-                connectionMetadata.writeBuffer.clear();
+                this.logger.info("Batch has been sent. Result: " + result);
+                this.connectionMetadata.writeBuffer.clear();
             } catch (InterruptedException | ExecutionException e) {
                 this.logger.warning("Error submitting batch");
                 // return non-processed events to original location or what?

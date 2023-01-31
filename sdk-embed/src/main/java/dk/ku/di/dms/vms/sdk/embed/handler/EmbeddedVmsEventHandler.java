@@ -13,6 +13,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.modb.transaction.CheckpointingAPI;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
@@ -78,6 +79,9 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
     // built dynamically as new producers request connection
     private final Map<Integer, LockConnectionMetadata> producerConnectionMetadataMap;
 
+    /** For checkpointing the state */
+    private final CheckpointingAPI checkpointingAPI;
+
     /** SERIALIZATION & DESERIALIZATION **/
     private final IVmsSerdesProxy serdesProxy;
 
@@ -129,14 +133,16 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
      */
     private final Map<Long, Map<String, Long>> tidToPrecedenceMap;
 
-    public static EmbeddedVmsEventHandler build(// for communicating with other components
-                                                VmsEmbedInternalChannels vmsInternalChannels,
-                                                // to identify which vms this is
+    public static EmbeddedVmsEventHandler build(// to identify which vms this is
                                                 VmsIdentifier me,
                                                 // the VMSs to send data to
                                                 List<ConsumerVms> consumerVMSs,
                                                 // map event to VMSs
                                                 Map<String, List<ConsumerVms>> eventToConsumersMap,
+                                                // to checkpoint private state
+                                                CheckpointingAPI checkpointingAPI,
+                                                // for communicating with other components
+                                                VmsEmbedInternalChannels vmsInternalChannels,
                                                 // metadata about this vms
                                                 VmsRuntimeMetadata vmsMetadata,
                                                 // serialization/deserialization of objects
@@ -144,7 +150,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                                                 // for recurrent and continuous tasks
                                                 ExecutorService executorService) throws Exception {
         try {
-            return new EmbeddedVmsEventHandler(me, vmsMetadata, consumerVMSs, eventToConsumersMap, vmsInternalChannels, serdesProxy, executorService);
+            return new EmbeddedVmsEventHandler(me, vmsMetadata, consumerVMSs, eventToConsumersMap, checkpointingAPI, vmsInternalChannels, serdesProxy, executorService);
         } catch (IOException e){
             throw new Exception("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
@@ -154,6 +160,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                                     VmsRuntimeMetadata vmsMetadata,
                                     List<ConsumerVms> consumerVMSs,
                                     Map<String, List<ConsumerVms>> eventToConsumersMap,
+                                    CheckpointingAPI checkpointingAPI,
                                     VmsEmbedInternalChannels vmsInternalChannels,
                                     IVmsSerdesProxy serdesProxy,
                                     ExecutorService executorService) throws IOException {
@@ -174,6 +181,8 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
         this.eventToConsumersMap = eventToConsumersMap == null ? new ConcurrentHashMap<>() : eventToConsumersMap;
         this.consumerConnectionMetadataMap = new ConcurrentHashMap<>(10);
         this.producerConnectionMetadataMap = new ConcurrentHashMap<>(10);
+
+        this.checkpointingAPI = checkpointingAPI;
 
         this.serdesProxy = serdesProxy;
 
@@ -333,7 +342,8 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
         // of course, I do not need to stop the scheduler on commit
         // I need to make access to the data versions data race free
         // so new transactions get data versions from the version map or the store
-        // FIXME find later how to call transaction facade here: transactionFacade.log();
+        this.checkpointingAPI.checkpoint();
+
         this.currentBatch.setStatus(BatchContext.Status.BATCH_COMMITTED);
         this.leaderWorkerQueue.add( new LeaderWorker.Message( LeaderWorker.Command.SEND_BATCH_COMMIT_ACK,
                 BatchCommitAck.of(this.currentBatch.batch, this.me.getIdentifier()) ));
