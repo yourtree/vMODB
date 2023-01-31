@@ -303,7 +303,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 channel.setOption(SO_KEEPALIVE, true);
 
                 // right now I cannot discern whether it is a VMS or follower. perhaps I can keep alive channels from leader election?
-
                 buffer = MemoryManager.getTemporaryDirectBuffer();
 
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
@@ -311,7 +310,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 channel.read(buffer, buffer, new CompletionHandler<>() {
                     @Override
                     public void completed(Integer result, ByteBuffer buffer) {
-                        processReadAfterAcceptConnection(channel, buffer);
+                        // set this thread free. release the thread that belongs to the channel group
+                         taskExecutor.submit(() -> processReadAfterAcceptConnection(channel, buffer));
                     }
 
                     @Override
@@ -366,8 +366,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 LeaderRequest.write(buffer, me);
                 buffer.flip();
                 try (channel) {
-                    channel.write(buffer).get(); // write and forget
-                } catch (IOException | ExecutionException | InterruptedException ignored) {
+                    channel.write(buffer); // write and forget
+                } catch (IOException ignored) {
                 } finally {
                     MemoryManager.releaseTemporaryDirectBuffer(buffer);
                 }
@@ -396,6 +396,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
             processServerPresentationMessage(channel, buffer);
         } else if(type == VMS_TYPE){
             try {
+                // this thread could potentially handle this worker... let's see how this performs later
+                // one aspect that favors the current approach is to release this thread as soon as possible
+                // for other connection attempts and reads from leader/VMSs once it is part of the group pool
                 ConsumerVms vms = new ConsumerVms( channel.getRemoteAddress() );
                 vms.vmsWorker = VmsWorker.build( me, vms, coordinatorQueue,
                         channel, group, buffer, serdesProxy);
@@ -406,12 +409,15 @@ public final class Coordinator extends SignalingStoppableRunnable {
             }
         } else {
             // simply unknown... probably a bug?
-            logger.warning("Unknown type of client connection. Probably a bug? ");
+            this.logger.warning("Unknown type of client connection. Probably a bug? ");
             try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored){}
         }
 
     }
 
+    /**
+     * Still need to define what to do with connections from replicas....
+     */
     private void processServerPresentationMessage(AsynchronousSocketChannel channel, ByteBuffer buffer) {
         // server
         // ....
@@ -434,7 +440,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
             this.serverConnectionMetadataMap.put( newServer.hashCode(), connectionMetadata );
             // create a read handler for this connection
             // attach buffer, so it can be read upon completion
-            // FIXME why server type creates vms read completion handler?
             // channel.read(buffer, connectionMetadata, new VmsReadCompletionHandler());
         }
     }

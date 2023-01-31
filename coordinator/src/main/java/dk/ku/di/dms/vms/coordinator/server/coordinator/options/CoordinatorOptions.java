@@ -1,7 +1,8 @@
 package dk.ku.di.dms.vms.coordinator.server.coordinator.options;
 
 /**
- * Initialized with default values
+ * Rules that govern how a coordinator must behave.
+ * Values initialized with default parameters.
  */
 public class CoordinatorOptions {
 
