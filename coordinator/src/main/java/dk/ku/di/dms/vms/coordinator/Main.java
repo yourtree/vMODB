@@ -25,21 +25,6 @@ public class Main
 //    }
         // assemble this into a new new-order tx, giving a unique id
 
-        // new order transaction
-        TransactionBootstrap txBootstrap = new TransactionBootstrap();
-        TransactionDAG dag =  txBootstrap.init("new-order")
-                .input( "a", "customer", "customer-new-order-in" )
-                .input("b", "item","item-new-order-in" )
-                .input( "c", "stock","stock-new-order-in" )
-                .input( "d", "warehouse", "waredist-new-order-in" )
-                .internal( "e", "customer","customer-new-order-out",  "a" )
-                .internal( "f", "item","item-new-order-out", "b" )
-                .internal( "g", "stock", "stock-new-order-out", "c" )
-                .internal( "h", "warehouse","waredist-new-order-out", "d" )
-                // signals the end of the transaction. However, it does not mean it cannot generate an output event
-                .terminal("i", "order", "b", "e", "f", "g", "h" )
-                .build();
-
         // the coordinator receives many events ... it maintains these received events in main memory, and then it forwards to the respective dbms proxies
 
         // at some point we do a checkpoint

@@ -12,10 +12,6 @@ import java.nio.charset.StandardCharsets;
  */
 public final class BatchReplication {
 
-    // commit   ----                            vms last tid
-    // type  | batch offset  | size of string | string representing map of (vms,tid)
-    private static final int headerSize = Byte.BYTES + Long.BYTES + Integer.BYTES; // + variable size
-
     public static void write(ByteBuffer buffer, long batch, String vmsTidMap){
         buffer.put(Constants.BATCH_REPLICATION);
         buffer.putLong( batch );
@@ -23,14 +19,14 @@ public final class BatchReplication {
         buffer.put( vmsTidMap.getBytes(StandardCharsets.UTF_8) );
     }
 
-    public static BatchReplicationPayload read(ByteBuffer buffer){
+    public static Payload read(ByteBuffer buffer){
         long batch = buffer.getLong();
         int size = buffer.getInt();
         String map = ByteUtils.extractStringFromByteBuffer(buffer, size);
-        return new BatchReplicationPayload(batch,map);
+        return new Payload(batch,map);
     }
 
-    public record BatchReplicationPayload(
+    public record Payload(
         long batch, String vmsTidMap
     ){}
 

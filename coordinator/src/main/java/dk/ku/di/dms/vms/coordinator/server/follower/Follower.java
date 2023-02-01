@@ -226,7 +226,7 @@ public final class Follower extends SignalingStoppableRunnable {
 
             } else if(type == Constants.BATCH_REPLICATION){
 
-                BatchReplication.BatchReplicationPayload payload = BatchReplication.read( readBuffer );
+                BatchReplication.Payload payload = BatchReplication.read( readBuffer );
 
                 readBuffer.clear();
 

@@ -107,8 +107,7 @@ public class App
         Map<Integer, ConsumerVms> VMSs = new HashMap<>(1);
         VMSs.put(vms.hashCode(), vms);
 
-        TransactionBootstrap txBootstrap = new TransactionBootstrap();
-        TransactionDAG dag =  txBootstrap.init("example")
+        TransactionDAG dag =  TransactionBootstrap.name("example")
                 .input( "a", "example", "in" )
                 // bad way to do it for single-microservice transactions
                 .terminal("t", "example", "a")
@@ -170,7 +169,7 @@ public class App
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
         EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.build(
-                vmsInternalPubSubService, vmsIdentifier, null, null, vmsMetadata, serdes, socketPool );
+                vmsIdentifier, null, null, null, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
 
         Thread eventHandlerThread = new Thread(eventHandler);
         eventHandlerThread.start();

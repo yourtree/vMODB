@@ -11,6 +11,8 @@ import java.util.List;
 
 /**
  * Set of internal operations performed in the private state
+ * It abstracts the possible calls {@link dk.ku.di.dms.vms.modb.api.interfaces.IRepository}
+ * classes perform to the {@link TransactionFacade}.
  */
 public interface OperationAPI {
     void deleteByKey(Table table, Object[] valuesOfKey);

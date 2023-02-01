@@ -142,8 +142,7 @@ public class App
         VMSs.put(vms1.hashCode(), vms1);
         VMSs.put(vms2.hashCode(), vms2);
 
-        TransactionBootstrap txBootstrap = new TransactionBootstrap();
-        TransactionDAG dag =  txBootstrap.init(transactionName)
+        TransactionDAG dag =  TransactionBootstrap.name(transactionName)
                 .input( "a", "example", "in" )
                 .terminal("b", "example", "a")
                 .terminal("c", "example2", "a")
@@ -214,7 +213,7 @@ public class App
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
         EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.build(
-                    vmsInternalPubSubService, vmsIdentifier, null, null, vmsMetadata, serdes, socketPool );
+                    vmsIdentifier, null, null, null, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
 
         Thread eventHandlerThread = new Thread(eventHandler);
         eventHandlerThread.start();
