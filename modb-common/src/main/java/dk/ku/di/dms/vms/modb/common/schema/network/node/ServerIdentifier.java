@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.common.schema.network.meta;
+package dk.ku.di.dms.vms.modb.common.schema.network.node;
 
 /**
  * Basic data of a server running for leader

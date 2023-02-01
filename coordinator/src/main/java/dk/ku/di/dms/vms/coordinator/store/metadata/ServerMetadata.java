@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.coordinator.store.metadata;
 
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
 import java.util.List;
@@ -20,7 +20,7 @@ public class ServerMetadata {
     public Map<String, TransactionDAG> transactionMap;
 
     // keyed by vms name
-    public Map<String, VmsIdentifier> vmsMap;
+    public Map<String, VmsNode> vmsMap;
 
     public Map<String,Long> lastTidOfBatchPerVms;
 

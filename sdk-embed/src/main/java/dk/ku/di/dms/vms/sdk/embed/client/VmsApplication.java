@@ -1,12 +1,12 @@
 package dk.ku.di.dms.vms.sdk.embed.client;
 
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
-import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
+import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbeddedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 
@@ -45,7 +45,7 @@ public final class VmsApplication {
 
             if(packageName.equalsIgnoreCase("Nothing")) throw new IllegalStateException("Cannot identify package.");
 
-            VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
+            VmsEmbeddedInternalChannels vmsInternalPubSubService = new VmsEmbeddedInternalChannels();
 
             VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata(packages);
 
@@ -74,7 +74,7 @@ public final class VmsApplication {
 
             // ideally lastTid and lastBatch must be read from the storage
 
-            VmsIdentifier vmsIdentifier = new VmsIdentifier(
+            VmsNode vmsIdentifier = new VmsNode(
                     host, port, vmsName,
                     0, 0,0,
                     vmsMetadata.dataSchema(),
@@ -84,8 +84,8 @@ public final class VmsApplication {
             // at least two, one for acceptor and one for new events
             ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-            EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.build(
-                    vmsIdentifier, Collections.emptyList(), null,
+            EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.buildWithDefaults(
+                    vmsIdentifier, null,
                     transactionFacade, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
 
             /*

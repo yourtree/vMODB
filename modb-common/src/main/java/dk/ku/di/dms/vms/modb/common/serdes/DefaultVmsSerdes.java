@@ -6,8 +6,9 @@ import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.NetworkNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
@@ -102,14 +103,14 @@ final class DefaultVmsSerdes implements IVmsSerdesProxy {
     }
 
     @Override
-    public String serializeConsumerSet(Map<String, List<NetworkNode>> map) {
+    public String serializeConsumerSet(Map<String, List<NetworkAddress>> map) {
         return this.gson.toJson( map );
     }
 
-    private static final Type typeConsMap = new TypeToken<Map<String, List<ConsumerVms>>>(){}.getType();
+    private static final Type typeConsMap = new TypeToken<Map<String, List<NetworkAddress>>>(){}.getType();
 
     @Override
-    public Map<String, List<ConsumerVms>> deserializeConsumerSet(String mapStr) {
+    public Map<String, List<NetworkAddress>> deserializeConsumerSet(String mapStr) {
         return this.gson.fromJson(mapStr, typeConsMap);
     }
 

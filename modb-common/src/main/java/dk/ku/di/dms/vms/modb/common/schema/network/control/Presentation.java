@@ -4,8 +4,8 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 
@@ -165,7 +165,7 @@ public final class Presentation {
         buffer.put( outputEventSchemaBytes );
     }
 
-    public static VmsIdentifier readVms(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){
+    public static VmsNode readVms(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){
 
         int sizeName = buffer.getInt();
         String vmsIdentifier = ByteUtils.extractStringFromByteBuffer( buffer, sizeName );
@@ -199,7 +199,7 @@ public final class Presentation {
 
         Map<String, VmsEventSchema> outputEventSchema = serdesProxy.deserializeEventSchema( outputEventSchemaStr );
 
-        return new VmsIdentifier( host, port, vmsIdentifier, batch , lastTid, previousBatch, dataSchema, inputEventSchema, outputEventSchema );
+        return new VmsNode( host, port, vmsIdentifier, batch , lastTid, previousBatch, dataSchema, inputEventSchema, outputEventSchema );
 
     }
 

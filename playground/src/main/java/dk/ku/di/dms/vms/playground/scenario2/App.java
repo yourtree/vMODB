@@ -1,22 +1,22 @@
 package dk.ku.di.dms.vms.playground.scenario2;
 
-import dk.ku.di.dms.vms.coordinator.server.coordinator.Coordinator;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.NetworkNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
-import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
+import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbeddedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 
@@ -135,10 +135,10 @@ public class App
 
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        ConsumerVms vms1 = new ConsumerVms("localhost", 1080);
-        ConsumerVms vms2 = new ConsumerVms("localhost", 1081);
+        NetworkAddress vms1 = new NetworkAddress("localhost", 1080);
+        NetworkAddress vms2 = new NetworkAddress("localhost", 1081);
 
-        Map<Integer, ConsumerVms> VMSs = new HashMap<>(2);
+        Map<Integer, NetworkAddress> VMSs = new HashMap<>(2);
         VMSs.put(vms1.hashCode(), vms1);
         VMSs.put(vms2.hashCode(), vms2);
 
@@ -153,7 +153,7 @@ public class App
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
-        Coordinator coordinator = new Coordinator(
+        Coordinator coordinator = Coordinator.buildDefault(
                 serverMap,
                 null,
                 VMSs,
@@ -173,7 +173,7 @@ public class App
 
     private static void loadMicroservice(NetworkNode node, String vmsName, String packageName, List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap) throws Exception {
 
-        VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
+        VmsEmbeddedInternalChannels vmsInternalPubSubService = new VmsEmbeddedInternalChannels();
 
         VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata(packageName);
 
@@ -204,7 +204,7 @@ public class App
                         vmsMetadata.queueToVmsTransactionMap(),
                         null);
 
-        VmsIdentifier vmsIdentifier = new VmsIdentifier(
+        VmsNode vmsIdentifier = new VmsNode(
                 node.host, node.port, vmsName,
                 0, 0,0,
                 vmsMetadata.dataSchema(),
@@ -212,8 +212,8 @@ public class App
 
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.build(
-                    vmsIdentifier, null, null, null, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
+        EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.buildWithDefaults(
+                    vmsIdentifier, null, null, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
 
         Thread eventHandlerThread = new Thread(eventHandler);
         eventHandlerThread.start();

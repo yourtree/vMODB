@@ -1,20 +1,20 @@
 package dk.ku.di.dms.vms.playground.scenario1;
 
-import dk.ku.di.dms.vms.coordinator.server.coordinator.Coordinator;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
-import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
+import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbeddedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 
@@ -100,11 +100,9 @@ public class App
         Map<Integer, ServerIdentifier> serverMap = new HashMap<>(2);
         serverMap.put(serverEm1.hashCode(), serverEm1);
 
-        ExecutorService socketPool = Executors.newFixedThreadPool(2);
+        NetworkAddress vms = new NetworkAddress("localhost", 1080);
 
-        ConsumerVms vms = new ConsumerVms("localhost", 1080);
-
-        Map<Integer, ConsumerVms> VMSs = new HashMap<>(1);
+        Map<Integer, NetworkAddress> VMSs = new HashMap<>(1);
         VMSs.put(vms.hashCode(), vms);
 
         TransactionDAG dag =  TransactionBootstrap.name("example")
@@ -118,7 +116,7 @@ public class App
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
-        Coordinator coordinator = new Coordinator(
+        Coordinator coordinator = Coordinator.buildDefault(
                 serverMap,
                 null,
                 VMSs,
@@ -141,7 +139,7 @@ public class App
      */
     private static void loadMicroservice() throws Exception {
 
-        VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
+        VmsEmbeddedInternalChannels vmsInternalPubSubService = new VmsEmbeddedInternalChannels();
 
         VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata("dk.ku.di.dms.vms.playground.app");
 
@@ -160,7 +158,7 @@ public class App
                         vmsMetadata.queueToVmsTransactionMap(),
                         null);
 
-        VmsIdentifier vmsIdentifier = new VmsIdentifier(
+        VmsNode vmsIdentifier = new VmsNode(
                 "localhost", 1080, "example",
                 0, 0,0,
                 vmsMetadata.dataSchema(),
@@ -168,8 +166,8 @@ public class App
 
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.build(
-                vmsIdentifier, null, null, null, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
+        EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.buildWithDefaults(
+                vmsIdentifier, null, transactionFacade, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
 
         Thread eventHandlerThread = new Thread(eventHandler);
         eventHandlerThread.start();

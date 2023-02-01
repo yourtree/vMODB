@@ -1,9 +1,9 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.control;
 
-import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -20,7 +20,7 @@ public final class ConsumerSet {
         buffer.put( mapBytes );
     }
 
-    public static Map<String, List<ConsumerVms>> read(ByteBuffer buffer, IVmsSerdesProxy proxy){
+    public static Map<String, List<NetworkAddress>> read(ByteBuffer buffer, IVmsSerdesProxy proxy){
         int size = buffer.getInt();
         if(size > 0) {
             String consumerSet = ByteUtils.extractStringFromByteBuffer(buffer, size);

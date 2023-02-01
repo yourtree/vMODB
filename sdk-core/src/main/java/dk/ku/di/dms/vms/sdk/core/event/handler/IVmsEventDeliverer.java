@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.event.handler;
 
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 
 import java.nio.ByteBuffer;
 
@@ -28,7 +28,7 @@ public interface IVmsEventDeliverer {
      * @param buffer
      * @param target
      */
-    void sendEvent(ByteBuffer buffer, VmsIdentifier target);
+    void sendEvent(ByteBuffer buffer, VmsNode target);
 
     // CompletionStage<?> onMessage(ByteBuffer message);
 

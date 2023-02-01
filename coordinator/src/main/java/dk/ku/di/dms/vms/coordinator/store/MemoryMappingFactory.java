@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.coordinator.store;
 
 import dk.ku.di.dms.vms.coordinator.store.metadata.ServerMetadata;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import sun.misc.Unsafe;
 
 import java.io.IOException;
@@ -140,7 +140,7 @@ public class MemoryMappingFactory {
         return serverMap;
     }
 
-    public Map<Integer, VmsIdentifier> loadVMSs(){
+    public Map<Integer, VmsNode> loadVMSs(){
 
 //        public long lastTid;
 //        public long lastBatch;
@@ -153,7 +153,7 @@ public class MemoryMappingFactory {
 
         int N = buffer.getInt();
 
-        Map<Integer, VmsIdentifier> vmsMap = new ConcurrentHashMap<>(N);
+        Map<Integer, VmsNode> vmsMap = new ConcurrentHashMap<>(N);
 
         for(int i = 0; i < N; i++){
 

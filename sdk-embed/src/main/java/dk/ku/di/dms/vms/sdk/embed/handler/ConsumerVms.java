@@ -1,9 +1,8 @@
-package dk.ku.di.dms.vms.modb.common.schema.network.meta;
+package dk.ku.di.dms.vms.sdk.embed.handler;
 
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.util.Map;
 import java.util.Timer;
 import java.util.concurrent.BlockingDeque;
@@ -14,8 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Contains only the necessary information for that
  * Attributes do not form an identification of the VMS, but rather
  * make it easier to manage metadata about each. I.e., metadata that
- * must be shared across threads (e.g., transactionEventsPerBatch),
- * managed by the event handler and coordinator (see comments on each attribute)
+ * must be shared across threads (e.g., transactionEventsPerBatch)
  */
 public class ConsumerVms extends NetworkAddress {
 
@@ -28,19 +26,19 @@ public class ConsumerVms extends NetworkAddress {
       */
     public transient Timer timer;
 
-    /**
-     * Only used by Coordinator to send events to a VMS
-     */
-    public transient Runnable vmsWorker;
-
     public ConsumerVms(String host, int port) {
         super(host, port);
         this.transactionEventsPerBatch = new ConcurrentHashMap<>();
     }
 
-    public ConsumerVms(SocketAddress address) {
-        super(((InetSocketAddress)address).getHostName(), ((InetSocketAddress)address).getPort());
+    public ConsumerVms(NetworkAddress address, Timer timer) {
+        super(address.host, address.port);
+        this.timer = timer;
         this.transactionEventsPerBatch = new ConcurrentHashMap<>();
+    }
+
+    public ConsumerVms me(){
+        return this;
     }
 
 }

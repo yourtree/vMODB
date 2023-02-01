@@ -1,8 +1,8 @@
-package dk.ku.di.dms.vms.coordinator.server.coordinator;
+package dk.ku.di.dms.vms.coordinator.server.coordinator.runnable;
 
 import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchAlgo;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchContext;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchCore;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
@@ -10,15 +10,14 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -38,8 +37,8 @@ import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
-import static dk.ku.di.dms.vms.coordinator.server.coordinator.VmsWorker.Command.*;
 import static dk.ku.di.dms.vms.coordinator.server.coordinator.options.BatchReplicationStrategy.*;
+import static dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.IVmsWorker.Command.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.PRESENTATION;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.SERVER_TYPE;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.VMS_TYPE;
@@ -49,8 +48,9 @@ import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
 /**
+ * Also known as Leader
  * Class that encapsulates all logic related to issuing of
- * batch commits, transaction aborts, ...
+ * transactions, batch commits, transaction aborts, ...
  */
 public final class Coordinator extends SignalingStoppableRunnable {
 
@@ -74,7 +74,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
     /** VMS data structures **/
 
     // received from program start
-    private final Map<Integer, ConsumerVms> starterVMSs;
+    private final Map<Integer, NetworkAddress> starterVMSs;
 
     /**
      * Those received from program start + those that joined later
@@ -116,7 +116,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
     private final IVmsSerdesProxy serdesProxy;
 
     /**
-     * vms workers append to this queue
+     * Vms workers append to this queue
       */
     record Message(
             Type type,
@@ -149,53 +149,72 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     private final BlockingQueue<Message> coordinatorQueue;
 
-    public Coordinator(// obtained from leader election or passed by parameter on setup
-                       Map<Integer, ServerIdentifier> servers,
-                       Map<Integer, LockConnectionMetadata> serverConnectionMetadataMap,
-                       // passed by parameter
-                       Map<Integer, ConsumerVms> startersVMSs,
-                       Map<String, TransactionDAG> transactionMap,
-                       // coordinator config
-                       ServerIdentifier me,
-                       CoordinatorOptions options,
-                       // starting batch offset (may come from storage after a crash)
-                       long startingBatchOffset,
-                       // starting tid (may come from storage after a crash)
-                       long startingTid,
-                       // queue containing the input transactions. ingestion performed by http server
-                       BlockingQueue<TransactionInput> parsedTransactionRequests,
-                       IVmsSerdesProxy serdesProxy) throws IOException {
+    public static Coordinator buildDefault(// obtained from leader election or passed by parameter on setup
+                                           Map<Integer, ServerIdentifier> servers,
+                                           Map<Integer, LockConnectionMetadata> serverConnectionMetadataMap,
+                                           // passed by parameter
+                                           Map<Integer, NetworkAddress> startersVMSs,
+                                           Map<String, TransactionDAG> transactionMap,
+                                           ServerIdentifier me,
+                                           // coordinator configuration
+                                           CoordinatorOptions options,
+                                           // starting batch offset (may come from storage after a crash)
+                                           long startingBatchOffset,
+                                           // starting tid (may come from storage after a crash)
+                                           long startingTid,
+                                           // queue containing the input transactions. ingestion performed by http server
+                                           BlockingQueue<TransactionInput> parsedTransactionRequests,
+                                           IVmsSerdesProxy serdesProxy) throws IOException {
+        return new Coordinator(servers == null ? new ConcurrentHashMap<>() : servers,
+                serverConnectionMetadataMap == null ? new HashMap<>() : serverConnectionMetadataMap,
+                startersVMSs, Objects.requireNonNull(transactionMap), me, options, startingBatchOffset, startingTid,
+                parsedTransactionRequests,serdesProxy);
+    }
+
+    private Coordinator(Map<Integer, ServerIdentifier> servers,
+                        Map<Integer, LockConnectionMetadata> serverConnectionMetadataMap,
+                        Map<Integer, NetworkAddress> startersVMSs,
+                        Map<String, TransactionDAG> transactionMap,
+                        ServerIdentifier me,
+                        CoordinatorOptions options,
+                        long startingBatchOffset,
+                        long startingTid,
+                        BlockingQueue<TransactionInput> parsedTransactionRequests,
+                        IVmsSerdesProxy serdesProxy) throws IOException {
         super();
 
-        // task manager + (eventually) InformLeadershipTask | resendTransactionalInputEvents | general exceptions coming from completable futures
+        // coordinator options
+        this.options = options;
+
+        // used to complete handshake protocol
         this.taskExecutor = Executors.newFixedThreadPool(options.getTaskThreadPoolSize());
 
         // network and executor
-        this.group = AsynchronousChannelGroup.withThreadPool(Executors.newWorkStealingPool(options.getGroupThreadPoolSize()));
-        this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
-        this.serverSocket.bind(me.asInetSocketAddress());
+        if(options.isNetworkEnabled()) {
+            this.group = AsynchronousChannelGroup.withThreadPool(Executors.newWorkStealingPool(options.getGroupThreadPoolSize()));
+            this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+            this.serverSocket.bind(me.asInetSocketAddress());
+        } else {
+            this.group = null;
+            this.serverSocket = null;
+        }
 
-        // should come filled from election process
-        this.servers = servers == null ? new ConcurrentHashMap<>() : servers;
         this.starterVMSs = startersVMSs;
         this.vmsMetadataMap = new HashMap<>(10);
 
         // might come filled from election process
-        this.serverConnectionMetadataMap = serverConnectionMetadataMap == null ? new HashMap<>() : serverConnectionMetadataMap;
-        //this.vmsConnectionMetadataMap = new ConcurrentHashMap<>();
+        this.servers = servers;
+        this.serverConnectionMetadataMap = serverConnectionMetadataMap;
         this.me = me;
 
         // infra
         this.serdesProxy = serdesProxy;
 
-        // coordinator options
-        this.options = options;
-
         // shared data structure with http handler
         this.parsedTransactionRequests = parsedTransactionRequests;
 
         // in production, it requires receiving new transaction definitions
-        this.transactionMap = Objects.requireNonNull(transactionMap);
+        this.transactionMap = transactionMap;
 
         // to hold actions spawned by events received by different VMSs
         this.coordinatorQueue = new LinkedBlockingQueue<>();
@@ -215,27 +234,27 @@ public final class Coordinator extends SignalingStoppableRunnable {
     }
 
     /**
-     *  This method contains the event loop that contains the main functions of a leader/coordinator
-     *  What happens if two nodes declare themselves as leaders? We need some way to let it know
-     *  OK (b) Batch management
+     * This method contains the event loop that contains the main functions of a leader/coordinator
+     * What happens if two nodes declare themselves as leaders? We need some way to let it know
+     * OK (b) Batch management
      * designing leader mode first
-     * design follower mode in another class to avoid convoluted code
-     * -
+     * design follower mode in another class to avoid convoluted code.
      * Going for a different socket to allow for heterogeneous ways for a client to connect with the servers e.g., http.
      * It is also good to better separate resources, so VMSs and followers do not share resources with external clients
      */
     @Override
     public void run() {
 
-        // setup asynchronous listener for new connections
-        this.serverSocket.accept( null, new AcceptCompletionHandler());
-
-        // connect to all virtual microservices
-        this.setupStarterVMSs();
+        if(options.isNetworkEnabled()) {
+            // setup asynchronous listener for new connections
+            this.serverSocket.accept(null, new AcceptCompletionHandler());
+            // connect to all virtual microservices
+            this.setupStarterVMSs();
+        }
 
         while(isRunning()){
             try {
-                TimeUnit.of(ChronoUnit.MILLIS).sleep(options.getBatchWindow());
+                TimeUnit.of(ChronoUnit.MILLIS).sleep(this.options.getBatchWindow());
                 this.processEventsSentByVmsWorkers();
                 this.processTransactionInputEvents();
                 this.advanceCurrentBatchAndSpawnSendBatchOfEvents();
@@ -251,12 +270,14 @@ public final class Coordinator extends SignalingStoppableRunnable {
     /**
      * After a leader election, it makes more sense that
      * the leader connects to all known virtual microservices.
+     * No need to track the thread created because they will be
+     * later mapped to the respective vms identifier by the thread
      */
     private void setupStarterVMSs() {
-        for(ConsumerVms vms : this.starterVMSs.values()){
-            vms.vmsWorker = VmsWorker.buildAsStarter(this.me, vms, this.coordinatorQueue, this.group, this.serdesProxy);
+        for(NetworkAddress vms : this.starterVMSs.values()){
+            VmsWorker worker = VmsWorker.buildAsStarter(this.me, vms, this.coordinatorQueue, this.group, this.serdesProxy);
             // a cached thread pool would be ok in this case
-            new Thread( vms.vmsWorker ).start();
+            new Thread( worker ).start();
         }
     }
 
@@ -265,12 +286,12 @@ public final class Coordinator extends SignalingStoppableRunnable {
      * for each vms input event (not generated by the coordinator),
      * find the vms that generated the output
      */
-    private List<NetworkNode> findConsumerVMSs(String outputEvent){
-        List<NetworkNode> list = new ArrayList<>(2);
+    private List<NetworkAddress> findConsumerVMSs(String outputEvent){
+        List<NetworkAddress> list = new ArrayList<>(2);
         // can be the leader or a vms
         for( VmsIdentifier vms : this.vmsMetadataMap.values() ){
-            if(vms.inputEventSchema.get(outputEvent) != null){
-                list.add(vms);
+            if(vms.node().inputEventSchema.get(outputEvent) != null){
+                list.add(vms.node());
             }
         }
         // assumed to be terminal? maybe yes.
@@ -310,7 +331,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     @Override
                     public void completed(Integer result, ByteBuffer buffer) {
                         // set this thread free. release the thread that belongs to the channel group
-                         taskExecutor.submit(() -> processReadAfterAcceptConnection(channel, buffer));
+                        taskExecutor.submit(() -> processReadAfterAcceptConnection(channel, buffer));
                     }
 
                     @Override
@@ -398,11 +419,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 // this thread could potentially handle this worker... let's see how this performs later
                 // one aspect that favors the current approach is to release this thread as soon as possible
                 // for other connection attempts and reads from leader/VMSs once it is part of the group pool
-                ConsumerVms vms = new ConsumerVms( channel.getRemoteAddress() );
-                vms.vmsWorker = VmsWorker.build( me, vms, coordinatorQueue,
-                        channel, group, buffer, serdesProxy);
+                // ConsumerVms vms = new ConsumerVms( channel.getRemoteAddress() );
+                VmsWorker worker = VmsWorker.build( this.me, new NetworkAddress(channel.getRemoteAddress()), this.coordinatorQueue,
+                        channel, this.group, buffer, this.serdesProxy);
                 // a cached thread pool would be ok in this case
-                new Thread( vms.vmsWorker ).start();
+                new Thread( worker ).start();
             } catch (IOException ignored1) {
                 try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored2){}
             }
@@ -447,26 +468,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
      * Given a set of VMSs involved in the last batch
      * (for easiness can send to all of them for now)
      * send a batch request.
-     * -
-     * Callback to start batch commit process
-     * -
-     * we need a cut. all vms must be aligned in terms of tid
-     * because the other thread might still be sending intersecting TIDs
-     * e.g., vms 1 receives batch 1 tid 1 vms 2 received batch 2 tid 1
-     * this is solved by fixing the batch per transaction (and all its events)
-     * this is an anomaly across batches
-     * -
-     * but another problem is that an interleaving can allow the following problem
-     * commit handler issues batch 1 to vms 1 with last tid 1
-     * but tx-mgr issues event with batch 1 vms 1 last tid 2
-     * this can happen because the tx-mgr is still in the loop
-     * this is an anomaly within a batch
-     * -
-     * so we need synchronization to disallow the second
-     * -
-     * obtain a consistent snapshot of last TIDs for all VMSs
-     * the transaction manager must obtain the next batch inside the synchronized block
-     * -
      * TODO store the transactions in disk before sending
      */
     private void advanceCurrentBatchAndSpawnSendBatchOfEvents(){
@@ -487,11 +488,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         // a map of the last tid for each vms participating in this batch
         Map<String,Long> lastTidOfBatchPerVms = this.vmsMetadataMap.values().stream()
-                .filter(p-> p.batch == generateBatch)
+                .filter(p-> p.node().batch == generateBatch)
                 .collect(Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getLastTidOfBatch) );
 
         Map<String,Long> previousBatchPerVms = this.vmsMetadataMap.values().stream()
-                .filter(p-> p.batch == generateBatch)
+                .filter(p-> p.node().batch == generateBatch)
                 .collect(Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getPreviousBatch) );
 
         currBatchContext.seal(this.tid, lastTidOfBatchPerVms, previousBatchPerVms);
@@ -503,27 +504,28 @@ public final class Coordinator extends SignalingStoppableRunnable {
         BatchContext newBatchContext = new BatchContext(this.currentBatchOffset);
         this.batchContextMap.put( this.currentBatchOffset, newBatchContext );
 
-        logger.info("Current batch offset is "+generateBatch+" and new batch offset is "+this.currentBatchOffset);
+        this.logger.info("Current batch offset is "+generateBatch+" and new batch offset is "+this.currentBatchOffset);
 
         // new TIDs will be emitted with the new batch in the transaction manager
         boolean isTerminal;
         for(VmsIdentifier vms : this.vmsMetadataMap.values()){
 
-            if(vms.batch != generateBatch) continue; // remove the ones not participating in this batch
+            if(vms.node().batch != generateBatch) continue; // remove the ones not participating in this batch
 
             // the terminals inform the batch completion. that refrains the coordinator from waiting for all VMSs
-            isTerminal = currBatchContext.terminalVMSs.contains(vms.vmsIdentifier);
+            isTerminal = currBatchContext.terminalVMSs.contains(vms.node().vmsIdentifier);
             // remove the nodes who have no event, unless it is a terminal
             // in this case, it must receive at least the batch commit info
             // to know when to send the batch complete message
-            if( vms.consumerVms.transactionEventsPerBatch
-                    .computeIfAbsent(this.currentBatchOffset, k -> new LinkedBlockingDeque<>()).isEmpty() && !isTerminal){
+            if( vms.worker().transactionEventsPerBatch(this.currentBatchOffset).isEmpty()
+                    // .computeIfAbsent(this.currentBatchOffset, k -> new LinkedBlockingDeque<>()).isEmpty()
+                    && !isTerminal){
                 continue;
             }
 
-            ((VmsWorker) vms.consumerVms.vmsWorker).workerQueue.add(new VmsWorker.VmsWorkerMessage(
+            vms.worker().queue().add(new IVmsWorker.Message(
                     isTerminal ? SEND_BATCH_OF_EVENTS_WITH_COMMIT_INFO : SEND_BATCH_OF_EVENTS,
-                            BatchCommitInfo.of(vms.batch, vms.lastTidOfBatch, vms.previousBatch) ) );
+                            BatchCommitInfo.of(vms.node().batch, vms.node().lastTidOfBatch, vms.node().previousBatch) ) );
         }
 
         // the batch commit only has progress (a safety property) the way it is implemented now when future events
@@ -677,7 +679,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 EventIdentifier event = transactionDAG.inputEvents.get(inputEvent.name);
                 VmsIdentifier vms = this.vmsMetadataMap.get(event.targetVms);
                 if(vms == null) {
-                    logger.warning("VMS "+event.targetVms+" is unknown to the coordinator");
+                    this.logger.warning("VMS "+event.targetVms+" is unknown to the coordinator");
                     allKnown = false;
                     break;
                 }
@@ -706,37 +708,36 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 /*
                  * update for next transaction. this is basically to ensure VMS do not wait for a tid that will never come. TIDs processed by a vms may not be sequential
                  */
-                vms.lastTidOfBatch = tid_;
-                this.updateBatchAndPrecedenceIfNecessary(vms);
+                vms.node().lastTidOfBatch = tid_;
+                this.updateBatchAndPrecedenceIfNecessary(vms.node());
                 // if an internal/terminal vms do not receive an input event in this batch, it won't be able to
                 // progress since the precedence info will never arrive
                 // this way, we need to send in this event the precedence info for all downstream VMSs of this event
                 // having this info avoids having to contact all internal/terminal nodes to inform the precedence of events
-                Map<String, Long> precedenceMap = BatchCore.buildPrecedenceMap(event, transactionDAG, this.vmsMetadataMap);
+                Map<String, Long> precedenceMap = BatchAlgo.buildPrecedenceMap(event, transactionDAG, this.vmsMetadataMap);
                 String precedenceMapStr = this.serdesProxy.serializeMap(precedenceMap);
 
                 // write. think about failures/atomicity later
                 TransactionEvent.Payload txEvent = TransactionEvent.of(tid_, this.currentBatchOffset, inputEvent.name, inputEvent.payload, precedenceMapStr);
 
                 // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
-                vms.consumerVms.transactionEventsPerBatch
-                        .computeIfAbsent(this.currentBatchOffset, k -> new LinkedBlockingDeque<>()).add(txEvent);
+                vms.worker().transactionEventsPerBatch(this.currentBatchOffset).add(txEvent);
 
             }
 
             // update the last tid of the terminals
             for(String vmsIdentifier : transactionDAG.terminalNodes){
                 VmsIdentifier vms = this.vmsMetadataMap.get(vmsIdentifier);
-                vms.lastTidOfBatch = tid_;
-                updateBatchAndPrecedenceIfNecessary(vms);
+                vms.node().lastTidOfBatch = tid_;
+                updateBatchAndPrecedenceIfNecessary(vms.node());
             }
 
             // also update the last tid of the internal VMSs
             // to make sure they receive the batch commit command with the appropriate lastTid
             for(String vmsIdentifier : transactionDAG.internalNodes){
                 VmsIdentifier vms = this.vmsMetadataMap.get(vmsIdentifier);
-                vms.lastTidOfBatch = tid_;
-                updateBatchAndPrecedenceIfNecessary(vms);
+                vms.node().lastTidOfBatch = tid_;
+                updateBatchAndPrecedenceIfNecessary(vms.node());
             }
 
             // add terminal to the set... so cannot be immutable when the batch context is created...
@@ -746,7 +747,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     }
 
-    private void updateBatchAndPrecedenceIfNecessary(VmsIdentifier vms) {
+    private void updateBatchAndPrecedenceIfNecessary(VmsNode vms) {
         if(vms.batch != this.currentBatchOffset){
             vms.previousBatch = vms.batch;
             vms.batch = this.currentBatchOffset;
@@ -769,27 +770,26 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
             try {
                 Message message = this.coordinatorQueue.take();
-
                 switch(message.type){
-
                     case VMS_IDENTIFIER -> {
                         // update metadata of this node so coordinator can reason about data dependencies
-                         this.vmsMetadataMap.put( message.asVmsIdentifier().getIdentifier(), message.asVmsIdentifier() );
+
+                        this.vmsMetadataMap.put( message.asVmsIdentifier().getIdentifier(), message.asVmsIdentifier() );
 
                         // if all metadata, from all starter vms have arrived, then send the signal to them
                         if(this.vmsMetadataMap.size() == this.starterVMSs.size()){
 
-                            Map<String, List<NetworkNode>> vmsConsumerSet = new HashMap<>();
+                            Map<String, List<NetworkAddress>> vmsConsumerSet = new HashMap<>();
 
                             for(VmsIdentifier vmsIdentifier : this.vmsMetadataMap.values()) {
 
-                                ConsumerVms vms = this.starterVMSs.get( vmsIdentifier.hashCode() );
+                                NetworkAddress vms = this.starterVMSs.get( vmsIdentifier.hashCode() );
                                 if(vms == null) continue;
 
                                 // build consumer set dynamically
                                 // for each output event, find the consumer VMSs
-                                for (VmsEventSchema eventSchema : vmsIdentifier.outputEventSchema.values()) {
-                                    List<NetworkNode> nodes = this.findConsumerVMSs(eventSchema.eventName);
+                                for (VmsEventSchema eventSchema : vmsIdentifier.node().outputEventSchema.values()) {
+                                    List<NetworkAddress> nodes = this.findConsumerVMSs(eventSchema.eventName);
                                     if (!nodes.isEmpty())
                                         vmsConsumerSet.put(eventSchema.eventName, nodes);
                                 }
@@ -799,7 +799,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                                     mapStr = this.serdesProxy.serializeConsumerSet(vmsConsumerSet);
                                 }
 
-                                ((VmsWorker) vms.vmsWorker).workerQueue.add( new VmsWorker.VmsWorkerMessage( SEND_CONSUMER_SET, mapStr ));
+                                vmsIdentifier.worker().queue().add( new IVmsWorker.Message( SEND_CONSUMER_SET, mapStr ));
 
                             }
 
@@ -817,7 +817,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         for(VmsIdentifier vms : this.vmsMetadataMap.values()){
                             // don't need to send to the vms that aborted
                             if(vms.getIdentifier().equalsIgnoreCase( msg.vms() )) continue;
-                            ((VmsWorker)vms.consumerVms.vmsWorker).workerQueue.add( new VmsWorker.VmsWorkerMessage( SEND_TRANSACTION_ABORT, msg.tid()));
+                            vms.worker().queue().add( new IVmsWorker.Message( SEND_TRANSACTION_ABORT, msg.tid()));
                         }
                     }
                     case BATCH_COMPLETE -> {
@@ -839,7 +839,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                         }
                     }
-
                     case BATCH_COMMIT_ACK -> {
                         // let's just ignore the ACKs. since the terminals have responded, that means the VMSs before them have processed the transactions in the batch
                         // not sure if this is correct since we have to wait for all VMSs to respond...
@@ -866,7 +865,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
     private void sendCommitRequestToVMSs(BatchContext batchContext){
         for(VmsIdentifier vms : this.vmsMetadataMap.values()){
             if(batchContext.terminalVMSs.contains(vms.getIdentifier())) continue;
-            ((VmsWorker)vms.consumerVms.vmsWorker).workerQueue.add( new VmsWorker.VmsWorkerMessage(SEND_BATCH_COMMIT_COMMAND,
+            vms.worker().queue().add( new IVmsWorker.Message(SEND_BATCH_COMMIT_COMMAND,
                     new BatchCommitCommand.Payload(
                         batchContext.batchOffset,
                         batchContext.lastTidOfBatchPerVms.get(vms.getIdentifier()),

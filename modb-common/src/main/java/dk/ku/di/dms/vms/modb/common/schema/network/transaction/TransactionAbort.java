@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.common.schema.network.transaction;
 
 import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -23,12 +23,12 @@ public class TransactionAbort {
         buffer.put( payload.vms().getBytes(StandardCharsets.UTF_8) );
     }
 
-    public static void write(ByteBuffer buffer, VmsIdentifier vmsIdentifier, long batch, long tid){
+    public static void write(ByteBuffer buffer, VmsNode vmsIdentifier, long batch, long tid){
         buffer.put(Constants.TX_ABORT);
         buffer.putLong(batch);
         buffer.putLong(tid);
-        buffer.putInt( vmsIdentifier.getIdentifier().length() );
-        buffer.put( vmsIdentifier.getIdentifier().getBytes(StandardCharsets.UTF_8) );
+        buffer.putInt( vmsIdentifier.vmsIdentifier.length() );
+        buffer.put( vmsIdentifier.vmsIdentifier.getBytes(StandardCharsets.UTF_8) );
     }
 
     public static Payload read(ByteBuffer buffer){

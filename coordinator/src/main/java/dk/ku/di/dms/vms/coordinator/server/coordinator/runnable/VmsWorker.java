@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.coordinator;
+package dk.ku.di.dms.vms.coordinator.server.coordinator.runnable;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
@@ -7,9 +7,9 @@ import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ServerIdentifier;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -23,27 +23,26 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.Map;
+import java.util.concurrent.*;
 import java.util.logging.Logger;
 
-import static dk.ku.di.dms.vms.coordinator.server.coordinator.VmsWorker.State.*;
+import static dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.IVmsWorker.State.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
-final class VmsWorker extends StoppableRunnable {
+final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private final Logger logger;
 
     private final ServerIdentifier me;
 
-    private final ConsumerVms consumerVms;
+    // the vms this worker is responsible for
+    private final NetworkAddress consumerVms;
 
     // defined after presentation being sent by the actual vms
-    private VmsIdentifier vmsIdentifier;
+    private VmsNode vmsNode;
 
     private State state;
 
@@ -53,52 +52,9 @@ final class VmsWorker extends StoppableRunnable {
 
     private ByteBuffer writeBuffer;
 
-    /**
-     * Messages that correspond to operations
-     */
-    record VmsWorkerMessage(Command type, Object object){
+    public final Map<Long, BlockingDeque<TransactionEvent.Payload>> transactionEventsPerBatch;
 
-        public BatchCommitCommand.Payload asBatchCommitCommand() {
-            return (BatchCommitCommand.Payload)object;
-        }
-
-        public String asVmsConsumerSet(){
-            return (String)object;
-        }
-
-        public BatchCommitInfo.Payload asBatchOfEventsRequest(){
-            return (BatchCommitInfo.Payload)object;
-        }
-
-        public TransactionAbort.Payload asTransactionAbort(){
-            return (TransactionAbort.Payload)object;
-        }
-
-    }
-
-    enum Command {
-        SEND_BATCH_OF_EVENTS,
-        SEND_BATCH_OF_EVENTS_WITH_COMMIT_INFO, // to terminals only
-        SEND_BATCH_COMMIT_COMMAND,
-        SEND_TRANSACTION_ABORT,
-        SEND_CONSUMER_SET
-    }
-
-    public enum State {
-        NEW,
-        CONNECTION_ESTABLISHED,
-        CONNECTION_FAILED,
-        LEADER_PRESENTATION_SENT,
-        LEADER_PRESENTATION_SEND_FAILED,
-        VMS_PRESENTATION_RECEIVED,
-        VMS_PRESENTATION_RECEIVE_FAILED,
-        VMS_PRESENTATION_PROCESSED,
-        CONSUMER_SET_READY_FOR_SENDING,
-        CONSUMER_SET_SENDING_FAILED,
-        CONSUMER_EXECUTING
-    }
-
-    public final BlockingQueue<VmsWorkerMessage> workerQueue;
+    public final BlockingQueue<Message> workerQueue;
 
     /**
      * Queues to inform coordinator about an event
@@ -113,10 +69,10 @@ final class VmsWorker extends StoppableRunnable {
     static VmsWorker buildAsStarter(// coordinator reference
                                     ServerIdentifier me,
                                     // the vms this thread is responsible for
-                                    ConsumerVms consumerVms,
+                                    NetworkAddress consumerVms,
                                     // shared data structure to communicate messages to coordinator
                                     BlockingQueue<Coordinator.Message> coordinatorQueue,
-                                    // the group for socket channel
+                                    // the group for the socket channel
                                     AsynchronousChannelGroup group,
                                     IVmsSerdesProxy serdesProxy) {
         return new VmsWorker(me, consumerVms, coordinatorQueue, null, group, null, serdesProxy);
@@ -124,7 +80,7 @@ final class VmsWorker extends StoppableRunnable {
 
     static VmsWorker build(
             ServerIdentifier me,
-            ConsumerVms consumerVms,
+            NetworkAddress consumerVms,
             BlockingQueue<Coordinator.Message> coordinatorQueue,
             // the socket channel already established
             AsynchronousSocketChannel channel,
@@ -137,7 +93,7 @@ final class VmsWorker extends StoppableRunnable {
     private VmsWorker(// coordinator reference
                       ServerIdentifier me,
                       // the vms this thread is responsible for
-                      ConsumerVms consumerVms,
+                      NetworkAddress consumerVms,
                       // events to share with coordinator
                       BlockingQueue<Coordinator.Message> coordinatorQueue,
                       // the group for socket channel
@@ -154,6 +110,7 @@ final class VmsWorker extends StoppableRunnable {
 
         // particular to this vms worker
         this.workerQueue = new LinkedBlockingQueue<>();
+        this.transactionEventsPerBatch = new ConcurrentHashMap<>();
 
         // this.vmsMetadata = vmsMetadata;
         this.channel = channel;
@@ -248,8 +205,8 @@ final class VmsWorker extends StoppableRunnable {
     private void eventLoop() {
         while (this.isRunning()){
             try {
-                VmsWorkerMessage workerMessage = this.workerQueue.take();
-                switch (workerMessage.type){
+                Message workerMessage = this.workerQueue.take();
+                switch (workerMessage.type()){
                     // in order of probability
                     case SEND_BATCH_OF_EVENTS -> this.sendBatchOfEvents(workerMessage, false);
                     case SEND_BATCH_OF_EVENTS_WITH_COMMIT_INFO -> this.sendBatchOfEvents(workerMessage, true);
@@ -264,7 +221,7 @@ final class VmsWorker extends StoppableRunnable {
         }
     }
 
-    private void sendTransactionAbort(VmsWorkerMessage workerMessage) {
+    private void sendTransactionAbort(Message workerMessage) {
         TransactionAbort.Payload tidToAbort = workerMessage.asTransactionAbort();
         TransactionAbort.write(this.writeBuffer, tidToAbort);
         this.writeBuffer.flip();
@@ -285,7 +242,7 @@ final class VmsWorker extends StoppableRunnable {
 
     }
 
-    private void sendBatchCommitRequest(VmsWorkerMessage workerMessage) {
+    private void sendBatchCommitRequest(Message workerMessage) {
         BatchCommitCommand.Payload commitRequest = workerMessage.asBatchCommitCommand();
         BatchCommitCommand.write(this.writeBuffer, commitRequest);
         this.writeBuffer.flip();
@@ -306,7 +263,7 @@ final class VmsWorker extends StoppableRunnable {
         }
     }
 
-    private void sendConsumerSet(VmsWorkerMessage workerMessage) {
+    private void sendConsumerSet(Message workerMessage) {
         // the first or new information
         if(this.state == VMS_PRESENTATION_PROCESSED) {
             // now initialize the write buffer
@@ -350,6 +307,16 @@ final class VmsWorker extends StoppableRunnable {
 
     }
 
+    @Override
+    public BlockingDeque<TransactionEvent.Payload> transactionEventsPerBatch(long batch) {
+        return this.transactionEventsPerBatch.computeIfAbsent(batch, (x) -> new LinkedBlockingDeque<>());
+    }
+
+    @Override
+    public BlockingQueue<Message> queue() {
+        return this.workerQueue;
+    }
+
     /**
      * Reuses the thread from the socket thread pool, instead of assigning a specific thread
      * Removes thread context switching costs.
@@ -372,7 +339,7 @@ final class VmsWorker extends StoppableRunnable {
             switch (type) {
 
                 case PRESENTATION -> {
-                    if(vmsIdentifier != null){
+                    if(vmsNode != null){
                         // in the future it can be an update of the vms schema
                         logger.warning("Presentation already received from this VMS.");
                     } else {
@@ -442,24 +409,23 @@ final class VmsWorker extends StoppableRunnable {
     private void processVmsIdentifier() {
         // always a vms
         this.readBuffer.position(2);
-        this.vmsIdentifier = Presentation.readVms(readBuffer, serdesProxy);
-        this.vmsIdentifier.consumerVms = this.consumerVms;
+        this.vmsNode = Presentation.readVms(readBuffer, serdesProxy);
         this.state = State.VMS_PRESENTATION_PROCESSED;
         // let coordinator aware this vms worker already has the vms identifier
-        this.coordinatorQueue.add(new Coordinator.Message( Coordinator.Type.VMS_IDENTIFIER, vmsIdentifier ));
+        this.coordinatorQueue.add(new Coordinator.Message( Coordinator.Type.VMS_IDENTIFIER, new VmsIdentifier(this.vmsNode, this)));
     }
 
     /**
      * Need to send the last batch too so the vms can safely start the new batch
      */
-    private void sendBatchOfEvents(VmsWorkerMessage message, boolean includeCommitInfo) {
+    private void sendBatchOfEvents(Message message, boolean includeCommitInfo) {
         BatchCommitInfo.Payload batchCommitInfo = message.asBatchOfEventsRequest();
-        boolean thereAreEventsToSend = this.vmsIdentifier.transactionEventsPerBatch(batchCommitInfo.batch()) == null;
+        boolean thereAreEventsToSend = this.transactionEventsPerBatch(batchCommitInfo.batch()) == null;
         if(thereAreEventsToSend){
             if(includeCommitInfo){
-                this.sendBatchedEvents(this.vmsIdentifier.transactionEventsPerBatch(batchCommitInfo.batch()), batchCommitInfo);
+                this.sendBatchedEvents(this.transactionEventsPerBatch(batchCommitInfo.batch()), batchCommitInfo);
             } else {
-                this.sendBatchedEvents(this.vmsIdentifier.transactionEventsPerBatch(batchCommitInfo.batch()));
+                this.sendBatchedEvents(this.transactionEventsPerBatch(batchCommitInfo.batch()));
             }
         } else if(includeCommitInfo){
             this.sendBatchCommitInfo(batchCommitInfo);
@@ -477,7 +443,7 @@ final class VmsWorker extends StoppableRunnable {
             this.writeBuffer.clear();
         } catch (InterruptedException | ExecutionException e) {
             if(!this.channel.isOpen()) {
-                this.vmsIdentifier.off();
+                this.vmsNode.off();
             }
             this.writeBuffer.clear();
         }
@@ -498,7 +464,7 @@ final class VmsWorker extends StoppableRunnable {
                     eventsToSendToVms.offerFirst(event);
                 }
                 if(!this.channel.isOpen()){
-                    this.vmsIdentifier.off();
+                    this.vmsNode.off();
                     remaining = 0; // force exit loop
                 }
             } finally {
@@ -549,7 +515,7 @@ final class VmsWorker extends StoppableRunnable {
                     eventsToSendToVms.offerFirst(event);
                 }
                 if(!this.channel.isOpen()){
-                    this.vmsIdentifier.off();
+                    this.vmsNode.off();
                     remaining = 0; // force exit loop
                 }
             } finally {

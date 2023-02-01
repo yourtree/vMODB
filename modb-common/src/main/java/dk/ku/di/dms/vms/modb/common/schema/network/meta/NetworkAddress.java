@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.meta;
 
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 
 public class NetworkAddress {
 
@@ -10,6 +11,11 @@ public class NetworkAddress {
     public NetworkAddress(String host, int port) {
         this.host = host;
         this.port = port;
+    }
+
+    public NetworkAddress(SocketAddress address) {
+        this.host = ((InetSocketAddress)address).getHostName();
+        this.port = ((InetSocketAddress)address).getPort();
     }
 
     @Override

@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.sdk.embed.channel;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
-import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
@@ -9,7 +8,7 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public final class VmsEmbedInternalChannels implements IVmsInternalChannels {
+public final class VmsEmbeddedInternalChannels implements IVmsInternalChannels {
 
     private final BlockingQueue<InboundEvent> transactionInputQueue;
 
@@ -21,7 +20,7 @@ public final class VmsEmbedInternalChannels implements IVmsInternalChannels {
 
     private final BlockingQueue<Object> batchCommitCommandQueue;
 
-    public VmsEmbedInternalChannels() {
+    public VmsEmbeddedInternalChannels() {
 
         // linked blocking queue because method size is a constant time operation
 

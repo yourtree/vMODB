@@ -1,14 +1,18 @@
 package dk.ku.di.dms.vms.coordinator.coordinator;
 
-import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchCore;
-import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchAlgo;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.IVmsWorker;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.BlockingQueue;
 import java.util.logging.Logger;
 
 /**
@@ -40,17 +44,17 @@ public class CoordinatorTest {
     public void testSimpleDependenceMap(){
 
         // build VMSs
-        VmsIdentifier vms1 = new VmsIdentifier("",0,"vms1",1,1,0,null,null,null);
-        VmsIdentifier vms2 = new VmsIdentifier("",0,"vms2",2,2,1,null,null,null);
+        VmsIdentifier vms1 = new VmsIdentifier( new VmsNode("",0,"vms1",1,1,0,null,null,null), null);
+        VmsIdentifier vms2 = new VmsIdentifier( new VmsNode("",0,"vms2",2,2,1,null,null,null), null);
 
-        Map<String,VmsIdentifier> vmsMetadataMap = new HashMap<>(2);
+        Map<String, VmsIdentifier> vmsMetadataMap = new HashMap<>(2);
         vmsMetadataMap.put(vms1.getIdentifier(), vms1);
         vmsMetadataMap.put(vms2.getIdentifier(), vms2);
 
         // build DAG
         TransactionDAG dag = TransactionBootstrap.name("test").input("a", "vms1", "input1").terminal("b","vms2","a").build();
 
-        Map<String, Long> dependenceMap = BatchCore.buildPrecedenceMap( dag.inputEvents.get("input1"), dag, vmsMetadataMap );
+        Map<String, Long> dependenceMap = BatchAlgo.buildPrecedenceMap( dag.inputEvents.get("input1"), dag, vmsMetadataMap );
 
         assert dependenceMap.get("vms1") == 1 && dependenceMap.get("vms2") == 2;
 
@@ -59,13 +63,13 @@ public class CoordinatorTest {
     public void testComplexDependenceMap(){
 
         // build VMSs
-        VmsIdentifier vms1 = new VmsIdentifier("",0,"customer",1,1,0,null,null,null);
-        VmsIdentifier vms2 = new VmsIdentifier("",0,"item",2,2,1,null,null,null);
-        VmsIdentifier vms3 = new VmsIdentifier("",0,"stock",3,3,2,null,null,null);
-        VmsIdentifier vms4 = new VmsIdentifier("",0,"warehouse",4,4,3,null,null,null);
-        VmsIdentifier vms5 = new VmsIdentifier("",0,"order",5,5,4,null,null,null);
+        VmsIdentifier vms1 = new VmsIdentifier( new VmsNode("",0,"customer",1,1,0,null,null,null), null);
+        VmsIdentifier vms2 = new VmsIdentifier( new VmsNode("",0,"item",2,2,1,null,null,null), null);
+        VmsIdentifier vms3 = new VmsIdentifier( new VmsNode("",0,"stock",3,3,2,null,null,null), null);
+        VmsIdentifier vms4 = new VmsIdentifier( new VmsNode("",0,"warehouse",4,4,3,null,null,null), null);
+        VmsIdentifier vms5 = new VmsIdentifier( new VmsNode("",0,"order",5,5,4,null,null,null), null);
 
-        Map<String,VmsIdentifier> vmsMetadataMap = new HashMap<>(2);
+        Map<String, VmsIdentifier> vmsMetadataMap = new HashMap<>(5);
         vmsMetadataMap.put(vms1.getIdentifier(), vms1);
         vmsMetadataMap.put(vms2.getIdentifier(), vms2);
         vmsMetadataMap.put(vms3.getIdentifier(), vms3);
@@ -86,16 +90,52 @@ public class CoordinatorTest {
                 .terminal("i", "order", "b", "e", "f", "g", "h" )
                 .build();
 
-        Map<String, Long> dependenceMap = BatchCore.buildPrecedenceMap( dag, vmsMetadataMap );
+        Map<String, Long> dependenceMap = BatchAlgo.buildPrecedenceMap( dag, vmsMetadataMap );
 
         assert dependenceMap.get("customer") == 1 && dependenceMap.get("item") == 2 && dependenceMap.get("stock") == 3
                 && dependenceMap.get("warehouse") == 4 && dependenceMap.get("order") == 5;
     }
 
-
     // test correctness of a batch... are all dependence maps correct?
 
     // test the batch protocol. with a simple dag, 1 source, one terminal
+    @Test
+    public void testBasicCommitProtocol(){
+
+        // need a transaction dag and corresponding VMSs
+        // need a producer of transaction inputs (a separate thread or this thread)
+        // need the coordinator to assemble the batch
+        // need vms workers
+        // no need of a scheduler
+
+        // need of custom VMSs to respond to the batch protocol correctly
+
+
+
+        // it would be nice to decouple the network from the batch algorithm...
+
+
+
+    }
+
+    private static final class TestVmsWorker implements IVmsWorker, Runnable {
+
+        @Override
+        public void run() {
+
+        }
+
+        @Override
+        public BlockingDeque<TransactionEvent.Payload> transactionEventsPerBatch(long batch) {
+            return null;
+        }
+
+        @Override
+        public BlockingQueue<Message> queue() {
+            return null;
+        }
+
+    }
 
     // with a source, an internal, and a terminal
 

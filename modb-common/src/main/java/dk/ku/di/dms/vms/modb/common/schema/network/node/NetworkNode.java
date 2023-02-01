@@ -1,4 +1,6 @@
-package dk.ku.di.dms.vms.modb.common.schema.network.meta;
+package dk.ku.di.dms.vms.modb.common.schema.network.node;
+
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 
 import java.util.Objects;
 

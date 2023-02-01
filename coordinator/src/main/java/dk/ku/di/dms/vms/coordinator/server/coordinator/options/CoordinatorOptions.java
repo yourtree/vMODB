@@ -6,6 +6,8 @@ package dk.ku.di.dms.vms.coordinator.server.coordinator.options;
  */
 public class CoordinatorOptions {
 
+    private boolean networkEnabled = true;
+
     // a slack must be considered due to network overhead
     // e.g., by the time the timeout is reached, the time
     // taken to build the payload + sending the request over
@@ -35,6 +37,14 @@ public class CoordinatorOptions {
 
     // defines how the batch metadata is replicated across servers
     private BatchReplicationStrategy batchReplicationStrategy = BatchReplicationStrategy.NONE;
+
+    public boolean isNetworkEnabled() {
+        return this.networkEnabled;
+    }
+
+    public void withNetworkDisabled() {
+        this.networkEnabled = false;
+    }
 
     public int getGroupThreadPoolSize() {
         return this.groupThreadPoolSize;

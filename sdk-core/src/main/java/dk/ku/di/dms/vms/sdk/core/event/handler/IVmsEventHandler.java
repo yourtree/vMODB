@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.sdk.core.event.handler;
 
 
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.NetworkNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
@@ -42,6 +42,6 @@ public interface IVmsEventHandler {
      * Receives a presentation payload from a (producer) VMS
      * @param vms vms
      */
-    void onVmsConnection(VmsIdentifier vms);
+    void onVmsConnection(VmsNode vms);
 
 }

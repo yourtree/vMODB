@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.batch;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
@@ -14,11 +14,11 @@ import java.nio.charset.StandardCharsets;
  */
 public final class BatchComplete {
 
-    public static void write(ByteBuffer buffer, long batch, VmsIdentifier vmsIdentifier){
+    public static void write(ByteBuffer buffer, long batch, VmsNode vmsIdentifier){
         buffer.put(Constants.BATCH_COMPLETE);
         buffer.putLong( batch );
-        buffer.putInt( vmsIdentifier.getIdentifier().length() );
-        buffer.put( vmsIdentifier.getIdentifier().getBytes(StandardCharsets.UTF_8) );
+        buffer.putInt( vmsIdentifier.vmsIdentifier.length() );
+        buffer.put( vmsIdentifier.vmsIdentifier.getBytes(StandardCharsets.UTF_8) );
     }
 
     public static Payload read(ByteBuffer buffer){

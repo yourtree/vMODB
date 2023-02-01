@@ -222,7 +222,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     this.currentOffset.signalTaskFinished();
                     list.remove(i);
 
-                    if (currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED_SUCCESSFULLY) {
+                    if (this.currentOffset.status() == OffsetTracker.OffsetStatus.FINISHED_SUCCESSFULLY) {
 
                         List<OutboundEventResult> outbounds = new ArrayList<>(txCtx.resultTasks.size());
                         for(var resultTask : txCtx.resultTasks) {
@@ -231,7 +231,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
                         // now can send all to output queue
                         this.vmsChannels.transactionOutputQueue().add(
-                                new VmsTransactionResult(currentOffset.tid(), outbounds) );
+                                new VmsTransactionResult(this.currentOffset.tid(), outbounds) );
 
                         this.transactionContextMap.remove(this.currentOffset.tid());
                     }

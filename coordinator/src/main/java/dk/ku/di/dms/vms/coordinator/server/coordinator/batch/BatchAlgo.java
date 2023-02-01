@@ -1,15 +1,15 @@
 package dk.ku.di.dms.vms.coordinator.server.coordinator.batch;
 
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
 
 import java.util.*;
 
 /**
  * Algorithms related to the formation of a batch of transactions
  */
-public final class BatchCore {
+public final class BatchAlgo {
 
     /**
      * A map of vms and corresponding precedent TID for a given tid
@@ -38,12 +38,12 @@ public final class BatchCore {
 
         // input and internal nodes first, since they have children
         if(transactionDAG.internalNodes.contains( event.targetVms ) || transactionDAG.inputEvents.get( event.getName() ) != null){
-            listToBuildMap.put(event.targetVms, vmsMetadata.get(event.targetVms).lastTidOfBatch);
+            listToBuildMap.put(event.targetVms, vmsMetadata.get(event.targetVms).getLastTidOfBatch());
             for(EventIdentifier child : event.children){
                 listToBuildMap.putAll(buildPrecedenceRecursive(child, transactionDAG, vmsMetadata));
             }
         } else if(transactionDAG.terminalNodes.contains( event.targetVms )){
-                listToBuildMap.put(event.targetVms, vmsMetadata.get(event.targetVms).lastTidOfBatch);
+                listToBuildMap.put(event.targetVms, vmsMetadata.get(event.targetVms).getLastTidOfBatch());
         }
 
         return listToBuildMap;

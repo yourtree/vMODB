@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.ConsumerVms;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
@@ -39,7 +38,7 @@ final class ConsumerVmsWorker extends TimerTask {
     @Override
     public void run() {
 
-        // logger.info("VMS worker scheduled: "+System.currentTimeMillis());
+        this.logger.info("VMS worker scheduled at: "+System.currentTimeMillis());
 
         // find the smallest batch. to avoid synchronizing with main thread
         long batchToSend = Long.MAX_VALUE;
@@ -58,7 +57,7 @@ final class ConsumerVmsWorker extends TimerTask {
         int remaining = events.size();
 
         while(remaining > 0){
-            this.logger.info("VMS worker submitting batch: "+System.currentTimeMillis());
+            this.logger.info("VMS worker submitting batch: "+batchToSend);
             remaining = BatchUtils.assembleBatchPayload( remaining, events, this.connectionMetadata.writeBuffer);
             this.connectionMetadata.writeBuffer.flip();
             try {
@@ -69,7 +68,7 @@ final class ConsumerVmsWorker extends TimerTask {
                 this.logger.warning("Error submitting batch");
                 // return non-processed events to original location or what?
                 if (!this.connectionMetadata.channel.isOpen()) {
-                    logger.warning("The VMS is offline");
+                    this.logger.warning("The VMS is offline");
                 }
                 this.connectionMetadata.writeBuffer.clear();
 

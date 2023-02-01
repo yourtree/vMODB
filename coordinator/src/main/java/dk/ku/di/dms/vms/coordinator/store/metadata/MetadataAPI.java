@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.coordinator.store.metadata;
 
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.VmsIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 
 import java.io.RandomAccessFile;
 import java.util.Map;
@@ -37,7 +37,7 @@ public class MetadataAPI {
         return false;
     }
 
-    public boolean registerVmsMetadata(VmsIdentifier vmsMetadata){
+    public boolean registerVmsMetadata(VmsNode vmsMetadata){
         return false;
     }
 
