@@ -23,7 +23,6 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.*;
 import java.util.logging.Logger;
 
@@ -51,10 +50,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private ByteBuffer readBuffer;
 
     private ByteBuffer writeBuffer;
-
-    public final Map<Long, BlockingDeque<TransactionEvent.Payload>> transactionEventsPerBatch;
-
-    public final BlockingQueue<Message> workerQueue;
 
     /**
      * Queues to inform coordinator about an event
@@ -107,10 +102,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
         // shared by many vms workers
         this.coordinatorQueue = coordinatorQueue;
-
-        // particular to this vms worker
-        this.workerQueue = new LinkedBlockingQueue<>();
-        this.transactionEventsPerBatch = new ConcurrentHashMap<>();
 
         // this.vmsMetadata = vmsMetadata;
         this.channel = channel;
@@ -305,16 +296,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             }
         }
 
-    }
-
-    @Override
-    public BlockingDeque<TransactionEvent.Payload> transactionEventsPerBatch(long batch) {
-        return this.transactionEventsPerBatch.computeIfAbsent(batch, (x) -> new LinkedBlockingDeque<>());
-    }
-
-    @Override
-    public BlockingQueue<Message> queue() {
-        return this.workerQueue;
     }
 
     /**

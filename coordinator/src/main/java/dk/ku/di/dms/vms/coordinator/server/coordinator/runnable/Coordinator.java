@@ -25,6 +25,7 @@ import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousChannelGroup;
@@ -73,7 +74,10 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     /** VMS data structures **/
 
-    // received from program start
+    /*
+     * received from program start
+     * also called known VMSs
+     */
     private final Map<Integer, NetworkAddress> starterVMSs;
 
     /**
@@ -81,11 +85,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
      * shared with vms workers
      */
     private final Map<String, VmsIdentifier> vmsMetadataMap;
-
-    private final Map<String, TransactionDAG> transactionMap;
-
-    // if each thread control their own metadata connection, let them manage it
-    // private final Map<Integer, ConnectionMetadata> vmsConnectionMetadataMap;
 
     // the identification of this server
     private final ServerIdentifier me;
@@ -112,13 +111,16 @@ public final class Coordinator extends SignalingStoppableRunnable {
     // transaction requests coming from the http event loop
     private final BlockingQueue<TransactionInput> parsedTransactionRequests;
 
+    // transaction definitions coming from the http event loop
+    private final Map<String, TransactionDAG> transactionMap;
+
     /** serialization and deserialization of complex objects **/
     private final IVmsSerdesProxy serdesProxy;
 
     /**
      * Vms workers append to this queue
       */
-    record Message(
+    public record Message(
             Type type,
             Object object) {
 
@@ -168,7 +170,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         return new Coordinator(servers == null ? new ConcurrentHashMap<>() : servers,
                 serverConnectionMetadataMap == null ? new HashMap<>() : serverConnectionMetadataMap,
                 startersVMSs, Objects.requireNonNull(transactionMap), me, options, startingBatchOffset, startingTid,
-                parsedTransactionRequests,serdesProxy);
+                parsedTransactionRequests, serdesProxy);
     }
 
     private Coordinator(Map<Integer, ServerIdentifier> servers,
@@ -189,14 +191,16 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // used to complete handshake protocol
         this.taskExecutor = Executors.newFixedThreadPool(options.getTaskThreadPoolSize());
 
+        this.group = AsynchronousChannelGroup.withThreadPool(Executors.newWorkStealingPool(options.getGroupThreadPoolSize()));
+        this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+
         // network and executor
         if(options.isNetworkEnabled()) {
-            this.group = AsynchronousChannelGroup.withThreadPool(Executors.newWorkStealingPool(options.getGroupThreadPoolSize()));
-            this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
             this.serverSocket.bind(me.asInetSocketAddress());
         } else {
-            this.group = null;
-            this.serverSocket = null;
+            // loopback address and default port
+            InetSocketAddress loopback = new InetSocketAddress(InetAddress.getLoopbackAddress(), 8000);
+            this.serverSocket.bind( loopback );
         }
 
         this.starterVMSs = startersVMSs;
@@ -245,7 +249,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
     @Override
     public void run() {
 
-        if(options.isNetworkEnabled()) {
+        if(this.options.isNetworkEnabled()) {
             // setup asynchronous listener for new connections
             this.serverSocket.accept(null, new AcceptCompletionHandler());
             // connect to all virtual microservices
@@ -771,39 +775,44 @@ public final class Coordinator extends SignalingStoppableRunnable {
             try {
                 Message message = this.coordinatorQueue.take();
                 switch(message.type){
+
+                    // receive metadata from all microservices
                     case VMS_IDENTIFIER -> {
                         // update metadata of this node so coordinator can reason about data dependencies
-
                         this.vmsMetadataMap.put( message.asVmsIdentifier().getIdentifier(), message.asVmsIdentifier() );
 
+                        if(this.vmsMetadataMap.size() < this.starterVMSs.size()) continue;
                         // if all metadata, from all starter vms have arrived, then send the signal to them
-                        if(this.vmsMetadataMap.size() == this.starterVMSs.size()){
 
-                            Map<String, List<NetworkAddress>> vmsConsumerSet = new HashMap<>();
+                        // new VMS may join, requiring updating the consumer set
+                        Map<String, List<NetworkAddress>> vmsConsumerSet = new HashMap<>();
 
-                            for(VmsIdentifier vmsIdentifier : this.vmsMetadataMap.values()) {
+                        for(VmsIdentifier vmsIdentifier : this.vmsMetadataMap.values()) {
 
-                                NetworkAddress vms = this.starterVMSs.get( vmsIdentifier.hashCode() );
-                                if(vms == null) continue;
+                            NetworkAddress vms = this.starterVMSs.get( vmsIdentifier.hashCode() );
+                            if(vms == null) continue;
 
-                                // build consumer set dynamically
-                                // for each output event, find the consumer VMSs
-                                for (VmsEventSchema eventSchema : vmsIdentifier.node().outputEventSchema.values()) {
-                                    List<NetworkAddress> nodes = this.findConsumerVMSs(eventSchema.eventName);
-                                    if (!nodes.isEmpty())
-                                        vmsConsumerSet.put(eventSchema.eventName, nodes);
-                                }
-
-                                String mapStr = "";
-                                if (!vmsConsumerSet.isEmpty()) {
-                                    mapStr = this.serdesProxy.serializeConsumerSet(vmsConsumerSet);
-                                }
-
-                                vmsIdentifier.worker().queue().add( new IVmsWorker.Message( SEND_CONSUMER_SET, mapStr ));
-
+                            // build global view of vms dependencies/interactions
+                            // build consumer set dynamically
+                            // for each output event, find the consumer VMSs
+                            for (VmsEventSchema eventSchema : vmsIdentifier.node().outputEventSchema.values()) {
+                                List<NetworkAddress> nodes = this.findConsumerVMSs(eventSchema.eventName);
+                                if (!nodes.isEmpty())
+                                    vmsConsumerSet.put(eventSchema.eventName, nodes);
                             }
 
+                            String mapStr = "";
+                            if (!vmsConsumerSet.isEmpty()) {
+                                mapStr = this.serdesProxy.serializeConsumerSet(vmsConsumerSet);
+                            }
+
+                            vmsIdentifier.worker().queue().add( new IVmsWorker.Message( SEND_CONSUMER_SET, mapStr ));
+
+                            vmsConsumerSet.clear();
+
                         }
+
+
 
                     }
                     case TRANSACTION_ABORT -> {

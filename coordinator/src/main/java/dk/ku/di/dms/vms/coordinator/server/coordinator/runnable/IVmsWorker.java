@@ -5,16 +5,22 @@ import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
-import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.BlockingQueue;
+import java.util.Map;
+import java.util.concurrent.*;
 
 /**
  * Interface that represents a unit of work
  * that encapsulates all operations and
  * messages exchanged between the coordinator
- * and the associated virtual microservice
+ * and the associated virtual microservice.
+ * Interface useful for decoupling the test of
+ * the batch protocol with the network protocol
  */
 public interface IVmsWorker {
+
+    // DTs particular to this vms worker
+    Map<Long, BlockingDeque<TransactionEvent.Payload>> transactionEventsPerBatch = new ConcurrentHashMap<>();
+    BlockingQueue<Message> workerQueue = new LinkedBlockingQueue<>();
 
     /**
      * Messages that correspond to operations
@@ -61,8 +67,12 @@ public interface IVmsWorker {
         CONSUMER_EXECUTING
     }
 
-    BlockingDeque<TransactionEvent.Payload> transactionEventsPerBatch(long batch);
+    default BlockingDeque<TransactionEvent.Payload> transactionEventsPerBatch(long batch){
+        return this.transactionEventsPerBatch.computeIfAbsent(batch, (x) -> new LinkedBlockingDeque<>());
+    }
 
-    BlockingQueue<Message> queue();
+    default BlockingQueue<Message> queue() {
+        return this.workerQueue;
+    }
 
 }
