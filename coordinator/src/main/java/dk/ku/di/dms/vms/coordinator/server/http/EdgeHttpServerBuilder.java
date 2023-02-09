@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.http.jdk;
+package dk.ku.di.dms.vms.coordinator.server.http;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -9,35 +9,61 @@ import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
+import java.util.logging.Logger;
 
 /**
  * <a href="https://dzone.com/articles/simple-http-server-in-java">...</a>
  * It would be nice to compare both implementations.
  */
-public class EdgeHttpServerBuilder {
+public final class EdgeHttpServerBuilder {
+
+    private static final Logger logger = Logger.getLogger("httpServer");
 
     public static HttpServer start(IVmsSerdesProxy serdesProxy,
                                    BlockingQueue<TransactionInput> parsedTransactionRequests,
-                                   Map<String, TransactionDAG> transactionMap) throws IOException {
+                                   Map<String, TransactionDAG> transactionMap,
+                                   InetSocketAddress addr) throws IOException {
 
-        HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 8001), 10);
+        HttpServer server = HttpServer.create(addr, 10);
 
         // HttpContext newTxCtx =
-        server.createContext("/newTx", new TransactionInputHandler(serdesProxy, parsedTransactionRequests ));
+        server.createContext("/tx", new TransactionInputHandler(serdesProxy, parsedTransactionRequests ));
         // HttpContext newTxDefCtx =
-        server.createContext("/newTxDef", new TransactionDefinitionHandler(serdesProxy, transactionMap ));
+        server.createContext("/txDef", new TransactionDefinitionHandler(serdesProxy, transactionMap ));
+
+        server.createContext("/healthCheck", exchange -> {
+            logger.info("Healthcheck message arrived");
+            exchange.sendResponseHeaders(200, 0);
+            exchange.close();
+        });
+
+        server.createContext("/data", exchange -> {
+
+            switch (exchange.getRequestMethod()){
+                case "POST": {
+                    logger.info("POST request arrived");
+                    System.out.println(new String( exchange.getRequestBody().readAllBytes() ));
+                    exchange.sendResponseHeaders(200, 0);
+                }
+                case "GET": {
+                    logger.info("GET request arrived");
+                    System.out.println(new String( exchange.getRequestBody().readAllBytes() ));
+                    exchange.sendResponseHeaders(200, 0);
+                }
+            }
+
+            exchange.close();
+        });
 
         server.setExecutor(Executors.newSingleThreadExecutor());
-
         server.start();
-
         return server;
-
     }
 
     public static class TransactionDefinitionHandler implements HttpHandler {
@@ -59,6 +85,7 @@ public class EdgeHttpServerBuilder {
                 TransactionDAG dag = this.serdesProxy.deserialize(json, TransactionDAG.class);
                 this.transactionMap.put(dag.name, dag);
                 exchange.sendResponseHeaders(200, 0);
+                exchange.close();
             } catch(Exception ignored) {}
         }
     }
@@ -92,6 +119,7 @@ public class EdgeHttpServerBuilder {
                 transactionInput.events.sort(Comparator.comparing(o -> o.name));
                 this.parsedTransactionRequests.add(transactionInput);
                 exchange.sendResponseHeaders(200, 0);
+                exchange.close();
             } catch (Exception ignored) { }
         }
 

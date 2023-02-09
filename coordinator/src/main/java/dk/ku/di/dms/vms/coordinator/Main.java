@@ -1,9 +1,8 @@
 package dk.ku.di.dms.vms.coordinator;
 
 import com.sun.net.httpserver.HttpServer;
-import dk.ku.di.dms.vms.coordinator.election.ElectionWorker;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
-import dk.ku.di.dms.vms.coordinator.server.http.jdk.EdgeHttpServerBuilder;
+import dk.ku.di.dms.vms.coordinator.server.http.EdgeHttpServerBuilder;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
@@ -11,11 +10,11 @@ import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.logging.Logger;
-
-import static dk.ku.di.dms.vms.coordinator.election.ElectionWorker.LEADER;
 
 /**
  *
@@ -35,7 +34,7 @@ public class Main
 
     private static final StartupConfig defaultConfig = new StartupConfig(false, new NetworkAddress("127.0.0.1", 8080), Collections.emptyList(), new HashMap<>(), new CoordinatorOptions());
 
-    public static void main( String[] args ) throws InterruptedException {
+    public static void main( String[] args ) throws InterruptedException, IOException {
 
         // https://stackoverflow.com/questions/42426206/httpserver-very-slow-with-keepalive
         System.setProperty("sun.net.httpserver.nodelay", "true");
@@ -55,13 +54,21 @@ public class Main
 
             // just set up the http server then
             try {
-                HttpServer httpServer = EdgeHttpServerBuilder.start(serdesProxy, parsedTransactionRequests, transactionMap);
+                HttpServer httpServer = EdgeHttpServerBuilder.start(serdesProxy, parsedTransactionRequests, transactionMap,
+                        new InetSocketAddress(InetAddress.getByName("localhost"), 8001));
                 logger.info("Http server initialized");
             } catch (IOException e){
                 logger.warning("ERROR: "+e.getMessage());
                 return;
             }
         }
+
+        /*
+        HttpClient client = HttpClient.newHttpClient();
+        var request = HttpRequest.newBuilder().uri(URI.create("http://localhost:8001/data")).POST(HttpRequest.BodyPublishers.ofString("TESTE")).build();
+        client.send( request, HttpResponse.BodyHandlers.discarding());
+        */
+        Thread.sleep(Long.MAX_VALUE);
 
         // the input a new-order transaction
 //        a payload containing these 4 events {
