@@ -5,7 +5,6 @@ import dk.ku.di.dms.vms.web_common.meta.Issue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -14,7 +13,7 @@ import java.util.logging.Logger;
  */
 public abstract class SignalingStoppableRunnable extends StoppableRunnable {
 
-    protected final Logger logger; // = Logger.getLogger(getClass().getName());
+    protected final Logger logger;
     /**
      * Protocol result. Now also any result from a thread...
      */
@@ -35,9 +34,9 @@ public abstract class SignalingStoppableRunnable extends StoppableRunnable {
         this.exceptionHandler = new CustomUncaughtExceptionHandler();
         this.issueQueue = new LinkedBlockingQueue<>();
 
-        this.logger = Logger.getLogger(getClass().getName());
-        this.logger.setLevel(Level.ALL);
-        this.logger.setUseParentHandlers(false);
+        this.logger = Logger.getLogger(getClass().getSimpleName());
+//        this.logger.setLevel(Level.ALL);
+        this.logger.setUseParentHandlers(true);
     }
 
     /**

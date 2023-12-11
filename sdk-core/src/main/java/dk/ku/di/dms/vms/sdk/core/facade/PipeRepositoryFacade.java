@@ -9,14 +9,11 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.nio.channels.AsynchronousFileChannel;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchService;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
 
 import static java.nio.file.StandardWatchEventKinds.*;
 

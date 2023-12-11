@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.nio.channels.AsynchronousSocketChannel;
 
 import static java.net.StandardSocketOptions.*;
-import static java.net.StandardSocketOptions.SO_RCVBUF;
 
 /**
  * Responsible for batching messages in a buffer before

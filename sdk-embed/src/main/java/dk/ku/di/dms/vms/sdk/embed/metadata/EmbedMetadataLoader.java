@@ -129,14 +129,17 @@ public class EmbedMetadataLoader {
 
             vmsDataSchemaToIndexMap.put( entry.getKey().vmsName, consistentIndex );
 
-            List<NonUniqueHashIndex> listSecIdxs = new ArrayList<>(entry.getValue().t2().size());
-            vmsDataSchemaToSecondaryIndexMap.put(entry.getKey().tableName, listSecIdxs);
+            // secondary indexes
+            if(entry.getValue().t2() != null) {
+                List<NonUniqueHashIndex> listSecIndexes = new ArrayList<>(entry.getValue().t2().size());
+                vmsDataSchemaToSecondaryIndexMap.put(entry.getKey().tableName, listSecIndexes);
 
-            // now create the secondary index (a - based on foreign keys and b - based on non-foreign keys)
-            for(var secIdx : entry.getValue().t2().entrySet()) {
-                NonUniqueHashIndex nuhi = createNonUniqueIndex(schema, secIdx.getValue(), pageSize, 10,
-                        entry.getKey().tableName + "_" + secIdx.getKey());
-                listSecIdxs.add(nuhi);
+                // now create the secondary index (a - based on foreign keys and b - based on non-foreign keys)
+                for (var secIdx : entry.getValue().t2().entrySet()) {
+                    NonUniqueHashIndex nuhi = createNonUniqueIndex(schema, secIdx.getValue(), pageSize, 10,
+                            entry.getKey().tableName + "_" + secIdx.getKey());
+                    listSecIndexes.add(nuhi);
+                }
             }
 
         }
@@ -147,23 +150,29 @@ public class EmbedMetadataLoader {
             VmsDataSchema vmsDataSchema = entry.getKey();
             Tuple<Schema, Map<String, int[]>> tupleSchemaFKs = entry.getValue();
 
-            Map<PrimaryIndex, int[]> fks = new HashMap<>(tupleSchemaFKs.t2().size());
-
-            // build fks
-            for(var fk : tupleSchemaFKs.t2().entrySet()){
-                fks.put( vmsDataSchemaToIndexMap.get( fk.getKey() ), fk.getValue() );
-            }
-
-            List<NonUniqueSecondaryIndex> list = new ArrayList<>();
-
             PrimaryIndex primaryIndex = vmsDataSchemaToIndexMap.get( vmsDataSchema.vmsName );
+            Table table;
 
-            // build secondary indexes (for foreign keys)
-            for(var idx : vmsDataSchemaToSecondaryIndexMap.get(vmsDataSchema.tableName)){
-                list.add( new NonUniqueSecondaryIndex( primaryIndex, idx ) );
+            if(entry.getValue().t2() != null) {
+
+                Map<PrimaryIndex, int[]> fks = new HashMap<>(tupleSchemaFKs.t2().size());
+
+                // build fks
+                for (var fk : tupleSchemaFKs.t2().entrySet()) {
+                    fks.put(vmsDataSchemaToIndexMap.get(fk.getKey()), fk.getValue());
+                }
+
+                List<NonUniqueSecondaryIndex> list = new ArrayList<>();
+
+                // build secondary indexes (for foreign keys)
+                for (var idx : vmsDataSchemaToSecondaryIndexMap.get(vmsDataSchema.tableName)) {
+                    list.add(new NonUniqueSecondaryIndex(primaryIndex, idx));
+                }
+                table = new Table(vmsDataSchema.tableName, tupleSchemaFKs.t1(), primaryIndex, fks, list);
+            } else {
+                table = new Table(vmsDataSchema.tableName, tupleSchemaFKs.t1(), primaryIndex);
             }
 
-            Table table = new Table(vmsDataSchema.tableName, tupleSchemaFKs.t1(), primaryIndex, fks, list);
             catalog.put( vmsDataSchema.tableName, table );
         }
 

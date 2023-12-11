@@ -4,11 +4,12 @@ import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
 import java.io.IOException;
 import java.net.*;
-import java.nio.channels.DatagramChannel;
 import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
 import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class UdpNetworkChannel extends BaseNetworkChannel {
 

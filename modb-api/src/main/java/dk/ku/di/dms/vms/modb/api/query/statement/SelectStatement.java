@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.modb.api.query.statement;
 
 import dk.ku.di.dms.vms.modb.api.query.clause.*;
-import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
 
 import java.util.List;
 

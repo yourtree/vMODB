@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.definition.key;
 
-import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.definition.Row;
+import dk.ku.di.dms.vms.modb.index.IIndexKey;
 
 import java.util.Arrays;
 

@@ -5,8 +5,11 @@ import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.definition.Table;
 
 import java.nio.ByteBuffer;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 
 /**
  * I can keep all primary indexes in mapped byte buffer

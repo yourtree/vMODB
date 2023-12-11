@@ -256,6 +256,11 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
         return false;
     }
 
+    @Override
+    public boolean delete(IKey key) {
+        return false;
+    }
+
     /**
      * An iterator over a secondary index must consider the PK
      */

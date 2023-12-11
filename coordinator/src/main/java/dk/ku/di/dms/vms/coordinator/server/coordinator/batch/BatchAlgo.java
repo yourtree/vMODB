@@ -4,7 +4,10 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Algorithms related to the formation of a batch of transactions

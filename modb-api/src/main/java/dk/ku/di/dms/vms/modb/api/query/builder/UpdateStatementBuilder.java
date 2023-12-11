@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.api.query.builder;
 
-import dk.ku.di.dms.vms.modb.api.query.statement.UpdateStatement;
 import dk.ku.di.dms.vms.modb.api.query.clause.SetClauseElement;
+import dk.ku.di.dms.vms.modb.api.query.statement.UpdateStatement;
 
 public class UpdateStatementBuilder extends AbstractStatementBuilder  {
 

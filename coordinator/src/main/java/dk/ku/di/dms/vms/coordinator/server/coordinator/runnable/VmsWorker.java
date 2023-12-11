@@ -107,6 +107,8 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.channel = channel;
         this.group = group;
 
+        // initialize the write buffer
+        this.writeBuffer = MemoryManager.getTemporaryDirectBuffer();
         this.readBuffer = readBuffer;
         this.serdesProxy = serdesProxy;
 
@@ -257,8 +259,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private void sendConsumerSet(Message workerMessage) {
         // the first or new information
         if(this.state == VMS_PRESENTATION_PROCESSED) {
-            // now initialize the write buffer
-            this.writeBuffer = MemoryManager.getTemporaryDirectBuffer();
             this.state = CONSUMER_SET_READY_FOR_SENDING;
             this.logger.info("Consumer set will be established for the first time: "+consumerVms);
         } else if(this.state == CONSUMER_EXECUTING){
@@ -401,7 +401,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
      */
     private void sendBatchOfEvents(Message message, boolean includeCommitInfo) {
         BatchCommitInfo.Payload batchCommitInfo = message.asBatchOfEventsRequest();
-        boolean thereAreEventsToSend = this.transactionEventsPerBatch(batchCommitInfo.batch()) == null;
+        boolean thereAreEventsToSend = this.transactionEventsPerBatch(batchCommitInfo.batch()) != null;
         if(thereAreEventsToSend){
             if(includeCommitInfo){
                 this.sendBatchedEvents(this.transactionEventsPerBatch(batchCommitInfo.batch()), batchCommitInfo);

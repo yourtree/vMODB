@@ -1,11 +1,13 @@
 package dk.ku.di.dms.vms.sdk.core.example;
 
-import dk.ku.di.dms.vms.modb.api.annotations.*;
+import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 
-import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.*;
+import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("example2")
 public class MicroserviceExample2 {

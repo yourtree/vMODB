@@ -1,11 +1,8 @@
 package dk.ku.di.dms.vms.playground;
 
-import static org.junit.Assert.assertTrue;
-
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import org.junit.Test;
-import sun.misc.Unsafe;
 
 import java.nio.ByteBuffer;
 

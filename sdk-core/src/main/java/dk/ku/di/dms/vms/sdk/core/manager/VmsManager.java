@@ -1,21 +1,23 @@
 package dk.ku.di.dms.vms.sdk.core.manager;
 
-import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
-import dk.ku.di.dms.vms.sdk.core.event.handler.VmsEventHandler;
-import dk.ku.di.dms.vms.sdk.core.facade.NetworkRepositoryFacade;
-import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
-import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
-import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
-import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
-import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
+import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
+import dk.ku.di.dms.vms.sdk.core.event.handler.IVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.core.event.handler.VmsEventHandler;
+import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
+import dk.ku.di.dms.vms.sdk.core.facade.NetworkRepositoryFacade;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
+import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
+import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Manager is a class that manages the lifecycle of components:

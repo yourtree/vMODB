@@ -3,7 +3,6 @@ package dk.ku.di.dms.vms.web_common.meta;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.SynchronousQueue;
 
 /**
  * Reads are performed via single-thread anyway by design (completion handler),

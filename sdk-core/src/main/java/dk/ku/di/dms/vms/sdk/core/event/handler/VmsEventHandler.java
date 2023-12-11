@@ -2,11 +2,10 @@ package dk.ku.di.dms.vms.sdk.core.event.handler;
 
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
+import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
-
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
-import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -17,7 +16,9 @@ import java.nio.channels.CompletionHandler;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.logging.Level;
 
 import static java.net.StandardSocketOptions.*;
@@ -117,7 +118,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 //                inputQueue.add( event );
 
             } catch (InterruptedException | ExecutionException e) {
-                logger.info("ERROR: "+e.getLocalizedMessage());
+                // logger.info("ERROR: "+e.getLocalizedMessage());
             } finally {
                 eventReadBuffer.clear();
                 futureEvent = eventChannel.read(eventReadBuffer);
@@ -150,7 +151,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
                 }
 
             } catch (InterruptedException | ExecutionException e) {
-                logger.log(Level.WARNING, "ERR: on reading the new data: "+ e.getLocalizedMessage());
+                // logger.log(Level.WARNING, "ERR: on reading the new data: "+ e.getLocalizedMessage());
             } finally {
 
                 dataSocketBuffer.clear();
@@ -333,7 +334,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
             }
 
         } catch (IOException e) {
-            logger.info("ERROR: "+e.getLocalizedMessage());
+            // logger.info("ERROR: "+e.getLocalizedMessage());
             throw new RuntimeException("Error on setting socket options for channel "+channelName);
         }
 

@@ -5,7 +5,10 @@ import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIF
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class FifoTest {
 

@@ -3,7 +3,6 @@ package dk.ku.di.dms.vms.sdk.embed.entity;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
-import dk.ku.di.dms.vms.modb.definition.Schema;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -20,7 +19,7 @@ public final class EntityUtils {
         lookup = MethodHandles.lookup();
     }
 
-    public static Map<String, VarHandle> getFieldsFromPk(Class<?> pkClazz) throws NoSuchFieldException, IllegalAccessException {
+    public static Map<String, VarHandle> getFieldsFromCompositePk(Class<?> pkClazz) throws NoSuchFieldException, IllegalAccessException {
 
         MethodHandles.Lookup lookup_ = MethodHandles.privateLookupIn(pkClazz, lookup);
 
@@ -40,27 +39,23 @@ public final class EntityUtils {
         return fieldMap;
     }
 
-    public static VarHandle getPrimitiveFieldOfPk(Class<?> pkClazz, VmsDataSchema dataSchema) throws NoSuchFieldException, IllegalAccessException {
-
-        MethodHandles.Lookup lookup_ = MethodHandles.privateLookupIn(pkClazz, lookup);
+    public static Map<String, VarHandle> getFieldFromPk(Class<?> parentClazz, Class<?> pkClazz, VmsDataSchema dataSchema) throws NoSuchFieldException, IllegalAccessException {
 
         // usually the first, but to make sure lets do like this
         int pkColumn = dataSchema.primaryKeyColumns[0];
 
         String pkColumnName = dataSchema.columnNames[pkColumn];
 
-        Field[] fields = pkClazz.getDeclaredFields();
-
-        for(Field field : fields){
-            if(field.getName().equalsIgnoreCase(pkColumnName)){
-                return lookup_.findVarHandle(
-                        pkClazz,
-                        field.getName(),
-                        field.getType()
-                );
-            }
-        }
-        throw new IllegalStateException("Cannot find var handle of primitive primary key.");
+        Map<String, VarHandle> fieldMap = new HashMap<>(1);
+        fieldMap.put(
+                pkColumnName,
+                lookup.findVarHandle(
+                        parentClazz,
+                        pkColumnName,
+                        parentClazz.getDeclaredField(pkColumnName).getType()
+                )
+        );
+        return fieldMap;
     }
 
     public static Map<String, VarHandle> getFieldsFromEntity(Class<? extends IEntity<?>> entityClazz,

@@ -1,6 +1,9 @@
 package dk.ku.di.dms.vms.playground.app;
 
-import dk.ku.di.dms.vms.modb.api.annotations.*;
+import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.R;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
@@ -29,7 +32,7 @@ public class MicroserviceExample {
 
         System.out.println("methodExample1");
 
-        repository.getItemsById( new int[]{1,2,3} );
+        // repository.getItemsById( new int[]{1,2,3} );
 
         repository.insert(new EntityExample(in.id, in.id));
 

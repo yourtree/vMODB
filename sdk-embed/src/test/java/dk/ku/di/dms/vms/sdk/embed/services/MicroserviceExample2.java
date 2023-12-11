@@ -8,9 +8,6 @@ import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample2;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample3;
 
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
-
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("example2")

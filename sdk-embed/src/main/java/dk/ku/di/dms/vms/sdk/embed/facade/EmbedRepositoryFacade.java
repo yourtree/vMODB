@@ -12,7 +12,6 @@ import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
 import dk.ku.di.dms.vms.modb.transaction.OperationAPI;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
-import dk.ku.di.dms.vms.modb.transaction.internal.CircularBuffer;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityUtils;
 
@@ -20,7 +19,6 @@ import java.io.Serializable;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.*;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -48,7 +46,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
     private final Map<String, VarHandle> pkFieldMap;
 
-    private final VarHandle pkPrimitive;
+    // private final VarHandle pkPrimitive;
 
     /**
      * Cache of objects in memory.
@@ -56,7 +54,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
      * Should be used by the repository facade, since it is the one who is converting the payloads from the user code.
      * Key is the hash code of a table
      */
-    private final CircularBuffer objectCacheStore;
+    // private final CircularBuffer objectCacheStore;
 
     /**
      * Attribute set after database is loaded
@@ -85,17 +83,15 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         // https://stackoverflow.com/questions/43558270/correct-way-to-use-varhandle-in-java-9
         this.entityFieldMap = EntityUtils.getFieldsFromEntity(entityClazz, schema );
 
-        if(!pkClazz.isPrimitive()){
-            this.pkFieldMap = EntityUtils.getFieldsFromPk(pkClazz);
-            this.pkPrimitive = null;
+        if(pkClazz.getPackageName().equalsIgnoreCase("java.lang") || pkClazz.isPrimitive()){
+            this.pkFieldMap = EntityUtils.getFieldFromPk(entityClazz, pkClazz, schema);
         } else {
-            this.pkFieldMap = Collections.emptyMap();
-            this.pkPrimitive = EntityUtils.getPrimitiveFieldOfPk(pkClazz, schema);
+            this.pkFieldMap = EntityUtils.getFieldsFromCompositePk(pkClazz);
         }
 
         this.staticQueriesMap = staticQueriesMap;
 
-        this.objectCacheStore = new CircularBuffer(schema.columnNames.length);
+        // this.objectCacheStore = new CircularBuffer(schema.columnNames.length);
 
     }
 
@@ -161,7 +157,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
                 Object cached = args[0];
                 Object[] values = extractFieldValuesFromEntityObject(args[0]);
                 Object key_ = this.transactionFacade.insertAndGet(this.table, values);
-                this.setKeyValueOnObject( key_, cached );
+                // this.setKeyValueOnObject( key_, cached );
                 return cached;
             }
             case "insertAll" -> this.insertAll((List<Object>) args[0]);
@@ -226,9 +222,9 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         return values;
     }
 
-    private void setKeyValueOnObject( Object key, Object object ){
-        pkPrimitive.set(object, key);
-    }
+//    private void setKeyValueOnObject( Object key, Object object ){
+//        pkPrimitive.set(object, key);
+//    }
 
     private Object[] extractFieldValuesFromEntityObject(Object entityObject) {
 

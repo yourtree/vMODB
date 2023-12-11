@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.modb.api.query.builder;
 
-import dk.ku.di.dms.vms.modb.api.query.statement.AbstractStatement;
 import dk.ku.di.dms.vms.modb.api.query.clause.WhereClauseElement;
 import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
+import dk.ku.di.dms.vms.modb.api.query.statement.AbstractStatement;
 
 import java.util.ArrayList;
 

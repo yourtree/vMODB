@@ -6,7 +6,6 @@ import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Only parses simple SELECT statements

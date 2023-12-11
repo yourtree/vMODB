@@ -17,6 +17,8 @@ public class EntityExample implements IEntity<Long> {
     @Column
     public int n;
 
+    public EntityExample(){}
+
     public EntityExample(long key, int n) {
         this.key = key;
         this.n = n;

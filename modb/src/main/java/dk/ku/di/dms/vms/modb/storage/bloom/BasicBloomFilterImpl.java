@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.modb.storage.bloom;
 
 import java.util.List;
 import java.util.function.ToIntBiFunction;
-import java.util.function.ToIntFunction;
 
 public class BasicBloomFilterImpl implements IBloomFilter {
 

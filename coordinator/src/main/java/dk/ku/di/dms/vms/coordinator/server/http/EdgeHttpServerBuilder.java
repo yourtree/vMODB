@@ -9,7 +9,6 @@ import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.Comparator;
 import java.util.Map;

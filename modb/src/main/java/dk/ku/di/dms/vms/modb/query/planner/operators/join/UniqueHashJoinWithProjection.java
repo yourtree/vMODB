@@ -1,12 +1,12 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.join;
 
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 
 /**
  * Basic form of hash join

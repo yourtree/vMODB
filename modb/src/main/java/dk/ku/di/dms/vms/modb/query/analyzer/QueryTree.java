@@ -1,13 +1,16 @@
 package dk.ku.di.dms.vms.modb.query.analyzer;
 
-import dk.ku.di.dms.vms.modb.query.analyzer.predicate.OrderByPredicate;
-import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
-import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
-import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.definition.ColumnReference;
 import dk.ku.di.dms.vms.modb.definition.Table;
+import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
+import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
+import dk.ku.di.dms.vms.modb.query.analyzer.predicate.OrderByPredicate;
+import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  *  Logical query plan tree

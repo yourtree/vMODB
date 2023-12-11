@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.playground.scenario1;
 
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
@@ -63,29 +63,25 @@ public class App
 
             int val = 1;
 
-            while(true) {
+            while(val <= 3) {
 
-                if(val < 3) {
+                EventExample eventExample = new EventExample(val);
 
-                    EventExample eventExample = new EventExample(val);
+                String payload = serdes.serialize(eventExample, EventExample.class);
 
-                    String payload = serdes.serialize(eventExample, EventExample.class);
+                TransactionInput.Event eventPayload = new TransactionInput.Event("in", payload);
 
-                    TransactionInput.Event eventPayload = new TransactionInput.Event("in", payload);
+                TransactionInput txInput = new TransactionInput("example", eventPayload);
 
-                    TransactionInput txInput = new TransactionInput("example", eventPayload);
+                logger.info("[Producer] Adding " + val);
 
-                    logger.info("[Producer] Adding " + val);
+                parsedTransactionRequests.add(txInput);
 
-                    parsedTransactionRequests.add(txInput);
-
-                }
-
-                try {
-                    //logger.info("Producer going to bed... ");
-                    Thread.sleep(10000);
-                    //logger.info("Producer woke up! Time to insert one more ");
-                } catch (InterruptedException ignored) { }
+//                try {
+//                    //logger.info("Producer going to bed... ");
+//                    Thread.sleep(10000);
+//                    //logger.info("Producer woke up! Time to insert one more ");
+//                } catch (InterruptedException ignored) { }
 
                 val++;
 
@@ -122,7 +118,7 @@ public class App
                 VMSs,
                 transactionMap,
                 serverEm1,
-                new CoordinatorOptions(),
+                new CoordinatorOptions().withBatchWindow(1000),
                 1,
                 1,
                 App.parsedTransactionRequests,
@@ -143,9 +139,9 @@ public class App
 
         VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata("dk.ku.di.dms.vms.playground.app");
 
-        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata);
-
         if(vmsMetadata == null) throw new IllegalStateException("Cannot start VMs, error loading metadata.");
+
+        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata);
 
         ExecutorService vmsAppLogicTaskPool = Executors.newSingleThreadExecutor();
 

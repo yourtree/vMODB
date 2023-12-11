@@ -22,10 +22,6 @@
     <module>sdk-embed</module>
     <module>sdk-core</module>
 
-    <!-- benchmark applications -->
-    <module>micro-tpcc</module>
-    <module>eShopOnVms</module>
-
     <!-- general -->
     <module>web_common</module>
 
@@ -34,8 +30,6 @@
 
     <!-- for tests -->
     <module>playground</module>
-      <module>E-Commerce</module>
-      <module>E-Commerce/user</module>
 
   </modules>
 

@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.modb.transaction.internal;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 /**
  * A data structure that serves the only purpose of storing historical writes of a key

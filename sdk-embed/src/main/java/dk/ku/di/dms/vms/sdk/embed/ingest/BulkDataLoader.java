@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.sdk.embed.ingest;
 
-import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.annotations.Loader;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;

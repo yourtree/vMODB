@@ -9,8 +9,8 @@ import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplicati
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplicationAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
-import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
+import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
 import java.io.IOException;
