@@ -77,12 +77,6 @@ public class App
 
                 parsedTransactionRequests.add(txInput);
 
-//                try {
-//                    //logger.info("Producer going to bed... ");
-//                    Thread.sleep(10000);
-//                    //logger.info("Producer woke up! Time to insert one more ");
-//                } catch (InterruptedException ignored) { }
-
                 val++;
 
             }
@@ -118,7 +112,7 @@ public class App
                 VMSs,
                 transactionMap,
                 serverEm1,
-                new CoordinatorOptions().withBatchWindow(1000),
+                new CoordinatorOptions(), // .withBatchWindow(1000),
                 1,
                 1,
                 App.parsedTransactionRequests,

@@ -91,6 +91,7 @@ final class LeaderWorker extends StoppableRunnable {
                 while(true) {
                     Message msg = this.leaderWorkerQueue.poll();
                     if (msg == null) break;
+                    logger.info("Leader worker will send message type: "+ msg.type());
                     switch (msg.type()) {
                         case SEND_BATCH_COMPLETE -> this.sendBatchComplete(msg.asBatchComplete());
                         case SEND_BATCH_COMMIT_ACK -> this.sendBatchCommitAck(msg.asBatchCommitAck());
@@ -98,7 +99,7 @@ final class LeaderWorker extends StoppableRunnable {
                     }
                 }
 
-            } catch (InterruptedException e) {
+            } catch (Exception e) { // (InterruptedException e) {
                 logger.warning("Error on taking message from worker queue: "+e.getMessage());
             }
         }
@@ -135,6 +136,9 @@ final class LeaderWorker extends StoppableRunnable {
         int remaining = this.events.size();
 
         while(remaining > 0){
+
+            logger.info("Leader worker will send a batch of events to leader");
+
             remaining = BatchUtils.assembleBatchPayload( remaining, this.events, this.leaderConnectionMetadata.writeBuffer);
             try {
                 this.leaderConnectionMetadata.writeBuffer.flip();

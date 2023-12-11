@@ -150,7 +150,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     private void executeReadyTasks() {
 
-        IVmsTransactionTrackingContext txContext = this.transactionContextMap.get( currentOffset.tid() );
+        IVmsTransactionTrackingContext txContext = this.transactionContextMap.get( this.currentOffset.tid() );
 
         // no event arrived yet for the current tid
         if(txContext == null) return;

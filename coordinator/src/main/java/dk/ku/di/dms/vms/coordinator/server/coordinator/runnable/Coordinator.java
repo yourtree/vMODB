@@ -499,7 +499,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 .filter(p-> p.node().batch == generateBatch)
                 .collect(Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getPreviousBatch) );
 
-        currBatchContext.seal(this.tid, lastTidOfBatchPerVms, previousBatchPerVms);
+        currBatchContext.seal(this.tid - 1, lastTidOfBatchPerVms, previousBatchPerVms);
 
         // increment batch offset
         this.currentBatchOffset = this.currentBatchOffset + 1;
@@ -709,17 +709,19 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 // there may have additional events to arrive from the current batch
                 // so the batch request must contain the last tid of the given vms
 
-                /*
-                 * update for next transaction. this is basically to ensure VMS do not wait for a tid that will never come. TIDs processed by a vms may not be sequential
-                 */
-                vms.node().lastTidOfBatch = tid_;
-                this.updateBatchAndPrecedenceIfNecessary(vms.node());
+
                 // if an internal/terminal vms do not receive an input event in this batch, it won't be able to
                 // progress since the precedence info will never arrive
                 // this way, we need to send in this event the precedence info for all downstream VMSs of this event
                 // having this info avoids having to contact all internal/terminal nodes to inform the precedence of events
                 Map<String, Long> precedenceMap = BatchAlgo.buildPrecedenceMap(event, transactionDAG, this.vmsMetadataMap);
                 String precedenceMapStr = this.serdesProxy.serializeMap(precedenceMap);
+
+                /*
+                 * update for next transaction. this is basically to ensure VMS do not wait for a tid that will never come. TIDs processed by a vms may not be sequential
+                 */
+                vms.node().lastTidOfBatch = tid_;
+                this.updateBatchAndPrecedenceIfNecessary(vms.node());
 
                 // write. think about failures/atomicity later
                 TransactionEvent.Payload txEvent = TransactionEvent.of(tid_, this.currentBatchOffset, inputEvent.name, inputEvent.payload, precedenceMapStr);
@@ -774,6 +776,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
             try {
                 Message message = this.coordinatorQueue.take();
+                logger.info("Coordinator received message type: "+ message.type());
                 switch(message.type){
 
                     // receive metadata from all microservices
