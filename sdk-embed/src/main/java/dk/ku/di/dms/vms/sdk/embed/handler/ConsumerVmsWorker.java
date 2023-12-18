@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
@@ -24,11 +25,14 @@ import java.util.logging.Logger;
  */
 final class ConsumerVmsWorker extends TimerTask {
 
+    private final VmsNode me;
+
     private final Logger logger;
     private final ConsumerVms consumerVms;
     private final LockConnectionMetadata connectionMetadata;
 
-    public ConsumerVmsWorker(ConsumerVms consumerVms, LockConnectionMetadata connectionMetadata){
+    public ConsumerVmsWorker(VmsNode me, ConsumerVms consumerVms, LockConnectionMetadata connectionMetadata){
+        this.me = me;
         this.consumerVms = consumerVms;
         this.connectionMetadata = connectionMetadata;
         this.logger = Logger.getLogger("vms-worker-"+consumerVms.hashCode());
@@ -38,7 +42,7 @@ final class ConsumerVmsWorker extends TimerTask {
     @Override
     public void run() {
 
-        this.logger.info("VMS worker scheduled at: "+System.currentTimeMillis());
+        // this.logger.info("VMS worker scheduled at: "+System.currentTimeMillis());
 
         // find the smallest batch. to avoid synchronizing with main thread
         long batchToSend = Long.MAX_VALUE;
@@ -57,12 +61,12 @@ final class ConsumerVmsWorker extends TimerTask {
         int remaining = events.size();
 
         while(remaining > 0){
-            this.logger.info("VMS worker submitting batch: "+batchToSend);
+            this.logger.info(me.vmsIdentifier+ " submitting batch "+batchToSend+" to "+consumerVms);
             remaining = BatchUtils.assembleBatchPayload( remaining, events, this.connectionMetadata.writeBuffer);
             this.connectionMetadata.writeBuffer.flip();
             try {
                 int result = this.connectionMetadata.channel.write(this.connectionMetadata.writeBuffer).get();
-                this.logger.info("Batch has been sent. Result: " + result);
+                this.logger.info("Batch has been sent. Size: " + result);
                 this.connectionMetadata.writeBuffer.clear();
             } catch (InterruptedException | ExecutionException e) {
                 this.logger.warning("Error submitting batch");

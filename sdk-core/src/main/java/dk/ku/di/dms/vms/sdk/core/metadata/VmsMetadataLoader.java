@@ -544,7 +544,7 @@ public class VmsMetadataLoader {
             }
 
             // output type cannot be String or primitive
-            if((outputType.isPrimitive() && !outputType.getSimpleName().equals("void")) || outputType.isArray() || outputType.isAnnotation() || outputType.isInstance(String.class)){
+            if((outputType.isPrimitive() && !outputType.getSimpleName().equals("void")) || outputType.isArray() || outputType.isInstance(String.class)){
                 throw new IllegalStateException("Output type cannot be String, array, annotation, or primitive");
             }
 
@@ -587,7 +587,7 @@ public class VmsMetadataLoader {
                                 "Error mapping: An output queue cannot be mapped to two (or more) types.");
                     }
 
-                    inputOutputEventDistinction.put(outputQueue,"output");
+                    inputOutputEventDistinction.put(outputQueue, "output");
 
                 } else if(queueToEventMap.get(queueName) != outputType) {
                     throw new QueueMappingException(

@@ -476,17 +476,17 @@ public final class Coordinator extends SignalingStoppableRunnable {
      */
     private void advanceCurrentBatchAndSpawnSendBatchOfEvents(){
 
+        BatchContext previousBatch = this.batchContextMap.get( this.currentBatchOffset - 1 );
+        // have we processed any input event since the start of this coordinator thread?
+        if(previousBatch.lastTid == this.tid - 1){
+            // logger.info("No new transaction since last batch generation. Current batch "+generateBatch+" won't be spawned this time.");
+            return;
+        }
+
         logger.info("Batch commit run started.");
 
         // why do I need to replicate vmsTidMap? to restart from this point if the leader fails
         final long generateBatch = this.currentBatchOffset;
-
-        // have we processed any input event since the start of this coordinator thread?
-        BatchContext previousBatch = this.batchContextMap.get( generateBatch - 1 );
-        if(previousBatch.lastTid == this.tid - 1){
-            logger.info("No new transaction since last batch generation. Current batch "+generateBatch+" won't be spawned this time.");
-            return;
-        }
 
         BatchContext currBatchContext = this.batchContextMap.get( generateBatch );
 
@@ -675,21 +675,21 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
             TransactionDAG transactionDAG = this.transactionMap.get( transactionInput.name );
 
-            boolean allKnown = true;
+//            boolean allKnown = true;
 
             // first make sure the metadata of this vms is known
             // that ensures that, even if the vms is down, eventually it will come to life
-            for (TransactionInput.Event inputEvent : transactionInput.events) {
-                EventIdentifier event = transactionDAG.inputEvents.get(inputEvent.name);
-                VmsIdentifier vms = this.vmsMetadataMap.get(event.targetVms);
-                if(vms == null) {
-                    this.logger.warning("VMS "+event.targetVms+" is unknown to the coordinator");
-                    allKnown = false;
-                    break;
-                }
-            }
+//            for (TransactionInput.Event inputEvent : transactionInput.events) {
+//                EventIdentifier event = transactionDAG.inputEvents.get(inputEvent.name);
+//                VmsIdentifier vms = this.vmsMetadataMap.get(event.targetVms);
+//                if(vms == null) {
+//                    this.logger.warning("VMS "+event.targetVms+" is unknown to the coordinator");
+//                    allKnown = false;
+//                    break;
+//                }
+//            }
 
-            if(!allKnown) continue; // got to the next transaction
+//            if(!allKnown) continue; // got to the next transaction
 
             // this is the only thread updating this value, so it is by design an atomic operation
             // ++ after variable returns the value before incrementing
@@ -709,7 +709,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 // there may have additional events to arrive from the current batch
                 // so the batch request must contain the last tid of the given vms
 
-
                 // if an internal/terminal vms do not receive an input event in this batch, it won't be able to
                 // progress since the precedence info will never arrive
                 // this way, we need to send in this event the precedence info for all downstream VMSs of this event
@@ -727,6 +726,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 TransactionEvent.Payload txEvent = TransactionEvent.of(tid_, this.currentBatchOffset, inputEvent.name, inputEvent.payload, precedenceMapStr);
 
                 // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
+
+                if(!event.targetVms.equalsIgnoreCase(vms.node().vmsIdentifier)){
+                    logger.severe("The event was going to be queued to the incorrect VMS worker!");
+                }
+                logger.info("Adding event "+event.name+" to "+event);
                 vms.worker().transactionEventsPerBatch(this.currentBatchOffset).add(txEvent);
 
             }
@@ -776,11 +780,10 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
             try {
                 Message message = this.coordinatorQueue.take();
-                logger.info("Coordinator received message type: "+ message.type());
                 switch(message.type){
-
                     // receive metadata from all microservices
                     case VMS_IDENTIFIER -> {
+                        logger.info("Coordinator received a VMS_IDENTIFIER");
                         // update metadata of this node so coordinator can reason about data dependencies
                         this.vmsMetadataMap.put( message.asVmsIdentifier().getIdentifier(), message.asVmsIdentifier() );
 
@@ -788,12 +791,18 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         // if all metadata, from all starter vms have arrived, then send the signal to them
 
                         // new VMS may join, requiring updating the consumer set
-                        Map<String, List<NetworkAddress>> vmsConsumerSet = new HashMap<>();
+                        Map<String, List<NetworkAddress>> vmsConsumerSet;
 
                         for(VmsIdentifier vmsIdentifier : this.vmsMetadataMap.values()) {
 
-                            NetworkAddress vms = this.starterVMSs.get( vmsIdentifier.hashCode() );
-                            if(vms == null) continue;
+                            // if we reuse the hashmap, the entries get mixed and lead to incorrect consumer set
+                            vmsConsumerSet = new HashMap<>();
+
+                            NetworkAddress vms = this.starterVMSs.get( vmsIdentifier.node().hashCode() );
+                            if(vms == null) {
+                                logger.warning("Could not identify "+vmsIdentifier.getIdentifier()+" from set of starter VMSs");
+                                continue;
+                            }
 
                             // build global view of vms dependencies/interactions
                             // build consumer set dynamically
@@ -807,15 +816,12 @@ public final class Coordinator extends SignalingStoppableRunnable {
                             String mapStr = "";
                             if (!vmsConsumerSet.isEmpty()) {
                                 mapStr = this.serdesProxy.serializeConsumerSet(vmsConsumerSet);
+                                logger.info("Consumer set built for "+vmsIdentifier.getIdentifier()+": "+mapStr);
                             }
 
                             vmsIdentifier.worker().queue().add( new IVmsWorker.Message( SEND_CONSUMER_SET, mapStr ));
 
-                            vmsConsumerSet.clear();
-
                         }
-
-
 
                     }
                     case TRANSACTION_ABORT -> {
@@ -836,9 +842,12 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         // what if ACKs from VMSs take too long? or never arrive?
                         // need to deal with intersecting batches? actually just continue emitting for higher throughput
                         BatchComplete.Payload msg = message.asBatchComplete();
+                        logger.info("Coordinator received a BATCH_COMPLETE from: "+msg.vms());
                         BatchContext batchContext = this.batchContextMap.get( msg.batch() );
                         // only if it is not a duplicate vote
-                        if( batchContext.missingVotes.remove( msg.vms() ) ){
+                        batchContext.missingVotes.remove( msg.vms() );
+                        if( batchContext.missingVotes.size() == 0 ){
+                            logger.info("Coordinator received all missing votes of batch: "+ msg.batch());
                             // making this implement order-independent, so not assuming batch commit are received in order,
                             // although they are necessarily applied in order both here and in the VMSs
                             // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes,
@@ -859,7 +868,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         BatchCommitAck.Payload msg = message.asBatchCommitAck();
                         this.logger.info("Batch "+ msg.batch() +" commit ACK received from "+msg.vms());
                     }
-
+                    default -> logger.warning("Coordinator received an unidentified message: "+message.type);
                 }
 
             } catch (InterruptedException e) {
@@ -876,7 +885,10 @@ public final class Coordinator extends SignalingStoppableRunnable {
      */
     private void sendCommitRequestToVMSs(BatchContext batchContext){
         for(VmsIdentifier vms : this.vmsMetadataMap.values()){
-            if(batchContext.terminalVMSs.contains(vms.getIdentifier())) continue;
+            if(batchContext.terminalVMSs.contains(vms.getIdentifier())) {
+                logger.info("Coordinator will not send commit request to VMS "+ vms.getIdentifier() + " because it is a terminal VMS");
+                continue;
+            }
             vms.worker().queue().add( new IVmsWorker.Message(SEND_BATCH_COMMIT_COMMAND,
                     new BatchCommitCommand.Payload(
                         batchContext.batchOffset,
@@ -887,4 +899,15 @@ public final class Coordinator extends SignalingStoppableRunnable {
         }
     }
 
+    public long getTid() {
+        return tid;
+    }
+
+    public long getCurrentBatchOffset() {
+        return currentBatchOffset;
+    }
+
+    public long getBatchOffsetPendingCommit() {
+        return batchOffsetPendingCommit;
+    }
 }

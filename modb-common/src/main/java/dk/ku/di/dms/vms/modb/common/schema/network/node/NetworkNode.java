@@ -13,26 +13,12 @@ import java.util.Objects;
  */
 public class NetworkNode extends NetworkAddress {
 
-    private final transient int hashCode;
-
     // whether this node is active
     private volatile transient boolean active;
 
     public NetworkNode(String host, int port) {
         super(host, port);
-        this.hashCode = Objects.hash(this.host, this.port);
         this.active = false;
-    }
-
-    // mutable since the VMS can crash
-    @Override
-    public int hashCode() {
-        return this.hashCode;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        return o instanceof NetworkNode && hashCode() == o.hashCode();
     }
 
     public boolean isActive(){

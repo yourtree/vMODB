@@ -31,15 +31,6 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
 
     private int remainingInputs;
 
-//    public VmsTransactionTask (long tid, long lastTid, long batch, VmsTransactionSignature signature, int inputSize){
-//        this.tid = tid;
-//        this.lastTid = lastTid;
-//        this.batch = batch;
-//        this.signature = signature;
-//        this.inputs = new Object[inputSize];
-//        this.remainingInputs = inputSize;
-//    }
-
     public VmsTransactionTask (long tid, long batch, VmsTransactionSignature signature, int inputSize){
         this.tid = tid;
         this.batch = batch;

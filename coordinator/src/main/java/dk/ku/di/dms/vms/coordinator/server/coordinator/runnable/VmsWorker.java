@@ -23,6 +23,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.logging.Logger;
 
@@ -49,7 +50,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private ByteBuffer readBuffer;
 
-    private ByteBuffer writeBuffer;
+    private final ByteBuffer writeBuffer;
 
     /**
      * Queues to inform coordinator about an event
@@ -60,6 +61,11 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private final AsynchronousChannelGroup group;
 
     private AsynchronousSocketChannel channel;
+
+    // DTs particular to this vms worker
+    private final Map<Long, BlockingDeque<TransactionEvent.Payload>> transactionEventsPerBatch = new ConcurrentHashMap<>();
+
+    private final BlockingQueue<Message> workerQueue = new LinkedBlockingQueue<>();
 
     static VmsWorker buildAsStarter(// coordinator reference
                                     ServerIdentifier me,
@@ -214,6 +220,16 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         }
     }
 
+    @Override
+    public BlockingDeque<TransactionEvent.Payload> transactionEventsPerBatch(long batch){
+        return this.transactionEventsPerBatch.computeIfAbsent(batch, (x) -> new LinkedBlockingDeque<>());
+    }
+
+    @Override
+    public BlockingQueue<Message> queue() {
+        return this.workerQueue;
+    }
+
     private void sendTransactionAbort(Message workerMessage) {
         TransactionAbort.Payload tidToAbort = workerMessage.asTransactionAbort();
         TransactionAbort.write(this.writeBuffer, tidToAbort);
@@ -260,7 +276,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         // the first or new information
         if(this.state == VMS_PRESENTATION_PROCESSED) {
             this.state = CONSUMER_SET_READY_FOR_SENDING;
-            this.logger.info("Consumer set will be established for the first time: "+consumerVms);
+            this.logger.info("Consumer set will be established for the first time for "+vmsNode.vmsIdentifier+": "+consumerVms);
         } else if(this.state == CONSUMER_EXECUTING){
             this.logger.info("Consumer set is going to be updated for: "+consumerVms);
         } else if(this.state == CONSUMER_SET_SENDING_FAILED){
@@ -504,6 +520,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             }
             remaining = BatchUtils.assembleBatchPayload( remaining, this.events, this.writeBuffer);
         }
+
     }
 
 }

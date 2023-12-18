@@ -9,7 +9,6 @@ import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingDeque;
@@ -84,12 +83,11 @@ final class LeaderWorker extends StoppableRunnable {
         while (isRunning()){
             try {
 
-                TimeUnit.of(ChronoUnit.MILLIS).sleep(DEFAULT_DELAY_FOR_BATCH_SEND);
                 this.batchEventsToLeader();
 
                 // drain the queue
                 while(true) {
-                    Message msg = this.leaderWorkerQueue.poll();
+                    Message msg = this.leaderWorkerQueue.poll(DEFAULT_DELAY_FOR_BATCH_SEND, TimeUnit.MILLISECONDS);
                     if (msg == null) break;
                     logger.info("Leader worker will send message type: "+ msg.type());
                     switch (msg.type()) {

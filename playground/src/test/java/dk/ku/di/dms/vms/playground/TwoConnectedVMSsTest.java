@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.playground.scenario2;
+package dk.ku.di.dms.vms.playground;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
@@ -19,17 +19,17 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbeddedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
+import org.junit.Test;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.logging.Logger;
+
+import static java.lang.Thread.sleep;
 
 /**
  *
@@ -44,17 +44,17 @@ import java.util.logging.Logger;
  * "Unix-based systems declare ports below 1024 as privileged"
  * <a href="https://stackoverflow.com/questions/25544849/java-net-bindexception-permission-denied-when-creating-a-serversocket-on-mac-os">...</a>
  */
-public class App 
-{
+public class TwoConnectedVMSsTest {
 
-    protected static final Logger logger = Logger.getLogger("App");
+    protected static final Logger logger = Logger.getLogger("TwoConnectedVMSsTest");
 
     private static final String transactionName = "tx_example";
 
     // input transactions
-    private static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
+    private final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
-    public static void main( String[] args ) throws Exception {
+    @Test
+    public void testBatchCompleteTwoTerminalVMSs() throws Exception {
 
         // the reflections framework is scanning all the packages, not respecting the package passed
         List<String> inToDiscard = Collections.emptyList();
@@ -66,7 +66,7 @@ public class App
                 "dk.ku.di.dms.vms.playground.app",
                 inToDiscard,
                 outToDiscard,
-                inToSwap);
+                inToSwap); // leader node should send the consumer set
 
         inToSwap = inToDiscard;
         inToDiscard = List.of("in");
@@ -80,14 +80,26 @@ public class App
                 outToDiscard,
                 inToSwap);
 
-        loadCoordinator();
+        var coordinator = loadCoordinator();
 
         Thread producerThread = new Thread(new Producer());
+
+        // wait for consumer set being send
+        sleep(5000);
+
         producerThread.start();
+
+        sleep(10000);
+
+        assert coordinator.getTid() == 4;
+
+        sleep(5000);
+
+        assert coordinator.getCurrentBatchOffset() == 2 && coordinator.getBatchOffsetPendingCommit() == 2;
 
     }
 
-    private static class Producer implements Runnable {
+    private class Producer implements Runnable {
 
         @Override
         public void run() {
@@ -96,7 +108,7 @@ public class App
 
             int val = 1;
 
-            while(val < 3) {
+            while(val <= 3) {
 
                 EventExample eventExample = new EventExample(val);
 
@@ -110,12 +122,6 @@ public class App
 
                 parsedTransactionRequests.add(txInput);
 
-                try {
-                    //logger.info("Producer going to bed... ");
-                    Thread.sleep(10000);
-                    //logger.info("Producer woke up! Time to insert one more ");
-                } catch (InterruptedException ignored) { }
-
                 val++;
 
             }
@@ -124,7 +130,60 @@ public class App
         }
     }
 
-    private static void loadCoordinator() throws IOException {
+    private void loadMicroservice(NetworkNode node, String vmsName, String packageName,
+                                         List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap) throws Exception {
+
+        VmsEmbeddedInternalChannels vmsInternalPubSubService = new VmsEmbeddedInternalChannels();
+
+        VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata(packageName);
+
+        assert vmsMetadata != null;
+
+        // discard events
+        for(String in : inToDiscard)
+            vmsMetadata.inputEventSchema().remove(in);
+
+        for(String out : outToDiscard)
+            vmsMetadata.outputEventSchema().remove(out);
+
+        for(String in : inToSwap) {
+            VmsEventSchema eventSchema = vmsMetadata.inputEventSchema().remove(in);
+            vmsMetadata.outputEventSchema().put(in, eventSchema);
+        }
+
+        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata);
+
+        ExecutorService readTaskPool = Executors.newSingleThreadExecutor();
+
+        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+
+        VmsTransactionScheduler scheduler =
+                new VmsTransactionScheduler(
+                        readTaskPool,
+                        vmsInternalPubSubService,
+                        vmsMetadata.queueToVmsTransactionMap(),
+                        null);
+
+        VmsNode vmsIdentifier = new VmsNode(
+                node.host, node.port, vmsName,
+                0, 0,0,
+                vmsMetadata.dataSchema(),
+                vmsMetadata.inputEventSchema(), vmsMetadata.outputEventSchema());
+
+        ExecutorService socketPool = Executors.newFixedThreadPool(2);
+
+        EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.buildWithDefaults(
+                vmsIdentifier, null, transactionFacade, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
+
+        Thread eventHandlerThread = new Thread(eventHandler);
+        eventHandlerThread.start();
+
+        Thread schedulerThread = new Thread(scheduler);
+        schedulerThread.start();
+
+    }
+
+    private Coordinator loadCoordinator() throws IOException {
 
         ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 1082 );
         ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 1083 );
@@ -159,68 +218,19 @@ public class App
                 VMSs,
                 transactionMap,
                 serverEm1,
-                new CoordinatorOptions(),
+                new CoordinatorOptions().withBatchWindow(3000),
                 1,
                 1,
-                App.parsedTransactionRequests,
+                parsedTransactionRequests,
                 serdes
         );
 
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
 
-    }
-
-    private static void loadMicroservice(NetworkNode node, String vmsName, String packageName, List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap) throws Exception {
-
-        VmsEmbeddedInternalChannels vmsInternalPubSubService = new VmsEmbeddedInternalChannels();
-
-        VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata(packageName);
-
-        // discard events
-        for(String in : inToDiscard)
-            vmsMetadata.inputEventSchema().remove(in);
-
-        for(String out : outToDiscard)
-            vmsMetadata.outputEventSchema().remove(out);
-
-        for(String in : inToSwap) {
-            VmsEventSchema eventSchema = vmsMetadata.inputEventSchema().remove(in);
-            vmsMetadata.outputEventSchema().put(in, eventSchema);
-        }
-
-        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata);
-
-        assert vmsMetadata != null;
-
-        ExecutorService readTaskPool = Executors.newSingleThreadExecutor();
-
-        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
-
-        VmsTransactionScheduler scheduler =
-                new VmsTransactionScheduler(
-                        readTaskPool,
-                        vmsInternalPubSubService,
-                        vmsMetadata.queueToVmsTransactionMap(),
-                        null);
-
-        VmsNode vmsIdentifier = new VmsNode(
-                node.host, node.port, vmsName,
-                0, 0,0,
-                vmsMetadata.dataSchema(),
-                vmsMetadata.inputEventSchema(), vmsMetadata.outputEventSchema());
-
-        ExecutorService socketPool = Executors.newFixedThreadPool(2);
-
-        EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.buildWithDefaults(
-                    vmsIdentifier, null, null, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
-
-        Thread eventHandlerThread = new Thread(eventHandler);
-        eventHandlerThread.start();
-
-        Thread schedulerThread = new Thread(scheduler);
-        schedulerThread.start();
+        return coordinator;
 
     }
+
 
 }

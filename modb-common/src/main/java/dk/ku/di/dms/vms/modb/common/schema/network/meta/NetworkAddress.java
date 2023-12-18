@@ -1,9 +1,14 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.meta;
 
+import dk.ku.di.dms.vms.modb.common.schema.network.node.NetworkNode;
+
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.Objects;
 
 public class NetworkAddress {
+
+    private final transient int hashCode;
 
     public final String host;
     public final int port;
@@ -11,11 +16,13 @@ public class NetworkAddress {
     public NetworkAddress(String host, int port) {
         this.host = host;
         this.port = port;
+        this.hashCode = Objects.hash(this.host, this.port);
     }
 
     public NetworkAddress(SocketAddress address) {
         this.host = ((InetSocketAddress)address).getHostName();
         this.port = ((InetSocketAddress)address).getPort();
+        this.hashCode = Objects.hash(this.host, this.port);
     }
 
     @Override
@@ -28,6 +35,17 @@ public class NetworkAddress {
 
     public InetSocketAddress asInetSocketAddress(){
         return new InetSocketAddress(this.host, this.port);
+    }
+
+    // mutable since the VMS can crash
+    @Override
+    public int hashCode() {
+        return this.hashCode;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return o instanceof NetworkNode && hashCode() == o.hashCode();
     }
 
 }

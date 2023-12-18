@@ -6,12 +6,15 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.IVmsWorker;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.BlockingQueue;
 import java.util.logging.Logger;
 
@@ -140,7 +143,7 @@ public class CoordinatorTest {
         public void run() {
             while (this.isRunning()){
                 try {
-                    Message workerMessage = this.workerQueue.take();
+                    Message workerMessage = this.queue().take();
                     switch (workerMessage.type()){
                         // in order of probability
                         case SEND_BATCH_OF_EVENTS -> {
@@ -162,7 +165,15 @@ public class CoordinatorTest {
             }
         }
 
+        @Override
+        public BlockingDeque<TransactionEvent.Payload> transactionEventsPerBatch(long batch) {
+            return null;
+        }
 
+        @Override
+        public BlockingQueue<Message> queue() {
+            return null;
+        }
     }
 
     // with a source, an internal, and a terminal

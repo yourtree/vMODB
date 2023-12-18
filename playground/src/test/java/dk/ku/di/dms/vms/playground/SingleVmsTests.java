@@ -1,10 +1,11 @@
-package dk.ku.di.dms.vms.playground.scenario1;
+package dk.ku.di.dms.vms.playground;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
@@ -17,6 +18,7 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.EmbeddedVmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -27,34 +29,48 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.logging.Logger;
 
-/**
- *
- * Scenario 1: One VMS and a coordinator. One transaction, running in the vms
- * -
- * "Unix-based systems declare ports below 1024 as privileged"
- * <a href="https://stackoverflow.com/questions/25544849/java-net-bindexception-permission-denied-when-creating-a-serversocket-on-mac-os">...</a>
- *
- */
-public class App 
-{
+import static java.lang.Thread.sleep;
 
-    protected static final Logger logger = Logger.getLogger("App");
+/**
+ * Unit test for tests involving a single VMS
+ * {@link #batchOfThreeEventsTest()} Three transaction inputs are sent to be batched as part of a batch.
+ * Another interesting test is sending many more events as part of a batch. The size must trespass a single message
+ * and both the VMs and coordinator must handle that correctly.
+ * Another test regards message delivery failures, including the batch and other events related to the batch protocol.
+ */
+public class SingleVmsTests
+{
+    protected static final Logger logger = Logger.getLogger("SingleVmsTests");
+
+    private static final String transactionName = "example";
 
     // input transactions
-    private static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
+    private final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
-    public static void main( String[] args ) throws Exception {
+    @Test
+    public void batchOfThreeEventsTest() throws Exception {
 
-        loadMicroservice();
+        // query microservice state afterwards and
 
-        loadCoordinator();
+        var vms = loadMicroservice();
+        var coordinator = loadCoordinator();
 
         Thread producerThread = new Thread(new Producer());
         producerThread.start();
 
+        sleep(10000);
+
+        assert coordinator.getTid() == 4 && coordinator.getCurrentBatchOffset() == 2 && coordinator.getBatchOffsetPendingCommit() == 2;
+
+        // query the coordinator batch to see if batch has evolved and how many batches has been committed
+
+        coordinator.stop();
+        vms.t1().stop();
+        vms.t2().stop();
+
     }
 
-    private static class Producer implements Runnable {
+    private class Producer implements Runnable {
 
         @Override
         public void run() {
@@ -71,7 +87,7 @@ public class App
 
                 TransactionInput.Event eventPayload = new TransactionInput.Event("in", payload);
 
-                TransactionInput txInput = new TransactionInput("example", eventPayload);
+                TransactionInput txInput = new TransactionInput(transactionName, eventPayload);
 
                 logger.info("[Producer] Adding " + val);
 
@@ -83,7 +99,7 @@ public class App
         }
     }
 
-    private static void loadCoordinator() throws IOException {
+    private Coordinator loadCoordinator() throws IOException {
 
         ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 1081 );
 
@@ -95,14 +111,14 @@ public class App
         Map<Integer, NetworkAddress> VMSs = new HashMap<>(1);
         VMSs.put(vms.hashCode(), vms);
 
-        TransactionDAG dag =  TransactionBootstrap.name("example")
+        TransactionDAG dag =  TransactionBootstrap.name(transactionName)
                 .input( "a", "example", "in" )
                 // bad way to do it for single-microservice transactions
                 .terminal("t", "example", "a")
                 .build();
 
         Map<String, TransactionDAG> transactionMap = new HashMap<>(1);
-        transactionMap.put("example", dag);
+        transactionMap.put(dag.name, dag);
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
@@ -112,22 +128,20 @@ public class App
                 VMSs,
                 transactionMap,
                 serverEm1,
-                new CoordinatorOptions(), // .withBatchWindow(1000),
+                new CoordinatorOptions().withBatchWindow(3000),
                 1,
                 1,
-                App.parsedTransactionRequests,
+                parsedTransactionRequests,
                 serdes
         );
 
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
 
+        return coordinator;
     }
 
-    /**
-     * Load one microservice at first and perform several transactions and batch commit
-     */
-    private static void loadMicroservice() throws Exception {
+    private Tuple<EmbeddedVmsEventHandler,VmsTransactionScheduler> loadMicroservice() throws Exception {
 
         VmsEmbeddedInternalChannels vmsInternalPubSubService = new VmsEmbeddedInternalChannels();
 
@@ -165,6 +179,7 @@ public class App
         Thread schedulerThread = new Thread(scheduler);
         schedulerThread.start();
 
+        return new Tuple<>(eventHandler,scheduler);
     }
 
 }

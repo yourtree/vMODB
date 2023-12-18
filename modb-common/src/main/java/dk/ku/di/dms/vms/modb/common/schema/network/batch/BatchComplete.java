@@ -30,7 +30,7 @@ public final class BatchComplete {
 
     public static void write(ByteBuffer buffer, Payload payload) {
         buffer.put(Constants.BATCH_COMPLETE);
-        buffer.putLong(payload.batch() );
+        buffer.putLong(payload.batch());
         buffer.putInt( payload.vms().length() );
         buffer.put( payload.vms().getBytes(StandardCharsets.UTF_8) );
     }
