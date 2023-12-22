@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.modb.ExecutorTest;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
+import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 import jdk.incubator.foreign.MemorySegment;
@@ -28,7 +28,7 @@ public final class TestCommon {
         ResourceScope scope = ResourceScope.newSharedScope();
         MemorySegment segment = MemorySegment.allocateNative(itemSchema.getRecordSize() * 10L, scope);
         RecordBufferContext rbc = new RecordBufferContext(segment, 10);
-        UniqueHashIndex index = new UniqueHashIndex(rbc, itemSchema, itemSchema.getPrimaryKeyColumns());
+        UniqueHashBufferIndex index = new UniqueHashBufferIndex(rbc, itemSchema, itemSchema.getPrimaryKeyColumns());
         PrimaryIndex consistentIndex = new PrimaryIndex(index);
         Table itemTable = new Table("item", itemSchema, consistentIndex);
 

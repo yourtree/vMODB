@@ -12,8 +12,13 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.logging.Logger;
 
 /**
@@ -34,7 +39,11 @@ public class Main
 
     private static final StartupConfig defaultConfig = new StartupConfig(false, new NetworkAddress("127.0.0.1", 8080), Collections.emptyList(), new HashMap<>(), new CoordinatorOptions());
 
-    public static void main( String[] args ) throws InterruptedException, IOException {
+    public static void main(String[] args){
+
+    }
+
+    public static void old_main(String[] args) throws InterruptedException {
 
         // https://stackoverflow.com/questions/42426206/httpserver-very-slow-with-keepalive
         System.setProperty("sun.net.httpserver.nodelay", "true");

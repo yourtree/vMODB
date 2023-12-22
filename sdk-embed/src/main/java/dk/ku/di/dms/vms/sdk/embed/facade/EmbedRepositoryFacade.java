@@ -48,7 +48,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
     // private final VarHandle pkPrimitive;
 
-    /**
+    /*
      * Cache of objects in memory.
      * Circular buffer of records (represented as object arrays) for a given index
      * Should be used by the repository facade, since it is the one who is converting the payloads from the user code.
@@ -191,7 +191,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         return null;
     }
 
-    private IEntity<?> parseObjectIntoEntity( Object[] object ){
+    private IEntity<?> parseObjectIntoEntity(Object[] object){
         // all entities must have default constructor
         try {
             IEntity<?> entity = entityConstructor.newInstance();
@@ -251,7 +251,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         // we need some context about the results in this memory space
         // number of records
         // schema of the return (maybe not if it is a dto)
-        var memRes = this.transactionFacade.fetch(this.table.primaryKeyIndex(), selectStatement);
+        var memRes = this.transactionFacade.fetch(this.table, selectStatement);
 
         // TODO parse output into object
         if(type == IDTO.class) {

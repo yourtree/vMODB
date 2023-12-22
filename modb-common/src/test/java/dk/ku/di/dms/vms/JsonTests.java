@@ -4,7 +4,7 @@ import com.google.gson.*;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
 import org.junit.Test;
 
-import java.io.*;
+import java.io.IOException;
 import java.util.Base64;
 
 public class JsonTests {

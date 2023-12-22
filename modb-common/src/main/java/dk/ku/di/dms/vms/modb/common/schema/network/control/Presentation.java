@@ -34,9 +34,9 @@ public final class Presentation {
         buffer.put( Constants.PRESENTATION );
         buffer.put( CLIENT );
 
-        byte[] host = table.getBytes(StandardCharsets.UTF_8);
-        buffer.putInt( host.length );
-        buffer.put( host );
+        byte[] tableBytes = table.getBytes(StandardCharsets.UTF_8);
+        buffer.putInt( tableBytes.length );
+        buffer.put( tableBytes );
     }
 
     public static String readClient(ByteBuffer buffer){

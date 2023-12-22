@@ -29,7 +29,7 @@ public interface OperationAPI {
 
     void issue(Table table, IStatement arg) throws AnalyzerException;
 
-    MemoryRefNode fetch(PrimaryIndex primaryKeyIndex, SelectStatement selectStatement);
+    MemoryRefNode fetch(Table table, SelectStatement selectStatement);
 
     void updateAll(Table table, List<Object[]> parsedEntities);
 

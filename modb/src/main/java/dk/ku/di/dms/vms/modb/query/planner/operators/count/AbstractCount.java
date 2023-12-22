@@ -1,14 +1,14 @@
 package dk.ku.di.dms.vms.modb.query.planner.operators.count;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 
 public class AbstractCount extends AbstractSimpleOperator {
 
-    protected final ReadOnlyIndex<IKey> index;
+    protected final ReadOnlyBufferIndex<IKey> index;
 
-    public AbstractCount(ReadOnlyIndex<IKey> index, int entrySize) {
+    public AbstractCount(ReadOnlyBufferIndex<IKey> index, int entrySize) {
         super(entrySize);
         this.index = index;
     }

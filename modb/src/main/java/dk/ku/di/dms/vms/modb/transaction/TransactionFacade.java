@@ -8,7 +8,7 @@ import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteBufferIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
@@ -88,7 +88,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
      * @param selectStatement a select statement
      * @return the query result in a memory space
      */
-    public MemoryRefNode fetch(PrimaryIndex consistentIndex, SelectStatement selectStatement) {
+    public MemoryRefNode fetch(Table table, SelectStatement selectStatement) {
 
         String sqlAsKey = selectStatement.SQL.toString();
 
@@ -120,10 +120,10 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
         if(scanOperator.isIndexScan()){
             // build keys and filters
             //memRes = OperatorExecution.run( wherePredicates, scanOperator.asIndexScan() );
-            memRes = this.run(consistentIndex, wherePredicates, scanOperator.asIndexScan());
+            memRes = this.run(table, wherePredicates, scanOperator.asIndexScan());
         } else {
             // build only filters
-            memRes = this.run( consistentIndex, wherePredicates, scanOperator.asFullScan() );
+            memRes = this.run(table, wherePredicates, scanOperator.asFullScan() );
         }
 
         return memRes;
@@ -170,7 +170,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
 
         // if the memory address is occupied, must log warning
         // so we can increase the table size
-        ReadWriteIndex<IKey> index = table.underlyingPrimaryKeyIndex();
+        ReadWriteBufferIndex<IKey> index = table.underlyingPrimaryKeyIndex();
         int sizeWithoutHeader = table.schema.getRecordSizeWithoutHeader();
         long currAddress = address;
 
@@ -222,7 +222,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
      * @param pk The primary key
      */
     private void deleteByKey(Table table, IKey pk){
-        if(table.primaryKeyIndex().delete(pk)){
+        if(table.primaryKeyIndex().remove(pk)){
             INDEX_WRITES.get().add(table.primaryKeyIndex());
         }
     }
@@ -238,7 +238,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
      */
     public void insert(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
-        IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
+        IKey pk = KeyUtils.buildRecordKey(index.index().schema().getPrimaryKeyColumns(), values);
         if(!fkConstraintViolation(table, values) && index.insert(pk, values)){
             INDEX_WRITES.get().add(index);
 
@@ -265,7 +265,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
                 for(NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()){
                     secIndex.appendDelta( key_, values );
                 }
-                return values[ table.primaryKeyIndex().columns()[0] ];
+                return values[ index.index().columns()[0] ];
             }
         }
         undoTransactionWrites();
@@ -278,7 +278,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
      */
     public void update(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
-        IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
+        IKey pk = KeyUtils.buildRecordKey(index.index().schema().getPrimaryKeyColumns(), values);
         if(!fkConstraintViolation(table, values) && index.update(pk, values)){
             INDEX_WRITES.get().add(index);
             return;
@@ -300,7 +300,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
 
     /****** SCAN OPERATORS *******/
 
-    public MemoryRefNode run(PrimaryIndex consistentIndex,
+    public MemoryRefNode run(Table table,
                              List<WherePredicate> wherePredicates,
                              IndexScanWithProjection operator){
 
@@ -321,14 +321,14 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
         // build input
         IKey inputKey = KeyUtils.buildKey(keyList.toArray());
 
-        return operator.run( consistentIndex, filterContext, inputKey );
+        return operator.run( table.underlyingPrimaryKeyIndex(), filterContext, inputKey );
     }
 
-    public MemoryRefNode run(PrimaryIndex consistentIndex,
+    public MemoryRefNode run(Table table,
                              List<WherePredicate> wherePredicates,
                              FullScanWithProjection operator){
         FilterContext filterContext = FilterContextBuilder.build(wherePredicates);
-        return operator.run( consistentIndex, filterContext );
+        return operator.run( table.underlyingPrimaryKeyIndex(), filterContext );
     }
 
     /****** WRITE OPERATORS *******/

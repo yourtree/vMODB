@@ -1,14 +1,14 @@
 package dk.ku.di.dms.vms.modb.storage.iterator.unique;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 public final class KeyRecordIterator implements IRecordIterator<IKey> {
 
     public final IKey[] keys;
 
-    public final ReadOnlyIndex<IKey> index;
+    public final ReadOnlyBufferIndex<IKey> index;
 
     private int position;
 
@@ -18,7 +18,7 @@ public final class KeyRecordIterator implements IRecordIterator<IKey> {
 
     private long currentAddress;
 
-    public KeyRecordIterator(ReadOnlyIndex<IKey> index, IKey[] keys){
+    public KeyRecordIterator(ReadOnlyBufferIndex<IKey> index, IKey[] keys){
         this.index = index;
         this.keys = keys;
 

@@ -16,7 +16,7 @@ public final class UpdateOperator {
 
     public static void run(UpdateStatement updateStatement, PrimaryIndex index, FilterContext filterContext, IKey... keys){
 
-        if(index.getType() == IndexTypeEnum.UNIQUE){
+        if(index.underlyingIndex().getType() == IndexTypeEnum.UNIQUE){
 
             for(IKey key : keys){
 
@@ -27,7 +27,7 @@ public final class UpdateOperator {
                 if(index.checkConditionVersioned(filterContext, cloned)){
 
                     for(var setClause : updateStatement.setClause){
-                        cloned[ index.schema().columnPosition( setClause.column() )] = setClause.value();
+                        cloned[ index.underlyingIndex().schema().columnPosition( setClause.column() )] = setClause.value();
                     }
 
                     index.update( key, cloned );

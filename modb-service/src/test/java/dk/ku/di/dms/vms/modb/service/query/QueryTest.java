@@ -1,14 +1,5 @@
 package dk.ku.di.dms.vms.modb.service.query;
 
-import dk.ku.di.dms.vms.modb.common.type.DataType;
-import dk.ku.di.dms.vms.modb.definition.*;
-import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
-import org.junit.BeforeClass;
-import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.List;
-
 public class QueryTest {
 
     private static Catalog catalog;

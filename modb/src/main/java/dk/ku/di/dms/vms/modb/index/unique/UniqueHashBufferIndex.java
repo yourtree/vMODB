@@ -4,8 +4,9 @@ import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.AbstractBufferedIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
@@ -22,7 +23,7 @@ import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
  * Could deal with collisions by having a linked list.
  * This index is oblivious to isolation level and relational constraints.
  */
-public final class UniqueHashIndex extends AbstractIndex<IKey> {
+public final class UniqueHashBufferIndex extends AbstractBufferedIndex<IKey> implements ReadWriteIndex<IKey> {
 
     private static final Logger logger = Logger.getLogger("UniqueHashIndex");
 
@@ -41,7 +42,7 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
      */
     // static final int TREEIFY_THRESHOLD = 8;
 
-    public UniqueHashIndex(RecordBufferContext recordBufferContext, Schema schema){
+    public UniqueHashBufferIndex(RecordBufferContext recordBufferContext, Schema schema){
         super(schema, schema.getPrimaryKeyColumns());
         this.recordBufferContext = recordBufferContext;
         this.cacheObjectStore = new ConcurrentHashMap<>();
@@ -52,7 +53,7 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
      * Unique index for non-primary keys.
      * In other words, a constructor for a secondary index
      */
-    public UniqueHashIndex(RecordBufferContext recordBufferContext, Schema schema, int... columnsIndex){
+    public UniqueHashBufferIndex(RecordBufferContext recordBufferContext, Schema schema, int... columnsIndex){
         super(schema, columnsIndex);
         this.recordBufferContext = recordBufferContext;
         this.cacheObjectStore = new ConcurrentHashMap<>();
@@ -97,6 +98,7 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
         UNSAFE.copyMemory(null, srcAddress, null, pos, this.recordSize);
     }
 
+    @Override
     public void update(IKey key, Object[] record){
 
         long pos = this.getPosition(key.hashCode());
@@ -117,6 +119,7 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
         }
     }
 
+    @Override
     public void insert(IKey key, Object[] record){
 
         long pos = this.getPosition(key.hashCode());
@@ -161,6 +164,11 @@ public final class UniqueHashIndex extends AbstractIndex<IKey> {
     public boolean exists(IKey key){
         long pos = getPosition(key.hashCode());
         return UNSAFE.getBoolean(null, pos);
+    }
+
+    @Override
+    public Object[] lookupByKey(IKey key){
+        return this.readFromIndex(this.getPosition(key.hashCode()));
     }
 
     @Override

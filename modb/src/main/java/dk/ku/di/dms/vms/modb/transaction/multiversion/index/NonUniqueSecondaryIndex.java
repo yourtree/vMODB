@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteBufferIndex;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
@@ -21,7 +22,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import static dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer.deltaKey;
 import static dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer.deltaNext;
 
-public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
+/**
+ * Only implementing ReadWriteBufferIndex to maintain compatibility
+ */
+public final class NonUniqueSecondaryIndex implements IMultiVersionIndex, ReadWriteBufferIndex<IKey> {
 
     // pointer to primary index
     // necessary because of transaction, concurrency control
@@ -70,7 +74,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
     @Override
     public Schema schema() {
-        return this.primaryIndex.schema();
+        return this.underlyingIndex.schema();
     }
 
     @Override
@@ -109,7 +113,6 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
         return null;
     }
 
-    @Override
     public IRecordIterator<IKey> iterator(IKey key){
         return new RecordBucketIterator(key);
     }
@@ -257,8 +260,28 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     }
 
     @Override
-    public boolean delete(IKey key) {
+    public void insert(IKey key, long srcAddress) {
+
+    }
+
+    @Override
+    public void update(IKey key, long srcAddress) {
+
+    }
+
+    @Override
+    public void delete(IKey key) {
+
+    }
+
+    @Override
+    public boolean remove(IKey key) {
         return false;
+    }
+
+    @Override
+    public Object[] lookupByKey(IKey key) {
+        return new Object[0];
     }
 
     /**

@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.join;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
@@ -15,8 +15,8 @@ import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
  */
 public class UniqueHashJoinNonUniqueHashWithProjection extends AbstractSimpleOperator {
 
-    public final ReadOnlyIndex<IKey> leftIndex;
-    public final ReadOnlyIndex<IKey> rightIndex;
+    public final ReadOnlyBufferIndex<IKey> leftIndex;
+    public final ReadOnlyBufferIndex<IKey> rightIndex;
 
     // index of the columns
     protected final int[] leftProjectionColumns;
@@ -30,8 +30,8 @@ public class UniqueHashJoinNonUniqueHashWithProjection extends AbstractSimpleOpe
     private final boolean[] projectionOrder;
 
     public UniqueHashJoinNonUniqueHashWithProjection(
-            ReadOnlyIndex<IKey> leftIndex,
-            ReadOnlyIndex<IKey> rightIndex,
+            ReadOnlyBufferIndex<IKey> leftIndex,
+            ReadOnlyBufferIndex<IKey> rightIndex,
             int[] leftProjectionColumns,
             int[] leftProjectionColumnsSize,
             int[] rightProjectionColumns,

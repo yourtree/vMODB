@@ -1,11 +1,9 @@
 package dk.ku.di.dms.vms.modb.index;
 
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
-import jdk.internal.misc.Unsafe;
+import dk.ku.di.dms.vms.modb.index.interfaces.IIndex;
 
 import java.util.HashSet;
 
@@ -16,9 +14,7 @@ import java.util.HashSet;
  * <a href="https://github.com/apache/flink/blob/master/flink-core/src/main/java/org/apache/flink/core/memory/MemorySegment.java">...</a>
  * <a href="https://stackoverflow.com/questions/24026918/java-nio-bytebuffer-allocatedirect-size-limit-over-the-int">...</a>
  */
-public abstract class AbstractIndex<K> implements ReadWriteIndex<K> {
-
-    protected static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
+public abstract class AbstractIndex<K> implements IIndex<K> {
 
     protected final int[] columns;
 

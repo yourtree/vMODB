@@ -28,21 +28,21 @@ public interface IVmsSerdesProxy {
     byte[] serializeDataResponseEvent(DataResponseEvent event);
     DataResponseEvent deserializeToDataResponseEvent(byte[] bytes);
 
-    <K,V> String serializeMap( Map<K,V> map );
+    <K,V> String serializeMap(Map<K,V> map);
     <K,V> Map<K,V> deserializeMap(String mapStr);
 
-    <V> String serializeSet( Set<V> map );
+    <V> String serializeSet(Set<V> map);
     <V> Set<V> deserializeSet(String setStr);
 
-    String serializeConsumerSet( Map<String, List<NetworkAddress>> map );
+    String serializeConsumerSet(Map<String, List<NetworkAddress>> map);
     Map<String, List<NetworkAddress>> deserializeConsumerSet(String mapStr);
 
     Map<String, Long> deserializeDependenceMap(String dependenceMapStr);
 
-    <V> String serializeList( List<V> map );
+    <V> String serializeList(List<V> map);
     <V> List<V> deserializeList(String listStr);
 
     String serialize(Object value, Class<?> clazz);
-    <T> T deserialize( String valueStr, Class<T> clazz );
+    <T> T deserialize( String valueStr, Class<T> clazz);
 
 }

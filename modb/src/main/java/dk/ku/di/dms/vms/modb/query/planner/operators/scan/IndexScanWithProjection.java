@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.query.planner.operators.scan;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
@@ -21,7 +21,7 @@ public final class IndexScanWithProjection extends AbstractScan {
 
     public IndexScanWithProjection(
                      Table table,
-                     ReadOnlyIndex<IKey> index,
+                     ReadOnlyBufferIndex<IKey> index,
                      int[] projectionColumns,
                      int entrySize) {
         super(table, entrySize, index, projectionColumns);
@@ -43,7 +43,7 @@ public final class IndexScanWithProjection extends AbstractScan {
     }
 
     // transactional call
-    public MemoryRefNode run(ReadOnlyIndex<IKey> index, FilterContext filterContext, IKey... keys) {
+    public MemoryRefNode run(ReadOnlyBufferIndex<IKey> index, FilterContext filterContext, IKey... keys) {
         // unifying in terms of iterator
         IRecordIterator<IKey> iterator = index.iterator(keys);
         while(iterator.hasElement()){

@@ -3,10 +3,7 @@ package dk.ku.di.dms.vms.modb.index.interfaces;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
-import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.IIndexKey;
-import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
@@ -16,25 +13,9 @@ import jdk.internal.misc.Unsafe;
  * Base interface for operators that perform read-only queries.
  * @param <K> The key object identifier of a record
  */
-public interface ReadOnlyIndex<K> {
+public interface ReadOnlyBufferIndex<K> extends IIndex<K> {
 
     Unsafe UNSAFE = MemoryUtils.UNSAFE;
-
-    IIndexKey key();
-
-    Schema schema();
-
-    // columns that form the key to each record entry
-    int[] columns();
-
-    boolean containsColumn(int columnPos);
-
-    /** information used by the planner to decide for the appropriate operator */
-    IndexTypeEnum getType();
-
-    int size();
-
-    boolean exists(K key);
 
     default boolean exists(long address){
         throw new IllegalStateException("No support for direct addressing in this index.");

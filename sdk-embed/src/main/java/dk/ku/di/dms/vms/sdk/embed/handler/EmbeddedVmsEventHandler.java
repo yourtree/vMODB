@@ -31,7 +31,6 @@ import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.*;
@@ -212,7 +211,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
     private void eventLoop(){
 
-        this.logger.info("Event handler has started running.");
+        this.logger.info("Event handler has started.");
 
         this.connectToStarterConsumers();
 

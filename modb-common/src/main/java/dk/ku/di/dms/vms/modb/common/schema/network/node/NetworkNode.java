@@ -2,8 +2,6 @@ package dk.ku.di.dms.vms.modb.common.schema.network.node;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 
-import java.util.Objects;
-
 /**
  * In distributed systems, nodes can fail.
  * When they come back, their network address may change,

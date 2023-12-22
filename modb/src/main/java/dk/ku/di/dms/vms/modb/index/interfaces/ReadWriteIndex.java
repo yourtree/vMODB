@@ -1,11 +1,15 @@
 package dk.ku.di.dms.vms.modb.index.interfaces;
 
-public interface ReadWriteIndex<K> extends ReadOnlyIndex<K> {
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
 
-    void insert(K key, long srcAddress);
+public interface ReadWriteIndex<K> extends IIndex<K> {
 
-    void update(K key, long srcAddress);
+    void insert(IKey key, Object[] record);
 
-    void delete(K key);
+    void update(IKey key, Object[] record);
+
+    void delete(IKey key);
+
+    Object[] lookupByKey(IKey key);
 
 }

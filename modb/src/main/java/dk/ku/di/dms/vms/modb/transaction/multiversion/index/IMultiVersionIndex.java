@@ -1,9 +1,8 @@
 package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 
-public interface IMultiVersionIndex extends ReadOnlyIndex<IKey> {
+public interface IMultiVersionIndex {
 
     void undoTransactionWrites();
 
@@ -13,6 +12,8 @@ public interface IMultiVersionIndex extends ReadOnlyIndex<IKey> {
 
     boolean update(IKey key, Object[] record);
 
-    boolean delete(IKey key);
+    boolean remove(IKey key);
+
+    Object[] lookupByKey(IKey key);
 
 }

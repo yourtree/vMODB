@@ -49,7 +49,7 @@ import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
 /**
- * Also known as Leader
+ * Also known as the "Leader"
  * Class that encapsulates all logic related to issuing of
  * transactions, batch commits, transaction aborts, ...
  */
@@ -72,9 +72,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
     // for server nodes
     private final Map<Integer, LockConnectionMetadata> serverConnectionMetadataMap;
 
-    /** VMS data structures **/
+    /* VMS data structures **/
 
-    /*
+    /**
      * received from program start
      * also called known VMSs
      */

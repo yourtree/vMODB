@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.storage.iterator.multiversion;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 
@@ -14,10 +14,10 @@ public final class NonUniqueKeySnapshotIterator implements IRecordIterator<IKey>
     /**
      * Can only be a {@link NonUniqueSecondaryIndex}
      */
-    private final ReadOnlyIndex<IKey> index;
+    private final ReadOnlyBufferIndex<IKey> index;
     private final IRecordIterator<IKey> recordIterator;
 
-    public NonUniqueKeySnapshotIterator(ReadOnlyIndex<IKey> index, IRecordIterator recordIterator) {
+    public NonUniqueKeySnapshotIterator(ReadOnlyBufferIndex<IKey> index, IRecordIterator recordIterator) {
         this.index = index;
         this.recordIterator = recordIterator;
     }

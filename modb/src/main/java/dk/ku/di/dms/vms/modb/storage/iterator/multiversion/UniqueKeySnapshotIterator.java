@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.storage.iterator.multiversion;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 import java.util.List;
@@ -16,10 +16,10 @@ public class UniqueKeySnapshotIterator implements IRecordIterator<IKey> {
     // for no keys, maybe it is better to iterate over some non-unique index for this table
     // perhaps this is the best approach, would allow avoiding checking empty blocks
 
-    private ReadOnlyIndex<IKey> index;
+    private ReadOnlyBufferIndex<IKey> index;
     private IKey[] keys;
 
-    public UniqueKeySnapshotIterator(ReadOnlyIndex<IKey> index, IKey[] keys){
+    public UniqueKeySnapshotIterator(ReadOnlyBufferIndex<IKey> index, IKey[] keys){
         this.index = index;
         this.keys = keys;
     }

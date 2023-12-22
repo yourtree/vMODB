@@ -8,7 +8,8 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
+import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
+import dk.ku.di.dms.vms.modb.index.unique.UniqueHashMapIndex;
 import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
 import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
@@ -41,6 +42,10 @@ public class EmbedMetadataLoader {
 
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
+    private static final boolean IN_MEMORY_STORAGE = true;
+
+    private static final boolean BULK_DATA_LOADER = false;
+
     public static VmsRuntimeMetadata loadRuntimeMetadata(String... packages) {
 
         try {
@@ -63,26 +68,23 @@ public class EmbedMetadataLoader {
     }
 
     public static TransactionFacade loadTransactionFacadeAndInjectIntoRepositories(
-            VmsRuntimeMetadata vmsRuntimeMetadata, Set<String> entitiesToExclude) {
-
-        Map<String, Table> catalog = loadCatalog(vmsRuntimeMetadata, entitiesToExclude);
-
+            VmsRuntimeMetadata vmsRuntimeMetadata, Map<String, Table> catalog) {
         TransactionFacade transactionFacade = TransactionFacade.build(catalog);
-
         for(Map.Entry<String, IVmsRepositoryFacade> facadeEntry : vmsRuntimeMetadata.repositoryFacades().entrySet()){
             ((EmbedRepositoryFacade)facadeEntry.getValue()).setDynamicDatabaseModules(transactionFacade, catalog.get(facadeEntry.getKey()));
         }
 
         // instantiate loader
-        BulkDataLoader loader = new BulkDataLoader( vmsRuntimeMetadata.repositoryFacades(), vmsRuntimeMetadata.entityToTableNameMap(), VmsSerdesProxyBuilder.build() );
-
-        vmsRuntimeMetadata.loadedVmsInstances().put("data_loader", loader);
+        if(BULK_DATA_LOADER) {
+            BulkDataLoader loader = new BulkDataLoader(vmsRuntimeMetadata.repositoryFacades(), vmsRuntimeMetadata.entityToTableNameMap(), VmsSerdesProxyBuilder.build());
+            vmsRuntimeMetadata.loadedVmsInstances().put("data_loader", loader);
+        }
 
         return transactionFacade;
 
     }
 
-    private static Map<String, Table> loadCatalog(VmsRuntimeMetadata vmsRuntimeMetadata, Set<String> entitiesToExclude) {
+    public static Map<String, Table> loadCatalog(VmsRuntimeMetadata vmsRuntimeMetadata, Set<String> entitiesToExclude) {
 
         Map<String, Table> catalog = new HashMap<>(vmsRuntimeMetadata.dataSchema().size());
         Map<VmsDataSchema, Tuple<Schema, Map<String, int[]>>> dataSchemaToPkMap = new HashMap<>(vmsRuntimeMetadata.dataSchema().size());
@@ -92,7 +94,7 @@ public class EmbedMetadataLoader {
          */
         for (VmsDataSchema vmsDataSchema : vmsRuntimeMetadata.dataSchema().values()) {
 
-            if(entitiesToExclude != null && !entitiesToExclude.contains(vmsDataSchema.tableName)) continue;
+            if(entitiesToExclude != null && entitiesToExclude.contains(vmsDataSchema.tableName)) continue;
 
             final Schema schema = new Schema(vmsDataSchema.columnNames, vmsDataSchema.columnDataTypes,
                     vmsDataSchema.primaryKeyColumns, vmsDataSchema.constraintReferences);
@@ -211,10 +213,16 @@ public class EmbedMetadataLoader {
     }
 
     private static PrimaryIndex createPrimaryIndex(String fileName, Schema schema) {
-        // map this to a file, so whenever a batch commit event arrives, it can trigger logging the entire file
-        RecordBufferContext recordBufferContext = loadRecordBuffer(10, schema.getRecordSize(), fileName);
-        UniqueHashIndex pkIndex = new UniqueHashIndex(recordBufferContext, schema);
-        return new PrimaryIndex(pkIndex);
+
+        if(IN_MEMORY_STORAGE){
+            return new PrimaryIndex(new UniqueHashMapIndex(schema));
+        } else {
+            // map this to a file, so whenever a batch commit event arrives, it can trigger logging the entire file
+            RecordBufferContext recordBufferContext = loadRecordBuffer(10, schema.getRecordSize(), fileName);
+            UniqueHashBufferIndex pkIndex = new UniqueHashBufferIndex(recordBufferContext, schema);
+            return new PrimaryIndex(pkIndex);
+        }
+
     }
 
     private static Map<String, int[]> buildSchemaForeignKeyMap(Schema schema, Map<String, VmsDataSchema> dataSchemaMap, Map<String, List<ForeignKeyReference>> map) {

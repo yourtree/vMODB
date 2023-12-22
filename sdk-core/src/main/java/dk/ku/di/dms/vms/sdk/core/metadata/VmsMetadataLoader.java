@@ -148,7 +148,6 @@ public class VmsMetadataLoader {
         Set<Class<?>> vmsTables = reflections.getTypesAnnotatedWith(VmsTable.class);
         Map<Class<?>, String> vmsTableNameMap = new HashMap<>();
         for(Class<?> vmsTable : vmsTables){
-
             Optional<Annotation> optionalVmsTableAnnotation = Arrays.stream(vmsTable.getAnnotations())
                     .filter(p -> p.annotationType() == VmsTable.class).findFirst();
             optionalVmsTableAnnotation.ifPresent(
@@ -464,6 +463,7 @@ public class VmsMetadataLoader {
 
         for(Class<?> clazz : vmsClasses) {
 
+            // mapVmsTransactionInputOutput uses the canonical name
             String clazzName = clazz.getCanonicalName();
 
             Class<?> cls = Class.forName(clazzName);
@@ -499,14 +499,6 @@ public class VmsMetadataLoader {
 
             Object vmsInstance = constructor.newInstance(proxies.toArray());
 
-            // get name from annotation
-            /* FIXME something uses the clazz name to map things. I cannot change this...
-            Optional<Annotation> optionalMicroserviceAnnotation = Arrays.stream(clazz.getAnnotations())
-                    .filter(p -> p.annotationType() == Microservice.class).findFirst();
-            if(optionalMicroserviceAnnotation.isEmpty()) throw new IllegalStateException("Cannot read microservice annotation");
-            String microservice = ((Microservice)optionalMicroserviceAnnotation.get()).value();
-            loadedMicroserviceInstances.put(microservice, vmsInstance);
-            */
             loadedMicroserviceInstances.put(clazzName, vmsInstance);
         }
 

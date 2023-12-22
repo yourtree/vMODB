@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.index.non_unique;
 
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.AbstractBufferedIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.non_unique.BucketIterator;
@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Space conscious non-unique hash index
  * It manages a sequential buffer for each hash entry
  */
-public final class NonUniqueHashIndex extends AbstractIndex<IKey> {
+public final class NonUniqueHashIndex extends AbstractBufferedIndex<IKey> {
 
     // better to have a manager. to manage the append-only buffer
     // correctly (safety)... the manager will expand it if necessary

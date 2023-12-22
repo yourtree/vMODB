@@ -3,18 +3,12 @@ package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
-import dk.ku.di.dms.vms.modb.definition.Header;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
-import dk.ku.di.dms.vms.modb.index.IIndexKey;
-import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashIndex;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.IPrimaryKeyGenerator;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.OperationSetOfKey;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
@@ -44,7 +38,7 @@ import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
  */
 public final class PrimaryIndex implements IMultiVersionIndex {
 
-    private final UniqueHashIndex primaryKeyIndex;
+    private final ReadWriteIndex<IKey> primaryKeyIndex;
 
     private final Map<IKey, OperationSetOfKey> updatesPerKeyMap;
 
@@ -67,13 +61,13 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     private static final Deque<List<IKey>> writeListBuffer = new ArrayDeque<>();
 
-    public PrimaryIndex(UniqueHashIndex primaryKeyIndex) {
+    public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
         this.primaryKeyGenerator = null;
     }
 
-    public PrimaryIndex(UniqueHashIndex primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
+    public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
         this.primaryKeyGenerator = primaryKeyGenerator;
@@ -89,91 +83,11 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         return this.primaryKeyIndex.key().hashCode();
     }
 
-    @Override
-    public IIndexKey key() {
-        return this.primaryKeyIndex.key();
-    }
-
-    @Override
-    public Schema schema() {
-        return this.primaryKeyIndex.schema();
-    }
-
-    @Override
-    public int[] columns() {
-        return this.primaryKeyIndex.columns();
-    }
-
-    @Override
-    public boolean containsColumn(int columnPos) {
-        return this.primaryKeyIndex.containsColumn(columnPos);
-    }
-
-    @Override
-    public IndexTypeEnum getType() {
-        return this.primaryKeyIndex.getType();
-    }
-
-    @Override
-    public int size() {
-        return this.primaryKeyIndex.size();
-    }
-
-    @Override
-    public IRecordIterator<IKey> iterator() {
-        // TODO return a non-unique index iterator if there is some. it would be faster since
-        //  records are packed together in memory, connected through a linked list
-        //  different from the sparse hash index
-        return null;
-        // return new UniqueKeySnapshotRecordIterator(this, this.primaryKeyIndex.iterator());
-    }
-
-    @Override
-    public IRecordIterator<IKey> iterator(IKey[] keys) {
-        return this.iterator.init(keys);
-    }
-
-    private final PrimaryIndexKeyIterator iterator = new PrimaryIndexKeyIterator();
-
-    private static class PrimaryIndexKeyIterator implements IRecordIterator<IKey> {
-
-        private IKey[] keys;
-        private int pos;
-
-        public PrimaryIndexKeyIterator init(IKey[] keys){
-            this.keys = keys;
-            this.pos = 0;
-            return this;
-        }
-
-        @Override
-        public IKey get() {
-            return this.keys[this.pos];
-        }
-
-        @Override
-        public void next() {
-            this.pos++;
-        }
-
-        @Override
-        public boolean hasElement() {
-            return pos < keys.length;
-        }
-
-    }
-
-    @Override
-    public Object[] record(IKey key) {
-        return this.lookupByKey(key);
-    }
-
     /**
      * Same logic as {@link #lookupByKey}
      * @param key record key
      * @return whether the record exists for this transaction, respecting atomic visibility
      */
-    @Override
     public boolean exists(IKey key) {
 
         // O(1)
@@ -197,15 +111,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     }
 
-    /**
-     */
-    @Override
-    public boolean exists(long address) {
-        int pk = UNSAFE.getInt( address + Header.SIZE );
-        if(pk == 0) return false;
-        var key = SimpleKey.of(pk);
-        return this.exists( key );
-    }
+
 
 //    @Override
 //    public long address(IKey key) {
@@ -217,18 +123,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     // can maintain the boolean return but all operators (for read queries)
     // necessarily require appending to a memory result space
 
-    @Override
-    public boolean checkCondition(IRecordIterator<IKey> iterator, FilterContext filterContext) {
-        IKey key = iterator.get();
-        return this.checkCondition(key, filterContext);
-    }
-
-    @Override
-    public boolean checkCondition(IKey key, FilterContext filterContext) {
-        Object[] record = this.lookupByKey(key);
-        if(record == null) return false;
-        return this.checkConditionVersioned(filterContext, record);
-    }
 
     /**
      * This is the basic check condition. Does not take into consideration the
@@ -282,7 +176,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      */
     private boolean nonPkConstraintViolation(Object[] values) {
 
-        Map<Integer, ConstraintReference> constraints = schema().constraints();
+        Schema schema =  this.primaryKeyIndex.schema();
+        Map<Integer, ConstraintReference> constraints = schema.constraints();
 
         boolean violation = false;
 
@@ -291,7 +186,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             switch (c.getValue().constraint.type){
 
                 case NUMBER -> {
-                    switch (schema().columnDataType(c.getKey())) {
+                    switch (schema.columnDataType(c.getKey())) {
                         case INT -> violation = NumberTypeConstraintHelper.eval((int)values[c.getKey()] , 0, Integer::compareTo, c.getValue().constraint);
                         case LONG, DATE -> violation = NumberTypeConstraintHelper.eval((long)values[c.getKey()] , 0L, Long::compareTo, c.getValue().constraint);
                         case FLOAT -> violation = NumberTypeConstraintHelper.eval((float)values[c.getKey()] , 0f, Float::compareTo, c.getValue().constraint);
@@ -302,7 +197,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
                 case NUMBER_WITH_VALUE -> {
                     Object valToCompare = c.getValue().asValueConstraint().value;
-                    switch (schema().columnDataType(c.getKey())) {
+                    switch (schema.columnDataType(c.getKey())) {
                         case INT -> violation = NumberTypeConstraintHelper.eval((int)values[c.getKey()] , (int)valToCompare, Integer::compareTo, c.getValue().constraint);
                         case LONG, DATE -> violation = NumberTypeConstraintHelper.eval((long)values[c.getKey()] , (long)valToCompare, Long::compareTo, c.getValue().constraint);
                         case FLOAT -> violation = NumberTypeConstraintHelper.eval((float)values[c.getKey()] , (float)valToCompare, Float::compareTo, c.getValue().constraint);
@@ -382,6 +277,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     }
 
+    @Override
     public Object[] lookupByKey(IKey key){
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
         if ( operationSet != null ){
@@ -396,7 +292,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
         // it is a readonly
         if(this.primaryKeyIndex.exists(key)) {
-            return this.primaryKeyIndex.record(key);
+            return this.primaryKeyIndex.lookupByKey(key);
         }
 
         return null;
@@ -404,8 +300,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     /**
      * TODO if cached value is not null, then extract the updated columns to make constraint violation check faster
-     *
-     * @return
+     * @return whether it is allowed to proceed with the operation
      */
     public boolean insert(IKey key, Object[] values) {
 
@@ -442,26 +337,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     }
 
-    public IKey insertAndGet(Object[] values){
-
-        if(this.primaryKeyGenerator != null){
-            Object key_ = this.primaryKeyGenerator.next();
-
-            values[this.primaryKeyIndex.columns()[0]] = key_;
-
-            IKey key = KeyUtils.buildKey( key_ );
-            if(this.insert( key, values )){
-                return key;
-            }
-        } else {
-            IKey key = KeyUtils.buildPrimaryKey(this.schema(), values);
-            if(this.insert( key, values )){
-                return key;
-            }
-        }
-        return null;
-    }
-
+    @Override
     public boolean update(IKey key, Object[] values) {
 
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
@@ -492,10 +368,30 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         KEY_WRITES.get().add(key);
 
         return true;
-
     }
 
-    public boolean delete(IKey key) {
+    public IKey insertAndGet(Object[] values){
+
+        if(this.primaryKeyGenerator != null){
+            Object key_ = this.primaryKeyGenerator.next();
+
+            values[this.primaryKeyIndex.columns()[0]] = key_;
+
+            IKey key = KeyUtils.buildKey( key_ );
+            if(this.insert( key, values )){
+                return key;
+            }
+        } else {
+            IKey key = KeyUtils.buildPrimaryKey(this.primaryKeyIndex.schema(), values);
+            if(this.insert( key, values )){
+                return key;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public boolean remove(IKey key) {
 
         // O(1)
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
@@ -573,6 +469,10 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
         }
 
+    }
+
+    public ReadWriteIndex<IKey> index(){
+        return this.primaryKeyIndex;
     }
 
     public ReadWriteIndex<IKey> underlyingIndex(){
