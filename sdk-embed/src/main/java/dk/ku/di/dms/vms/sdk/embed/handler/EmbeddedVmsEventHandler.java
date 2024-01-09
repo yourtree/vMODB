@@ -261,7 +261,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
         }
 
-        failSafeClose();
+        this.failSafeClose();
         this.logger.info("Event handler has finished execution.");
 
     }
@@ -721,7 +721,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
             logger.info("An unknown host has started a connection attempt.");
-            final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(1024);
+            final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(2048);
             try {
                 logger.info("Remote address: "+channel.getRemoteAddress().toString());
                 channel.setOption(TCP_NODELAY, true);

@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
+import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
@@ -41,6 +42,10 @@ public final class VmsApplication {
 
     public Table getTable(String table){
         return this.catalog.get(table);
+    }
+
+    public IVmsRepositoryFacade getRepositoryFacade(String table){
+        return this.vmsRuntimeMetadata.repositoryFacades().get(table);
     }
 
     /**

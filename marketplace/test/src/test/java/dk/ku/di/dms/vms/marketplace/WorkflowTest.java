@@ -2,11 +2,13 @@ package dk.ku.di.dms.vms.marketplace;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.product.Product;
 import dk.ku.di.dms.vms.marketplace.product.UpdateProductEvent;
+import dk.ku.di.dms.vms.marketplace.stock.Stock;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -23,6 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.function.Function;
 import java.util.logging.Logger;
 
 import static java.lang.Thread.sleep;
@@ -33,33 +36,54 @@ public class WorkflowTest {
 
     private final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
-    @Test
-    public void testIngestion() throws Exception {
-        dk.ku.di.dms.vms.marketplace.product.Main.main(null);
+    private static final Function<String, HttpRequest> supplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8001/product" ) )
+            .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
+            .version(HttpClient.Version.HTTP_2)
+            .POST(HttpRequest.BodyPublishers.ofString( str ))
+            .build();
 
-        String str = new Product( 1, 1, "test", "test", "test", "test", 1.0f, 1.0f,  "test", "test" ).toString();
+    private static final int MAX_ITEMS = 10;
+
+    private void ingestDataIntoVMSs() throws IOException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder( URI.create( "http://localhost:8001/product" ) )
-                .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
-//                .version(HttpClient.Version.HTTP_2)
-                .POST(HttpRequest.BodyPublishers.ofString( str ))
-                .build();
-        HttpResponse<String> resp = client.send(request, HttpResponse.BodyHandlers.ofString());
-        System.out.println(resp);
+        String str1;
+        String str2;
+        for(int i = 1; i <= MAX_ITEMS; i++){
+            str1 = new Product( 1, i, "test", "test", "test", "test", 1.0f, 1.0f,  "test", "test" ).toString();
+            HttpRequest prodReq = supplier.apply(str1);
+            client.send(prodReq, HttpResponse.BodyHandlers.ofString());
+
+            str2 = new Stock( 1, i, 100, 0, 0, 0,  "test", "test" ).toString();
+            HttpRequest stockReq = supplier.apply(str2);
+            client.send(stockReq, HttpResponse.BodyHandlers.ofString());
+        }
     }
 
     @Test
     public void testLargeBatchWithTwoVMSs() throws Exception {
 
-        dk.ku.di.dms.vms.marketplace.product.Main.main(null);
+//        dk.ku.di.dms.vms.marketplace.product.Main.main(null);
 
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
+
+        // ingestDataIntoVMSs();
 
         // initialize coordinator
         Coordinator coordinator = loadCoordinator();
 
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
+
+        Map<String, VmsIdentifier> connectedVMSs;
+        do{
+            sleep(5000);
+            connectedVMSs = coordinator.getConnectedVMSs();
+        } while (connectedVMSs.size() < 2);
+
+        Thread thread = new Thread(new Producer());
+        thread.start();
+
+        assert true;
 
     }
 
@@ -85,11 +109,11 @@ public class WorkflowTest {
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
-        NetworkAddress productAddress = new NetworkAddress("localhost", 1081);
-        NetworkAddress stockAddress = new NetworkAddress("localhost", 1082);
+        NetworkAddress productAddress = new NetworkAddress("localhost", 8081);
+        NetworkAddress stockAddress = new NetworkAddress("localhost", 8082);
 
         Map<Integer, NetworkAddress> VMSs = new HashMap<>(2);
-        VMSs.put(productAddress.hashCode(), productAddress);
+        // VMSs.put(productAddress.hashCode(), productAddress);
         VMSs.put(stockAddress.hashCode(), stockAddress);
 
         return Coordinator.buildDefault(
@@ -115,10 +139,10 @@ public class WorkflowTest {
 
             int val = 1;
 
-            while(val < 100) {
+            while(val < 10) {
 
                 UpdateProductEvent updateProductEvent = new UpdateProductEvent(
-                        1,1,"test","test","test","test",10.0F,10.0F,"test","test"
+                        1,1,"test","test","test","test",10.0F,10.0F,"test",String.valueOf(val)
                 );
 
                 String payload = serdes.serialize(updateProductEvent, UpdateProductEvent.class);
@@ -130,12 +154,6 @@ public class WorkflowTest {
                 logger.info("[Producer] Adding "+val);
 
                 parsedTransactionRequests.add(txInput);
-
-                try {
-                    sleep(3000);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
 
                 val++;
 

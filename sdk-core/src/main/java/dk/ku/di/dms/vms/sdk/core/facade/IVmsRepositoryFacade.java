@@ -14,4 +14,6 @@ public interface IVmsRepositoryFacade {
 
     InvocationHandler asInvocationHandler();
 
+    Object[] extractFieldValuesFromEntityObject(Object entityObject);
+
 }

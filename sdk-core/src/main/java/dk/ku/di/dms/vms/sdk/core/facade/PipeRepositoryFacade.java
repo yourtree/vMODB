@@ -84,4 +84,9 @@ public class PipeRepositoryFacade implements IVmsRepositoryFacade, InvocationHan
         return this;
     }
 
+    @Override
+    public Object[] extractFieldValuesFromEntityObject(Object entityObject) {
+        return new Object[0];
+    }
+
 }

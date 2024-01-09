@@ -86,7 +86,6 @@ public final class Presentation {
         byte[] host = serverIdentifier.host.getBytes(StandardCharsets.UTF_8);
         buffer.putInt( host.length );
         buffer.put( host );
-
     }
 
     public static ServerIdentifier readServer(ByteBuffer buffer){

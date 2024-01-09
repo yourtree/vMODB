@@ -53,4 +53,9 @@ public class NetworkRepositoryFacade implements IVmsRepositoryFacade, Invocation
         return this;
     }
 
+    @Override
+    public Object[] extractFieldValuesFromEntityObject(Object entityObject) {
+        return new Object[0];
+    }
+
 }

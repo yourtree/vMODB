@@ -48,7 +48,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private final IVmsSerdesProxy serdesProxy;
 
-    private ByteBuffer readBuffer;
+    private final ByteBuffer readBuffer;
 
     private final ByteBuffer writeBuffer;
 
@@ -76,7 +76,8 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                                     // the group for the socket channel
                                     AsynchronousChannelGroup group,
                                     IVmsSerdesProxy serdesProxy) {
-        return new VmsWorker(me, consumerVms, coordinatorQueue, null, group, null, serdesProxy);
+        return new VmsWorker(me, consumerVms, coordinatorQueue, null, group,
+                MemoryManager.getTemporaryDirectBuffer(2048), serdesProxy);
     }
 
     static VmsWorker build(
@@ -114,12 +115,10 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.group = group;
 
         // initialize the write buffer
-        this.writeBuffer = MemoryManager.getTemporaryDirectBuffer();
+        this.writeBuffer = MemoryManager.getTemporaryDirectBuffer(2048);
         this.readBuffer = readBuffer;
         this.serdesProxy = serdesProxy;
 
-        // synchronization with completion handler thread
-        // this.sync = new SynchronousQueue<>();
         this.logger = Logger.getLogger("vms-worker-"+consumerVms.toString());
         this.logger.setUseParentHandlers(true);
     }
@@ -135,37 +134,44 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             return;
         }
 
-        if(this.readBuffer == null) {
-            this.readBuffer = MemoryManager.getTemporaryDirectBuffer();
-        }
-
         // connect to starter vms
+        logger.info("Attempting connection to "+consumerVms);
         try {
             this.channel = AsynchronousSocketChannel.open(this.group);
             this.channel.setOption(TCP_NODELAY, true);
             this.channel.setOption(SO_KEEPALIVE, true);
-            this.channel.connect(this.consumerVms.asInetSocketAddress()).get();
 
+            try {
+                this.channel.connect(this.consumerVms.asInetSocketAddress()).get();
+            } catch (Exception e){
+                logger.severe("Error on connecting: "+e.getMessage());
+                return;
+            }
             this.state = CONNECTION_ESTABLISHED;
 
-            this.readBuffer.clear();
-
+            this.writeBuffer.clear();
             // write presentation
-            Presentation.writeServer(this.readBuffer, this.me, true );
-            this.readBuffer.flip();
-            this.channel.write(this.readBuffer).get();
+            Presentation.writeServer(this.writeBuffer, this.me, true);
+            this.writeBuffer.flip();
+            try {
+                this.channel.write(this.writeBuffer).get();
+            } catch(Exception e){
+                logger.severe("Error on writing presentation: "+e.getMessage());
+                return;
+            }
 
             this.state = State.LEADER_PRESENTATION_SENT;
-            this.readBuffer.clear();
+            this.writeBuffer.clear();
 
             // set read handler here
             this.channel.read( this.readBuffer, null, new VmsReadCompletionHandler() );
 
-        } catch (ExecutionException | InterruptedException e) {
+        } catch (Exception e) {
 
+            this.logger.warning("Failed to connect to a known VMS: " + consumerVms);
             if (this.state == State.NEW) {
                 // forget about it, let the vms connect then...
-                this.logger.warning("Failed to connect to a known VMS: " + consumerVms);
+
                 this.state = State.CONNECTION_FAILED;
             } else if(this.state == CONNECTION_ESTABLISHED) {
                 this.state = LEADER_PRESENTATION_SEND_FAILED;
@@ -185,17 +191,14 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             // important for consistency of state (if debugging, good to see the code controls the thread state)
             this.stop();
 
-        } catch (Exception e){
-            this.logger.warning("Cannot find the root problem. Please have a look: "+e.getMessage());
-            this.stop();
         }
 
     }
 
     @Override
     public void run() {
-        initHandshakeProtocol();
-        eventLoop();
+        this.initHandshakeProtocol();
+        this.eventLoop();
     }
 
     /**

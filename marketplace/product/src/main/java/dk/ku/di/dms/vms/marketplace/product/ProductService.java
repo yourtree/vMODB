@@ -24,7 +24,7 @@ public class ProductService {
     @Outbound("product_updated")
     @Transactional(type=W)
     public ProductUpdatedEvent updateProduct(UpdateProductEvent updateEvent) {
-        System.out.println("I am alive. The scheduler has scheduled me successfully!");
+        System.out.println("Product received an product update event");
 
         // can use issue statement for faster update
         Product product = new Product(updateEvent.seller_id, updateEvent.product_id, updateEvent.name, updateEvent.sku, updateEvent.category,

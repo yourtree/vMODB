@@ -194,9 +194,9 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
     private IEntity<?> parseObjectIntoEntity(Object[] object){
         // all entities must have default constructor
         try {
-            IEntity<?> entity = entityConstructor.newInstance();
+            IEntity<?> entity = this.entityConstructor.newInstance();
             int i = 0;
-            for(var entry : entityFieldMap.entrySet()){
+            for(var entry : this.entityFieldMap.entrySet()){
                 entry.getValue().set( entity, object[i] );
                 i++;
             }
@@ -211,12 +211,12 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
      */
     private Object[] extractFieldValuesFromKeyObject(Object keyObject) {
 
-        Object[] values = new Object[pkFieldMap.size()];
+        Object[] values = new Object[this.pkFieldMap.size()];
 
         int fieldIdx = 0;
         // get values from key object
-        for(String columnName : pkFieldMap.keySet()){
-            values[fieldIdx] = pkFieldMap.get(columnName).get(keyObject);
+        for(String columnName : this.pkFieldMap.keySet()){
+            values[fieldIdx] = this.pkFieldMap.get(columnName).get(keyObject);
             fieldIdx++;
         }
         return values;
@@ -226,15 +226,16 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 //        pkPrimitive.set(object, key);
 //    }
 
-    private Object[] extractFieldValuesFromEntityObject(Object entityObject) {
+    @Override
+    public Object[] extractFieldValuesFromEntityObject(Object entityObject) {
 
-        Object[] values = new Object[schema.columnNames.length];
+        Object[] values = new Object[this.schema.columnNames.length];
         // TODO objectCacheStore.peek()
 
         int fieldIdx = 0;
         // get values from entity
-        for(String columnName : schema.columnNames){
-            values[fieldIdx] = entityFieldMap.get(columnName).get(entityObject);
+        for(String columnName : this.schema.columnNames){
+            values[fieldIdx] = this.entityFieldMap.get(columnName).get(entityObject);
             fieldIdx++;
         }
         return values;

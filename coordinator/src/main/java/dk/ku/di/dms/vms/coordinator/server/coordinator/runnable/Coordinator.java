@@ -279,6 +279,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
      */
     private void setupStarterVMSs() {
         for(NetworkAddress vms : this.starterVMSs.values()){
+            // coordinator will later keep track of this thread when the connection with the VMS is fully established
             VmsWorker worker = VmsWorker.buildAsStarter(this.me, vms, this.coordinatorQueue, this.group, this.serdesProxy);
             // a cached thread pool would be ok in this case
             new Thread( worker ).start();
@@ -327,7 +328,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 channel.setOption(SO_KEEPALIVE, true);
 
                 // right now I cannot discern whether it is a VMS or follower. perhaps I can keep alive channels from leader election?
-                buffer = MemoryManager.getTemporaryDirectBuffer();
+                buffer = MemoryManager.getTemporaryDirectBuffer(2048);
 
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 // this will be handled by another thread in the group
@@ -783,9 +784,10 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 switch(message.type){
                     // receive metadata from all microservices
                     case VMS_IDENTIFIER -> {
-                        logger.info("Coordinator received a VMS_IDENTIFIER");
+                        VmsIdentifier vmsIdentifier_ = message.asVmsIdentifier();
+                        logger.info("Coordinator received a VMS_IDENTIFIER from VMS worker: "+vmsIdentifier_.getIdentifier());
                         // update metadata of this node so coordinator can reason about data dependencies
-                        this.vmsMetadataMap.put( message.asVmsIdentifier().getIdentifier(), message.asVmsIdentifier() );
+                        this.vmsMetadataMap.put( vmsIdentifier_.getIdentifier(), vmsIdentifier_ );
 
                         if(this.vmsMetadataMap.size() < this.starterVMSs.size()) continue;
                         // if all metadata, from all starter vms have arrived, then send the signal to them
@@ -900,14 +902,18 @@ public final class Coordinator extends SignalingStoppableRunnable {
     }
 
     public long getTid() {
-        return tid;
+        return this.tid;
+    }
+
+    public Map<String, VmsIdentifier> getConnectedVMSs() {
+        return this.vmsMetadataMap;
     }
 
     public long getCurrentBatchOffset() {
-        return currentBatchOffset;
+        return this.currentBatchOffset;
     }
 
     public long getBatchOffsetPendingCommit() {
-        return batchOffsetPendingCommit;
+        return this.batchOffsetPendingCommit;
     }
 }
