@@ -130,7 +130,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
                 // parse object into entity
                 if (object != null)
-                    return parseObjectIntoEntity(object);
+                    return this.parseObjectIntoEntity(object);
                 return null;
 
             }
@@ -155,7 +155,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
             case "insertAndGet" -> {
                 // cache the entity
                 Object cached = args[0];
-                Object[] values = extractFieldValuesFromEntityObject(args[0]);
+                Object[] values = this.extractFieldValuesFromEntityObject(args[0]);
                 Object key_ = this.transactionFacade.insertAndGet(this.table, values);
                 // this.setKeyValueOnObject( key_, cached );
                 return cached;
@@ -195,10 +195,11 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
         // all entities must have default constructor
         try {
             IEntity<?> entity = this.entityConstructor.newInstance();
-            int i = 0;
+            int i;
             for(var entry : this.entityFieldMap.entrySet()){
+                // must get the index of the column first
+                i = this.table.underlyingPrimaryKeyIndex_().schema().columnPosition(entry.getKey());
                 entry.getValue().set( entity, object[i] );
-                i++;
             }
             return entity;
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {

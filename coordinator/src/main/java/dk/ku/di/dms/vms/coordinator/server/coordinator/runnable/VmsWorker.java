@@ -279,7 +279,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         // the first or new information
         if(this.state == VMS_PRESENTATION_PROCESSED) {
             this.state = CONSUMER_SET_READY_FOR_SENDING;
-            this.logger.info("Consumer set will be established for the first time for "+vmsNode.vmsIdentifier+": "+consumerVms);
+            this.logger.info(vmsNode.vmsIdentifier+": Consumer set will be established for the first time: "+consumerVms);
         } else if(this.state == CONSUMER_EXECUTING){
             this.logger.info("Consumer set is going to be updated for: "+consumerVms);
         } else if(this.state == CONSUMER_SET_SENDING_FAILED){
@@ -452,8 +452,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private void sendBatchedEvents(BlockingDeque<TransactionEvent.Payload> eventsToSendToVms){
         eventsToSendToVms.drainTo(this.events);
-        int remaining = BatchUtils.assembleBatchPayload( this.events.size(), this.events, this.writeBuffer);
-        while(remaining > 0) {
+        int remaining;
+        do {
+            remaining = BatchUtils.assembleBatchPayload( this.events.size(), this.events, this.writeBuffer);
             try {
                 this.writeBuffer.flip();
                 this.channel.write(this.writeBuffer).get();
@@ -470,8 +471,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             } finally {
                 this.writeBuffer.clear();
             }
-            remaining = BatchUtils.assembleBatchPayload( remaining, this.events, this.writeBuffer);
-        }
+        } while (remaining > 0);
     }
 
     /**

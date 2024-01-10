@@ -21,7 +21,7 @@ public class MicroserviceExample {
     @Outbound("out")
     @Transactional(type=R)
     public OutEventExample methodExample(EventExample in) {
-        System.out.println("I am alive. The scheduler has scheduled me successfully!");
+        System.out.println("[example] methodExample");
         return in != null ? new OutEventExample(in.id) : null;
     }
 
@@ -30,7 +30,7 @@ public class MicroserviceExample {
     @Transactional(type=RW)
     public OutEventExample2 methodExample1(EventExample in) {
 
-        System.out.println("methodExample1");
+        System.out.println("[example] methodExample1");
 
         // repository.getItemsById( new int[]{1,2,3} );
 

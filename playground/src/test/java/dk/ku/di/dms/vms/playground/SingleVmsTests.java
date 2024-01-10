@@ -11,6 +11,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
@@ -23,6 +24,7 @@ import org.junit.Test;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -149,7 +151,9 @@ public class SingleVmsTests
 
         if(vmsMetadata == null) throw new IllegalStateException("Cannot start VMs, error loading metadata.");
 
-        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata);
+        Map<String, Table> catalog = EmbedMetadataLoader.loadCatalog(vmsMetadata, Set.of() );
+
+        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata, catalog);
 
         ExecutorService vmsAppLogicTaskPool = Executors.newSingleThreadExecutor();
 

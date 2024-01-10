@@ -186,6 +186,12 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         if(context.isSimple()){
             if(context.asSimple().future == null) return;
+
+            if(context.asSimple().future.isCancelled()) {
+                // TODO needs to handle cases where the code fails. ideally it should be correct by design
+                logger.severe("Problem in the execution of a VMS");
+            }
+
             if(!context.asSimple().future.isDone()) return;
             try {
                 context.asSimple().result = context.asSimple().future.get();

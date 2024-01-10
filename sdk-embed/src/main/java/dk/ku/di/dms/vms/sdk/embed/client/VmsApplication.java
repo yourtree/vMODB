@@ -78,9 +78,9 @@ public final class VmsApplication {
         if( vmsMetadata == null ) throw new IllegalStateException("Cannot build VMS runtime metadata.");
 
         // for now only giving support to one vms
-        Optional<Map.Entry<String, Object>> entryOptional = vmsMetadata.loadedVmsInstances().entrySet().stream().findFirst();
+        Optional<Map.Entry<String, String>> entryOptional = vmsMetadata.clazzNameToVmsName().entrySet().stream().findFirst();
         if(entryOptional.isEmpty()) throw new IllegalStateException("Cannot find a single instance of VMS");
-        String vmsName = entryOptional.get().getKey();
+        String vmsName = entryOptional.get().getValue();
 
         Set<String> toExclude = entitiesToExclude != null ? Arrays.stream(entitiesToExclude).collect(
                 Collectors.toSet()) : new HashSet<>();

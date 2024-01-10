@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
 import dk.ku.di.dms.vms.playground.app.EventExample;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
@@ -22,10 +23,7 @@ import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -98,7 +96,9 @@ public class TwoConnectedVMSsTest {
 
         sleep(5000);
 
-        assert coordinator.getCurrentBatchOffset() == 2 && coordinator.getBatchOffsetPendingCommit() == 2;
+        assert coordinator.getCurrentBatchOffset() == 2;
+
+        assert coordinator.getBatchOffsetPendingCommit() == 2;
 
     }
 
@@ -154,7 +154,9 @@ public class TwoConnectedVMSsTest {
             vmsMetadata.outputEventSchema().put(in, eventSchema);
         }
 
-        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata);
+        Map<String, Table> catalog = EmbedMetadataLoader.loadCatalog(vmsMetadata, Set.of() );
+
+        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata, catalog);
 
         ExecutorService readTaskPool = Executors.newSingleThreadExecutor();
 

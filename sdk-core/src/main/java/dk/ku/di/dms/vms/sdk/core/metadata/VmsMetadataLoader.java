@@ -56,6 +56,8 @@ public class VmsMetadataLoader {
 
         if(vmsClasses.isEmpty()) throw new IllegalStateException("No classes annotated with @Microservice in this application.");
 
+        Map<String, String> clazzNameToVmsNameMap = mapClazzNameToVmsName(vmsClasses);
+
         Map<Class<? extends IEntity<?>>, String> entityToVirtualMicroservice = mapEntitiesToVirtualMicroservice(vmsClasses);
 
         Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, entityToTableNameMap);
@@ -101,7 +103,6 @@ public class VmsMetadataLoader {
          *   SLF4J: Defaulting to no-operation (NOP) logger implementation
          *   SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
          */
-
         return new VmsRuntimeMetadata(
                 vmsDataSchemas,
                 inputEventSchemaMap,
@@ -109,11 +110,20 @@ public class VmsMetadataLoader {
                 queueToVmsTransactionMap,
                 queueToEventMap,
                 eventToQueueMap,
+                clazzNameToVmsNameMap,
                 loadedVmsInstances,
                 repositoryFacades,
                 entityToTableNameMap,
                 staticQueriesMap);
+    }
 
+    private static Map<String, String> mapClazzNameToVmsName(Set<Class<?>> vmsClasses) {
+        Map<String, String> map = new HashMap<>();
+        for(Class<?> clazz : vmsClasses) {
+            var anno = clazz.getAnnotation(Microservice.class);
+            map.put(clazz.getCanonicalName(), anno.value());
+        }
+        return map;
     }
 
     private static Reflections configureReflections(String[] packages){
@@ -418,9 +428,9 @@ public class VmsMetadataLoader {
     }
 
     @SuppressWarnings({"unchecked","rawtypes"})
-    protected static Map<Class<? extends IEntity<?>>,String> mapEntitiesToVirtualMicroservice(Set<Class<?>> vmsClasses) throws ClassNotFoundException {
+    protected static Map<Class<? extends IEntity<?>>, String> mapEntitiesToVirtualMicroservice(Set<Class<?>> vmsClasses) throws ClassNotFoundException {
 
-        Map<Class<? extends IEntity<?>>,String> entityToVirtualMicroservice = new HashMap<>();
+        Map<Class<? extends IEntity<?>>, String> entityToVirtualMicroservice = new HashMap<>();
 
         for(Class<?> clazz : vmsClasses) {
 

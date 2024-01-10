@@ -63,10 +63,6 @@ public class EmbedMetadataLoader {
 
     }
 
-    public static TransactionFacade loadTransactionFacadeAndInjectIntoRepositories(VmsRuntimeMetadata vmsRuntimeMetadata) {
-        return loadTransactionFacadeAndInjectIntoRepositories(vmsRuntimeMetadata, null);
-    }
-
     public static TransactionFacade loadTransactionFacadeAndInjectIntoRepositories(
             VmsRuntimeMetadata vmsRuntimeMetadata, Map<String, Table> catalog) {
         TransactionFacade transactionFacade = TransactionFacade.build(catalog);

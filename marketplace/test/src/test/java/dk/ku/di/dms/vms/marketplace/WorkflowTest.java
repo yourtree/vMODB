@@ -36,7 +36,13 @@ public class WorkflowTest {
 
     private final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
-    private static final Function<String, HttpRequest> supplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8001/product" ) )
+    private static final Function<String, HttpRequest> httpRequestProductSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8001/product" ) )
+            .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
+            .version(HttpClient.Version.HTTP_2)
+            .POST(HttpRequest.BodyPublishers.ofString( str ))
+            .build();
+
+    private static final Function<String, HttpRequest> httpRequestStockSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8002/stock" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HttpClient.Version.HTTP_2)
             .POST(HttpRequest.BodyPublishers.ofString( str ))
@@ -50,11 +56,11 @@ public class WorkflowTest {
         String str2;
         for(int i = 1; i <= MAX_ITEMS; i++){
             str1 = new Product( 1, i, "test", "test", "test", "test", 1.0f, 1.0f,  "test", "test" ).toString();
-            HttpRequest prodReq = supplier.apply(str1);
+            HttpRequest prodReq = httpRequestProductSupplier.apply(str1);
             client.send(prodReq, HttpResponse.BodyHandlers.ofString());
 
             str2 = new Stock( 1, i, 100, 0, 0, 0,  "test", "test" ).toString();
-            HttpRequest stockReq = supplier.apply(str2);
+            HttpRequest stockReq = httpRequestStockSupplier.apply(str2);
             client.send(stockReq, HttpResponse.BodyHandlers.ofString());
         }
     }
@@ -62,11 +68,11 @@ public class WorkflowTest {
     @Test
     public void testLargeBatchWithTwoVMSs() throws Exception {
 
-//        dk.ku.di.dms.vms.marketplace.product.Main.main(null);
+        dk.ku.di.dms.vms.marketplace.product.Main.main(null);
 
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
 
-        // ingestDataIntoVMSs();
+        ingestDataIntoVMSs();
 
         // initialize coordinator
         Coordinator coordinator = loadCoordinator();
@@ -82,6 +88,8 @@ public class WorkflowTest {
 
         Thread thread = new Thread(new Producer());
         thread.start();
+
+        sleep(500000);
 
         assert true;
 
@@ -113,7 +121,7 @@ public class WorkflowTest {
         NetworkAddress stockAddress = new NetworkAddress("localhost", 8082);
 
         Map<Integer, NetworkAddress> VMSs = new HashMap<>(2);
-        // VMSs.put(productAddress.hashCode(), productAddress);
+        VMSs.put(productAddress.hashCode(), productAddress);
         VMSs.put(stockAddress.hashCode(), stockAddress);
 
         return Coordinator.buildDefault(

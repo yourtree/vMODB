@@ -32,6 +32,7 @@ public record VmsRuntimeMetadata(
         Map<String, Class<?>> queueToEventMap,
         Map<Class<?>, String> eventToQueueMap,
 
+        Map<String, String> clazzNameToVmsName,
         Map<String, Object> loadedVmsInstances,
 
         // key is the entity (or table) name

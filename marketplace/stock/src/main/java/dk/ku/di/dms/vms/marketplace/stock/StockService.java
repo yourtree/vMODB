@@ -22,7 +22,7 @@ public class StockService {
     @Outbound("transaction_mark")
     @Transactional(type=RW)
     public TransactionMark updateProduct(ProductUpdatedEvent updateEvent) {
-        System.out.println("Stock received an update product event");
+        System.out.println("Stock received an update product event with version: "+updateEvent.version);
 
         // can use issue statement for faster update
         Stock stock = stockRepository.lookupByKey(new Stock.StockId(updateEvent.sellerId, updateEvent.productId));

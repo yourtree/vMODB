@@ -484,7 +484,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
             return;
         }
 
-        logger.info("Batch commit run started.");
+        logger.info("Batch commit run started");
 
         // why do I need to replicate vmsTidMap? to restart from this point if the leader fails
         final long generateBatch = this.currentBatchOffset;
@@ -522,7 +522,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
             // remove the nodes who have no event, unless it is a terminal
             // in this case, it must receive at least the batch commit info
             // to know when to send the batch complete message
-            if( vms.worker().transactionEventsPerBatch(this.currentBatchOffset).isEmpty()
+            if(vms.worker().transactionEventsPerBatch(generateBatch).isEmpty()
                     // .computeIfAbsent(this.currentBatchOffset, k -> new LinkedBlockingDeque<>()).isEmpty()
                     && !isTerminal){
                 continue;
@@ -536,7 +536,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // the batch commit only has progress (a safety property) the way it is implemented now when future events
         // touch the same VMSs that have been touched by transactions in the last batch.
         // how can we guarantee progress?
-        replicateBatchWithReplicas(currBatchContext);
+        this.replicateBatchWithReplicas(currBatchContext);
 
     }
 
@@ -731,7 +731,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 if(!event.targetVms.equalsIgnoreCase(vms.node().vmsIdentifier)){
                     logger.severe("The event was going to be queued to the incorrect VMS worker!");
                 }
-                logger.info("Adding event "+event.name+" to "+event);
+                logger.info("Adding event "+event.name+" to "+vms.node().vmsIdentifier+" worker");
                 vms.worker().transactionEventsPerBatch(this.currentBatchOffset).add(txEvent);
 
             }
@@ -740,7 +740,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
             for(String vmsIdentifier : transactionDAG.terminalNodes){
                 VmsIdentifier vms = this.vmsMetadataMap.get(vmsIdentifier);
                 vms.node().lastTidOfBatch = tid_;
-                updateBatchAndPrecedenceIfNecessary(vms.node());
+                this.updateBatchAndPrecedenceIfNecessary(vms.node());
             }
 
             // also update the last tid of the internal VMSs
@@ -748,12 +748,14 @@ public final class Coordinator extends SignalingStoppableRunnable {
             for(String vmsIdentifier : transactionDAG.internalNodes){
                 VmsIdentifier vms = this.vmsMetadataMap.get(vmsIdentifier);
                 vms.node().lastTidOfBatch = tid_;
-                updateBatchAndPrecedenceIfNecessary(vms.node());
+                this.updateBatchAndPrecedenceIfNecessary(vms.node());
             }
 
             // add terminal to the set... so cannot be immutable when the batch context is created...
-            this.batchContextMap.get(this.currentBatchOffset).terminalVMSs.addAll( transactionDAG.terminalNodes);
+            this.batchContextMap.get(this.currentBatchOffset).terminalVMSs.addAll( transactionDAG.terminalNodes );
 
+            // update last tid? no, it will be updated on generate batch
+            // this.batchContextMap.get(this.currentBatchOffset).lastTid = tid_;
         }
 
     }
@@ -818,7 +820,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                             String mapStr = "";
                             if (!vmsConsumerSet.isEmpty()) {
                                 mapStr = this.serdesProxy.serializeConsumerSet(vmsConsumerSet);
-                                logger.info("Consumer set built for "+vmsIdentifier.getIdentifier()+": "+mapStr);
+                                logger.info(vmsIdentifier.getIdentifier()+": Consumer set built for "+mapStr);
                             }
 
                             vmsIdentifier.worker().queue().add( new IVmsWorker.Message( SEND_CONSUMER_SET, mapStr ));

@@ -65,12 +65,12 @@ public class Stock implements IEntity<Stock.StockId> {
 
     @Override
     public String toString() {
-        return "{\"seller_id\":\"" + seller_id + "\""
-                + ", \"product_id\":\"" + product_id + "\""
-                + ", \"qty_available\":\"" + qty_available + "\""
-                + ", \"qty_reserved\":\"" + qty_reserved + "\""
-                + ", \"order_count\":\"" + order_count + "\""
-                + ", \"ytd\":\"" + ytd + "\""
+        return "{\"seller_id\":" + seller_id
+                + ", \"product_id\":" + product_id
+                + ", \"qty_available\":" + qty_available
+                + ", \"qty_reserved\":" + qty_reserved
+                + ", \"order_count\":" + order_count
+                + ", \"ytd\":" + ytd
                 + ", \"data\":\"" + data + "\""
                 + ", \"version\":\"" + version + "\"}";
     }
