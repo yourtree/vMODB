@@ -490,7 +490,8 @@ public class VmsMetadataLoader {
                 Class<?> entityClazz = getEntityNameFromRepositoryClazz(parameterType);
                 String tableName = entityToTableNameMap.get(entityClazz);
 
-                IVmsRepositoryFacade facade = facadeConstructor.newInstance(parameterType,
+                IVmsRepositoryFacade facade = facadeConstructor.newInstance(
+                        parameterType,
                         vmsDataSchemas.get(tableName),
                         staticQueriesMap);
 
@@ -717,6 +718,9 @@ public class VmsMetadataLoader {
         }
         else if(attributeType == String.class){
             return DataType.STRING;
+        }
+        else if(attributeType.isEnum()){
+            return DataType.ENUM;
         }
         else {
             throw new NotAcceptableTypeException(attributeType.getCanonicalName() + " is not accepted as a column data type.");

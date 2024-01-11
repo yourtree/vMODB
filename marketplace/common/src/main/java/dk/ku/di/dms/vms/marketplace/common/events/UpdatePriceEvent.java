@@ -1,17 +1,19 @@
-package dk.ku.di.dms.vms.marketplace.common;
+package dk.ku.di.dms.vms.marketplace.common.events;
 
 import dk.ku.di.dms.vms.modb.api.annotations.Event;
 
 @Event
 public class UpdatePriceEvent {
 
-    public final int sellerId;
+    public int sellerId;
 
-    public final int productId;
+    public int productId;
 
-    public final float price;
+    public float price;
 
-    public final String instanceId;
+    public String instanceId;
+
+    public UpdatePriceEvent(){}
 
     public UpdatePriceEvent(int sellerId,
                        int productId,

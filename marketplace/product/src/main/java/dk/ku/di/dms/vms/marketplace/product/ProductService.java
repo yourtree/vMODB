@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.marketplace.product;
 
-import dk.ku.di.dms.vms.marketplace.common.ProductUpdatedEvent;
-import dk.ku.di.dms.vms.marketplace.common.TransactionMark;
-import dk.ku.di.dms.vms.marketplace.common.UpdatePriceEvent;
+import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdatedEvent;
+import dk.ku.di.dms.vms.marketplace.common.events.TransactionMark;
+import dk.ku.di.dms.vms.marketplace.common.events.UpdatePriceEvent;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Outbound;

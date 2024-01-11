@@ -6,9 +6,7 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.marketplace.product.Product;
 import dk.ku.di.dms.vms.marketplace.product.UpdateProductEvent;
-import dk.ku.di.dms.vms.marketplace.stock.Stock;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -16,54 +14,12 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.function.Function;
-import java.util.logging.Logger;
 
 import static java.lang.Thread.sleep;
 
-public class WorkflowTest {
-
-    protected static final Logger logger = Logger.getLogger("WorkflowTest");
-
-    private final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
-
-    private static final Function<String, HttpRequest> httpRequestProductSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8001/product" ) )
-            .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
-            .version(HttpClient.Version.HTTP_2)
-            .POST(HttpRequest.BodyPublishers.ofString( str ))
-            .build();
-
-    private static final Function<String, HttpRequest> httpRequestStockSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8002/stock" ) )
-            .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
-            .version(HttpClient.Version.HTTP_2)
-            .POST(HttpRequest.BodyPublishers.ofString( str ))
-            .build();
-
-    private static final int MAX_ITEMS = 10;
-
-    private void ingestDataIntoVMSs() throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newHttpClient();
-        String str1;
-        String str2;
-        for(int i = 1; i <= MAX_ITEMS; i++){
-            str1 = new Product( 1, i, "test", "test", "test", "test", 1.0f, 1.0f,  "test", "test" ).toString();
-            HttpRequest prodReq = httpRequestProductSupplier.apply(str1);
-            client.send(prodReq, HttpResponse.BodyHandlers.ofString());
-
-            str2 = new Stock( 1, i, 100, 0, 0, 0,  "test", "test" ).toString();
-            HttpRequest stockReq = httpRequestStockSupplier.apply(str2);
-            client.send(stockReq, HttpResponse.BodyHandlers.ofString());
-        }
-    }
+public class ProductStockWorkflowTest extends AbstractWorkflowTest {
 
     @Test
     public void testLargeBatchWithTwoVMSs() throws Exception {
@@ -89,9 +45,13 @@ public class WorkflowTest {
         Thread thread = new Thread(new Producer());
         thread.start();
 
-        sleep(500000);
+        sleep(batchWindowInterval + 1000); // 1000 to account for extra latency
 
-        assert true;
+        assert coordinator.getBatchOffsetPendingCommit() == 2;
+
+        assert coordinator.getTid() == 10;
+
+        assert coordinator.getCurrentBatchOffset() == 2;
 
     }
 
@@ -130,7 +90,7 @@ public class WorkflowTest {
                 VMSs,
                 transactionMap,
                 serverIdentifier,
-                new CoordinatorOptions().withBatchWindow(3000),
+                new CoordinatorOptions().withBatchWindow(batchWindowInterval),
                 1,
                 1,
                 parsedTransactionRequests,
@@ -139,7 +99,6 @@ public class WorkflowTest {
     }
 
     private class Producer implements Runnable {
-
         @Override
         public void run() {
 

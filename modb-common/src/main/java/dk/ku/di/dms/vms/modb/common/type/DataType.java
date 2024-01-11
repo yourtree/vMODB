@@ -24,7 +24,9 @@ public enum DataType {
 
     FLOAT_ARRAY(Float.BYTES * 10),
 
-    INT_ARRAY(Integer.BYTES * 10);
+    INT_ARRAY(Integer.BYTES * 10),
+
+    ENUM(Constants.DEFAULT_MAX_SIZE_STRING);
 
     public final int value;
 

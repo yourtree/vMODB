@@ -3,6 +3,8 @@ package dk.ku.di.dms.vms.modb.common.type;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 
 import java.nio.ByteBuffer;
+import java.util.Date;
+import java.util.Enumeration;
 import java.util.function.Function;
 
 import static dk.ku.di.dms.vms.modb.common.type.Constants.DEFAULT_MAX_SIZE_STRING;
@@ -174,7 +176,7 @@ public final class DataTypeUtils {
             case STRING -> {
                 return String.class;
             }
-            case LONG, DATE -> {
+            case LONG -> {
                 return long.class;
             }
             case FLOAT -> {
@@ -182,6 +184,9 @@ public final class DataTypeUtils {
             }
             case DOUBLE -> {
                 return double.class;
+            }
+            case DATE -> {
+                return Date.class;
             }
             default -> throw new IllegalStateException(dataType + " is not supported.");
         }

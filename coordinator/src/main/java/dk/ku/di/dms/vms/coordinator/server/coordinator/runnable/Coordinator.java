@@ -32,7 +32,6 @@ import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
@@ -45,6 +44,7 @@ import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.S
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.VMS_TYPE;
 import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.UNREACHABLE_NODE;
 import static dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata.NodeType.SERVER;
+import static java.lang.Thread.sleep;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -258,7 +258,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         while(isRunning()){
             try {
-                TimeUnit.of(ChronoUnit.MILLIS).sleep(this.options.getBatchWindow());
+                sleep(this.options.getBatchWindow());
                 this.processEventsSentByVmsWorkers();
                 this.processTransactionInputEvents();
                 this.advanceCurrentBatchAndSpawnSendBatchOfEvents();

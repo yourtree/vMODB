@@ -167,7 +167,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             this.channel.read( this.readBuffer, null, new VmsReadCompletionHandler() );
 
         } catch (Exception e) {
-
             this.logger.warning("Failed to connect to a known VMS: " + consumerVms);
             if (this.state == State.NEW) {
                 // forget about it, let the vms connect then...
@@ -239,7 +238,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.writeBuffer.flip();
         try {
             this.channel.write(this.writeBuffer).get();
-            this.logger.warning("Transaction abort sent to: " + this.consumerVms);
+            this.logger.warning("Transaction abort sent to: " + this.vmsNode.vmsIdentifier);
         } catch (InterruptedException | ExecutionException e){
             if(channel.isOpen()){
                 this.logger.warning("Transaction abort write has failed but channel is open. Trying to write again to: "+consumerVms+" in a while");
@@ -261,13 +260,13 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
         try {
             this.channel.write(writeBuffer).get();
-            this.logger.warning("Commit request sent to: " + consumerVms);
+            this.logger.info("Commit request sent to: " + this.vmsNode.vmsIdentifier);
         } catch (InterruptedException | ExecutionException e){
             if(channel.isOpen()){
-                this.logger.warning("Commit request write has failed but channel is open. Trying to write again to: "+consumerVms+" in a while");
+                this.logger.warning("Commit request write has failed but channel is open. Trying to write again to: "+this.vmsNode.vmsIdentifier+" in a while");
                 this.workerQueue.add(workerMessage);
             } else {
-                this.logger.warning("Commit request write has failed and channel is closed: "+consumerVms);
+                this.logger.warning("Commit request write has failed and channel is closed: "+this.vmsNode.vmsIdentifier);
                 this.stop(); // no reason to continue the loop
             }
         } finally {

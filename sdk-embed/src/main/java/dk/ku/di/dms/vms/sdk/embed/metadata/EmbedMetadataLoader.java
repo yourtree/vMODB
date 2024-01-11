@@ -49,12 +49,9 @@ public class EmbedMetadataLoader {
     public static VmsRuntimeMetadata loadRuntimeMetadata(String... packages) {
 
         try {
-
             @SuppressWarnings("unchecked")
             Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) EmbedRepositoryFacade.class.getConstructors()[0];
-
             return VmsMetadataLoader.load(packages, constructor);
-
         } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
             logger.warning("Cannot start VMs, error loading metadata: "+e.getMessage());
         }

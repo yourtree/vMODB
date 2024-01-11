@@ -4,13 +4,11 @@ import dk.ku.di.dms.vms.modb.common.type.DataType;
 
 /**
  * The class record describes the schema of Transactional Events.
- *
- *
- *
  */
 public class VmsEventSchema {
 
-    public String eventName; // the respective queue name
+    // the respective queue name
+    public String eventName;
 
     // the name of the columns
     public String[] columnNames;

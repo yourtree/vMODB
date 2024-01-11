@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.sdk.embed.entity;
 
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 
 import java.lang.invoke.MethodHandles;
@@ -65,15 +66,18 @@ public final class EntityUtils {
 
         Map<String, VarHandle> fieldMap = new HashMap<>(schema.columnNames.length);
         int i = 0;
+        Class<?> typez;
         for(String columnName : schema.columnNames){
-            fieldMap.put(
-                    columnName,
-                    lookup_.findVarHandle(
-                            entityClazz,
-                            columnName,
-                            DataTypeUtils.getJavaTypeFromDataType(schema.columnDataTypes[i])
-                    )
-            );
+            if(schema.columnDataTypes[i] == DataType.ENUM){
+                typez = entityClazz.getDeclaredField(columnName).getType();
+            } else {
+                typez = DataTypeUtils.getJavaTypeFromDataType(schema.columnDataTypes[i]);
+            }
+
+            fieldMap.put(columnName,
+                            lookup_.findVarHandle(entityClazz,
+                                                  columnName,
+                                                  typez) );
             i++;
         }
 

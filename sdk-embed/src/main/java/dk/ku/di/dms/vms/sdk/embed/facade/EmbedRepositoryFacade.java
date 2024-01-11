@@ -80,8 +80,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
 
         this.entityConstructor = entityClazz.getDeclaredConstructor();
 
-        // https://stackoverflow.com/questions/43558270/correct-way-to-use-varhandle-in-java-9
-        this.entityFieldMap = EntityUtils.getFieldsFromEntity(entityClazz, schema );
+        this.entityFieldMap = EntityUtils.getFieldsFromEntity(entityClazz, schema);
 
         if(pkClazz.getPackageName().equalsIgnoreCase("java.lang") || pkClazz.isPrimitive()){
             this.pkFieldMap = EntityUtils.getFieldFromPk(entityClazz, pkClazz, schema);
