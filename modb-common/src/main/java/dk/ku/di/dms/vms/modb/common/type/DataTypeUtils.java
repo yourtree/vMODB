@@ -4,7 +4,6 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 
 import java.nio.ByteBuffer;
 import java.util.Date;
-import java.util.Enumeration;
 import java.util.function.Function;
 
 import static dk.ku.di.dms.vms.modb.common.type.Constants.DEFAULT_MAX_SIZE_STRING;

@@ -1,16 +1,9 @@
 package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
-import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
-import dk.ku.di.dms.vms.modb.index.IIndexKey;
-import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteBufferIndex;
-import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
-import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
+import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
 import java.util.ArrayDeque;
@@ -19,20 +12,17 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer.deltaKey;
-import static dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer.deltaNext;
-
 /**
- * Only implementing ReadWriteBufferIndex to maintain compatibility
+ * Wrapper of a non unique index for multi versioning concurrency control
  */
-public final class NonUniqueSecondaryIndex implements IMultiVersionIndex, ReadWriteBufferIndex<IKey> {
+public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
     // pointer to primary index
     // necessary because of transaction, concurrency control
     private final PrimaryIndex primaryIndex;
 
     // a non-unique hash index
-    private final NonUniqueHashIndex underlyingIndex;
+    private final AbstractIndex<IKey> underlyingIndex;
 
     // key: formed by secondary indexed columns
     // value: the corresponding pks
@@ -54,7 +44,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex, ReadWr
 
      private static final Deque<WriteNode> writeNodeBuffer = new ArrayDeque<>();
 
-    public NonUniqueSecondaryIndex(PrimaryIndex primaryIndex, NonUniqueHashIndex underlyingIndex) {
+    public NonUniqueSecondaryIndex(PrimaryIndex primaryIndex, AbstractIndex<IKey> underlyingIndex) {
         this.primaryIndex = primaryIndex;
         this.underlyingIndex = underlyingIndex;
         this.writesCache = new ConcurrentHashMap<>();
@@ -67,110 +57,90 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex, ReadWr
 
     }
 
-    @Override
-    public IIndexKey key() {
-        return this.underlyingIndex.key();
-    }
+//    @Override
+//    public IndexTypeEnum getType() {
+//        return this.underlyingIndex.getType();
+//    }
+//
+//    @Override
+//    public int size() {
+//        return this.underlyingIndex.size() + this.writesCache.size();
+//    }
 
-    @Override
-    public Schema schema() {
-        return this.underlyingIndex.schema();
-    }
+//    @Override
+//    public boolean exists(IKey key) {
+//
+//
+//        if(TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
+//
+//        }
+//
+//        return false;
+//    }
 
-    @Override
-    public int[] columns() {
-        return this.underlyingIndex.columns();
-    }
+//    @Override
+//    public IRecordIterator<IKey> iterator() {
+//        return null;
+//    }
 
-    @Override
-    public boolean containsColumn(int columnPos) {
-        return this.underlyingIndex.containsColumn(columnPos);
-    }
-
-    @Override
-    public IndexTypeEnum getType() {
-        return this.underlyingIndex.getType();
-    }
-
-    @Override
-    public int size() {
-        return this.underlyingIndex.size() + this.writesCache.size();
-    }
-
-    @Override
-    public boolean exists(IKey key) {
-
-
-        if(TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
-
-        }
-
-        return false;
-    }
-
-    @Override
-    public IRecordIterator<IKey> iterator() {
-        return null;
-    }
-
-    public IRecordIterator<IKey> iterator(IKey key){
-        return new RecordBucketIterator(key);
-    }
+//    public IRecordIterator<IKey> iterator(IKey key){
+//        return new RecordBucketIterator(key);
+//    }
 
     /**
      * TODO finish
      */
-    private final class RecordBucketIterator implements IRecordIterator<IKey> {
-
-        OrderedRecordBuffer buffer;
-
-        long currentAddress;
-
-        boolean iteratorOpen;
-
-        IKey inputKey;
-
-        public RecordBucketIterator(IKey key){
-            this.inputKey = key;
-            this.buffer = underlyingIndex.getBucket( key );
-            this.currentAddress = buffer.findFirstOccurrence(key);
-            this.iteratorOpen = true;
-        }
-
-        @Override
-        public IKey get() {
-            return null;
-        }
-
-        @Override
-        public void next() {
-
-            if(iteratorOpen){
-                currentAddress = UNSAFE.getLong( currentAddress + deltaNext );
-
-                // does current element eky equals to input key?
-                int currKey = UNSAFE.getInt(currentAddress + deltaKey);
-
-                if(inputKey.hashCode() != currKey) iteratorOpen = false;
-
-            } else {
-
-            }
-
-            // if has been deleted, move to next
-        }
-
-        @Override
-        public boolean hasElement() {
-
-            if(iteratorOpen){
-                // currentAddress != 0L;
-
-            }
-
-            return false;
-        }
-    }
+//    private final class RecordBucketIterator implements IRecordIterator<IKey> {
+//
+//        OrderedRecordBuffer buffer;
+//
+//        long currentAddress;
+//
+//        boolean iteratorOpen;
+//
+//        IKey inputKey;
+//
+//        public RecordBucketIterator(IKey key){
+//            this.inputKey = key;
+//            this.buffer = underlyingIndex.getBucket( key );
+//            this.currentAddress = buffer.findFirstOccurrence(key);
+//            this.iteratorOpen = true;
+//        }
+//
+//        @Override
+//        public IKey get() {
+//            return null;
+//        }
+//
+//        @Override
+//        public void next() {
+//
+//            if(iteratorOpen){
+//                currentAddress = UNSAFE.getLong( currentAddress + deltaNext );
+//
+//                // does current element eky equals to input key?
+//                int currKey = UNSAFE.getInt(currentAddress + deltaKey);
+//
+//                if(inputKey.hashCode() != currKey) iteratorOpen = false;
+//
+//            } else {
+//
+//            }
+//
+//            // if has been deleted, move to next
+//        }
+//
+//        @Override
+//        public boolean hasElement() {
+//
+//            if(iteratorOpen){
+//                // currentAddress != 0L;
+//
+//            }
+//
+//            return false;
+//        }
+//    }
 
     /**
      * The semantics of this method:
@@ -260,21 +230,6 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex, ReadWr
     }
 
     @Override
-    public void insert(IKey key, long srcAddress) {
-
-    }
-
-    @Override
-    public void update(IKey key, long srcAddress) {
-
-    }
-
-    @Override
-    public void delete(IKey key) {
-
-    }
-
-    @Override
     public boolean remove(IKey key) {
         return false;
     }
@@ -294,6 +249,10 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex, ReadWr
         //this.underlyingIndex.delete(secIdxKey);
         WriteNode writeNode = getWriteNode( secIdxKey, null, WriteType.DELETE );
         updateTransactionWriteSet(writeNode);
+    }
+
+    public AbstractIndex<IKey> getUnderlyingIndex(){
+        return this.underlyingIndex;
     }
 
 }

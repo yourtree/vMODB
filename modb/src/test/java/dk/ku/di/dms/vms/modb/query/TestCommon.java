@@ -23,7 +23,7 @@ public final class TestCommon {
         // item
         String[] itemColumns = { "i_id", "i_price", "i_name", "i_data" };
         DataType[] itemDataTypes = { DataType.INT, DataType.FLOAT, DataType.STRING, DataType.STRING };
-        Schema itemSchema = new Schema(itemColumns, itemDataTypes, new int[]{0}, null );
+        Schema itemSchema = new Schema(itemColumns, itemDataTypes, new int[]{0}, null, false );
 
         ResourceScope scope = ResourceScope.newSharedScope();
         MemorySegment segment = MemorySegment.allocateNative(itemSchema.getRecordSize() * 10L, scope);

@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import java.util.Date;
 
@@ -13,6 +14,7 @@ import java.util.Date;
 public class Order implements IEntity<Integer>  {
 
     @Id
+    @GeneratedValue
     public int id;
 
     @Column
@@ -85,10 +87,6 @@ public class Order implements IEntity<Integer>  {
         this.total_incentive = total_incentive;
         this.total_invoice = total_invoice;
         this.total_items = total_items;
-    }
-
-    public String getStatus(){
-        return this.status.name();
     }
 
 }

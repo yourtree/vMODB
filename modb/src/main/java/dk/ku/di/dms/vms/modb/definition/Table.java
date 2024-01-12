@@ -10,8 +10,6 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Basic building block
@@ -67,40 +65,40 @@ public final class Table {
       */
     public final Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap;
 
-    public Table(String name, Schema schema, PrimaryIndex primaryIndex,
-                    Map<PrimaryIndex, int[]> foreignKeys,
-                    List<NonUniqueSecondaryIndex> secondaryIndexes,
-                    List<NonUniqueSecondaryIndex> children){
-        this.name = name;
-        this.schema = schema;
-        this.hashCode = name.hashCode();
-        this.primaryIndex = primaryIndex;
-        this.foreignKeys = foreignKeys;
-        this.secondaryIndexMap = secondaryIndexes.stream().collect(Collectors.toMap(NonUniqueSecondaryIndex::key, Function.identity()));
-        this.children = children;
-    }
+//    public Table(String name, Schema schema, PrimaryIndex primaryIndex,
+//                    Map<PrimaryIndex, int[]> foreignKeys,
+//                    List<NonUniqueSecondaryIndex> secondaryIndexes,
+//                    List<NonUniqueSecondaryIndex> children){
+//        this.name = name;
+//        this.schema = schema;
+//        this.hashCode = name.hashCode();
+//        this.primaryIndex = primaryIndex;
+//        this.foreignKeys = foreignKeys;
+//        this.secondaryIndexMap = secondaryIndexes.stream().collect(Collectors.toMap(NonUniqueSecondaryIndex::key, Function.identity()));
+//        this.children = children;
+//    }
 
     public Table(String name, Schema schema, PrimaryIndex primaryIndex,
-                    Map<PrimaryIndex, int[]> foreignKeys,
-                    List<NonUniqueSecondaryIndex> secondaryIndexes){
+                 Map<PrimaryIndex, int[]> foreignKeys,
+                 Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
         this.primaryIndex = primaryIndex;
         this.foreignKeys = foreignKeys;
-        this.secondaryIndexMap =  secondaryIndexes.stream().collect(Collectors.toMap(NonUniqueSecondaryIndex::key, Function.identity()));
+        this.secondaryIndexMap = secondaryIndexMap;
         this.children = Collections.emptyList();
     }
 
-    public Table(String name, Schema schema, PrimaryIndex primaryIndex, Map<PrimaryIndex, int[]> foreignKeys){
-        this.name = name;
-        this.schema = schema;
-        this.hashCode = name.hashCode();
-        this.primaryIndex = primaryIndex;
-        this.secondaryIndexMap = Collections.emptyMap();
-        this.foreignKeys = foreignKeys;
-        this.children = Collections.emptyList();
-    }
+//    public Table(String name, Schema schema, PrimaryIndex primaryIndex, Map<PrimaryIndex, int[]> foreignKeys){
+//        this.name = name;
+//        this.schema = schema;
+//        this.hashCode = name.hashCode();
+//        this.primaryIndex = primaryIndex;
+//        this.secondaryIndexMap = Collections.emptyMap();
+//        this.foreignKeys = foreignKeys;
+//        this.children = Collections.emptyList();
+//    }
 
     public Table(String name, Schema schema, PrimaryIndex primaryIndex){
         this.name = name;

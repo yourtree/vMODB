@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
+import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
@@ -271,7 +272,11 @@ public class SimplePlanner {
         // fast path (2): all columns are part of a secondary index
         if(table.secondaryIndexMap.get(indexKey) != null){
             int[] filterColumns = intStream.filter( w -> !table.underlyingPrimaryKeyIndex().containsColumn( w ) ).toArray();
-            return new IndexSelectionVerdict(true, table.secondaryIndexMap.get(indexKey), filterColumns);
+            return new IndexSelectionVerdict(true,
+                    null,
+                    // FIXME adjust later
+                    // table.secondaryIndexMap.get(indexKey)
+                    filterColumns);
         }
 
         final ReadOnlyBufferIndex<IKey> indexSelected = this.getOptimalIndex(table, columnsToBeConsideredForIndexSelection);
@@ -300,7 +305,7 @@ public class SimplePlanner {
         List<int[]> combinations = Combinatorics.getAllPossibleColumnCombinations(filterColumns);
 
         // heuristic: return the one that embraces more columns
-        ReadOnlyBufferIndex<IKey> bestSoFar = null;
+        AbstractIndex<IKey> bestSoFar = null;
         int maxLength = 0;
         for(int[] arr : combinations) {
 
@@ -312,14 +317,14 @@ public class SimplePlanner {
 
             if(table.secondaryIndexMap.get(indexKey) != null){
                 if(arr.length > maxLength){
-                    bestSoFar = table.secondaryIndexMap.get(indexKey);
+                    bestSoFar = table.secondaryIndexMap.get(indexKey).getUnderlyingIndex();
                     maxLength = arr.length;
                 }
             }
 
         }
 
-        return bestSoFar;
+        return (ReadOnlyBufferIndex<IKey>) bestSoFar;
 
     }
 

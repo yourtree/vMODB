@@ -26,7 +26,10 @@ public enum DataType {
 
     INT_ARRAY(Integer.BYTES * 10),
 
-    ENUM(Constants.DEFAULT_MAX_SIZE_STRING);
+    // max 16 characters
+    ENUM(Constants.DEFAULT_MAX_SIZE_STRING),
+
+    COMPLEX(Character.BYTES * Constants.DEFAULT_MAX_SIZE_STRING);
 
     public final int value;
 

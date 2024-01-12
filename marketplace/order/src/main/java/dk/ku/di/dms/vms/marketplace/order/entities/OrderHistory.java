@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import java.util.Date;
 
@@ -13,6 +14,7 @@ import java.util.Date;
 public class OrderHistory {
 
     @Id
+    @GeneratedValue
     public int id;
 
     @VmsForeignKey( table = Order.class, column = "id")

@@ -18,7 +18,7 @@ public final class MemoryUtils {
             DIRECT_BYTE_BUFFER_CLASS = getClassByName("java.nio.DirectByteBuffer");
 
             DEFAULT_PAGE_SIZE = getPageSize();
-
+            DEFAULT_NUM_BUCKETS = 10;
         } catch (Exception ignored) {}
 
     }
@@ -30,6 +30,8 @@ public final class MemoryUtils {
     private static Class<?> DIRECT_BYTE_BUFFER_CLASS;
 
     public static int DEFAULT_PAGE_SIZE;
+
+    public static int DEFAULT_NUM_BUCKETS;
 
     private static int getPageSize(){
         return UNSAFE.pageSize();

@@ -50,15 +50,14 @@ public class VmsMetadataLoader {
 
         Reflections reflections = configureReflections(packages);
 
-        Map<Class<?>, String> entityToTableNameMap = loadVmsTableNames(reflections);
-
         Set<Class<?>> vmsClasses = reflections.getTypesAnnotatedWith(Microservice.class);
-
         if(vmsClasses.isEmpty()) throw new IllegalStateException("No classes annotated with @Microservice in this application.");
+
+        Map<Class<?>, String> entityToTableNameMap = loadVmsTableNames(reflections);
 
         Map<String, String> clazzNameToVmsNameMap = mapClazzNameToVmsName(vmsClasses);
 
-        Map<Class<? extends IEntity<?>>, String> entityToVirtualMicroservice = mapEntitiesToVirtualMicroservice(vmsClasses);
+        Map<Class<?>, String> entityToVirtualMicroservice = mapEntitiesToVirtualMicroservice(vmsClasses, entityToTableNameMap);
 
         Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, entityToTableNameMap);
 
@@ -224,7 +223,7 @@ public class VmsMetadataLoader {
     @SuppressWarnings("unchecked")
     protected static Map<String, VmsDataSchema> buildDataSchema(Reflections reflections,
                                                                 Configuration reflectionsConfig,
-                                                                Map<Class<? extends IEntity<?>>,String> entityToVirtualMicroservice,
+                                                                Map<Class<?>, String> entityToVirtualMicroservice,
                                                                 Map<Class<?>, String> vmsTableNames) {
 
         Map<String, VmsDataSchema> schemaMap = new HashMap<>();
@@ -237,8 +236,7 @@ public class VmsMetadataLoader {
 
         // group by class
         Map<Class<?>,List<Field>> columnMap = allEntityFields.stream()
-                .collect( Collectors.groupingBy( Field::getDeclaringClass,
-                        Collectors.toList()) );
+                .collect( Collectors.groupingBy( Field::getDeclaringClass, Collectors.toList()) );
 
         // get all fields annotated with column
         Set<Field> allPrimaryKeyFields = reflections.get(
@@ -248,8 +246,7 @@ public class VmsMetadataLoader {
 
         // group by entity type
         Map<Class<?>,List<Field>> pkMap = allPrimaryKeyFields.stream()
-                .collect( Collectors.groupingBy( Field::getDeclaringClass,
-                        Collectors.toList()) );
+                .collect( Collectors.groupingBy( Field::getDeclaringClass, Collectors.toList()) );
 
         // get all foreign keys
         Set<Field> allAssociationFields = reflections.get(
@@ -259,8 +256,7 @@ public class VmsMetadataLoader {
 
         // group by entity type
         Map<Class<?>,List<Field>> associationMap = allAssociationFields.stream()
-                .collect( Collectors.groupingBy( Field::getDeclaringClass,
-                        Collectors.toList()) );
+                .collect( Collectors.groupingBy( Field::getDeclaringClass, Collectors.toList()) );
 
         // build schema of each table
         // we build the schema in order to look up the fields and define the pk hash index
@@ -272,7 +268,7 @@ public class VmsMetadataLoader {
             if(pkFields == null || pkFields.size() == 0){
                 throw new NoPrimaryKeyFoundException("Table class "+tableClass.getCanonicalName()+" does not have a primary key.");
             }
-            int totalNumberOfFields = pkFields.size();
+             int totalNumberOfFields = pkFields.size();
 
             List<Field> foreignKeyFields = associationMap.get( tableClass );
             List<Field> columnFields = columnMap.get( tableClass );
@@ -285,8 +281,8 @@ public class VmsMetadataLoader {
                 totalNumberOfFields += columnFields.size();
             }
 
-            String[] columnNames = new String[totalNumberOfFields];
-            DataType[] columnDataTypes = new DataType[totalNumberOfFields];
+            List<String> columnNames = new ArrayList<>();
+            List<DataType> columnDataTypes = new ArrayList<>();
 
             int[] pkFieldsStr = new int[pkFields.size()];
 
@@ -294,9 +290,9 @@ public class VmsMetadataLoader {
             int i = 0;
             for(Field field : pkFields){
                 Class<?> attributeType = field.getType();
-                columnDataTypes[i] = getColumnDataTypeFromAttributeType(attributeType);
+                columnDataTypes.add( getColumnDataTypeFromAttributeType(attributeType) );
                 pkFieldsStr[i] = i;
-                columnNames[i] = field.getName();
+                columnNames.add( field.getName() );
                 i++;
             }
 
@@ -307,40 +303,41 @@ public class VmsMetadataLoader {
                 // iterating over association columns
                 for (Field field : foreignKeyFields) {
 
-                    Class<?> attributeType = field.getType();
-                    columnDataTypes[i] = getColumnDataTypeFromAttributeType(attributeType);
-                    columnNames[i] = field.getName();
-                    i++;
+                    VmsForeignKey fk = field.getAnnotation(VmsForeignKey.class);
+                    String fkTable = vmsTableNames.get(fk.table());
+                    // later we parse into a Vms Table and check whether the types match
+                    foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column());
+                    j++;
 
-                    Optional<Annotation> fkAnnotation = Arrays.stream(field.getAnnotations())
-                            .filter(p -> p.annotationType() == VmsForeignKey.class).findFirst();
-                    if( fkAnnotation.isPresent() ) {
-                        VmsForeignKey fk = (VmsForeignKey) fkAnnotation.get();
-                        String fkTable = vmsTableNames.get(fk.table());
-                        // later we parse into a Vms Table and check whether the types match
-                        foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column());
+                    // check if field is part of PK already
+                    Id id = field.getAnnotation(Id.class);
+                    if(id == null){
+                        Class<?> attributeType = field.getType();
+                        columnDataTypes.add(getColumnDataTypeFromAttributeType(attributeType));
+                        columnNames.add(field.getName());
+                        i++;
                     } else {
-                        throw new RuntimeException("Some error...");
+                        totalNumberOfFields--;
                     }
 
-                    j++;
                 }
 
             }
 
-            // non-foreign key column constraints are inherent to the table, not referring to other tables
-            ConstraintReference[] constraints = getConstraintReferences(columnFields, columnNames, columnDataTypes, i);
+            String[] columnNamesArray = new String[totalNumberOfFields];
+            columnNames.toArray(columnNamesArray);
 
-            Optional<Annotation> optionalVmsTableAnnotation = Arrays.stream(tableClass.getAnnotations())
-                    .filter(p -> p.annotationType() == VmsTable.class).findFirst();
-            if(optionalVmsTableAnnotation.isPresent()){
-                String vmsTableName = ((VmsTable)optionalVmsTableAnnotation.get()).name();
-                String vms = entityToVirtualMicroservice.get( tableClass );
-                VmsDataSchema schema = new VmsDataSchema(vms, vmsTableName, pkFieldsStr, columnNames, columnDataTypes, foreignKeyReferences, constraints);
-                schemaMap.put(vmsTableName, schema);
-            } else {
-                throw new RuntimeException("should be annotated with vms table");
-            }
+            DataType[] columnDataTypesArray = new DataType[totalNumberOfFields];
+            columnDataTypes.toArray(columnDataTypesArray);
+
+            // regular columns
+            ConstraintReference[] constraints = processRegularColumns(columnFields, columnNamesArray, columnDataTypesArray, i);
+
+            VmsTable vmsTableAnnotation = tableClass.getAnnotation(VmsTable.class);
+            String vmsTableName = vmsTableAnnotation.name();
+            String vms = entityToVirtualMicroservice.get( tableClass );
+            VmsDataSchema schema = new VmsDataSchema(vms, vmsTableName, pkFieldsStr, columnNamesArray, columnDataTypesArray, foreignKeyReferences, constraints);
+            schemaMap.put(vmsTableName, schema);
 
         }
 
@@ -348,7 +345,10 @@ public class VmsMetadataLoader {
 
     }
 
-    private static ConstraintReference[] getConstraintReferences(List<Field> columnFields, String[] columnNames, DataType[] columnDataTypes, int columnPosition)
+    /**
+     * non-foreign key column constraints are inherent to the table, not referring to other tables
+     */
+    private static ConstraintReference[] processRegularColumns(List<Field> columnFields, String[] columnNames, DataType[] columnDataTypes, int columnPosition)
             throws UnsupportedConstraint, NotAcceptableTypeException {
 
         if(columnFields == null) {
@@ -428,30 +428,16 @@ public class VmsMetadataLoader {
     }
 
     @SuppressWarnings({"unchecked","rawtypes"})
-    protected static Map<Class<? extends IEntity<?>>, String> mapEntitiesToVirtualMicroservice(Set<Class<?>> vmsClasses) throws ClassNotFoundException {
+    protected static Map<Class<?>, String> mapEntitiesToVirtualMicroservice(Set<Class<?>> vmsClasses, Map<Class<?>, String> entityToTableNameMap) {
 
-        Map<Class<? extends IEntity<?>>, String> entityToVirtualMicroservice = new HashMap<>();
+        Map<Class<?>, String> entityToVirtualMicroservice = new HashMap<>();
 
         for(Class<?> clazz : vmsClasses) {
-
-            String clazzName = clazz.getCanonicalName();
-            Class<?> cls = Class.forName(clazzName);
-            Constructor<?>[] constructors = cls.getDeclaredConstructors();
-            Constructor<?> constructor = constructors[0];
-
-            for (Class parameterType : constructor.getParameterTypes()) {
-
-                Type[] types = ((ParameterizedType) parameterType.getGenericInterfaces()[0]).getActualTypeArguments();
-                Class<? extends IEntity<?>> entityClazz = (Class<? extends IEntity<?>>) types[1];
-
-                if(entityToVirtualMicroservice.get(entityClazz) == null) {
-                    entityToVirtualMicroservice.put(entityClazz, clazzName);
-                } else {
-                    throw new RuntimeException("Cannot have an entity linked to more than one virtual microservice.");
-                    // TODO later, when supporting replicated data objects, this will change
-                }
+            String vmsName = clazz.getAnnotation(Microservice.class).value();
+            // fast way since it is usually one per app
+            for(var entry : entityToTableNameMap.entrySet()){
+                entityToVirtualMicroservice.put(entry.getKey(), vmsName);
             }
-
         }
 
         return entityToVirtualMicroservice;
@@ -659,6 +645,11 @@ public class VmsMetadataLoader {
         }
     }
 
+    /**
+     * Event types are not being used in ser/des of events
+     * So it is ok to just return null for now.
+     * Later, the event schema can be removed from the presentation payload
+     */
     private static DataType getEventDataTypeFromAttributeType(Class<?> attributeType){
         String attributeCanonicalName = attributeType.getCanonicalName();
         if (attributeCanonicalName.equalsIgnoreCase("int") || attributeType == Integer.class){
@@ -692,7 +683,8 @@ public class VmsMetadataLoader {
             return DataType.STRING_ARRAY;
         }
         else {
-            throw new NotAcceptableTypeException(attributeType.getCanonicalName() + " is not accepted");
+            return DataType.COMPLEX;
+            // throw new NotAcceptableTypeException(attributeType.getCanonicalName() + " is not accepted");
         }
     }
 
