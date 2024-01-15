@@ -133,6 +133,16 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
                 return null;
 
             }
+            case "lookupByKeys" -> {
+                List<Object> castedList = (List<Object>) args[0];
+                List<IEntity<?>> resultList = new ArrayList<>(castedList.size());
+                for(Object obj : castedList){
+                    Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(obj);
+                    Object[] object = this.transactionFacade.lookupByKey(this.table.primaryKeyIndex(), valuesOfKey);
+                    resultList.add(this.parseObjectIntoEntity(object));
+                }
+                return resultList;
+            }
             case "deleteByKey" -> {
                 Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(args[0]);
                 this.transactionFacade.deleteByKey(this.table, valuesOfKey);

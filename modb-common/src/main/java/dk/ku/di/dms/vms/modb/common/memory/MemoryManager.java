@@ -100,7 +100,6 @@ public final class MemoryManager {
     }
 
     public static ByteBuffer getTemporaryDirectBuffer(int size) {
-
         ByteBuffer bb = bufferCache.get(size);
         if(bb == null){
             ByteBuffer newBB = ByteBuffer.allocateDirect(size);
@@ -108,7 +107,6 @@ public final class MemoryManager {
             return newBB;
         }
         return bb;
-
     }
 
     /*** Buffers are for network operations because it is required by the Java APIs */

@@ -43,7 +43,7 @@ import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.PRESENTATION
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.SERVER_TYPE;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.VMS_TYPE;
 import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.UNREACHABLE_NODE;
-import static dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata.NodeType.SERVER;
+import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.SERVER;
 import static java.lang.Thread.sleep;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
@@ -418,7 +418,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         byte type = buffer.get();
         if(type == SERVER_TYPE){
-            processServerPresentationMessage(channel, buffer);
+            this.processServerPresentationMessage(channel, buffer);
         } else if(type == VMS_TYPE){
             try {
                 // this thread could potentially handle this worker... let's see how this performs later
@@ -484,7 +484,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
             return;
         }
 
-        logger.info("Batch commit run started");
+        logger.info("Batch commit task is starting...");
 
         // why do I need to replicate vmsTidMap? to restart from this point if the leader fails
         final long generateBatch = this.currentBatchOffset;

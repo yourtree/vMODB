@@ -78,7 +78,7 @@ final class LeaderWorker extends StoppableRunnable {
     @Override
     public void run() {
 
-        logger.info("Leader worker started!");
+        // logger.info("Leader worker started!");
 
         while (isRunning()){
             try {

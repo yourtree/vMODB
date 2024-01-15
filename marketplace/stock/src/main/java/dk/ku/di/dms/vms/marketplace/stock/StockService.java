@@ -44,6 +44,8 @@ public class StockService {
     @Transactional(type=RW)
     public StockConfirmed reserveStock(ReserveStock reserveStock){
 
+        System.out.println("Stock received a reserve stock event with version: "+reserveStock.instanceId);
+
         List<Stock.StockId> listOfIds = reserveStock.items.stream().map(f -> new Stock.StockId(f.SellerId, f.ProductId)).toList();
 
         // TODO finish logic

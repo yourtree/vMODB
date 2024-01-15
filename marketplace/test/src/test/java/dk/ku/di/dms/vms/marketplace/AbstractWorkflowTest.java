@@ -23,19 +23,19 @@ public class AbstractWorkflowTest {
 
     protected final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
-    private static final Function<String, HttpRequest> httpRequestProductSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8001/product" ) )
+    protected static final Function<String, HttpRequest> httpRequestProductSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8001/product" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HttpClient.Version.HTTP_2)
             .POST(HttpRequest.BodyPublishers.ofString( str ))
             .build();
 
-    private static final Function<String, HttpRequest> httpRequestStockSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8002/stock" ) )
+    protected static final Function<String, HttpRequest> httpRequestStockSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8002/stock" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HttpClient.Version.HTTP_2)
             .POST(HttpRequest.BodyPublishers.ofString( str ))
             .build();
 
-    private static final int MAX_ITEMS = 10;
+    protected static final int MAX_ITEMS = 10;
 
     protected void ingestDataIntoVMSs() throws IOException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();

@@ -21,9 +21,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.logging.Logger;
 
@@ -42,7 +40,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private final NetworkAddress consumerVms;
 
     // defined after presentation being sent by the actual vms
-    private VmsNode vmsNode;
+    private VmsNode vmsNode = new VmsNode("", 0, "unknown", 0, 0, 0, null, null, null);
 
     private State state;
 
@@ -50,7 +48,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private final ByteBuffer readBuffer;
 
-    private final ByteBuffer writeBuffer;
+    private final Deque<ByteBuffer> writeBufferPool;
 
     /**
      * Queues to inform coordinator about an event
@@ -66,6 +64,10 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private final Map<Long, BlockingDeque<TransactionEvent.Payload>> transactionEventsPerBatch = new ConcurrentHashMap<>();
 
     private final BlockingQueue<Message> workerQueue = new LinkedBlockingQueue<>();
+
+    private final BlockingQueue<Byte> WRITE_SYNCHRONIZER = new ArrayBlockingQueue<>(1);
+
+    private static final Byte DUMB = 1;
 
     static VmsWorker buildAsStarter(// coordinator reference
                                     ServerIdentifier me,
@@ -87,9 +89,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             // the socket channel already established
             AsynchronousSocketChannel channel,
             AsynchronousChannelGroup group,
-            ByteBuffer buffer, // to continue reading presentation
+            ByteBuffer readBuffer, // to continue reading presentation
             IVmsSerdesProxy serdesProxy) {
-        return new VmsWorker(me, consumerVms, coordinatorQueue, channel, group, buffer, serdesProxy);
+        return new VmsWorker(me, consumerVms, coordinatorQueue, channel, group, readBuffer, serdesProxy);
     }
 
     private VmsWorker(// coordinator reference
@@ -115,12 +117,17 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.group = group;
 
         // initialize the write buffer
-        this.writeBuffer = MemoryManager.getTemporaryDirectBuffer(2048);
+        this.writeBufferPool = new ConcurrentLinkedDeque<>();
+        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(2048) );
+        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(2048) );
         this.readBuffer = readBuffer;
         this.serdesProxy = serdesProxy;
 
         this.logger = Logger.getLogger("vms-worker-"+consumerVms.toString());
         this.logger.setUseParentHandlers(true);
+
+        // to allow the first thread to write
+        this.WRITE_SYNCHRONIZER.add(DUMB);
     }
 
     public void initHandshakeProtocol(){
@@ -128,7 +135,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         // a vms has tried to connect
         if(this.channel != null) {
             this.state = CONNECTION_ESTABLISHED;
-            processVmsIdentifier();
+            this.processVmsIdentifier();
             this.readBuffer.clear();
             this.channel.read( this.readBuffer, null, new VmsReadCompletionHandler() );
             return;
@@ -149,19 +156,19 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             }
             this.state = CONNECTION_ESTABLISHED;
 
-            this.writeBuffer.clear();
-            // write presentation
-            Presentation.writeServer(this.writeBuffer, this.me, true);
-            this.writeBuffer.flip();
+            ByteBuffer writeBuffer = retrieveByteBuffer();
             try {
-                this.channel.write(this.writeBuffer).get();
+                // write presentation
+                Presentation.writeServer(writeBuffer, this.me, true);
+                writeBuffer.flip();
+                WRITE_SYNCHRONIZER.take();
+                this.channel.write(writeBuffer, writeBuffer, new WriteCompletionHandler());
             } catch(Exception e){
                 logger.severe("Error on writing presentation: "+e.getMessage());
                 return;
             }
 
             this.state = State.LEADER_PRESENTATION_SENT;
-            this.writeBuffer.clear();
 
             // set read handler here
             this.channel.read( this.readBuffer, null, new VmsReadCompletionHandler() );
@@ -234,10 +241,11 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private void sendTransactionAbort(Message workerMessage) {
         TransactionAbort.Payload tidToAbort = workerMessage.asTransactionAbort();
-        TransactionAbort.write(this.writeBuffer, tidToAbort);
-        this.writeBuffer.flip();
+        ByteBuffer writeBuffer = retrieveByteBuffer();
         try {
-            this.channel.write(this.writeBuffer).get();
+            TransactionAbort.write(writeBuffer, tidToAbort);
+            writeBuffer.flip();
+            this.channel.write(writeBuffer).get();
             this.logger.warning("Transaction abort sent to: " + this.vmsNode.vmsIdentifier);
         } catch (InterruptedException | ExecutionException e){
             if(channel.isOpen()){
@@ -248,17 +256,18 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 this.stop(); // no reason to continue the loop
             }
         } finally {
-            this.writeBuffer.clear();
+            writeBuffer.clear();
+            writeBufferPool.addLast(writeBuffer);
         }
 
     }
 
     private void sendBatchCommitRequest(Message workerMessage) {
         BatchCommitCommand.Payload commitRequest = workerMessage.asBatchCommitCommand();
-        BatchCommitCommand.write(this.writeBuffer, commitRequest);
-        this.writeBuffer.flip();
-
+        ByteBuffer writeBuffer = retrieveByteBuffer();
         try {
+            BatchCommitCommand.write(writeBuffer, commitRequest);
+            writeBuffer.flip();
             this.channel.write(writeBuffer).get();
             this.logger.info("Commit request sent to: " + this.vmsNode.vmsIdentifier);
         } catch (InterruptedException | ExecutionException e){
@@ -270,7 +279,8 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 this.stop(); // no reason to continue the loop
             }
         } finally {
-            this.writeBuffer.clear();
+            writeBuffer.clear();
+            writeBufferPool.addLast(writeBuffer);
         }
     }
 
@@ -278,30 +288,26 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         // the first or new information
         if(this.state == VMS_PRESENTATION_PROCESSED) {
             this.state = CONSUMER_SET_READY_FOR_SENDING;
-            this.logger.info(vmsNode.vmsIdentifier+": Consumer set will be established for the first time: "+consumerVms);
+            this.logger.info("Leader/"+vmsNode.vmsIdentifier+": Consumer set will be established for the first time: "+consumerVms);
         } else if(this.state == CONSUMER_EXECUTING){
-            this.logger.info("Consumer set is going to be updated for: "+consumerVms);
+            this.logger.info("Leader/"+vmsNode.vmsIdentifier+"Consumer set is going to be updated for: "+consumerVms);
         } else if(this.state == CONSUMER_SET_SENDING_FAILED){
-            this.logger.info("Consumer set, another attempt to write to: "+consumerVms);
+            this.logger.info("Leader/"+vmsNode.vmsIdentifier+"Consumer set, another attempt to write to: "+consumerVms);
         } // else, nothing...
 
         String vmsConsumerSet = workerMessage.asVmsConsumerSet();
-
-        ConsumerSet.write(this.writeBuffer, vmsConsumerSet);
-        this.writeBuffer.flip();
-
+        ByteBuffer writeBuffer = retrieveByteBuffer();
         try {
-            Integer result = this.channel.write(this.writeBuffer).get();
-            if (result == this.writeBuffer.limit()) {
+            ConsumerSet.write(writeBuffer, vmsConsumerSet);
+            writeBuffer.flip();
+            Integer result = this.channel.write(writeBuffer).get();
+            if (result == writeBuffer.limit()) {
                 if (this.state == CONSUMER_SET_READY_FOR_SENDING) // or != CONSUMER_EXECUTING
                     this.state = CONSUMER_EXECUTING;
             } else {
                 this.state = CONSUMER_SET_SENDING_FAILED;
                 this.workerQueue.add(workerMessage);
             }
-
-            this.writeBuffer.clear();
-
         } catch (InterruptedException | ExecutionException e){
             this.state = CONSUMER_SET_SENDING_FAILED;
             if (channel.isOpen()) {
@@ -312,6 +318,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 this.logger.warning("Write has failed and channel is closed: " + consumerVms);
                 this.stop(); // no reason to continue the loop
             }
+        } finally {
+            writeBuffer.clear();
+            writeBufferPool.addLast(writeBuffer);
         }
 
     }
@@ -338,7 +347,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             switch (type) {
 
                 case PRESENTATION -> {
-                    if(vmsNode != null){
+                    if(vmsNode != null && !vmsNode.vmsIdentifier.contentEquals("unknown")){
                         // in the future it can be an update of the vms schema
                         logger.warning("Presentation already received from this VMS.");
                     } else {
@@ -422,7 +431,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         boolean thereAreEventsToSend = this.transactionEventsPerBatch(batchCommitInfo.batch()) != null;
         if(thereAreEventsToSend){
             if(includeCommitInfo){
-                this.sendBatchedEvents(this.transactionEventsPerBatch(batchCommitInfo.batch()), batchCommitInfo);
+                this.sendBatchedEventsWithCommitInfo(this.transactionEventsPerBatch(batchCommitInfo.batch()), batchCommitInfo);
             } else {
                 this.sendBatchedEvents(this.transactionEventsPerBatch(batchCommitInfo.batch()));
             }
@@ -435,30 +444,44 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private void sendBatchCommitInfo(BatchCommitInfo.Payload batchCommitInfo){
         // then send only the batch commit info
+        ByteBuffer writeBuffer = retrieveByteBuffer();
         try {
-            BatchCommitInfo.write(this.writeBuffer, batchCommitInfo);
-            this.writeBuffer.flip();
-            this.channel.write(this.writeBuffer).get();
-            this.writeBuffer.clear();
+            BatchCommitInfo.write(writeBuffer, batchCommitInfo);
+            writeBuffer.flip();
+            this.channel.write(writeBuffer).get();
         } catch (InterruptedException | ExecutionException e) {
             if(!this.channel.isOpen()) {
                 this.vmsNode.off();
             }
-            this.writeBuffer.clear();
+            
+        } finally {
+            writeBuffer.clear();
+            this.writeBufferPool.addLast(writeBuffer);
         }
 
     }
 
+    private ByteBuffer retrieveByteBuffer(){
+        ByteBuffer bb = this.writeBufferPool.poll();
+        if(bb != null) return bb;
+        return MemoryManager.getTemporaryDirectBuffer(2048);
+    }
+
+    /**
+     * While a write is in progress, it must wait for completion and then submit the next write.
+     */
     private void sendBatchedEvents(BlockingDeque<TransactionEvent.Payload> eventsToSendToVms){
         eventsToSendToVms.drainTo(this.events);
-        int remaining;
-        do {
-            remaining = BatchUtils.assembleBatchPayload( this.events.size(), this.events, this.writeBuffer);
+        ByteBuffer writeBuffer = this.retrieveByteBuffer();
+        int remaining = BatchUtils.assembleBatchPayload(this.events.size(), this.events, writeBuffer);
+        while(true) {
             try {
-                this.writeBuffer.flip();
-                this.channel.write(this.writeBuffer).get();
-                this.writeBuffer.clear();
-            } catch (InterruptedException | ExecutionException e) {
+                writeBuffer.flip();
+                // without this async handler, the bytebuffer arriving in the VMS can be corrupted
+                // relying on future.get() yields corrupted buffer in the consumer
+                this.WRITE_SYNCHRONIZER.take();
+                this.channel.write(writeBuffer, writeBuffer, new WriteCompletionHandler());
+            } catch (Exception e) {// (InterruptedException | ExecutionException e) {
                 // return events to the deque
                 for(TransactionEvent.Payload event : this.events) {
                     eventsToSendToVms.offerFirst(event);
@@ -467,34 +490,57 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     this.vmsNode.off();
                     remaining = 0; // force exit loop
                 }
-            } finally {
-                this.writeBuffer.clear();
             }
-        } while (remaining > 0);
+
+            if(remaining == 0) break;
+
+            // pick another
+            writeBuffer = this.retrieveByteBuffer();
+            remaining = BatchUtils.assembleBatchPayload(remaining, this.events, writeBuffer);
+        }
+    }
+
+    private class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
+            @Override
+            public void completed(Integer result, ByteBuffer attachment) {
+                logger.info("Leader: Batch with size "+result+" has been sent to: "+vmsNode.vmsIdentifier);
+                attachment.clear();
+                writeBufferPool.addLast(attachment);
+                WRITE_SYNCHRONIZER.add(DUMB);
+            }
+            @Override
+            public void failed(Throwable exc, ByteBuffer attachment) {
+                logger.severe("Leader: ERROR on writing batch of events to: "+vmsNode.vmsIdentifier);
+                attachment.clear();
+                writeBufferPool.addLast(attachment);
+                WRITE_SYNCHRONIZER.add(DUMB);
+            }
     }
 
     /**
      * If the target VMS is a terminal in the current batch,
      * then the batch commit info must be appended
      */
-    private void sendBatchedEvents(BlockingDeque<TransactionEvent.Payload> eventsToSendToVms, BatchCommitInfo.Payload batchCommitInfo){
+    private void sendBatchedEventsWithCommitInfo(BlockingDeque<TransactionEvent.Payload> eventsToSendToVms, BatchCommitInfo.Payload batchCommitInfo){
         eventsToSendToVms.drainTo(this.events);
-        int remaining = BatchUtils.assembleBatchPayload( this.events.size(), this.events, this.writeBuffer);
+        ByteBuffer writeBuffer = this.retrieveByteBuffer();
+        int remaining = BatchUtils.assembleBatchPayload(this.events.size(), this.events, writeBuffer);
         while(true) {
             try {
                 if(remaining > 0) {
-                    this.writeBuffer.flip();
-                    this.channel.write(this.writeBuffer).get();
-                    this.writeBuffer.clear();
+                    writeBuffer.flip();
+                    this.WRITE_SYNCHRONIZER.take();
+                    this.channel.write(writeBuffer, writeBuffer, new WriteCompletionHandler());
                 } else {
                     // now must append the batch commit info
                     // do we space in the buffer?
-                    if (this.writeBuffer.remaining() < BatchCommitInfo.size) {
-                        this.writeBuffer.flip();
-                        this.channel.write(this.writeBuffer).get();
-                        this.writeBuffer.clear();
+                    if (writeBuffer.remaining() < BatchCommitInfo.size) {
+                        writeBuffer.flip();
+                        this.WRITE_SYNCHRONIZER.take();
+                        this.channel.write(writeBuffer, writeBuffer, new WriteCompletionHandler());
+                        writeBuffer = retrieveByteBuffer();
                     }
-                    BatchCommitInfo.write(this.writeBuffer, batchCommitInfo);
+                    BatchCommitInfo.write(writeBuffer, batchCommitInfo);
 
                     // update number of events
                     writeBuffer.mark();
@@ -503,12 +549,12 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     writeBuffer.putInt(1, currCount);
                     writeBuffer.reset();
 
-                    this.writeBuffer.flip();
-                    this.channel.write(this.writeBuffer).get();
-                    this.writeBuffer.clear();
+                    writeBuffer.flip();
+                    this.WRITE_SYNCHRONIZER.take();
+                    this.channel.write(writeBuffer, writeBuffer, new WriteCompletionHandler());
                     break;
                 }
-            } catch (InterruptedException | ExecutionException e) {
+            } catch (Exception e) {
                 // return events to the deque
                 for(TransactionEvent.Payload event : this.events) {
                     eventsToSendToVms.offerFirst(event);
@@ -517,10 +563,10 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     this.vmsNode.off();
                     remaining = 0; // force exit loop
                 }
-            } finally {
-                this.writeBuffer.clear();
             }
-            remaining = BatchUtils.assembleBatchPayload( remaining, this.events, this.writeBuffer);
+
+            writeBuffer = retrieveByteBuffer();
+            remaining = BatchUtils.assembleBatchPayload(remaining, this.events, writeBuffer);
         }
 
     }

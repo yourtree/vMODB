@@ -50,7 +50,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  */
 public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
-    static final int DEFAULT_DELAY_FOR_BATCH_SEND = 10000;
+    static final int DEFAULT_DELAY_FOR_BATCH_SEND = 3000;
 
     private final ExecutorService executorService;
 
@@ -208,7 +208,6 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
      * A batch strategy for sending would involve sleeping until the next timeout for batch,
      * send and set up the next. Do that iteratively
      */
-
     private void eventLoop(){
 
         this.logger.info("Event handler has started.");
@@ -217,7 +216,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
         // setup accept since we need to accept connections from the coordinator and other VMSs
         this.serverSocket.accept( null, new AcceptCompletionHandler());
-        this.logger.info("Accept handler has been setup.");
+        this.logger.info(me.vmsIdentifier+": Accept handler has been setup.");
 
         while(this.isRunning()){
 
@@ -443,7 +442,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                         address.hashCode(),
                         LockConnectionMetadata.NodeType.VMS,
                         attachment.buffer,
-                        MemoryManager.getTemporaryDirectBuffer(),
+                        null,// MemoryManager.getTemporaryDirectBuffer(),
                         channel,
                         null);
 
@@ -553,6 +552,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
      */
     private final class VmsReadCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
 
+        // the VMS producing events for me
         private final String producerVms;
 
         public VmsReadCompletionHandler(String producerVms){
@@ -572,7 +572,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                 case (BATCH_OF_EVENTS) -> {
                     connectionMetadata.readBuffer.position(1);
                     int count = connectionMetadata.readBuffer.getInt();
-                    logger.info("Batch of ["+count+"] events received from:"+producerVms);
+                    logger.info(me.vmsIdentifier+": Batch of ["+count+"] events received from: "+producerVms);
                     TransactionEvent.Payload payload;
                     for(int i = 0; i < count; i++){
                         // move offset to discard message type
@@ -625,7 +625,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
         @Override
         public void completed(Integer result, Void void_) {
 
-            logger.info(me.vmsIdentifier+" starting process for processing presentation message");
+            logger.info(me.vmsIdentifier+": Start processing presentation message");
 
             // message identifier
             byte messageIdentifier = this.buffer.get(0);
@@ -730,7 +730,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
-            logger.info("An unknown host has started a connection attempt.");
+            logger.info(me.vmsIdentifier+": An unknown host has started a connection attempt.");
             final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(2048);
             try {
                 // logger.info("Remote address: "+channel.getRemoteAddress().toString());
@@ -800,10 +800,9 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
             public void completed(Integer result, Void attachment) {
                 state = State.PRESENTATION_SENT;
                 // set up leader worker
-                leaderWorker = new LeaderWorker(leader,leaderConnectionMetadata,
-                        eventsToSendToLeader, leaderWorkerQueue);
+                leaderWorker = new LeaderWorker(leader, leaderConnectionMetadata, eventsToSendToLeader, leaderWorkerQueue);
                 new Thread(leaderWorker).start();
-                logger.info(me.vmsIdentifier+" leader worker set up");
+                logger.info(me.vmsIdentifier+": Leader worker set up");
                 buffer.clear();
                 channel.read(buffer, leaderConnectionMetadata, new LeaderReadCompletionHandler() );
             }
@@ -866,7 +865,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
             this.buffer.flip();
             this.state = State.PRESENTATION_PROCESSED;
-            logger.info("Leader presentation processed");
+            logger.info(me.vmsIdentifier+": Leader presentation processed");
             this.channel.write( this.buffer, null, this.writeCompletionHandler );
 
         }
@@ -968,7 +967,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                     }
                 }
                 case (PRESENTATION) -> logger.warning("Presentation being sent again by the producer!?");
-                default -> logger.warning("Message type sent by leader cannot be identified: "+messageType);
+                default -> logger.warning(me.vmsIdentifier+": Message type sent by leader cannot be identified: "+messageType);
             }
 
             connectionMetadata.readBuffer.clear();

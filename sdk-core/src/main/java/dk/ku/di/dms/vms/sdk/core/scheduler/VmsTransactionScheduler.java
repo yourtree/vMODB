@@ -170,7 +170,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         this.currentOffset = new OffsetTracker(0, 1);
         this.currentOffset.signalTaskFinished();
         this.offsetMap.put(0L, this.currentOffset);
-        this.logger.info("Offset initialized");
+        // this.logger.info("Offset initialized");
     }
 
     /**

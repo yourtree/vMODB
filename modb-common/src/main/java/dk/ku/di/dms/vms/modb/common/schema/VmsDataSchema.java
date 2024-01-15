@@ -36,6 +36,8 @@ public class VmsDataSchema {
     // constraints, referred by column position
     public ConstraintReference[] constraintReferences;
 
+    public VmsDataSchema(){}
+
     public VmsDataSchema(String vmsName, String tableName, int[] primaryKeyColumns, String[] columnNames, DataType[] columnDataTypes,
                          ForeignKeyReference[] foreignKeyReferences, ConstraintReference[] constraintReferences) {
         this.vmsName = vmsName;

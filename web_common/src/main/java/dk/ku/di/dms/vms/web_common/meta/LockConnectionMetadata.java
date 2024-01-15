@@ -9,26 +9,11 @@ import java.util.concurrent.Semaphore;
  * but writes (and update to the channel after crashes) must be serialized to avoid concurrency errors
  * Some attributes are non-final to allow for dynamic reuse (e.g.,
  */
-public final class LockConnectionMetadata {
-
-    /**
-     * generic, serves for both servers and VMSs, although the key
-     * may change across different classes (e.g., use of vms name or <host+port>)
-     */
-    public int key;
-    public final NodeType nodeType;
-
-    public enum NodeType {
-        SERVER,
-        VMS,
-        CLIENT
-    }
+public final class LockConnectionMetadata extends ConnectionMetadata {
 
     public final ByteBuffer writeBuffer;
 
-    public ByteBuffer readBuffer;
-
-    public AsynchronousSocketChannel channel;
+    public final ByteBuffer readBuffer;
 
     /*
      * Necessary to access connection metadata
@@ -43,11 +28,9 @@ public final class LockConnectionMetadata {
                                   ByteBuffer writeBuffer,
                                   AsynchronousSocketChannel channel,
                                   Semaphore writeLock) {
-        this.key = key;
-        this.nodeType = nodeType;
+        super(key, nodeType, channel);
         this.readBuffer = readBuffer;
         this.writeBuffer = writeBuffer;
-        this.channel = channel;
         this.writeLock = writeLock;
     }
 
