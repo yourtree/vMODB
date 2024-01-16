@@ -594,7 +594,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                     }
                 }
                 default ->
-                    logger.warning("Unknown message type received from another VMS: "+messageType);
+                    logger.warning("Unknown message type "+messageType+" received from: "+producerVms);
             }
             connectionMetadata.readBuffer.clear();
             connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
@@ -897,10 +897,12 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
             // receive input events
             switch (messageType) {
-                /*
-                 * Given a new batch of events sent by the leader, the last message is the batch info
-                 */
+
                 case (BATCH_OF_EVENTS) -> {
+                    /*
+                     * Given a new batch of events sent by the leader, the last message is the batch info
+                     */
+
                     // to increase performance, one would buffer this buffer for processing and then read from another buffer
                     int count = connectionMetadata.readBuffer.getInt();
                     logger.info(me.vmsIdentifier+": Batch of "+count+" events received from the leader");
@@ -966,8 +968,8 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                         connectToReceivedConsumerSet(receivedConsumerVms);
                     }
                 }
-                case (PRESENTATION) -> logger.warning("Presentation being sent again by the producer!?");
-                default -> logger.warning(me.vmsIdentifier+": Message type sent by leader cannot be identified: "+messageType);
+                case (PRESENTATION) -> logger.warning(me.vmsIdentifier+": Presentation being sent again by the producer!?");
+                default -> logger.severe(me.vmsIdentifier+": Message type sent by the leader cannot be identified: "+messageType);
             }
 
             connectionMetadata.readBuffer.clear();
@@ -976,6 +978,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
 
         @Override
         public void failed(Throwable exc, LockConnectionMetadata connectionMetadata) {
+            logger.severe(me.vmsIdentifier+": Message could not be processed: "+exc.getMessage());
             if (connectionMetadata.channel.isOpen()){
                 connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
             } else {

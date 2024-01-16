@@ -19,6 +19,8 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
 
+import static java.lang.Thread.sleep;
+
 /**
  * This thread encapsulates the batch of events sending task
  * that should occur periodically. Once set up, it schedules itself
@@ -58,6 +60,8 @@ final class ConsumerVmsWorker extends TimerTask {
         this.WRITE_SYNCHRONIZER.add(DUMB);
     }
 
+    private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
+
     @Override
     public void run() {
 
@@ -87,7 +91,7 @@ final class ConsumerVmsWorker extends TimerTask {
 
         while(remaining > 0){
 
-            ByteBuffer writeBuffer = retrieveByteBuffer();
+            ByteBuffer writeBuffer = this.retrieveByteBuffer();
             remaining = BatchUtils.assembleBatchPayload( remaining, events, writeBuffer);
 
             this.logger.info(me.vmsIdentifier+ ": Submitting "+(count - remaining)+" events from batch "+batchToSend+" to "+consumerVms);
@@ -96,12 +100,12 @@ final class ConsumerVmsWorker extends TimerTask {
             writeBuffer.flip();
             try {
                 this.WRITE_SYNCHRONIZER.take();
-                this.connectionMetadata.channel.write(writeBuffer, writeBuffer, new WriteCompletionHandler());
+                this.connectionMetadata.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
             } catch (Exception e) {
-                this.logger.warning("Error submitting batch");
+                this.logger.severe(me.vmsIdentifier+ ": Error submitting events from batch "+batchToSend+" to "+consumerVms);
                 // return non-processed events to original location or what?
                 if (!this.connectionMetadata.channel.isOpen()) {
-                    this.logger.warning("The VMS is offline");
+                    this.logger.warning("The "+consumerVms+" VMS is offline");
                 }
                 // return events to the deque
                 for (TransactionEvent.Payload event : events) {
@@ -109,6 +113,9 @@ final class ConsumerVmsWorker extends TimerTask {
                 }
 
             }
+
+            // prevent from error in consumer
+            try { sleep(1000); } catch (InterruptedException ignored) {}
 
         }
 
@@ -123,7 +130,7 @@ final class ConsumerVmsWorker extends TimerTask {
     private class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
         @Override
         public void completed(Integer result, ByteBuffer attachment) {
-            logger.info(me.vmsIdentifier+ ": Batch with size "+result+" has been sent to :"+consumerVms);
+            logger.info(me.vmsIdentifier+ ": Batch with size "+result+" has been sent to: "+consumerVms);
             attachment.clear();
             writeBufferPool.addLast( attachment );
             WRITE_SYNCHRONIZER.add(DUMB);

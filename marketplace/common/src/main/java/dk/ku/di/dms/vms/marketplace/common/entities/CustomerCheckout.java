@@ -37,4 +37,26 @@ public class CustomerCheckout {
 
     public CustomerCheckout(){}
 
+    public CustomerCheckout(int customerId, String firstName, String lastName, String street, String complement,
+                            String city, String state, String zipCode, String paymentType, String cardNumber,
+                            String cardHolderName, String cardExpiration, String cardSecurityNumber, String cardBrand,
+                            int installments, int instanceId) {
+        CustomerId = customerId;
+        FirstName = firstName;
+        LastName = lastName;
+        Street = street;
+        Complement = complement;
+        City = city;
+        State = state;
+        ZipCode = zipCode;
+        PaymentType = paymentType;
+        CardNumber = cardNumber;
+        CardHolderName = cardHolderName;
+        CardExpiration = cardExpiration;
+        CardSecurityNumber = cardSecurityNumber;
+        CardBrand = cardBrand;
+        Installments = installments;
+        this.instanceId = instanceId;
+    }
+
 }

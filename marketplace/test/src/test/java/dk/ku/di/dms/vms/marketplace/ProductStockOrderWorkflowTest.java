@@ -37,7 +37,9 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
 
     private final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
-    private static final CustomerCheckout customerCheckout = new CustomerCheckout();
+    private static final CustomerCheckout customerCheckout = new CustomerCheckout(
+         1, "test", "test", "test", "test","test", "test", "test","test","test","test","test", "test", "test", 1,1
+            );
 
     @Test
     public void testComplexTopologyWithThreeVMSs() throws Exception {
@@ -64,7 +66,7 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
         Thread thread = new Thread(new InputProducer());
         thread.start();
 
-        sleep(batchWindowInterval * 20);
+        sleep(batchWindowInterval * 200);
 
         assert true;
 
@@ -84,8 +86,8 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
                 String payload = serdes.serialize(updateProductEvent, UpdateProductEvent.class);
                 TransactionInput.Event eventPayload = new TransactionInput.Event("update_product", payload);
                 TransactionInput txInput = new TransactionInput("update_product", eventPayload);
-                logger.info("[InputProducer] New product version: "+val);
-                parsedTransactionRequests.add(txInput);
+//                logger.info("[InputProducer] New product version: "+val);
+//                parsedTransactionRequests.add(txInput);
 
                 // reserve stock
                 ReserveStock reserveStockEvent = new ReserveStock(

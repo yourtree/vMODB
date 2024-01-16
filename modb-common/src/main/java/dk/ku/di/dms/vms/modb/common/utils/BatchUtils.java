@@ -12,7 +12,8 @@ public final class BatchUtils {
     public static int assembleBatchPayload(int remaining, List<TransactionEvent.Payload> events, ByteBuffer writeBuffer){
         int remainingBytes = writeBuffer.remaining();
 
-        writeBuffer.clear();
+        // no need. the client must make sure to deliver a clean buffer
+        // writeBuffer.clear();
         writeBuffer.put(BATCH_OF_EVENTS);
         writeBuffer.position(5);
 

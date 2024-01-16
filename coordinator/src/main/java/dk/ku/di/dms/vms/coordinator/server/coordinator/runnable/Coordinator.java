@@ -893,6 +893,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 logger.info("Coordinator will not send commit request to VMS "+ vms.getIdentifier() + " because it is a terminal VMS");
                 continue;
             }
+
+            // has this VMS participated in this batch?
+            if(!batchContext.lastTidOfBatchPerVms.containsKey(vms.getIdentifier())){
+                logger.info("Coordinator will not send commit request to VMS "+ vms.getIdentifier() + " because it is has not participated in this batch.");
+                continue;
+            }
+
             vms.worker().queue().add( new IVmsWorker.Message(SEND_BATCH_COMMIT_COMMAND,
                     new BatchCommitCommand.Payload(
                         batchContext.batchOffset,

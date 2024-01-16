@@ -44,7 +44,7 @@ public class StockOrderWorkflowTest extends AbstractWorkflowTest {
     private static final CustomerCheckout customerCheckout = new CustomerCheckout();
 
     @Test
-    public void testComplexTopologyWithThreeVMSs() throws Exception {
+    public void testTopologyWithTwoVMSs() throws Exception {
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
         dk.ku.di.dms.vms.marketplace.order.Main.main(null);
 
