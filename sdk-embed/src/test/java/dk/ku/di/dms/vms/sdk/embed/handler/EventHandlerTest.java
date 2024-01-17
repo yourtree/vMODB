@@ -113,7 +113,7 @@ public class EventHandlerTest {
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        VmsTransactionScheduler scheduler = new VmsTransactionScheduler(readTaskPool, vmsInternalPubSubService,
+        VmsTransactionScheduler scheduler = new VmsTransactionScheduler("test", readTaskPool, vmsInternalPubSubService,
                         vmsMetadata.queueToVmsTransactionMap(),null);
 
         VmsNode vmsIdentifier = new VmsNode(

@@ -74,13 +74,17 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     private final ISchedulerHandler handler;
 
-    public VmsTransactionScheduler(ExecutorService readTaskPool,
+    private final String vmsIdentifier;
+
+    public VmsTransactionScheduler(String vmsIdentifier,
+                                   ExecutorService readTaskPool,
                                    IVmsInternalChannels vmsChannels,
                                    // (input) queue to transactions map
                                    Map<String, VmsTransactionMetadata> transactionMetadataMap,
                                    ISchedulerHandler handler){
         super();
 
+        this.vmsIdentifier = vmsIdentifier;
         // thread pools
         this.readTaskPool = readTaskPool;
         this.writeTaskPool = Executors.newSingleThreadExecutor();
@@ -294,7 +298,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         } else if (this.offsetMap.get(inboundEvent.tid()) == null) {
             this.processNewEventFromUnknownTransaction(inboundEvent);
         } else {
-            logger.warning("Queue '" + inboundEvent.event() + "' Batch: " + inboundEvent.batch() + " TID: " + inboundEvent.tid());
+            logger.warning(vmsIdentifier+": Event cannot be categorized! Queue '" + inboundEvent.event() + "' Batch: " + inboundEvent.batch() + " TID: " + inboundEvent.tid());
         }
     }
 

@@ -164,6 +164,7 @@ public class TwoConnectedVMSsTest {
 
         VmsTransactionScheduler scheduler =
                 new VmsTransactionScheduler(
+                        node.toString(),
                         readTaskPool,
                         vmsInternalPubSubService,
                         vmsMetadata.queueToVmsTransactionMap(),

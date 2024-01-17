@@ -163,7 +163,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 // write presentation
                 Presentation.writeServer(writeBuffer, this.me, true);
                 writeBuffer.flip();
-                 this.WRITE_SYNCHRONIZER.take();
+                this.WRITE_SYNCHRONIZER.take();
                 this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
             } catch(Exception e){
                 logger.severe("Error on writing presentation: "+e.getMessage());
@@ -299,6 +299,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             ByteBuffer writeBuffer = retrieveByteBuffer();
             ConsumerSet.write(writeBuffer, vmsConsumerSet);
             writeBuffer.flip();
+            this.WRITE_SYNCHRONIZER.take();
             this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
             if (this.state == CONSUMER_SET_READY_FOR_SENDING) // or != CONSUMER_EXECUTING
                 this.state = CONSUMER_EXECUTING;
@@ -478,14 +479,13 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         while(true) {
             try {
                 writeBuffer = this.retrieveByteBuffer();
-
                 remaining = BatchUtils.assembleBatchPayload(remaining, this.events, writeBuffer);
 
                 writeBuffer.flip();
                 // without this async handler, the bytebuffer arriving in the VMS can be corrupted
                 // relying on future.get() yields corrupted buffer in the consumer
-                this.WRITE_SYNCHRONIZER.take();
                 this.logger.info("Leader: Submitting "+(count - remaining)+" events to "+vmsNode.vmsIdentifier);
+                this.WRITE_SYNCHRONIZER.take();
                 this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
                 count = remaining;
 
@@ -516,7 +516,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private void sleep_(){
         // logger.info("Leader: Preparing another submission to: "+vmsNode.vmsIdentifier+" by thread "+Thread.currentThread().getId());
         // necessary to avoid buggy behavior: corrupted byte buffer. reason is unknown. maybe something related to operating system?
-        try { sleep(random.nextInt(100)); } catch (InterruptedException ignored) {}
+        try { sleep(random.nextInt(100) + 100); } catch (InterruptedException ignored) {}
     }
 
     /**
@@ -525,12 +525,12 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
      */
     private void sendBatchedEventsWithCommitInfo(BlockingDeque<TransactionEvent.Payload> eventsToSendToVms, BatchCommitInfo.Payload batchCommitInfo){
         eventsToSendToVms.drainTo(this.events);
-        int remaining;
+        int remaining = this.events.size();
         ByteBuffer writeBuffer;
         while(true) {
             try {
                 writeBuffer = this.retrieveByteBuffer();
-                remaining = BatchUtils.assembleBatchPayload(this.events.size(), this.events, writeBuffer);
+                remaining = BatchUtils.assembleBatchPayload(remaining, this.events, writeBuffer);
 
                 if (remaining == 0) {
                     // now must append the batch commit info
@@ -540,7 +540,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                         writeBuffer.flip();
                         this.WRITE_SYNCHRONIZER.take();
                         this.channel.write(writeBuffer,  writeBuffer, this.writeCompletionHandler);
-
                         // avoid corrupted buffer in consumer...
                         sleep_();
 
@@ -560,12 +559,14 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     writeBuffer.flip();
                     this.WRITE_SYNCHRONIZER.take();
                     this.channel.write(writeBuffer,  writeBuffer, this.writeCompletionHandler);
+                    sleep_();
                     break;
                 }
 
                 writeBuffer.flip();
                 this.WRITE_SYNCHRONIZER.take();
                 this.channel.write(writeBuffer,  writeBuffer, this.writeCompletionHandler);
+                sleep_();
 
             } catch (Exception e) {
                 // return events to the deque

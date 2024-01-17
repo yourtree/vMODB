@@ -66,13 +66,13 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
         Thread thread = new Thread(new InputProducer());
         thread.start();
 
-        sleep(batchWindowInterval * 3);
+        sleep(batchWindowInterval * 5);
 
         assert coordinator.getCurrentBatchOffset() == 2;
 
         assert coordinator.getBatchOffsetPendingCommit() == 2;
 
-        assert coordinator.getTid() == 10;
+        assert coordinator.getTid() == 21;
 
     }
 
@@ -81,7 +81,7 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
         public void run() {
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
             int val = 1;
-            while(val < 10) {
+            while(val <= 10) {
 
                 // update product
                 UpdateProductEvent updateProductEvent = new UpdateProductEvent(
@@ -90,8 +90,8 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
                 String payload = serdes.serialize(updateProductEvent, UpdateProductEvent.class);
                 TransactionInput.Event eventPayload = new TransactionInput.Event("update_product", payload);
                 TransactionInput txInput = new TransactionInput("update_product", eventPayload);
-//                logger.info("[InputProducer] New product version: "+val);
-//                parsedTransactionRequests.add(txInput);
+                logger.info("[InputProducer] New product version: "+val);
+                parsedTransactionRequests.add(txInput);
 
                 // reserve stock
                 ReserveStock reserveStockEvent = new ReserveStock(

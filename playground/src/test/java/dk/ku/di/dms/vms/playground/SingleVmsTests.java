@@ -161,6 +161,7 @@ public class SingleVmsTests
 
         VmsTransactionScheduler scheduler =
                 new VmsTransactionScheduler(
+                        "VmsTest",
                         vmsAppLogicTaskPool,
                         vmsInternalPubSubService,
                         vmsMetadata.queueToVmsTransactionMap(),

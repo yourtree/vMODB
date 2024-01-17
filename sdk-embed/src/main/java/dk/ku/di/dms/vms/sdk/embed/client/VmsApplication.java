@@ -97,6 +97,7 @@ public final class VmsApplication {
 
         VmsTransactionScheduler scheduler =
                 new VmsTransactionScheduler(
+                        vmsName,
                         readTaskPool,
                         vmsInternalPubSubService,
                         vmsMetadata.queueToVmsTransactionMap(), null);

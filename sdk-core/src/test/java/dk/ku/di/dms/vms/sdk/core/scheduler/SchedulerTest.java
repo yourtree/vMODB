@@ -41,7 +41,7 @@ public class SchedulerTest {
         Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) NetworkRepositoryFacade.class.getConstructors()[0];
         VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load(new String[]{"dk.ku.di.dms.vms.sdk.core.example"}, constructor);
 
-        VmsTransactionScheduler scheduler = new VmsTransactionScheduler(
+        VmsTransactionScheduler scheduler = new VmsTransactionScheduler("test",
                 readTaskPool, vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null);
 
         Thread schedulerThread = new Thread(scheduler);
@@ -66,7 +66,7 @@ public class SchedulerTest {
 
         // tricky to simulate we have a scheduler in other microservice.... we need a new scheduler because of the tid
         // could reset the tid to 0, but would need to synchronize to avoid exceptions
-        scheduler = new VmsTransactionScheduler(
+        scheduler = new VmsTransactionScheduler("vmsTest",
                 readTaskPool, vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null);
 
         schedulerThread = new Thread(scheduler);

@@ -82,7 +82,7 @@ public final class VmsManager {
         ExecutorService vmsAppLogicTaskPool = Executors.newSingleThreadExecutor();
 
         // scheduler
-        this.metadata.scheduler = new VmsTransactionScheduler(vmsAppLogicTaskPool, vmsInternalPubSubService,
+        this.metadata.scheduler = new VmsTransactionScheduler("", vmsAppLogicTaskPool, vmsInternalPubSubService,
                 vmsMetadata.queueToVmsTransactionMap(), null);
 
         // executor
