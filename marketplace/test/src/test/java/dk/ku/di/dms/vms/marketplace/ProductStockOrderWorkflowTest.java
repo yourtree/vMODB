@@ -66,9 +66,13 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
         Thread thread = new Thread(new InputProducer());
         thread.start();
 
-        sleep(batchWindowInterval * 200);
+        sleep(batchWindowInterval * 3);
 
-        assert true;
+        assert coordinator.getCurrentBatchOffset() == 2;
+
+        assert coordinator.getBatchOffsetPendingCommit() == 2;
+
+        assert coordinator.getTid() == 10;
 
     }
 

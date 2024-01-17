@@ -9,10 +9,7 @@ import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.List;
-import java.util.TimerTask;
+import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -55,6 +52,7 @@ final class ConsumerVmsWorker extends TimerTask {
         this.logger.setUseParentHandlers(true);
         this.writeBufferPool = new ConcurrentLinkedDeque<>();
         this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(2048) );
+        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(2048) );
 
         // to allow the first thread to write
         this.WRITE_SYNCHRONIZER.add(DUMB);
@@ -84,23 +82,25 @@ final class ConsumerVmsWorker extends TimerTask {
         // a temp list for each "run" can be discarded by the GC later without affecting concurrency
         List<TransactionEvent.Payload> events = new ArrayList<>(this.consumerVms.transactionEventsPerBatch.get(batchToSend).size());
         this.consumerVms.transactionEventsPerBatch.get(batchToSend).drainTo(events);
-
         int remaining = events.size();
-
         int count = remaining;
-
+        ByteBuffer writeBuffer;
         while(remaining > 0){
-
-            ByteBuffer writeBuffer = this.retrieveByteBuffer();
-            remaining = BatchUtils.assembleBatchPayload( remaining, events, writeBuffer);
-
-            this.logger.info(me.vmsIdentifier+ ": Submitting "+(count - remaining)+" events from batch "+batchToSend+" to "+consumerVms);
-            count = remaining;
-
-            writeBuffer.flip();
             try {
+                writeBuffer = this.retrieveByteBuffer();
+                remaining = BatchUtils.assembleBatchPayload( remaining, events, writeBuffer);
+
+                this.logger.info(me.vmsIdentifier+ ": Submitting "+(count - remaining)+" events from batch "+batchToSend+" to "+consumerVms);
+                count = remaining;
+
+                writeBuffer.flip();
+
                 this.WRITE_SYNCHRONIZER.take();
                 this.connectionMetadata.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
+
+                // prevent from error in consumer
+                sleep_();
+
             } catch (Exception e) {
                 this.logger.severe(me.vmsIdentifier+ ": Error submitting events from batch "+batchToSend+" to "+consumerVms);
                 // return non-processed events to original location or what?
@@ -111,14 +111,20 @@ final class ConsumerVmsWorker extends TimerTask {
                 for (TransactionEvent.Payload event : events) {
                     this.consumerVms.transactionEventsPerBatch.get(batchToSend).offerFirst(event);
                 }
-
             }
-
-            // prevent from error in consumer
-            try { sleep(1000); } catch (InterruptedException ignored) {}
-
         }
 
+    }
+
+    private final Random random = new Random();
+
+    /**
+     * For some reason without sleeping, the bytebuffer gets corrupted in the consumer
+     */
+    private void sleep_(){
+        // logger.info("Leader: Preparing another submission to: "+vmsNode.vmsIdentifier+" by thread "+Thread.currentThread().getId());
+        // necessary to avoid buggy behavior: corrupted byte buffer. reason is unknown. maybe something related to operating system?
+        try { sleep(random.nextInt(100)); } catch (InterruptedException ignored) {}
     }
 
     private ByteBuffer retrieveByteBuffer(){
@@ -131,16 +137,16 @@ final class ConsumerVmsWorker extends TimerTask {
         @Override
         public void completed(Integer result, ByteBuffer attachment) {
             logger.info(me.vmsIdentifier+ ": Batch with size "+result+" has been sent to: "+consumerVms);
+            WRITE_SYNCHRONIZER.add(DUMB);
             attachment.clear();
             writeBufferPool.addLast( attachment );
-            WRITE_SYNCHRONIZER.add(DUMB);
         }
         @Override
         public void failed(Throwable exc, ByteBuffer attachment) {
             logger.severe(me.vmsIdentifier+": ERROR on writing batch of events to: "+consumerVms);
+            WRITE_SYNCHRONIZER.add(DUMB);
             attachment.clear();
             writeBufferPool.addLast( attachment );
-            WRITE_SYNCHRONIZER.add(DUMB);
         }
     }
 }
