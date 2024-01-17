@@ -5,16 +5,14 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import java.util.Date;
 
 @Entity
 @VmsTable(name="orders")
-public class Order implements IEntity<Integer>  {
+public class Order implements IEntity<Integer> {
 
     @Id
-    @GeneratedValue
     public int id;
 
     @Column
@@ -69,7 +67,8 @@ public class Order implements IEntity<Integer>  {
 
     public Order(int id, String invoice_number, int customer_id, OrderStatus status, Date purchase_date,
                  Date payment_date, Date delivered_carrier_date, Date delivered_customer_date, Date estimated_delivery_date,
-                 int count_items, Date created_at, Date updated_at, float total_amount, float total_freight, float total_incentive, float total_invoice, float total_items) {
+                 int count_items, Date created_at, Date updated_at, float total_amount, float total_freight,
+                 float total_incentive, float total_invoice, float total_items) {
         this.id = id;
         this.invoice_number = invoice_number;
         this.customer_id = customer_id;

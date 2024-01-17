@@ -66,5 +66,27 @@ public class OrderItem implements IEntity<OrderItem.OrderItemId> {
     // public float total_incentive;
 
     public OrderItem() { }
-    
+
+    public OrderItem(int order_id, int order_item_id, int product_id, String product_name, int seller_id,
+                     float unit_price, Date shipping_limit_date,
+                     float freight_value, int quantity, float total_items, float total_amount) {
+        this.order_id = order_id;
+        this.order_item_id = order_item_id;
+        this.product_id = product_id;
+        this.product_name = product_name;
+        this.seller_id = seller_id;
+        this.unit_price = unit_price;
+        this.shipping_limit_date = shipping_limit_date;
+        this.freight_value = freight_value;
+        this.quantity = quantity;
+        this.total_items = total_items;
+        this.total_amount = total_amount;
+    }
+
+    public dk.ku.di.dms.vms.marketplace.common.entities.OrderItem toCommonOrderItem(){
+        return new dk.ku.di.dms.vms.marketplace.common.entities.OrderItem( order_id, order_item_id,
+                product_id, product_name, seller_id, unit_price, shipping_limit_date, freight_value,
+                quantity, total_items, total_amount);
+    }
+
 }

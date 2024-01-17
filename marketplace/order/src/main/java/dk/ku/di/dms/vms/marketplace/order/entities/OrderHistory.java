@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.marketplace.order.entities;
 
 import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
+import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
@@ -11,7 +12,7 @@ import java.util.Date;
 
 @Entity
 @VmsTable(name="order_history")
-public class OrderHistory {
+public class OrderHistory implements IEntity<Integer> {
 
     @Id
     @GeneratedValue
@@ -28,4 +29,9 @@ public class OrderHistory {
 
     public OrderHistory() { }
 
+    public OrderHistory(int order_id, Date created_at, OrderStatus status) {
+        this.order_id = order_id;
+        this.created_at = created_at;
+        this.status = status;
+    }
 }

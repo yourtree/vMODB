@@ -21,12 +21,16 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.*;
 import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.IVmsWorker.State.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
+import static dk.ku.di.dms.vms.web_common.meta.NetworkConfigConstants.DEFAULT_BUFFER_SIZE;
 import static java.lang.Thread.sleep;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
@@ -80,7 +84,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                                     AsynchronousChannelGroup group,
                                     IVmsSerdesProxy serdesProxy) {
         return new VmsWorker(me, consumerVms, coordinatorQueue, null, group,
-                MemoryManager.getTemporaryDirectBuffer(2048), serdesProxy);
+                MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE), serdesProxy);
     }
 
     static VmsWorker build(
@@ -296,7 +300,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
         String vmsConsumerSet = workerMessage.asVmsConsumerSet();
         try {
-            ByteBuffer writeBuffer = retrieveByteBuffer();
+            ByteBuffer writeBuffer = this.retrieveByteBuffer();
             ConsumerSet.write(writeBuffer, vmsConsumerSet);
             writeBuffer.flip();
             this.WRITE_SYNCHRONIZER.take();
@@ -384,7 +388,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
         @Override
         public void failed(Throwable exc, Object attachment) {
-
             if(state == LEADER_PRESENTATION_SENT){
                 state = VMS_PRESENTATION_RECEIVE_FAILED;
                 if(channel.isOpen()){
@@ -402,7 +405,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
             readBuffer.clear();
             channel.read(readBuffer, null, this);
-
         }
 
     }
@@ -460,9 +462,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     }
 
     private static ByteBuffer buildByteBuffer(){
-         return MemoryManager.getTemporaryDirectBuffer(2048);
+         return MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE);
          // leads to several bugs =(
-         // return ByteBuffer.allocate(2048);
+         // return ByteBuffer.allocate(DEFAULT_BUFFER_SIZE);
     }
 
     /**

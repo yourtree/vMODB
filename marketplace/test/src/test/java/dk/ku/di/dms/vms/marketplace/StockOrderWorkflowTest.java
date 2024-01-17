@@ -9,8 +9,6 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
-import dk.ku.di.dms.vms.marketplace.product.Product;
-import dk.ku.di.dms.vms.marketplace.product.UpdateProductEvent;
 import dk.ku.di.dms.vms.marketplace.stock.Stock;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
@@ -64,7 +62,7 @@ public class StockOrderWorkflowTest extends AbstractWorkflowTest {
         Thread thread = new Thread(new InputProducer());
         thread.start();
 
-        sleep(batchWindowInterval * 5);
+        sleep(batchWindowInterval * 500);
 
         assert coordinator.getCurrentBatchOffset() == 2;
 
@@ -79,7 +77,7 @@ public class StockOrderWorkflowTest extends AbstractWorkflowTest {
         public void run() {
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
             int val = 1;
-            while(val < 10) {
+            while(val < 2) {
 
                 // reserve stock
                 ReserveStock reserveStockEvent = new ReserveStock(

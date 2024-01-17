@@ -131,7 +131,6 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
                 if (object != null)
                     return this.parseObjectIntoEntity(object);
                 return null;
-
             }
             case "lookupByKeys" -> {
                 List<Object> castedList = (List<Object>) args[0];
@@ -222,6 +221,11 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
     private Object[] extractFieldValuesFromKeyObject(Object keyObject) {
 
         Object[] values = new Object[this.pkFieldMap.size()];
+
+        if(keyObject instanceof Number){
+            values[0] = keyObject;
+            return values;
+        }
 
         int fieldIdx = 0;
         // get values from key object

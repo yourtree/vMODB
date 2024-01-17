@@ -42,8 +42,9 @@ import static dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.IVmsWorke
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.PRESENTATION;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.SERVER_TYPE;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.VMS_TYPE;
-import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.UNREACHABLE_NODE;
 import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.SERVER;
+import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.UNREACHABLE_NODE;
+import static dk.ku.di.dms.vms.web_common.meta.NetworkConfigConstants.DEFAULT_BUFFER_SIZE;
 import static java.lang.Thread.sleep;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
@@ -328,7 +329,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 channel.setOption(SO_KEEPALIVE, true);
 
                 // right now I cannot discern whether it is a VMS or follower. perhaps I can keep alive channels from leader election?
-                buffer = MemoryManager.getTemporaryDirectBuffer(2048);
+                buffer = MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE);
 
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 // this will be handled by another thread in the group

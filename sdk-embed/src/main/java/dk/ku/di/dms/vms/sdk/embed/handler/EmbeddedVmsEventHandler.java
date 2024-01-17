@@ -35,6 +35,7 @@ import java.util.logging.Level;
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.*;
 import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.CANNOT_CONNECT_TO_NODE;
+import static dk.ku.di.dms.vms.web_common.meta.NetworkConfigConstants.DEFAULT_BUFFER_SIZE;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -424,7 +425,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
             this.state = State.NEW;
             this.channel = channel;
             this.connectCompletionHandler = new ConnectToVmsCompletionHandler();
-            this.buffer = MemoryManager.getTemporaryDirectBuffer(2048);
+            this.buffer = MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE);
             this.outputEvents = outputEvents;
             this.address = address;
         }
@@ -731,7 +732,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
             logger.info(me.vmsIdentifier+": An unknown host has started a connection attempt.");
-            final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(2048);
+            final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE);
             try {
                 // logger.info("Remote address: "+channel.getRemoteAddress().toString());
                 channel.setOption(TCP_NODELAY, true);

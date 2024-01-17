@@ -11,7 +11,6 @@ public interface INetworkProducer {
      * Broadcast is waste of resources
      * Multicast can use the network efficiently to
      * avoid overhead on packet sending
-     *
      * Join the default multicast group
      */
     void join();

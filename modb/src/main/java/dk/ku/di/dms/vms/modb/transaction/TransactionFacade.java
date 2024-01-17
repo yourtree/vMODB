@@ -228,7 +228,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
     }
 
     public Object[] lookupByKey(PrimaryIndex index, Object... valuesOfKey){
-        IKey pk = KeyUtils.buildPrimaryKeyFromKeyValues(valuesOfKey);
+        IKey pk = KeyUtils.buildKey(valuesOfKey);
         return index.lookupByKey(pk);
     }
 

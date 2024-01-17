@@ -5,7 +5,6 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
@@ -13,9 +12,9 @@ import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
 
+import static dk.ku.di.dms.vms.web_common.meta.NetworkConfigConstants.DEFAULT_BUFFER_SIZE;
 import static java.lang.Thread.sleep;
 
 /**
@@ -51,8 +50,8 @@ final class ConsumerVmsWorker extends TimerTask {
         this.logger = Logger.getLogger("vms-worker-"+consumerVms.hashCode());
         this.logger.setUseParentHandlers(true);
         this.writeBufferPool = new ConcurrentLinkedDeque<>();
-        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(2048) );
-        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(2048) );
+        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE) );
+        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE) );
 
         // to allow the first thread to write
         this.WRITE_SYNCHRONIZER.add(DUMB);
@@ -130,7 +129,7 @@ final class ConsumerVmsWorker extends TimerTask {
     private ByteBuffer retrieveByteBuffer(){
         ByteBuffer bb = this.writeBufferPool.poll();
         if(bb != null) return bb;
-        return MemoryManager.getTemporaryDirectBuffer(2048);
+        return MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE);
     }
 
     private class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
