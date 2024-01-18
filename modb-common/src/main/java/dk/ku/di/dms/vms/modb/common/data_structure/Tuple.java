@@ -1,5 +1,7 @@
 package dk.ku.di.dms.vms.modb.common.data_structure;
 
+import java.util.Objects;
+
 /**
  * Basic entry to represent pair of values
  *
@@ -28,4 +30,16 @@ public final class Tuple<T1, T2> {
         return new Tuple<>(t1,t2);
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Tuple<?, ?> tuple = (Tuple<?, ?>) o;
+        return Objects.equals(t1, tuple.t1) && Objects.equals(t2, tuple.t2);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(t1, t2);
+    }
 }

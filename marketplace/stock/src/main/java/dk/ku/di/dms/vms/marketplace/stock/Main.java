@@ -42,7 +42,7 @@ public class Main {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             String str = new String( exchange.getRequestBody().readAllBytes() );
-            Stock stock = this.serdes.deserialize(str, Stock.class);
+            StockItem stock = this.serdes.deserialize(str, StockItem.class);
             Object[] obj = this.repository.extractFieldValuesFromEntityObject(stock);
             IKey key = KeyUtils.buildRecordKey( table.getSchema().getPrimaryKeyColumns(), obj );
             this.table.underlyingPrimaryKeyIndex_().insert(key, obj);

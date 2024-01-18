@@ -9,7 +9,7 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
-import dk.ku.di.dms.vms.marketplace.stock.Stock;
+import dk.ku.di.dms.vms.marketplace.stock.StockItem;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -82,7 +82,7 @@ public class StockOrderWorkflowTest extends AbstractWorkflowTest {
                 // reserve stock
                 ReserveStock reserveStockEvent = new ReserveStock(
                         new Date(), customerCheckout,
-                        List.of(new CartItem(1,1,"test",1.0f, 1.0f, 1, 1.0f, String.valueOf(val))),
+                        List.of( new CartItem(1,1,"test",1.0f, 1.0f, 1, 1.0f, "test") ),
                         String.valueOf(val)
                 );
                 String payload_ = serdes.serialize(reserveStockEvent, ReserveStock.class);
@@ -137,7 +137,7 @@ public class StockOrderWorkflowTest extends AbstractWorkflowTest {
         HttpClient client = HttpClient.newHttpClient();
         String str2;
         for(int i = 1; i <= MAX_ITEMS; i++){
-            str2 = new Stock( 1, i, 100, 0, 0, 0,  "test", "test" ).toString();
+            str2 = new StockItem( 1, i, 100, 0, 0, 0,  "test", "test" ).toString();
             HttpRequest stockReq = httpRequestStockSupplier.apply(str2);
             client.send(stockReq, HttpResponse.BodyHandlers.ofString());
         }

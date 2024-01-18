@@ -8,11 +8,13 @@ import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.IdClass;
 import java.io.Serializable;
+import java.util.Date;
+import java.util.Objects;
 
 @Entity
 @VmsTable(name="stock_items")
-@IdClass(Stock.StockId.class)
-public class Stock implements IEntity<Stock.StockId> {
+@IdClass(StockItem.StockId.class)
+public class StockItem implements IEntity<StockItem.StockId> {
 
     public static class StockId implements Serializable {
         public int seller_id;
@@ -24,6 +26,20 @@ public class Stock implements IEntity<Stock.StockId> {
             this.seller_id = seller_id;
             this.product_id = product_id;
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            StockId stockId = (StockId) o;
+            return seller_id == stockId.seller_id && product_id == stockId.product_id;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(seller_id, product_id);
+        }
+
     }
 
     @Id
@@ -50,9 +66,15 @@ public class Stock implements IEntity<Stock.StockId> {
     @Column
     public String version;
 
-    public Stock() {}
+    @Column
+    public Date created_at;
 
-    public Stock(int seller_id, int product_id, int qty_available, int qty_reserved, int order_count, int ytd, String data, String version) {
+    @Column
+    public Date updated_at;
+
+    public StockItem() {}
+
+    public StockItem(int seller_id, int product_id, int qty_available, int qty_reserved, int order_count, int ytd, String data, String version) {
         this.seller_id = seller_id;
         this.product_id = product_id;
         this.qty_available = qty_available;
@@ -61,6 +83,8 @@ public class Stock implements IEntity<Stock.StockId> {
         this.ytd = ytd;
         this.data = data;
         this.version = version;
+        this.created_at = new Date();
+        this.updated_at = created_at;
     }
 
     @Override

@@ -19,6 +19,7 @@ import java.io.Serializable;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.*;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -133,7 +134,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
                 return null;
             }
             case "lookupByKeys" -> {
-                List<Object> castedList = (List<Object>) args[0];
+                Collection<Object> castedList = (Collection<Object>) args[0];
                 List<IEntity<?>> resultList = new ArrayList<>(castedList.size());
                 for(Object obj : castedList){
                     Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(obj);

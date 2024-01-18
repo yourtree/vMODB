@@ -43,7 +43,7 @@ public class OrderService {
     @Transactional(type=RW)
     public InvoiceIssued processStockConfirmed(StockConfirmed stockConfirmed) {
         Date now = new Date();
-        System.out.println("Order received a stock confirmed event: version = "+ stockConfirmed.instanceId +" ts: "+ now);
+        System.out.println("Order received a stock confirmed event with TID: "+ stockConfirmed.instanceId);
 
         // calculate total freight_value
         float total_freight = 0;
@@ -116,7 +116,7 @@ public class OrderService {
                  total_amount + total_freight,
                  total_items
                  );
-        orderRepository.insert(order);
+        this.orderRepository.insert(order);
 
         Calendar cal = Calendar.getInstance();
         cal.setTime(now);
@@ -142,7 +142,7 @@ public class OrderService {
             );
 
             orderItems.add(oim);
-            orderItemRepository.insert(oim);
+            this.orderItemRepository.insert(oim);
 
             item_id++;
         }
@@ -151,7 +151,7 @@ public class OrderService {
             customerOrder.next_order_id,
             order.created_at,
             OrderStatus.INVOICED);
-        orderHistoryRepository.insert(oh);
+        this.orderHistoryRepository.insert(oh);
 
         return new InvoiceIssued( stockConfirmed.customerCheckout, customerOrder.next_order_id, invoiceNumber, now, order.total_invoice,
                orderItems.stream().map(OrderItem::toCommonOrderItem).collect(Collectors.toList()), stockConfirmed.instanceId);

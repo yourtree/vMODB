@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 
 import java.io.Serializable;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -27,7 +28,7 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
     T deleteAllByKey(List<PK> keys);
 
     T lookupByKey(PK key);
-    List<T> lookupByKeys(List<PK> keys);
+    List<T> lookupByKeys(Collection<PK> keys);
 
     /**
      * Used for issuing update, insert, and delete statements.

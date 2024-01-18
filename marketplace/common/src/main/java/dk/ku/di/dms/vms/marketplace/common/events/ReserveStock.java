@@ -7,6 +7,9 @@ import dk.ku.di.dms.vms.modb.api.annotations.Event;
 import java.util.Date;
 import java.util.List;
 
+/**
+ * A command to reserve stock
+ */
 @Event
 public class ReserveStock {
 

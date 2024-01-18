@@ -30,7 +30,7 @@ public class ProductService {
         Product product = new Product(updateEvent.seller_id, updateEvent.product_id, updateEvent.name, updateEvent.sku, updateEvent.category,
                 updateEvent.description, updateEvent.price, updateEvent.freight_value, updateEvent.status, updateEvent.version);
 
-        productRepository.update(product);
+        this.productRepository.update(product);
 
         return new ProductUpdatedEvent( updateEvent.seller_id, updateEvent.product_id, updateEvent.version);
     }
@@ -39,16 +39,16 @@ public class ProductService {
     @Outbound("transaction_mark")
     @Transactional(type=W)
     public TransactionMark updateProductPrice(UpdatePriceEvent updatePriceEvent) {
-        System.out.println("I am alive. The scheduler has scheduled me successfully!");
+        System.out.println("Stock received an update price event with TID: "+updatePriceEvent.instanceId);
 
         // can use issue statement for faster update
 
-        Product product = productRepository.lookupByKey(new Product.ProductId(updatePriceEvent.sellerId, updatePriceEvent.productId));
+        Product product = this.productRepository.lookupByKey(new Product.ProductId(updatePriceEvent.sellerId, updatePriceEvent.productId));
 
         product.version = updatePriceEvent.instanceId;
         product.price = updatePriceEvent.price;
 
-        productRepository.update(product);
+        this.productRepository.update(product);
 
         return new TransactionMark( updatePriceEvent.instanceId, TransactionMark.TransactionType.PRICE_UPDATE,
                 updatePriceEvent.sellerId, TransactionMark.MarkStatus.SUCCESS, "product");

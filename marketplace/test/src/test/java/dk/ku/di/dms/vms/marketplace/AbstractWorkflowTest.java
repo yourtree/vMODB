@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.marketplace;
 
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.marketplace.product.Product;
-import dk.ku.di.dms.vms.marketplace.stock.Stock;
+import dk.ku.di.dms.vms.marketplace.stock.StockItem;
 
 import java.io.IOException;
 import java.net.URI;
@@ -46,7 +46,7 @@ public class AbstractWorkflowTest {
             HttpRequest prodReq = httpRequestProductSupplier.apply(str1);
             client.send(prodReq, HttpResponse.BodyHandlers.ofString());
 
-            str2 = new Stock( 1, i, 100, 0, 0, 0,  "test", "test" ).toString();
+            str2 = new StockItem( 1, i, 100, 0, 0, 0,  "test", "test" ).toString();
             HttpRequest stockReq = httpRequestStockSupplier.apply(str2);
             client.send(stockReq, HttpResponse.BodyHandlers.ofString());
         }
