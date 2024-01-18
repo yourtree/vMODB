@@ -372,7 +372,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         if(this.primaryKeyGenerator != null){
             Object key_ = this.primaryKeyGenerator.next();
             values[this.primaryKeyIndex.columns()[0]] = key_;
-            IKey key = KeyUtils.buildKey( key_ );
+            IKey key = KeyUtils.buildRecordKey( this.primaryKeyIndex.schema().getPrimaryKeyColumns(),  key_ );
             if(this.insert( key, values )){
                 return key;
             }
@@ -464,10 +464,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
         }
 
-    }
-
-    public ReadWriteIndex<IKey> index(){
-        return this.primaryKeyIndex;
     }
 
     public ReadWriteIndex<IKey> underlyingIndex(){

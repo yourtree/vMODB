@@ -62,7 +62,7 @@ public class StockOrderWorkflowTest extends AbstractWorkflowTest {
         Thread thread = new Thread(new InputProducer());
         thread.start();
 
-        sleep(batchWindowInterval * 500);
+        sleep(batchWindowInterval * 3);
 
         assert coordinator.getCurrentBatchOffset() == 2;
 
@@ -77,7 +77,7 @@ public class StockOrderWorkflowTest extends AbstractWorkflowTest {
         public void run() {
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
             int val = 1;
-            while(val < 2) {
+            while(val < 21) {
 
                 // reserve stock
                 ReserveStock reserveStockEvent = new ReserveStock(

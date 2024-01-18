@@ -164,7 +164,7 @@ public final class EmbedRepositoryFacade implements IVmsRepositoryFacade, Invoca
                 // cache the entity
                 Object cached = args[0];
                 Object[] values = this.extractFieldValuesFromEntityObject(args[0]);
-                Object key_ = this.transactionFacade.insertAndGet(this.table, values);
+                Object valuesWithKey = this.transactionFacade.insertAndGet(this.table, values);
                 // this.setKeyValueOnObject( key_, cached );
                 return cached;
             }

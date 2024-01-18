@@ -6,12 +6,12 @@ import dk.ku.di.dms.vms.modb.index.IIndexKey;
  * A value that serves both for identifying a unique row (e.g., as PK) or a unique index entry.
  * In this case, the hash code is the hash of the object itself rather than the composition of values as in {@link CompositeKey}
  */
-public class SimpleKey implements IKey, IIndexKey {
+public final class SimpleKey implements IKey, IIndexKey {
 
-    private final Object value;
+    private final int value;
 
-    public SimpleKey(Object value) {
-        this.value = value;
+    private SimpleKey(Object value) {
+        this.value = value.hashCode();
     }
 
     public static SimpleKey of(Object value) {
@@ -20,12 +20,12 @@ public class SimpleKey implements IKey, IIndexKey {
 
     @Override
     public int hashCode() {
-        return value.hashCode();
+        return this.value;
     }
 
     @Override
     public boolean equals(Object object){
-        return this.value == ((SimpleKey)object).value;
+        return object instanceof SimpleKey && this.value == ((SimpleKey) object).value;
     }
 
 }

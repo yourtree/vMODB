@@ -213,7 +213,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
     }
 
     public void deleteByKey(Table table, Object[] keyValues) {
-        IKey pk = KeyUtils.buildKey(keyValues);
+        IKey pk = KeyUtils.buildRecordKey(table.schema.getPrimaryKeyColumns(), keyValues);
         this.deleteByKey(table, pk);
     }
 
@@ -228,7 +228,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
     }
 
     public Object[] lookupByKey(PrimaryIndex index, Object... valuesOfKey){
-        IKey pk = KeyUtils.buildKey(valuesOfKey);
+        IKey pk = KeyUtils.buildRecordKey( index.underlyingIndex().schema().getPrimaryKeyColumns(), valuesOfKey);
         return index.lookupByKey(pk);
     }
 
@@ -265,7 +265,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
                     INDEX_WRITES.get().add(secIndex);
                     secIndex.appendDelta( key_, values );
                 }
-                return values[ index.index().columns()[0] ];
+                return values;
             }
         }
         undoTransactionWrites();
@@ -278,7 +278,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
      */
     public void update(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
-        IKey pk = KeyUtils.buildRecordKey(index.index().schema().getPrimaryKeyColumns(), values);
+        IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), values);
         if(!fkConstraintViolation(table, values) && index.update(pk, values)){
             INDEX_WRITES.get().add(index);
             return;
@@ -319,7 +319,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
         FilterContext filterContext = FilterContextBuilder.build(wherePredicatesNoIndex);
 
         // build input
-        IKey inputKey = KeyUtils.buildKey(keyList.toArray());
+        IKey inputKey = KeyUtils.buildRecordKey( table.schema.getPrimaryKeyColumns(), keyList.toArray());
 
         return operator.run( table.underlyingPrimaryKeyIndex(), filterContext, inputKey );
     }

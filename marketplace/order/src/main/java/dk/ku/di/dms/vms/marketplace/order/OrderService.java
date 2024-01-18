@@ -43,7 +43,7 @@ public class OrderService {
     @Transactional(type=RW)
     public InvoiceIssued processStockConfirmed(StockConfirmed stockConfirmed) {
         Date now = new Date();
-        System.out.println("Order received a stock confirmed event at: "+ now);
+        System.out.println("Order received a stock confirmed event: version = "+ stockConfirmed.instanceId +" ts: "+ now);
 
         // calculate total freight_value
         float total_freight = 0;
@@ -85,14 +85,14 @@ public class OrderService {
             totalPerItem.put(item.ProductId, total_item);
         }
 
-        CustomerOrder customerOrder = customerOrderRepository.lookupByKey( stockConfirmed.customerCheckout.CustomerId );
+        CustomerOrder customerOrder = this.customerOrderRepository.lookupByKey( stockConfirmed.customerCheckout.CustomerId );
         if (customerOrder == null)
         {
             customerOrder = new CustomerOrder(stockConfirmed.customerCheckout.CustomerId, 1);
-            customerOrderRepository.insert(customerOrder);
+            this.customerOrderRepository.insert(customerOrder);
         } else {
             customerOrder.next_order_id++;
-            customerOrderRepository.update(customerOrder);
+            this.customerOrderRepository.update(customerOrder);
         }
 
         String invoiceNumber = buildInvoiceNumber( stockConfirmed.customerCheckout.CustomerId, now, customerOrder.next_order_id );

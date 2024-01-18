@@ -23,4 +23,5 @@ public class CustomerOrder implements IEntity<Integer> {
         this.customer_id = customer_id;
         this.next_order_id = next_order_id;
     }
+
 }
