@@ -35,6 +35,7 @@ import java.net.URL;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
 import static java.util.logging.Logger.getLogger;
@@ -59,7 +60,7 @@ public class VmsMetadataLoader {
 
         Map<Class<?>, String> entityToVirtualMicroservice = mapEntitiesToVirtualMicroservice(vmsClasses, entityToTableNameMap);
 
-        Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(reflections, reflections.getConfiguration(), entityToVirtualMicroservice, entityToTableNameMap);
+        Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(entityToVirtualMicroservice, entityToTableNameMap);
 
         Map<String, IVmsRepositoryFacade> repositoryFacades = new HashMap<>(5);
 
@@ -153,7 +154,6 @@ public class VmsMetadataLoader {
      * Map the entities annotated with {@link VmsTable}
      */
     private static Map<Class<?>, String> loadVmsTableNames(Reflections reflections) {
-
         Set<Class<?>> vmsTables = reflections.getTypesAnnotatedWith(VmsTable.class);
         Map<Class<?>, String> vmsTableNameMap = new HashMap<>();
         for(Class<?> vmsTable : vmsTables){
@@ -162,9 +162,7 @@ public class VmsMetadataLoader {
             optionalVmsTableAnnotation.ifPresent(
                     annotation -> vmsTableNameMap.put(vmsTable, ((VmsTable) annotation).name()));
         }
-
         return vmsTableNameMap;
-
     }
 
     /**
@@ -221,63 +219,36 @@ public class VmsMetadataLoader {
      * Building virtual microservice table schemas
      */
     @SuppressWarnings("unchecked")
-    protected static Map<String, VmsDataSchema> buildDataSchema(Reflections reflections,
-                                                                Configuration reflectionsConfig,
-                                                                Map<Class<?>, String> entityToVirtualMicroservice,
+    protected static Map<String, VmsDataSchema> buildDataSchema(Map<Class<?>, String> entityToVirtualMicroservice,
                                                                 Map<Class<?>, String> vmsTableNames) {
 
         Map<String, VmsDataSchema> schemaMap = new HashMap<>();
 
-        // get all fields annotated with column
-        Set<Field> allEntityFields = reflections.get(
-                Scanners.FieldsAnnotated.with( Column.class )// .add(FieldsAnnotated.with(Id.class))
-                        .as(Field.class, reflectionsConfig.getClassLoaders())
-        );
-
-        // group by class
-        Map<Class<?>,List<Field>> columnMap = allEntityFields.stream()
-                .collect( Collectors.groupingBy( Field::getDeclaringClass, Collectors.toList()) );
-
-        // get all fields annotated with column
-        Set<Field> allPrimaryKeyFields = reflections.get(
-                Scanners.FieldsAnnotated.with( Id.class )
-                        .as(Field.class, reflectionsConfig.getClassLoaders())
-        );
-
-        // group by entity type
-        Map<Class<?>,List<Field>> pkMap = allPrimaryKeyFields.stream()
-                .collect( Collectors.groupingBy( Field::getDeclaringClass, Collectors.toList()) );
-
-        // get all foreign keys
-        Set<Field> allAssociationFields = reflections.get(
-                Scanners.FieldsAnnotated.with(VmsForeignKey.class)
-                        .as(Field.class, reflectionsConfig.getClassLoaders())
-        );
-
-        // group by entity type
-        Map<Class<?>,List<Field>> associationMap = allAssociationFields.stream()
-                .collect( Collectors.groupingBy( Field::getDeclaringClass, Collectors.toList()) );
-
         // build schema of each table
         // we build the schema in order to look up the fields and define the pk hash index
-        for(Map.Entry<Class<?>, List<Field>> entry : pkMap.entrySet()){
+        for(Map.Entry<Class<?>, String> entry : vmsTableNames.entrySet()){
 
             Class<? extends IEntity<?>> tableClass = (Class<? extends IEntity<?>>) entry.getKey();
-            List<Field> pkFields = entry.getValue();
 
-            if(pkFields == null || pkFields.size() == 0){
+            Stream<Field> stream = Arrays.stream(tableClass.getFields());
+
+            List<Field> pkFields = stream.filter(p -> p.getAnnotation(Id.class) != null).toList();
+
+            if(pkFields.isEmpty()){
                 throw new NoPrimaryKeyFoundException("Table class "+tableClass.getCanonicalName()+" does not have a primary key.");
             }
              int totalNumberOfFields = pkFields.size();
 
-            List<Field> foreignKeyFields = associationMap.get( tableClass );
-            List<Field> columnFields = columnMap.get( tableClass );
-
-            if(foreignKeyFields != null) {
+            stream = Arrays.stream(tableClass.getFields());
+            List<Field> foreignKeyFields = stream.filter(p->p.getAnnotation(VmsForeignKey.class)!=null).toList();
+            if(!foreignKeyFields.isEmpty()) {
                 totalNumberOfFields += foreignKeyFields.size();
             }
 
-            if(columnFields != null) {
+            stream = Arrays.stream(tableClass.getFields());
+            List<Field> columnFields = stream.filter(p->p.getAnnotation(Column.class)!=null).toList();
+
+            if(!columnFields.isEmpty()) {
                 totalNumberOfFields += columnFields.size();
             }
 
@@ -297,16 +268,15 @@ public class VmsMetadataLoader {
             }
 
             ForeignKeyReference[] foreignKeyReferences = null;
-            if(foreignKeyFields != null) {
+            if(!foreignKeyFields.isEmpty()) {
                 foreignKeyReferences = new ForeignKeyReference[foreignKeyFields.size()];
                 int j = 0;
                 // iterating over association columns
                 for (Field field : foreignKeyFields) {
-
                     VmsForeignKey fk = field.getAnnotation(VmsForeignKey.class);
                     String fkTable = vmsTableNames.get(fk.table());
                     // later we parse into a Vms Table and check whether the types match
-                    foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column());
+                    foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column(), i);
                     j++;
 
                     // check if field is part of PK already
@@ -319,7 +289,6 @@ public class VmsMetadataLoader {
                     } else {
                         totalNumberOfFields--;
                     }
-
                 }
 
             }
@@ -338,7 +307,6 @@ public class VmsMetadataLoader {
             String vms = entityToVirtualMicroservice.get( tableClass );
             VmsDataSchema schema = new VmsDataSchema(vms, vmsTableName, pkFieldsStr, columnNamesArray, columnDataTypesArray, foreignKeyReferences, constraints);
             schemaMap.put(vmsTableName, schema);
-
         }
 
         return schemaMap;

@@ -111,7 +111,7 @@ public class EmbedMetadataLoader {
             if(vmsDataSchema.foreignKeyReferences != null && vmsDataSchema.foreignKeyReferences.length > 0){
                 // build
                 Map<String, List<ForeignKeyReference>> fksPerTable = Stream.of( vmsDataSchema.foreignKeyReferences )
-                                .sorted( (x,y) -> schema.columnPosition( x.columnName() ) <= schema.columnPosition( y.columnName() ) ? -1 : 1 )
+                                //.sorted( (x,y) -> schema.columnPosition( x.columnName() ) <= schema.columnPosition( y.columnName() ) ? -1 : 1 )
                         .collect( Collectors.groupingBy(ForeignKeyReference::vmsTableName ) ); // Collectors.toUnmodifiableList() ) );
 
                 // table name, fields
@@ -243,13 +243,15 @@ public class EmbedMetadataLoader {
     private static Map<String, int[]> buildSchemaForeignKeyMap(Map<String, List<ForeignKeyReference>> fksPerTable, Map<String, VmsDataSchema> dataSchemaMap) {
         Map<String, int[]> res = new HashMap<>();
         for( var entry : fksPerTable.entrySet() ){
+            // get parent data schema
             VmsDataSchema dataSchema = dataSchemaMap.get( entry.getKey() );
-            try {
-                int[] intArray = entry.getValue().stream().mapToInt(p -> dataSchema.findColumnPosition( p.columnName() ) ).toArray();
-                res.put( dataSchema.tableName, intArray );
-            } catch (Exception e){
-                throw new RuntimeException("Cannot find foreign key that refers to a column in parent table:"+entry.getKey());
+            // first check if the foreign keys defined actually map to a column in parent table
+            for(var fkColumn : entry.getValue()){
+                if(dataSchema.findColumnPosition(fkColumn.columnName()) == -1)
+                    throw new RuntimeException("Cannot find foreign key "+ fkColumn +" that refers to a PK in parent table: "+entry.getKey());
             }
+            int[] intArray = entry.getValue().stream().mapToInt(ForeignKeyReference::getPos).toArray();
+            res.put( dataSchema.tableName, intArray );
         }
         return res;
     }

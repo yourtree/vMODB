@@ -11,7 +11,7 @@ public final class KeyUtils {
     public static IKey buildRecordKey(int[] columns, Object... object){
 
         if(columns.length == 1){
-            return SimpleKey.of( object[0] );
+            return SimpleKey.of( object[columns[0]] );
         }
 
         if(columns.length == object.length){
