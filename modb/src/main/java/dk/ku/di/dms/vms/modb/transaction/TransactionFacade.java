@@ -208,7 +208,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
      * Not yet considering this record can serve as FK to a record in another table.
      */
     public void delete(Table table, Object[] values) {
-        IKey pk = KeyUtils.buildPrimaryKey(table.schema, values);
+        IKey pk = KeyUtils.buildRecordKey(table.schema.getPrimaryKeyColumns(), values);
         this.deleteByKey(table, pk);
     }
 
@@ -238,18 +238,18 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
      */
     public void insert(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
-        IKey pk = KeyUtils.buildRecordKey(index.index().schema().getPrimaryKeyColumns(), values);
-        if(!fkConstraintViolation(table, values) && index.insert(pk, values)){
-            INDEX_WRITES.get().add(index);
-
-            // iterate over secondary indexes to insert the new write
-            // this is the delta. records that the underlying index does not know yet
-            for(NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()){
-                INDEX_WRITES.get().add(secIndex);
-                secIndex.appendDelta( pk, values );
+        if(!fkConstraintViolation(table, values)){
+            IKey pk = index.insertAndGetKey(values);
+            if(pk != null) {
+                INDEX_WRITES.get().add(index);
+                // iterate over secondary indexes to insert the new write
+                // this is the delta. records that the underlying index does not know yet
+                for (NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()) {
+                    INDEX_WRITES.get().add(secIndex);
+                    secIndex.appendDelta(pk, values);
+                }
+                return;
             }
-
-            return;
         }
         undoTransactionWrites();
         throw new RuntimeException("Constraint violation.");
@@ -257,12 +257,12 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
 
     public Object insertAndGet(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
-        // IKey pk = KeyUtils.buildRecordKey(index.schema().getPrimaryKeyColumns(), values);
         if(!fkConstraintViolation(table, values)){
-            IKey key_ = index.insertAndGet(values);
+            IKey key_ = index.insertAndGetKey(values);
             if(key_ != null) {
                 INDEX_WRITES.get().add(index);
                 for(NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()){
+                    INDEX_WRITES.get().add(secIndex);
                     secIndex.appendDelta( key_, values );
                 }
                 return values[ index.index().columns()[0] ];

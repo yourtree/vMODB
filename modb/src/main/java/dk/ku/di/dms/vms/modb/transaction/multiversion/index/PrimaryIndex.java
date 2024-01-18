@@ -303,7 +303,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      * @return whether it is allowed to proceed with the operation
      */
     public boolean insert(IKey key, Object[] values) {
-
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
 
         boolean pkConstraintViolation;
@@ -334,7 +333,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         KEY_WRITES.get().add(key);
 
         return true;
-
     }
 
     @Override
@@ -370,19 +368,16 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         return true;
     }
 
-    public IKey insertAndGet(Object[] values){
-
+    public IKey insertAndGetKey(Object[] values){
         if(this.primaryKeyGenerator != null){
             Object key_ = this.primaryKeyGenerator.next();
-
             values[this.primaryKeyIndex.columns()[0]] = key_;
-
             IKey key = KeyUtils.buildKey( key_ );
             if(this.insert( key, values )){
                 return key;
             }
         } else {
-            IKey key = KeyUtils.buildPrimaryKey(this.primaryKeyIndex.schema(), values);
+            IKey key = KeyUtils.buildRecordKey(this.primaryKeyIndex.schema().getPrimaryKeyColumns(), values);
             if(this.insert( key, values )){
                 return key;
             }
