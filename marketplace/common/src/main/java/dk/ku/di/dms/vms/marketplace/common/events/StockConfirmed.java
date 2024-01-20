@@ -8,7 +8,7 @@ import java.util.Date;
 import java.util.List;
 
 @Event
-public class StockConfirmed {
+public final class StockConfirmed {
 
     public Date timestamp;
 

@@ -243,14 +243,18 @@ public class EmbedMetadataLoader {
     private static Map<String, int[]> buildSchemaForeignKeyMap(Map<String, List<ForeignKeyReference>> fksPerTable, Map<String, VmsDataSchema> dataSchemaMap) {
         Map<String, int[]> res = new HashMap<>();
         for( var entry : fksPerTable.entrySet() ){
+            int[] intArray = new int[ entry.getValue().size() ];
+            int i = 0;
             // get parent data schema
             VmsDataSchema dataSchema = dataSchemaMap.get( entry.getKey() );
             // first check if the foreign keys defined actually map to a column in parent table
             for(var fkColumn : entry.getValue()){
-                if(dataSchema.findColumnPosition(fkColumn.columnName()) == -1)
-                    throw new RuntimeException("Cannot find foreign key "+ fkColumn +" that refers to a PK in parent table: "+entry.getKey());
+                intArray[i] = dataSchema.findColumnPosition(fkColumn.columnName());
+                if(intArray[i] == -1) {
+                    throw new RuntimeException("Cannot find foreign key " + fkColumn + " that refers to a PK in parent table: " + entry.getKey());
+                }
+                i++;
             }
-            int[] intArray = entry.getValue().stream().mapToInt(ForeignKeyReference::getPos).toArray();
             res.put( dataSchema.tableName, intArray );
         }
         return res;

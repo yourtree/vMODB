@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.order;
 
 import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
+import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
 import dk.ku.di.dms.vms.marketplace.common.events.StockConfirmed;
 import dk.ku.di.dms.vms.marketplace.order.entities.*;
 import dk.ku.di.dms.vms.marketplace.order.repositories.ICustomerOrderRepository;
@@ -13,7 +14,6 @@ import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.*;
 
@@ -36,6 +36,11 @@ public class OrderService {
         this.customerOrderRepository = customerOrderRepository;
         this.orderItemRepository = orderItemRepository;
         this.orderHistoryRepository = orderHistoryRepository;
+    }
+
+    // @AllowOutOfOrderProcessing
+    public void processPaymentConfirmed(PaymentConfirmed paymentConfirmed){
+
     }
 
     @Inbound(values = {"stock_confirmed"})
@@ -61,8 +66,6 @@ public class OrderService {
         // total before discounts
         float total_items = total_amount;
 
-        // apply vouchers per product, but only until total >= 0 for each item
-        // https://www.amazon.com/gp/help/customer/display.html?nodeId=G9R2MLD3EX557D77
         Map<Integer, Float> totalPerItem = new HashMap<>();
         float total_incentive = 0;
         for(var item : stockConfirmed.items)
@@ -124,8 +127,10 @@ public class OrderService {
 
         List<OrderItem> orderItems = new ArrayList<>();
         int item_id = 1;
+        float total_amount_item;
         for(var item : stockConfirmed.items)
         {
+            total_amount_item = item.UnitPrice * item.Quantity;
             OrderItem oim = new OrderItem
             (
                 order.id,
@@ -138,7 +143,8 @@ public class OrderService {
                 item.FreightValue,
                 item.Quantity,
                 totalPerItem.get(item.ProductId),
-                item.UnitPrice * item.Quantity
+                total_amount_item,
+                    total_amount_item - totalPerItem.get(item.ProductId)
             );
 
             orderItems.add(oim);
@@ -154,7 +160,7 @@ public class OrderService {
         this.orderHistoryRepository.insert(oh);
 
         return new InvoiceIssued( stockConfirmed.customerCheckout, customerOrder.next_order_id, invoiceNumber, now, order.total_invoice,
-               orderItems.stream().map(OrderItem::toCommonOrderItem).collect(Collectors.toList()), stockConfirmed.instanceId);
+               orderItems.stream().map(OrderItem::toCommonOrderItem).toList(), stockConfirmed.instanceId);
     }
 
     public static String buildInvoiceNumber(int customerId, Date timestamp, int orderId)

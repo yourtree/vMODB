@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
+import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
@@ -33,11 +34,16 @@ public final class VmsApplication {
 
     private final VmsTransactionScheduler scheduler;
 
-    private VmsApplication(VmsRuntimeMetadata vmsRuntimeMetadata, Map<String, Table> catalog, EmbeddedVmsEventHandler eventHandler, VmsTransactionScheduler scheduler) {
+    private final IVmsInternalChannels internalChannels;
+
+    private VmsApplication(VmsRuntimeMetadata vmsRuntimeMetadata, Map<String, Table> catalog,
+                           EmbeddedVmsEventHandler eventHandler, VmsTransactionScheduler scheduler,
+                           IVmsInternalChannels internalChannels) {
         this.vmsRuntimeMetadata = vmsRuntimeMetadata;
         this.catalog = catalog;
         this.eventHandler = eventHandler;
         this.scheduler = scheduler;
+        this.internalChannels = internalChannels;
     }
 
     public Table getTable(String table){
@@ -118,7 +124,7 @@ public final class VmsApplication {
                 vmsIdentifier, null,
                 transactionFacade, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
 
-        return new VmsApplication( vmsMetadata, catalog, eventHandler, scheduler );
+        return new VmsApplication( vmsMetadata, catalog, eventHandler, scheduler, vmsInternalPubSubService );
 
     }
 
@@ -135,4 +141,7 @@ public final class VmsApplication {
         scheduler.stop();
     }
 
+    public IVmsInternalChannels internalChannels() {
+        return internalChannels;
+    }
 }

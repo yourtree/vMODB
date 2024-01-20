@@ -256,7 +256,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                this.moveBatchIfNecessary();
 
             } catch (Exception e) {
-                this.logger.log(Level.SEVERE, "Problem on handling event on event handler:"+e.getMessage());
+                this.logger.log(Level.SEVERE, "Problem on handling event: "+e.getMessage());
             }
 
         }

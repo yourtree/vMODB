@@ -11,7 +11,7 @@ import java.util.List;
  * A command to reserve stock
  */
 @Event
-public class ReserveStock {
+public final class ReserveStock {
 
     public Date timestamp;
 

@@ -6,14 +6,11 @@ public class ForeignKeyReference {
 
     public String columnName;
 
-    public int pos;
-
     public ForeignKeyReference(){}
 
-    public ForeignKeyReference(String vmsTableName, String columnName, int pos) {
+    public ForeignKeyReference(String vmsTableName, String columnName) {
         this.vmsTableName = vmsTableName;
         this.columnName = columnName;
-        this.pos = pos;
     }
 
     public String vmsTableName(){
@@ -22,10 +19,6 @@ public class ForeignKeyReference {
 
     public String columnName(){
         return this.columnName;
-    }
-
-    public int getPos(){
-        return this.pos;
     }
 
 }

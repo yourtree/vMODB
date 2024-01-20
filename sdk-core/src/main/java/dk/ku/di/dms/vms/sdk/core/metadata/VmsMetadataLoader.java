@@ -240,13 +240,13 @@ public class VmsMetadataLoader {
              int totalNumberOfFields = pkFields.size();
 
             stream = Arrays.stream(tableClass.getFields());
-            List<Field> foreignKeyFields = stream.filter(p->p.getAnnotation(VmsForeignKey.class)!=null).toList();
+            List<Field> foreignKeyFields = stream.filter(p-> p.getAnnotation(VmsForeignKey.class) != null).toList();
             if(!foreignKeyFields.isEmpty()) {
                 totalNumberOfFields += foreignKeyFields.size();
             }
 
             stream = Arrays.stream(tableClass.getFields());
-            List<Field> columnFields = stream.filter(p->p.getAnnotation(Column.class)!=null).toList();
+            List<Field> columnFields = stream.filter(p-> p.getAnnotation(Column.class) != null).toList();
 
             if(!columnFields.isEmpty()) {
                 totalNumberOfFields += columnFields.size();
@@ -276,7 +276,7 @@ public class VmsMetadataLoader {
                     VmsForeignKey fk = field.getAnnotation(VmsForeignKey.class);
                     String fkTable = vmsTableNames.get(fk.table());
                     // later we parse into a Vms Table and check whether the types match
-                    foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column(), i);
+                    foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column());
                     j++;
 
                     // check if field is part of PK already

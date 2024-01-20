@@ -33,14 +33,14 @@ public class CustomerCheckout {
     // if no credit card; must be 1
     public int Installments;
 
-    public int instanceId;
+    public String instanceId;
 
     public CustomerCheckout(){}
 
     public CustomerCheckout(int customerId, String firstName, String lastName, String street, String complement,
                             String city, String state, String zipCode, String paymentType, String cardNumber,
                             String cardHolderName, String cardExpiration, String cardSecurityNumber, String cardBrand,
-                            int installments, int instanceId) {
+                            int installments, String instanceId) {
         CustomerId = customerId;
         FirstName = firstName;
         LastName = lastName;

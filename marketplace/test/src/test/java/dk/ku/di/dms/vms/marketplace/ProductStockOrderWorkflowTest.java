@@ -38,7 +38,9 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
     private final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
     private static final CustomerCheckout customerCheckout = new CustomerCheckout(
-         1, "test", "test", "test", "test","test", "test", "test","test","test","test","test", "test", "test", 1,1
+         1, "test", "test", "test", "test","test",
+            "test", "test","test","test","test",
+            "test", "test", "test", 1,"1"
             );
 
     @Test

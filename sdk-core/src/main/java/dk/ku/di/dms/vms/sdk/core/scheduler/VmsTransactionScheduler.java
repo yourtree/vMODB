@@ -74,6 +74,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     private final ISchedulerHandler handler;
 
+    // used to identify in which VMS scheduler a possible problem has happened
     private final String vmsIdentifier;
 
     public VmsTransactionScheduler(String vmsIdentifier,
@@ -291,15 +292,21 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     }
 
     private void processNewEvent(InboundEvent inboundEvent){
+
         // have I created the task already?
         // in other words, a previous payload for the same tid have been processed?
         if(this.waitingTasksPerTidMap.containsKey(inboundEvent.tid())){
             this.processNewEventFromKnownTransaction(inboundEvent);
-        } else if (this.offsetMap.get(inboundEvent.tid()) == null) {
-            this.processNewEventFromUnknownTransaction(inboundEvent);
-        } else {
-            logger.warning(vmsIdentifier+": Event cannot be categorized! Queue '" + inboundEvent.event() + "' Batch: " + inboundEvent.batch() + " TID: " + inboundEvent.tid());
+            return;
         }
+
+        if (!this.offsetMap.containsKey(inboundEvent.tid())) {
+            this.processNewEventFromUnknownTransaction(inboundEvent);
+            return;
+        }
+
+        logger.warning(vmsIdentifier+": Event cannot be categorized! Queue '" + inboundEvent.event() + "' Batch: " + inboundEvent.batch() + " TID: " + inboundEvent.tid());
+
     }
 
     private void processNewEventFromUnknownTransaction(InboundEvent inboundEvent) {
@@ -341,11 +348,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             // put the input event on the correct slot (i.e., the correct parameter position)
             task.putEventInput(node.id(), inboundEvent.input());
 
-            if(!task.isReady()){
-                // unknown transaction, then must create the entry
-                this.waitingTasksPerTidMap.computeIfAbsent(task.tid(),
-                        (x) -> new ArrayList<>(transactionMetadata.numTasksWithMoreThanOneInput)).add( task );
-            } else {
+            if(task.isReady()){
                 if(transactionMetadata.signatures.size() == 1){
                     txContext.asSimple().task = task;
                 } else {
@@ -356,6 +359,10 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                         txContext.asComplex().writeTasks.add(task);
                     }
                 }
+            } else {
+                // unknown transaction, then must create the entry
+                this.waitingTasksPerTidMap.computeIfAbsent(task.tid(),
+                        (x) -> new ArrayList<>(transactionMetadata.numTasksWithMoreThanOneInput)).add( task );
             }
         }
 

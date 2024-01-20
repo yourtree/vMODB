@@ -8,7 +8,7 @@ import java.util.Date;
 import java.util.List;
 
 @Event
-public class InvoiceIssued {
+public final class InvoiceIssued {
 
     public CustomerCheckout customer;
 

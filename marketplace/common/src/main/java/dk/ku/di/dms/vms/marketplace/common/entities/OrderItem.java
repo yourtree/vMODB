@@ -26,10 +26,13 @@ public class OrderItem {
 
     public float total_amount;
 
+    public float total_incentive;
+
     public OrderItem() {
     }
 
-    public OrderItem(int order_id, int order_item_id, int product_id, String product_name, int seller_id, float unit_price, Date shipping_limit_date, float freight_value, int quantity, float total_items, float total_amount) {
+    public OrderItem(int order_id, int order_item_id, int product_id, String product_name, int seller_id, float unit_price, Date shipping_limit_date,
+                     float freight_value, int quantity, float total_items, float total_amount, float total_incentive) {
         this.order_id = order_id;
         this.order_item_id = order_item_id;
         this.product_id = product_id;
@@ -41,5 +44,6 @@ public class OrderItem {
         this.quantity = quantity;
         this.total_items = total_items;
         this.total_amount = total_amount;
+        this.total_incentive = total_incentive;
     }
 }

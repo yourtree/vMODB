@@ -56,6 +56,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 return new ArrayList<>(2);
             return pulled;
         }
+        // immutable, empty list for read-only transactions
         return Collections.emptyList();
     });
 
