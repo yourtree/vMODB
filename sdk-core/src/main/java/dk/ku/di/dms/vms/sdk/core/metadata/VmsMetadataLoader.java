@@ -34,7 +34,6 @@ import java.lang.reflect.*;
 import java.net.URL;
 import java.util.*;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;

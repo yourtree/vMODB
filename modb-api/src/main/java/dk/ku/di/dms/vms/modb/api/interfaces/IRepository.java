@@ -6,7 +6,6 @@ import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
-import java.util.function.Predicate;
 
 /**
  * User-facing database operations

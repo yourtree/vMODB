@@ -211,7 +211,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
      */
     private void eventLoop(){
 
-        this.logger.info("Event handler has started.");
+        this.logger.info(me.vmsIdentifier+": Event handler has started.");
 
         this.connectToStarterConsumers();
 
@@ -243,7 +243,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                     Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(this.lastTidFinished);
 
                     if(precedenceMap == null){
-                        logger.warning("No precedence map found for TID: "+txResult.tid);
+                        logger.warning(me.vmsIdentifier+": No precedence map found for TID: "+txResult.tid);
                         continue;
                     }
 

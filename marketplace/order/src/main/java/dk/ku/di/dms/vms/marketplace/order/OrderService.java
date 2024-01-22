@@ -16,7 +16,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.*;
+import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 
 @Microservice("order")
 public class OrderService {
@@ -138,7 +138,7 @@ public class OrderService {
         String invoiceNumber = buildInvoiceNumber( stockConfirmed.customerCheckout.CustomerId, now, customerOrder.next_order_id );
 
         Order order = new Order(
-                customerOrder.customer_id,
+                 customerOrder.customer_id,
                  customerOrder.next_order_id,
                  invoiceNumber,
                  OrderStatus.INVOICED,

@@ -72,7 +72,9 @@ public class Customer implements IEntity<Integer> {
     @Column
     public Date updated_at;
 
-    public Customer() { }
+    public Customer() {
+        this.created_at = new Date();
+    }
 
     public Customer(int id, String first_name, String last_name, String address, String complement, String birth_date, String zip_code, String city, String state, String card_number,
                     String card_security_number, String card_expiration, String card_holder_name, String card_type, int success_payment_count, int failed_payment_count, int delivery_count, String data) {

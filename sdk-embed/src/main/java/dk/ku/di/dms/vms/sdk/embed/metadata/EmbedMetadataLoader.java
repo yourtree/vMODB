@@ -115,7 +115,7 @@ public class EmbedMetadataLoader {
                         .collect( Collectors.groupingBy(ForeignKeyReference::vmsTableName ) ); // Collectors.toUnmodifiableList() ) );
 
                 // table name, fields
-                Map<String, int[]> definitiveMap = buildSchemaForeignKeyMap(fksPerTable, vmsRuntimeMetadata.dataSchema());
+                Map<String, int[]> definitiveMap = buildSchemaForeignKeyMap(vmsDataSchema, fksPerTable, vmsRuntimeMetadata.dataSchema());
 
                 dataSchemaToPkMap.put(vmsDataSchema, Tuple.of(schema, definitiveMap));
 
@@ -240,7 +240,7 @@ public class EmbedMetadataLoader {
 
     }
 
-    private static Map<String, int[]> buildSchemaForeignKeyMap(Map<String, List<ForeignKeyReference>> fksPerTable, Map<String, VmsDataSchema> dataSchemaMap) {
+    private static Map<String, int[]> buildSchemaForeignKeyMap(VmsDataSchema dataSchemaToBuild, Map<String, List<ForeignKeyReference>> fksPerTable, Map<String, VmsDataSchema> dataSchemaMap) {
         Map<String, int[]> res = new HashMap<>();
         for( var entry : fksPerTable.entrySet() ){
             int[] intArray = new int[ entry.getValue().size() ];
@@ -249,10 +249,10 @@ public class EmbedMetadataLoader {
             VmsDataSchema dataSchema = dataSchemaMap.get( entry.getKey() );
             // first check if the foreign keys defined actually map to a column in parent table
             for(var fkColumn : entry.getValue()){
-                intArray[i] = dataSchema.findColumnPosition(fkColumn.columnName());
-                if(intArray[i] == -1) {
+                if(dataSchema.findColumnPosition(fkColumn.columnName()) == -1) {
                     throw new RuntimeException("Cannot find foreign key " + fkColumn + " that refers to a PK in parent table: " + entry.getKey());
                 }
+                intArray[i] = dataSchemaToBuild.findColumnPosition(fkColumn.columnName());
                 i++;
             }
             res.put( dataSchema.tableName, intArray );

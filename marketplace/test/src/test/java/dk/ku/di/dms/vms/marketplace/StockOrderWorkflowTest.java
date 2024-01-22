@@ -9,7 +9,6 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
-import dk.ku.di.dms.vms.marketplace.stock.StockItem;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -17,16 +16,12 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.logging.Logger;
 
 import static java.lang.Thread.sleep;
 

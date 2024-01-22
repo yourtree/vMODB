@@ -133,7 +133,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     @Override
     public void run() {
 
-        this.logger.info("Scheduler has started.");
+        this.logger.info(vmsIdentifier+": Transaction scheduler has started");
 
         this.initializeOffset();
 

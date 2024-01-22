@@ -148,7 +148,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         }
 
         // connect to starter vms
-        logger.info("Attempting connection to "+consumerVms);
+        logger.info("Leader: Attempting connection to "+consumerVms);
         try {
             this.channel = AsynchronousSocketChannel.open(this.group);
             this.channel.setOption(TCP_NODELAY, true);
@@ -275,7 +275,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             writeBuffer.flip();
             this.WRITE_SYNCHRONIZER.take();
             this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
-            this.logger.info("Commit request sent to: " + this.vmsNode.vmsIdentifier);
+            this.logger.info("Leader: Commit request sent to: " + this.vmsNode.vmsIdentifier);
         } catch (Exception e){
             if(channel.isOpen()){
                 this.logger.warning("Commit request write has failed but channel is open. Trying to write again to: "+this.vmsNode.vmsIdentifier+" in a while");

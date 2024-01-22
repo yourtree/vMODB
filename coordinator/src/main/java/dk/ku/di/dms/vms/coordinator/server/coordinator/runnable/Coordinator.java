@@ -788,11 +788,14 @@ public final class Coordinator extends SignalingStoppableRunnable {
                     // receive metadata from all microservices
                     case VMS_IDENTIFIER -> {
                         VmsIdentifier vmsIdentifier_ = message.asVmsIdentifier();
-                        logger.info("Coordinator received a VMS_IDENTIFIER from VMS worker: "+vmsIdentifier_.getIdentifier());
+                        logger.info("Leader: Received a VMS_IDENTIFIER from VMS worker: "+vmsIdentifier_.getIdentifier());
                         // update metadata of this node so coordinator can reason about data dependencies
                         this.vmsMetadataMap.put( vmsIdentifier_.getIdentifier(), vmsIdentifier_ );
 
-                        if(this.vmsMetadataMap.size() < this.starterVMSs.size()) continue;
+                        if(this.vmsMetadataMap.size() < this.starterVMSs.size()) {
+                            logger.info("Leader: "+(this.starterVMSs.size() - this.vmsMetadataMap.size())+" starter(s) VMSs remain to be processed.");
+                            continue;
+                        }
                         // if all metadata, from all starter vms have arrived, then send the signal to them
 
                         // new VMS may join, requiring updating the consumer set

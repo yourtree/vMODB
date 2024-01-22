@@ -10,7 +10,10 @@ import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -20,7 +23,7 @@ import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 @Microservice("stock")
 public class StockService {
 
-    private static final Logger LOGGER = Logger.getLogger("Stock");
+    private static final Logger LOGGER = Logger.getLogger(StockService.class.getCanonicalName());
 
     private final IStockRepository stockRepository;
 

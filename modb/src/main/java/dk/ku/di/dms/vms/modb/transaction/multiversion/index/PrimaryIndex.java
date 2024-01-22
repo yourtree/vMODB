@@ -177,21 +177,22 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      */
     private boolean nonPkConstraintViolation(Object[] values) {
 
-        Schema schema =  this.primaryKeyIndex.schema();
-        Map<Integer, ConstraintReference> constraints = schema.constraints();
+        if(this.primaryKeyIndex.schema().constraints().isEmpty())
+            return false;
 
-        boolean violation = false;
+        Schema schema = this.primaryKeyIndex.schema();
+        boolean constraintHolds = true;
 
-        for(Map.Entry<Integer, ConstraintReference> c : constraints.entrySet()) {
+        for(Map.Entry<Integer, ConstraintReference> c : schema.constraints().entrySet()) {
 
             switch (c.getValue().constraint.type){
 
                 case NUMBER -> {
                     switch (schema.columnDataType(c.getKey())) {
-                        case INT -> violation = NumberTypeConstraintHelper.eval((int)values[c.getKey()] , 0, Integer::compareTo, c.getValue().constraint);
-                        case LONG, DATE -> violation = NumberTypeConstraintHelper.eval((long)values[c.getKey()] , 0L, Long::compareTo, c.getValue().constraint);
-                        case FLOAT -> violation = NumberTypeConstraintHelper.eval((float)values[c.getKey()] , 0f, Float::compareTo, c.getValue().constraint);
-                        case DOUBLE -> violation = NumberTypeConstraintHelper.eval((double)values[c.getKey()] , 0d, Double::compareTo, c.getValue().constraint);
+                        case INT -> constraintHolds = NumberTypeConstraintHelper.eval((int)values[c.getKey()] , 0, Integer::compareTo, c.getValue().constraint);
+                        case LONG, DATE -> constraintHolds = NumberTypeConstraintHelper.eval((long)values[c.getKey()] , 0L, Long::compareTo, c.getValue().constraint);
+                        case FLOAT -> constraintHolds = NumberTypeConstraintHelper.eval((float)values[c.getKey()] , 0f, Float::compareTo, c.getValue().constraint);
+                        case DOUBLE -> constraintHolds = NumberTypeConstraintHelper.eval((double)values[c.getKey()] , 0d, Double::compareTo, c.getValue().constraint);
                         default -> throw new IllegalStateException("Data type "+c.getValue().constraint.type+" cannot be applied to a number");
                     }
                 }
@@ -199,23 +200,23 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 case NUMBER_WITH_VALUE -> {
                     Object valToCompare = c.getValue().asValueConstraint().value;
                     switch (schema.columnDataType(c.getKey())) {
-                        case INT -> violation = NumberTypeConstraintHelper.eval((int)values[c.getKey()] , (int)valToCompare, Integer::compareTo, c.getValue().constraint);
-                        case LONG, DATE -> violation = NumberTypeConstraintHelper.eval((long)values[c.getKey()] , (long)valToCompare, Long::compareTo, c.getValue().constraint);
-                        case FLOAT -> violation = NumberTypeConstraintHelper.eval((float)values[c.getKey()] , (float)valToCompare, Float::compareTo, c.getValue().constraint);
-                        case DOUBLE -> violation = NumberTypeConstraintHelper.eval((double)values[c.getKey()] , (double)valToCompare, Double::compareTo, c.getValue().constraint);
+                        case INT -> constraintHolds = NumberTypeConstraintHelper.eval((int)values[c.getKey()] , (int)valToCompare, Integer::compareTo, c.getValue().constraint);
+                        case LONG, DATE -> constraintHolds = NumberTypeConstraintHelper.eval((long)values[c.getKey()] , (long)valToCompare, Long::compareTo, c.getValue().constraint);
+                        case FLOAT -> constraintHolds = NumberTypeConstraintHelper.eval((float)values[c.getKey()] , (float)valToCompare, Float::compareTo, c.getValue().constraint);
+                        case DOUBLE -> constraintHolds = NumberTypeConstraintHelper.eval((double)values[c.getKey()] , (double)valToCompare, Double::compareTo, c.getValue().constraint);
                         default -> throw new IllegalStateException("Data type "+c.getValue().constraint.type+" cannot be applied to a number");
                     }
                 }
 
                 case NULLABLE ->
-                        violation = NullableTypeConstraintHelper.eval(values[c.getKey()], c.getValue().constraint);
+                        constraintHolds = NullableTypeConstraintHelper.eval(values[c.getKey()], c.getValue().constraint);
 
                 case CHARACTER ->
-                        violation = CharOrStringTypeConstraintHelper.eval((String) values[c.getKey()], c.getValue().constraint );
+                        constraintHolds = CharOrStringTypeConstraintHelper.eval((String) values[c.getKey()], c.getValue().constraint );
 
             }
 
-            if(violation) return true;
+            if(!constraintHolds) return true;
 
         }
 
@@ -312,7 +313,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             pkConstraintViolation = operationSet.lastWriteType != WriteType.DELETE;
         } else {
             // let's check now the index itself. it exists, it is a violation
-            pkConstraintViolation = primaryKeyIndex.exists(key);
+            pkConstraintViolation = this.primaryKeyIndex.exists(key);
         }
 
         if(pkConstraintViolation || nonPkConstraintViolation(values)) {

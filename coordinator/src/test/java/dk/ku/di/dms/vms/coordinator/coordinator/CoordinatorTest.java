@@ -54,7 +54,9 @@ public class CoordinatorTest {
         vmsMetadataMap.put(vms2.getIdentifier(), vms2);
 
         // build DAG
-        TransactionDAG dag = TransactionBootstrap.name("test").input("a", "vms1", "input1").terminal("b","vms2","a").build();
+        TransactionDAG dag = TransactionBootstrap.name("test")
+                .input("a", "vms1", "input1")
+                .terminal("b","vms2","a").build();
 
         Map<String, Long> dependenceMap = BatchAlgo.buildPrecedenceMap( dag.inputEvents.get("input1"), dag, vmsMetadataMap );
 
@@ -88,7 +90,7 @@ public class CoordinatorTest {
                 .internal( "f", "item","item-new-order-out", "b" )
                 .internal( "g", "stock", "stock-new-order-out", "c" )
                 .internal( "h", "warehouse","waredist-new-order-out", "d" )
-                // signals the end of the transaction. However, it does not mean generates an output event
+                // signals the end of the transaction. However, it does not mean it generates an output event
                 .terminal("i", "order", "b", "e", "f", "g", "h" )
                 .build();
 

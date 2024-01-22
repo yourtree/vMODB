@@ -15,8 +15,6 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
     // this is the global tid
     private final long tid;
 
-//    private final long lastTid;
-
     private final long batch;
 
     // the information necessary to run the method
@@ -96,7 +94,6 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
                     eventOutput,
                     VmsTransactionTaskResult.Status.SUCCESS);
 
-
         } catch (Exception e) {
             // (i) whether to return to the scheduler or (ii) to push to the payload handler for forwarding it to the queue
             // we can only notify it because the scheduler does not need to know the events. the scheduler just needs to
@@ -107,7 +104,6 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
                     this.identifier,
                     null,
                     VmsTransactionTaskResult.Status.FAILURE);
-
         }
 
     }

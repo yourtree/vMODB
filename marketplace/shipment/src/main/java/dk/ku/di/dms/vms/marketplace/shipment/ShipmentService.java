@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.shipment;
 
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
+import dk.ku.di.dms.vms.marketplace.common.enums.ShipmentStatus;
 import dk.ku.di.dms.vms.marketplace.common.events.DeliveryNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentNotification;
@@ -8,7 +9,6 @@ import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.Package;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.PackageStatus;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.Shipment;
-import dk.ku.di.dms.vms.marketplace.common.enums.ShipmentStatus;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IPackageRepository;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IShipmentRepository;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
@@ -39,6 +39,7 @@ public class ShipmentService {
     @Transactional(type=RW)
     public ShipmentUpdated updateShipment(String instanceId){
 
+        System.out.println("Shipment received an update shipment event with TID: "+ instanceId);
         Date now = new Date();
 
         List<Package> packages = this.packageRepository.getAll();
@@ -105,13 +106,14 @@ public class ShipmentService {
     @Transactional(type=W)
     public void processShipment(PaymentConfirmed paymentConfirmed){
 
+        System.out.println("Shipment received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
         Date now = new Date();
 
         Shipment shipment = new Shipment(
                 paymentConfirmed.customerCheckout.CustomerId,
                 paymentConfirmed.orderId,
                 paymentConfirmed.items.size(),
-                (float)  paymentConfirmed.items.stream().mapToDouble(OrderItem::getFreightValue).sum(),
+                (float) paymentConfirmed.items.stream().mapToDouble(OrderItem::getFreightValue).sum(),
                 now,
                 ShipmentStatus.APPROVED,
                 paymentConfirmed.customerCheckout.FirstName,

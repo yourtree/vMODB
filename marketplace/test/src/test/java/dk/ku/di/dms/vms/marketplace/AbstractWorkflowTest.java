@@ -49,7 +49,7 @@ public class AbstractWorkflowTest {
         HttpClient client = HttpClient.newHttpClient();
         String str1;
         for(int i = 1; i <= MAX_ITEMS; i++){
-            str1 = new Product( 1, i, "test", "test", "test", "test", 1.0f, 1.0f,  "test", "test" ).toString();
+            str1 = new Product( 1, i, "test", "test", "test", "test", 1.0f, 1.0f,  "test", "1" ).toString();
             HttpRequest prodReq = httpRequestProductSupplier.apply(str1);
             client.send(prodReq, HttpResponse.BodyHandlers.ofString());
         }
@@ -59,7 +59,7 @@ public class AbstractWorkflowTest {
         HttpClient client = HttpClient.newHttpClient();
         String str2;
         for(int i = 1; i <= MAX_ITEMS; i++){
-            str2 = new StockItem( 1, i, 100, 0, 0, 0,  "test", "test" ).toString();
+            str2 = new StockItem( 1, i, 100, 0, 0, 0,  "test", "1" ).toString();
             HttpRequest stockReq = httpRequestStockSupplier.apply(str2);
             client.send(stockReq, HttpResponse.BodyHandlers.ofString());
         }

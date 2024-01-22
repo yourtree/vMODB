@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.marketplace.shipment;
 
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
-import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;

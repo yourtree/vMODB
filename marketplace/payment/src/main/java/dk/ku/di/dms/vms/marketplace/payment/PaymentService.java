@@ -23,7 +23,7 @@ import java.io.InputStream;
 import java.util.Date;
 import java.util.Properties;
 
-import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.*;
+import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("payment")
 public class PaymentService {

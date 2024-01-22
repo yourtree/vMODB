@@ -1,8 +1,10 @@
-package dk.ku.di.dms.vms.marketplace.payment;
+package dk.ku.di.dms.vms.marketplace.order;
 
+import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
 import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
+import dk.ku.di.dms.vms.marketplace.common.events.StockConfirmed;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import org.junit.Test;
@@ -12,13 +14,13 @@ import java.util.List;
 
 import static java.lang.Thread.sleep;
 
-public class PaymentTest {
+public class OrderTest {
 
     @Test
     public void test() throws Exception {
 
-        VmsApplication vms = VmsApplication.build("localhost", 8084, new String[]{
-                "dk.ku.di.dms.vms.marketplace.payment",
+        VmsApplication vms = VmsApplication.build("localhost", 8083, new String[]{
+                "dk.ku.di.dms.vms.marketplace.order",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
         vms.start();
@@ -27,12 +29,14 @@ public class PaymentTest {
                 1, "test", "test", "test", "test","test", "test", "test",
                 "CREDIT_CARD","test","test","test", "test", "test", 1,"1");
 
-        InvoiceIssued invoiceIssued = new InvoiceIssued( customerCheckout, 1,  "test", new Date(), 100,
-                List.of(new OrderItem(1,1,1, "name", 1, 1.0f, new Date(), 1.0f, 1, 1.0f, 1.0f, 0.0f) )
-                , "1");
+        StockConfirmed stockConfirmed = new StockConfirmed(
+                new Date(),
+                customerCheckout,
+                List.of( new CartItem(1,1,"test",1.0f, 1.0f, 1, 1.0f, "1") ),
+                "1" );
 
         InboundEvent inboundEvent = new InboundEvent( 1, 0, 1,
-                "invoice_issued", InvoiceIssued.class, invoiceIssued );
+                "stock_confirmed", StockConfirmed.class, stockConfirmed );
         vms.internalChannels().transactionInputQueue().add( inboundEvent );
 
         sleep(100000);
