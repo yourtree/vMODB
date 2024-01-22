@@ -8,11 +8,12 @@ import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.Package;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.PackageStatus;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.Shipment;
-import dk.ku.di.dms.vms.marketplace.shipment.entities.ShipmentStatus;
+import dk.ku.di.dms.vms.marketplace.common.enums.ShipmentStatus;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IPackageRepository;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IShipmentRepository;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
 import java.util.*;
@@ -34,6 +35,7 @@ public class ShipmentService {
     }
 
     @Inbound(values = {"update_shipment"})
+    @Outbound("shipment_updated")
     @Transactional(type=RW)
     public ShipmentUpdated updateShipment(String instanceId){
 
@@ -62,7 +64,7 @@ public class ShipmentService {
             if(shipment.status == ShipmentStatus.APPROVED){
                 shipment.status = ShipmentStatus.DELIVERY_IN_PROGRESS;
                 this.shipmentRepository.update( shipment );
-                shipmentNotifications.add( new ShipmentNotification( shipment.customer_id, shipment.order_id, ShipmentStatus.DELIVERY_IN_PROGRESS.name(), now ) );
+                shipmentNotifications.add( new ShipmentNotification( shipment.customer_id, shipment.order_id, ShipmentStatus.DELIVERY_IN_PROGRESS, now ) );
             }
 
             long countDelivered = packages.stream().filter(p-> p.customer_id == kv.getValue().customer_id && p.order_id == kv.getValue().order_id && p.status == PackageStatus.delivered).count();
@@ -90,7 +92,7 @@ public class ShipmentService {
             if (shipment.package_count == countDelivered + sellerPackages.size()) {
                 shipment.status = ShipmentStatus.CONCLUDED;
                 this.shipmentRepository.update( shipment );
-                shipmentNotifications.add( new ShipmentNotification( shipment.customer_id, shipment.order_id, ShipmentStatus.CONCLUDED.name(), now ) );
+                shipmentNotifications.add( new ShipmentNotification( shipment.customer_id, shipment.order_id, ShipmentStatus.CONCLUDED, now ) );
             }
 
         }

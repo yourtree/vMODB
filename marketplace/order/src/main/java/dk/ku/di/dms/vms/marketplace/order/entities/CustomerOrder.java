@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
+import javax.validation.constraints.Positive;
 
 @Entity
 @VmsTable(name="customer_orders")
@@ -15,6 +16,7 @@ public class CustomerOrder implements IEntity<Integer> {
     public int customer_id;
 
     @Column
+    @Positive
     public int next_order_id;
 
     public CustomerOrder() { }

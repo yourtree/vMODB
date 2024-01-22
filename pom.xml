@@ -34,6 +34,7 @@
       <module>marketplace/order</module>
       <module>marketplace/payment</module>
       <module>marketplace/shipment</module>
+      <module>marketplace/customer</module>
 
   </modules>
 

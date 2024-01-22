@@ -18,7 +18,10 @@ public class OrderHistory implements IEntity<Integer> {
     @GeneratedValue
     public int id;
 
-    @VmsForeignKey( table = Order.class, column = "id")
+    @VmsForeignKey( table = Order.class, column = "customer_id")
+    public int customer_id;
+
+    @VmsForeignKey( table = Order.class, column = "order_id")
     public int order_id;
 
     @Column
@@ -29,7 +32,8 @@ public class OrderHistory implements IEntity<Integer> {
 
     public OrderHistory() { }
 
-    public OrderHistory(int order_id, Date created_at, OrderStatus status) {
+    public OrderHistory(int customer_id, int order_id, Date created_at, OrderStatus status) {
+        this.customer_id = customer_id;
         this.order_id = order_id;
         this.created_at = created_at;
         this.status = status;

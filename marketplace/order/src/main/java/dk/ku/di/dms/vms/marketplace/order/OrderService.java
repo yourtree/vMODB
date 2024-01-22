@@ -1,8 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.order;
 
-import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
-import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
-import dk.ku.di.dms.vms.marketplace.common.events.StockConfirmed;
+import dk.ku.di.dms.vms.marketplace.common.enums.ShipmentStatus;
+import dk.ku.di.dms.vms.marketplace.common.events.*;
 import dk.ku.di.dms.vms.marketplace.order.entities.*;
 import dk.ku.di.dms.vms.marketplace.order.repositories.ICustomerOrderRepository;
 import dk.ku.di.dms.vms.marketplace.order.repositories.IOrderHistoryRepository;
@@ -13,6 +12,8 @@ import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.*;
@@ -40,6 +41,42 @@ public class OrderService {
 
     // @AllowOutOfOrderProcessing
     public void processPaymentConfirmed(PaymentConfirmed paymentConfirmed){
+
+    }
+
+    @Inbound(values = {"shipment_updated"})
+    @Transactional(type=RW)
+    public void processShipmentNotification(ShipmentUpdated shipmentUpdated){
+
+        Date now = new Date();
+        for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {
+
+            Order order = this.orderRepository.lookupByKey( new Order.OrderId(
+                    shipmentNotification.customerId, shipmentNotification.orderId
+            ) );
+
+            OrderStatus status = OrderStatus.READY_FOR_SHIPMENT;
+            if(shipmentNotification.status == ShipmentStatus.DELIVERY_IN_PROGRESS) {
+                status = OrderStatus.IN_TRANSIT;
+                order.delivered_carrier_date = shipmentNotification.eventDate;
+            } else if(shipmentNotification.status == ShipmentStatus.CONCLUDED) {
+                status = OrderStatus.DELIVERED;
+                order.delivered_customer_date = shipmentNotification.eventDate;
+            }
+
+            OrderHistory orderHistory = new OrderHistory(
+                    order.customer_id,
+                    order.order_id,
+                    now,
+                    status);
+
+            order.updated_at = now;
+            order.status = status;
+
+            this.orderRepository.update(order);
+            this.orderHistoryRepository.insert( orderHistory );
+
+        }
 
     }
 
@@ -101,9 +138,9 @@ public class OrderService {
         String invoiceNumber = buildInvoiceNumber( stockConfirmed.customerCheckout.CustomerId, now, customerOrder.next_order_id );
 
         Order order = new Order(
+                customerOrder.customer_id,
                  customerOrder.next_order_id,
                  invoiceNumber,
-                 customerOrder.customer_id,
                  OrderStatus.INVOICED,
                  stockConfirmed.timestamp,
                 null,
@@ -133,7 +170,8 @@ public class OrderService {
             total_amount_item = item.UnitPrice * item.Quantity;
             OrderItem oim = new OrderItem
             (
-                order.id,
+                customerOrder.customer_id,
+                order.order_id,
                 item_id,
                 item.ProductId,
                 item.ProductName,
@@ -154,20 +192,23 @@ public class OrderService {
         }
 
         OrderHistory oh = new OrderHistory(
-            customerOrder.next_order_id,
-            order.created_at,
-            OrderStatus.INVOICED);
+                customerOrder.customer_id,
+                customerOrder.next_order_id,
+                order.created_at,
+                OrderStatus.INVOICED);
         this.orderHistoryRepository.insert(oh);
 
         return new InvoiceIssued( stockConfirmed.customerCheckout, customerOrder.next_order_id, invoiceNumber, now, order.total_invoice,
                orderItems.stream().map(OrderItem::toCommonOrderItem).toList(), stockConfirmed.instanceId);
     }
 
+    private static final DateFormat df = new SimpleDateFormat("MM/dd/yyyy");
+
     public static String buildInvoiceNumber(int customerId, Date timestamp, int orderId)
     {
         return new StringBuilder()
                 .append(customerId).append('-')
-                .append(timestamp.toString()).append('-')
+                .append(df.format(timestamp)).append('-')
                 .append(orderId).toString();
     }
 

@@ -35,8 +35,6 @@ import static java.lang.Thread.sleep;
  */
 public class StockOrderWorkflowTest extends AbstractWorkflowTest {
 
-    protected static final Logger logger = Logger.getLogger(ProductStockWorkflowTest.class.getCanonicalName());
-
     private final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
     private static final CustomerCheckout customerCheckout = new CustomerCheckout();
@@ -46,7 +44,7 @@ public class StockOrderWorkflowTest extends AbstractWorkflowTest {
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
         dk.ku.di.dms.vms.marketplace.order.Main.main(null);
 
-        ingestDataIntoStock();
+        this.ingestDataIntoStockVms();
 
         Coordinator coordinator = loadCoordinator();
 
@@ -131,16 +129,6 @@ public class StockOrderWorkflowTest extends AbstractWorkflowTest {
                 parsedTransactionRequests,
                 serdes
         );
-    }
-
-    protected void ingestDataIntoStock() throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newHttpClient();
-        String str2;
-        for(int i = 1; i <= MAX_ITEMS; i++){
-            str2 = new StockItem( 1, i, 100, 0, 0, 0,  "test", "test" ).toString();
-            HttpRequest stockReq = httpRequestStockSupplier.apply(str2);
-            client.send(stockReq, HttpResponse.BodyHandlers.ofString());
-        }
     }
 
 }

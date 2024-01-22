@@ -15,19 +15,26 @@ import java.util.Date;
 public class OrderItem implements IEntity<OrderItem.OrderItemId> {
 
     public static class OrderItemId implements Serializable {
+
+        public int customer_id;
         public int order_id;
         public int order_item_id;
 
         public OrderItemId(){}
 
-        public OrderItemId(int order_id, int order_item_id) {
+        public OrderItemId(int customer_id, int order_id, int order_item_id) {
+            this.customer_id = customer_id;
             this.order_id = order_id;
             this.order_item_id = order_item_id;
         }
     }
 
     @Id
-    @VmsForeignKey(table = Order.class, column = "id")
+    @VmsForeignKey( table = Order.class, column = "customer_id")
+    public int customer_id;
+
+    @Id
+    @VmsForeignKey(table = Order.class, column = "order_id")
     public int order_id;
 
     @Id
@@ -67,9 +74,10 @@ public class OrderItem implements IEntity<OrderItem.OrderItemId> {
 
     public OrderItem() { }
 
-    public OrderItem(int order_id, int order_item_id, int product_id, String product_name, int seller_id,
+    public OrderItem(int customer_id, int order_id, int order_item_id, int product_id, String product_name, int seller_id,
                      float unit_price, Date shipping_limit_date,
                      float freight_value, int quantity, float total_items, float total_amount, float total_incentive) {
+        this.customer_id = customer_id;
         this.order_id = order_id;
         this.order_item_id = order_item_id;
         this.product_id = product_id;

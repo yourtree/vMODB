@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.shipment.entities;
 
+import dk.ku.di.dms.vms.marketplace.common.enums.ShipmentStatus;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 

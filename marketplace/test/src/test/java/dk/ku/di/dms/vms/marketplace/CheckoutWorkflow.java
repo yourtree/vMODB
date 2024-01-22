@@ -17,54 +17,44 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.logging.Logger;
+import java.util.*;
+import java.util.function.Function;
 
 import static java.lang.Thread.sleep;
 
-/**
- * Different transactions in stock VMS interleave
- * Some come from product (update product), others come from the coordinator (reserve stock)
- */
-public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
+public class CheckoutWorkflow extends AbstractWorkflowTest {
 
-    private final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
-    private static final CustomerCheckout customerCheckout = new CustomerCheckout(
-         1, "test", "test", "test", "test","test",
+    private static final Function<Integer,CustomerCheckout> customerCheckoutFunction = customerId -> new CustomerCheckout(
+            customerId, "test", "test", "test", "test","test",
             "test", "test","test","test","test",
             "test", "test", "test", 1,"1"
-            );
+    );
 
     @Test
-    public void testComplexTopologyWithThreeVMSs() throws Exception {
-
-        dk.ku.di.dms.vms.marketplace.product.Main.main(null);
+    public void testFullCheckout() throws Exception {
 
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
-
         dk.ku.di.dms.vms.marketplace.order.Main.main(null);
+        dk.ku.di.dms.vms.marketplace.payment.Main.main(null);
+        dk.ku.di.dms.vms.marketplace.shipment.Main.main(null);
+        dk.ku.di.dms.vms.marketplace.customer.Main.main(null);
 
         this.ingestDataIntoProductVms();
         this.ingestDataIntoStockVms();
+        this.ingestDataIntoCustomerVms();
 
         Coordinator coordinator = loadCoordinator();
-
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
 
         Map<String, VmsIdentifier> connectedVMSs;
         do{
-            sleep(5000);
+            sleep(2000);
             connectedVMSs = coordinator.getConnectedVMSs();
-        } while (connectedVMSs.size() < 3);
+        } while (connectedVMSs.size() < 5);
 
-        Thread thread = new Thread(new InputProducer());
+        Thread thread = new Thread(new CheckoutProducer());
         thread.start();
 
         sleep(batchWindowInterval * 5);
@@ -73,30 +63,22 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
 
         assert coordinator.getBatchOffsetPendingCommit() == 2;
 
-        assert coordinator.getTid() == 21;
-
+        assert coordinator.getTid() == 11;
     }
 
-    private class InputProducer implements Runnable {
+    private static Random random = new Random();
+
+    private class CheckoutProducer implements Runnable {
         @Override
         public void run() {
+            logger.info("[CheckoutProducer] Starting...");
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
             int val = 1;
             while(val <= 10) {
 
-                // update product
-                UpdateProductEvent updateProductEvent = new UpdateProductEvent(
-                        1,1,"test","test","test","test",10.0F,10.0F,"test", String.valueOf(val)
-                );
-                String payload = serdes.serialize(updateProductEvent, UpdateProductEvent.class);
-                TransactionInput.Event eventPayload = new TransactionInput.Event("update_product", payload);
-                TransactionInput txInput = new TransactionInput("update_product", eventPayload);
-                logger.info("[InputProducer] New product version: "+val);
-                parsedTransactionRequests.add(txInput);
-
                 // reserve stock
                 ReserveStock reserveStockEvent = new ReserveStock(
-                        new Date(), customerCheckout,
+                        new Date(), customerCheckoutFunction.apply( random.nextInt(MAX_CUSTOMERS+1) ),
                         List.of(new CartItem(1,1,"test",1.0f, 1.0f, 1, 1.0f, String.valueOf(val))),
                         String.valueOf(val)
                 );
@@ -108,9 +90,10 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
 
                 val++;
             }
-            logger.info("InputProducer going to bed definitely... ");
+            logger.info("[CheckoutProducer] Going to bed definitely... ");
         }
     }
+
 
     private Coordinator loadCoordinator() throws IOException {
         ServerIdentifier serverIdentifier = new ServerIdentifier( "localhost", 8080 );
@@ -118,27 +101,18 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
         Map<Integer, ServerIdentifier> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
-        TransactionDAG updatePriceDag =  TransactionBootstrap.name("update_price")
-                .input( "a", "product", "update_price" )
-                .terminal("b", "product", "a")
-                .build();
-
-        TransactionDAG updateProductDag =  TransactionBootstrap.name("update_product")
-                .input( "a", "product", "update_product" )
-                .terminal("b", "stock", "a")
-                .build();
-
         TransactionDAG checkoutDag =  TransactionBootstrap.name("customer_checkout")
                 .input( "a", "stock", "reserve_stock" )
-                .terminal("b", "order", "a")
+                .internal("b", "order", "stock_confirmed", "a")
+                .internal("c", "payment", "invoice_issued", "b")
+                .terminal( "d", "customer", "c" )
+                .terminal( "e", "shipment",  "c" )
                 .build();
 
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
-        transactionMap.put(updatePriceDag.name, updatePriceDag);
-        transactionMap.put(updateProductDag.name, updateProductDag);
         transactionMap.put(checkoutDag.name, checkoutDag);
 
-        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
+        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         Map<Integer, NetworkAddress> VMSs = new HashMap<>(3);
         NetworkAddress productAddress = new NetworkAddress("localhost", 8081);
@@ -147,6 +121,12 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
         VMSs.put(stockAddress.hashCode(), stockAddress);
         NetworkAddress orderAddress = new NetworkAddress("localhost", 8083);
         VMSs.put(orderAddress.hashCode(), orderAddress);
+        NetworkAddress paymentAddress = new NetworkAddress("localhost", 8084);
+        VMSs.put(paymentAddress.hashCode(), paymentAddress);
+        NetworkAddress shipmentAddress = new NetworkAddress("localhost", 8085);
+        VMSs.put(shipmentAddress.hashCode(), shipmentAddress);
+        NetworkAddress customerAddress = new NetworkAddress("localhost", 8086);
+        VMSs.put(customerAddress.hashCode(), customerAddress);
 
         return Coordinator.buildDefault(
                 serverMap,
@@ -161,5 +141,6 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
                 serdes
         );
     }
+
 
 }

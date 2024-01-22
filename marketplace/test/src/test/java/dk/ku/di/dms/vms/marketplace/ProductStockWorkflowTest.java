@@ -28,7 +28,8 @@ public class ProductStockWorkflowTest extends AbstractWorkflowTest {
 
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
 
-        ingestDataIntoVMSs();
+        this.ingestDataIntoProductVms();
+        this.ingestDataIntoStockVms();
 
         // initialize coordinator
         Coordinator coordinator = loadCoordinator();

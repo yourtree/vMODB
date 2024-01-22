@@ -17,6 +17,9 @@
         <module>product</module>
         <module>stock</module>
         <module>order</module>
+        <module>payment</module>
+        <module>shipment</module>
+        <module>customer</module>
         <module>common</module>
         <module>test</module>
     </modules>

@@ -1,5 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.common.events;
 
+import dk.ku.di.dms.vms.marketplace.common.enums.ShipmentStatus;
+
 import java.util.Date;
 
 public class ShipmentNotification {
@@ -8,17 +10,17 @@ public class ShipmentNotification {
 
     public int orderId;
     
-    public String shipmentStatus;
+    public ShipmentStatus status;
     
     public Date eventDate;
 
     public ShipmentNotification() {
     }
 
-    public ShipmentNotification(int customerId, int orderId, String shipmentStatus, Date eventDate) {
+    public ShipmentNotification(int customerId, int orderId, ShipmentStatus status, Date eventDate) {
         this.customerId = customerId;
         this.orderId = orderId;
-        this.shipmentStatus = shipmentStatus;
+        this.status = status;
         this.eventDate = eventDate;
     }
 

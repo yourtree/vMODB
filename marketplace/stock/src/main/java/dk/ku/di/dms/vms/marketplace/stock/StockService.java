@@ -52,8 +52,6 @@ public class StockService {
 
         System.out.println("Stock received a reserve stock event with TID: "+reserveStock.instanceId);
 
-        // List<StockItem.StockId> listOfIds = reserveStock.items.stream().map(f -> new StockItem.StockId(f.SellerId, f.ProductId)).toList();
-
         Map<StockItem.StockId, CartItem> cartItemMap = reserveStock.items.stream().collect( Collectors.toMap( (f)-> new StockItem.StockId(f.SellerId, f.ProductId), Function.identity()) );
 
         List<StockItem> items = stockRepository.lookupByKeys(cartItemMap.keySet());
@@ -62,7 +60,6 @@ public class StockService {
             LOGGER.severe("No items found in private state");
             return null;
         }
-
 
         // List<CartItem> unavailableItems = new();
         List<CartItem> cartItemsReserved = new ArrayList<>(reserveStock.items.size());
