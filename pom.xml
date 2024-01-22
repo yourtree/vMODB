@@ -33,6 +33,7 @@
     <module>marketplace</module>
       <module>marketplace/order</module>
       <module>marketplace/payment</module>
+      <module>marketplace/shipment</module>
 
   </modules>
 

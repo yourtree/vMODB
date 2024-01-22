@@ -46,4 +46,10 @@ public class OrderItem {
         this.total_amount = total_amount;
         this.total_incentive = total_incentive;
     }
+
+    public float getFreightValue() {
+        return freight_value;
+    }
+
+
 }

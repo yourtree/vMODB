@@ -55,8 +55,7 @@ public final class OrderPayment implements IEntity<OrderPayment.OrderPaymentId> 
     @Column
     public Date created_at;
 
-    public OrderPayment() {
-    }
+    public OrderPayment() { }
 
     public OrderPayment(int customer_id, int order_id, int sequential, PaymentType type, int installments, float value, PaymentStatus status) {
         this.customer_id = customer_id;

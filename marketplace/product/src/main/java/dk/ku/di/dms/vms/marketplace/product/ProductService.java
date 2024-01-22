@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.marketplace.product;
 
-import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdatedEvent;
+import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdated;
 import dk.ku.di.dms.vms.marketplace.common.events.TransactionMark;
-import dk.ku.di.dms.vms.marketplace.common.events.UpdatePriceEvent;
+import dk.ku.di.dms.vms.marketplace.common.events.UpdatePrice;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
@@ -23,7 +23,7 @@ public class ProductService {
     @Inbound(values = {"update_product"})
     @Outbound("product_updated")
     @Transactional(type=W)
-    public ProductUpdatedEvent updateProduct(UpdateProductEvent updateEvent) {
+    public ProductUpdated updateProduct(UpdateProductEvent updateEvent) {
         System.out.println("Product received an product update event");
 
         // can use issue statement for faster update
@@ -32,13 +32,13 @@ public class ProductService {
 
         this.productRepository.update(product);
 
-        return new ProductUpdatedEvent( updateEvent.seller_id, updateEvent.product_id, updateEvent.version);
+        return new ProductUpdated( updateEvent.seller_id, updateEvent.product_id, updateEvent.version);
     }
 
     @Inbound(values = {"update_price"})
     @Outbound("transaction_mark")
     @Transactional(type=W)
-    public TransactionMark updateProductPrice(UpdatePriceEvent updatePriceEvent) {
+    public TransactionMark updateProductPrice(UpdatePrice updatePriceEvent) {
         System.out.println("Stock received an update price event with TID: "+updatePriceEvent.instanceId);
 
         // can use issue statement for faster update

@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.marketplace.common.events;
 import dk.ku.di.dms.vms.modb.api.annotations.Event;
 
 @Event
-public final class ProductUpdatedEvent {
+public final class ProductUpdated {
 
     public int sellerId;
 
@@ -11,9 +11,9 @@ public final class ProductUpdatedEvent {
 
     public String version;
 
-    public ProductUpdatedEvent(){}
+    public ProductUpdated(){}
 
-    public ProductUpdatedEvent(int sellerId, int productId, String version) {
+    public ProductUpdated(int sellerId, int productId, String version) {
         this.sellerId = sellerId;
         this.productId = productId;
         this.version = version;

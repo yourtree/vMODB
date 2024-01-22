@@ -241,6 +241,12 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                     this.lastTidFinished = txResult.tid;
 
                     Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(this.lastTidFinished);
+
+                    if(precedenceMap == null){
+                        logger.warning("No precedence map found for TID: "+txResult.tid);
+                        continue;
+                    }
+
                     // remove ourselves
                     precedenceMap.remove(this.me.vmsIdentifier);
 

@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.stock;
 
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
-import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdatedEvent;
+import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdated;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
 import dk.ku.di.dms.vms.marketplace.common.events.StockConfirmed;
 import dk.ku.di.dms.vms.marketplace.common.events.TransactionMark;
@@ -9,7 +9,6 @@ import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
-import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 
 import java.util.*;
 import java.util.function.Function;
@@ -32,7 +31,7 @@ public class StockService {
     @Inbound(values = {"product_updated"})
     @Outbound("transaction_mark")
     @Transactional(type=RW)
-    public TransactionMark updateProduct(ProductUpdatedEvent updateEvent) {
+    public TransactionMark updateProduct(ProductUpdated updateEvent) {
         System.out.println("Stock received an update product event with version: "+updateEvent.version);
 
         // can use issue statement for faster update

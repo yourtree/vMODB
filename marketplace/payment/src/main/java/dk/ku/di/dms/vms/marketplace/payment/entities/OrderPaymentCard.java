@@ -59,8 +59,7 @@ public final class OrderPaymentCard implements IEntity<OrderPaymentCard.OrderPay
     @Column
     public Date created_at;
 
-    public OrderPaymentCard() {
-    }
+    public OrderPaymentCard() { }
 
     public OrderPaymentCard(int customer_id, int order_id, int sequential, String card_number, String card_holder_name, String card_expiration, String card_brand) {
         this.customer_id = customer_id;

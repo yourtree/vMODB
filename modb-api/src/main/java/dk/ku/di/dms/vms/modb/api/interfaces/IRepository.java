@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * User-facing database operations
@@ -29,6 +30,8 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
 
     T lookupByKey(PK key);
     List<T> lookupByKeys(Collection<PK> keys);
+
+    List<T> getAll();
 
     /**
      * Used for issuing update, insert, and delete statements.
@@ -57,6 +60,6 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
     // maybe callbacks can be a good alternative for embedding statements inside repository
     // <DTO extends Record> List<DTO>  create(Consumer<UpdateStatementBuilder.SetClause> callback);
 
-    IVmsFuture<Void> submit(Runnable runnable);
+//    IVmsFuture<Void> submit(Runnable runnable);
 
 }
