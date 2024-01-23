@@ -21,12 +21,12 @@ public final class BatchUtils {
         // until buffer capacity is reached or elements are all sent
         int count = 0;
         remainingBytes = remainingBytes - 1 - Integer.BYTES;
-        int idx = remaining - 1;
+        int idx = events.size() - remaining;
 
-        while(idx >= 0 && remainingBytes > events.get(idx).totalSize()){
+        while(idx < events.size() && remainingBytes > events.get(idx).totalSize()){
             TransactionEvent.write( writeBuffer, events.get(idx) );
             remainingBytes = remainingBytes - events.get(idx).totalSize();
-            idx--;
+            idx++;
             count++;
         }
 

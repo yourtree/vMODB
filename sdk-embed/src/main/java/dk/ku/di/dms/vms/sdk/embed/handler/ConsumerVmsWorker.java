@@ -87,7 +87,7 @@ final class ConsumerVmsWorker extends TimerTask {
         while(remaining > 0){
             try {
                 writeBuffer = this.retrieveByteBuffer();
-                remaining = BatchUtils.assembleBatchPayload( remaining, events, writeBuffer);
+                remaining = BatchUtils.assembleBatchPayload(remaining, events, writeBuffer);
 
                 this.logger.info(me.vmsIdentifier+ ": Submitting "+(count - remaining)+" events from batch "+batchToSend+" to "+consumerVms);
                 count = remaining;

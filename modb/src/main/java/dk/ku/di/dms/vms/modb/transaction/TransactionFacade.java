@@ -238,7 +238,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
      */
     public void insert(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
-        if(!fkConstraintViolation(table, values)){
+        if(!this.fkConstraintViolation(table, values)){
             IKey pk = index.insertAndGetKey(values);
             if(pk != null) {
                 INDEX_WRITES.get().add(index);
@@ -251,13 +251,13 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
                 return;
             }
         }
-        undoTransactionWrites();
+        this.undoTransactionWrites();
         throw new RuntimeException("Constraint violation.");
     }
 
     public Object insertAndGet(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
-        if(!fkConstraintViolation(table, values)){
+        if(!this.fkConstraintViolation(table, values)){
             IKey key_ = index.insertAndGetKey(values);
             if(key_ != null) {
                 INDEX_WRITES.get().add(index);
@@ -268,7 +268,7 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
                 return values;
             }
         }
-        undoTransactionWrites();
+        this.undoTransactionWrites();
         throw new RuntimeException("Constraint violation.");
     }
 
@@ -279,11 +279,11 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
     public void update(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), values);
-        if(!fkConstraintViolation(table, values) && index.update(pk, values)){
+        if(!this.fkConstraintViolation(table, values) && index.update(pk, values)){
             INDEX_WRITES.get().add(index);
             return;
         }
-        undoTransactionWrites();
+        this.undoTransactionWrites();
         throw new RuntimeException("Constraint violation.");
     }
 

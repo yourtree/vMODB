@@ -472,12 +472,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
      */
     private void sendBatchedEvents(BlockingDeque<TransactionEvent.Payload> eventsToSendToVms){
         eventsToSendToVms.drainTo(this.events);
-
         int count = this.events.size();
         int remaining = count;
-
         ByteBuffer writeBuffer;
-
         while(true) {
             try {
                 writeBuffer = this.retrieveByteBuffer();
