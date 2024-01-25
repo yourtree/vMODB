@@ -6,6 +6,9 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Type;
 import java.util.List;
 
+/**
+ * Basic interface of a repository proxy
+ */
 public interface IVmsRepositoryFacade {
 
     Object fetch(SelectStatement selectStatement, Type type);

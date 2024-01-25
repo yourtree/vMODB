@@ -1,0 +1,240 @@
+package dk.ku.di.dms.vms.sdk.embed.facade;
+
+import dk.ku.di.dms.vms.modb.api.interfaces.IDTO;
+import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
+import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
+import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
+import dk.ku.di.dms.vms.modb.definition.Table;
+import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
+import dk.ku.di.dms.vms.sdk.embed.entity.EntityUtils;
+
+import java.io.Serializable;
+import java.lang.invoke.VarHandle;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * The interface between the application and internal database operations
+ * Responsible to parse objects and convert database results to application objects
+ */
+public abstract class AbstractProxyRepository<PK extends Serializable, T extends IEntity<PK>> implements IRepository<PK, T> {
+
+//    private static final Logger LOGGER = Logger.getLogger(AbstractProxyRepository.class.getName());
+
+    private final Constructor<T> entityConstructor;
+
+    /**
+     * Respective table of the entity
+     */
+    private final Table table;
+
+//    private final Map<String, Tuple<SelectStatement, Type>> staticQueriesMap;
+
+    private final Map<String, VarHandle> entityFieldMap;
+
+    private final Map<String, VarHandle> pkFieldMap;
+
+    /*
+     * Cache of objects in memory.
+     * Circular buffer of records (represented as object arrays) for a given index
+     * Should be used by the repository facade, since it is the one who is converting the payloads from the user code.
+     * Key is the hash code of a table
+     */
+    // private final CircularBuffer objectCacheStore;
+
+    /**
+     * Attribute set after database is loaded
+     * Not when the metadata is loaded
+     * The transaction facade requires DBMS modules (planner, analyzer)
+     * along with the catalog. These are not ready on metadata loading time
+     */
+    private final OperationalAPI operationalAPI;
+
+    public AbstractProxyRepository(Class<PK> pkClazz,
+                                  Class<T> entityClazz,
+                                  Table table,
+                                  OperationalAPI operationalAPI
+//                                 Map<String, Tuple<SelectStatement, Type>> staticQueriesMap)
+    ) throws NoSuchMethodException, NoSuchFieldException, IllegalAccessException {
+        this.entityConstructor = entityClazz.getDeclaredConstructor();
+        this.entityFieldMap = EntityUtils.getVarHandleFieldsFromEntity(entityClazz, table.getSchema());
+        if(pkClazz.getPackageName().equalsIgnoreCase("java.lang") || pkClazz.isPrimitive()){
+            this.pkFieldMap = EntityUtils.getVarHandleFieldFromPk(entityClazz, table.getSchema());
+        } else {
+            this.pkFieldMap = EntityUtils.getVarHandleFieldsFromCompositePk(pkClazz);
+        }
+        this.table = table;
+        this.operationalAPI = operationalAPI;
+    }
+
+    @Override
+    public T lookupByKey(PK key){
+        // this repository is oblivious to multi-versioning
+        // given the single-thread model, we can work with writes easily
+        // but reads are another story. multiple threads may be calling the repository facade
+        // and requiring different data item versions
+        // we always need to offload the lookup to the transaction facade
+        Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(key);
+        Object[] object = this.operationalAPI.lookupByKey(this.table.primaryKeyIndex(), valuesOfKey);
+
+        // parse object into entity
+        if (object != null)
+            return this.parseObjectIntoEntity(object);
+        return null;
+    }
+
+    @Override
+    public List<T> lookupByKeys(Collection<PK> keys){
+        List<T> resultList = new ArrayList<>(keys.size());
+        for(PK obj : keys){
+            Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(obj);
+            Object[] object = this.operationalAPI.lookupByKey(this.table.primaryKeyIndex(), valuesOfKey);
+            resultList.add(this.parseObjectIntoEntity(object));
+        }
+        return resultList;
+    }
+
+    @Override
+    public void insert(T entity) {
+        Object[] values = this.extractFieldValuesFromEntityObject(entity);
+        this.operationalAPI.insert(this.table, values);
+    }
+
+    @Override
+    public T insertAndGet(T entity){
+        // TODO check if PK is generated before returning the entity
+        Object[] values = this.extractFieldValuesFromEntityObject(entity);
+        // Object valuesWithKey =
+        this.operationalAPI.insertAndGet(this.table, values);
+        // this.setKeyValueOnObject( key_, cached );
+        return entity;
+    }
+
+    @Override
+    public void insertAll(List<T> entities) {
+        // acts as a single transaction, so all constraints, of every single row must be present
+        List<Object[]> parsedEntities = new ArrayList<>(entities.size());
+        for (T entityObject : entities){
+            Object[] parsed = this.extractFieldValuesFromEntityObject(entityObject);
+            parsedEntities.add(parsed);
+        }
+        // can only add to cache if all items were inserted since it is transactional
+        this.operationalAPI.insertAll( this.table, parsedEntities );
+    }
+
+    @Override
+    public void update(T entity) {
+        Object[] values = this.extractFieldValuesFromEntityObject(entity);
+        this.operationalAPI.update(this.table, values);
+    }
+
+    @Override
+    public void updateAll(List<T> entities) {
+        List<Object[]> parsedEntities = new ArrayList<>(entities.size());
+        for (T entityObject : entities){
+            Object[] parsed = this.extractFieldValuesFromEntityObject(entityObject);
+            parsedEntities.add(parsed);
+        }
+        this.operationalAPI.updateAll(this.table, parsedEntities);
+    }
+
+    @Override
+    public void delete(T entity){
+        Object[] values = this.extractFieldValuesFromEntityObject(entity);
+        this.operationalAPI.delete(this.table, values);
+    }
+
+    @Override
+    public void deleteByKey(PK key) {
+        Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(key);
+        this.operationalAPI.deleteByKey(this.table, valuesOfKey);
+    }
+
+    @Override
+    public void deleteAll(List<T> entities) {
+        List<Object[]> parsedEntities = new ArrayList<>(entities.size());
+        for (T entityObject : entities){
+            Object[] parsed = this.extractFieldValuesFromEntityObject(entityObject);
+            parsedEntities.add(parsed);
+        }
+        this.operationalAPI.deleteAll( this.table, parsedEntities );
+    }
+
+    private T parseObjectIntoEntity(Object[] object){
+        // all entities must have default constructor
+        try {
+            T entity = this.entityConstructor.newInstance();
+            int i;
+            for(var entry : this.entityFieldMap.entrySet()){
+                // must get the index of the column first
+                i = this.table.underlyingPrimaryKeyIndex_().schema().columnPosition(entry.getKey());
+                entry.getValue().set( entity, object[i] );
+            }
+            return entity;
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Must be a linked sorted map. Ordered by the columns that appear on the key object.
+     */
+    private Object[] extractFieldValuesFromKeyObject(PK keyObject) {
+
+        Object[] values = new Object[this.pkFieldMap.size()];
+
+        if(keyObject instanceof Number){
+            values[0] = keyObject;
+            return values;
+        }
+
+        int fieldIdx = 0;
+        // get values from key object
+        for(String columnName : this.pkFieldMap.keySet()){
+            values[fieldIdx] = this.pkFieldMap.get(columnName).get(keyObject);
+            fieldIdx++;
+        }
+        return values;
+    }
+
+    public final Object[] extractFieldValuesFromEntityObject(T entityObject) {
+
+        Object[] values = new Object[this.table.getSchema().columnNames().length];
+        // TODO objectCacheStore.peek()
+
+        int fieldIdx = 0;
+        // get values from entity
+        for(String columnName : this.table.schema.columnNames()){
+            values[fieldIdx] = this.entityFieldMap.get(columnName).get(entityObject);
+            fieldIdx++;
+        }
+        return values;
+    }
+
+    public Object fetch(SelectStatement selectStatement, Type type) {
+
+        // we need some context about the results in this memory space
+        // number of records
+        // schema of the return (maybe not if it is a dto)
+        var memRes = this.operationalAPI.fetch(this.table, selectStatement);
+
+        // TODO parse output into object
+        if(type == IDTO.class) {
+            // look in the map of dto types for the setter and getter
+            return null;
+        }
+
+        // then it is a primitive, just return the value
+//        int projectionColumnIndex = scanOperator.asScan().projectionColumns[0];
+//        DataType dataType = scanOperator.asScan().index.schema().getColumnDataType(projectionColumnIndex);
+//        return DataTypeUtils.getValue(dataType, memRes.address());
+        return null;
+    }
+
+}
+

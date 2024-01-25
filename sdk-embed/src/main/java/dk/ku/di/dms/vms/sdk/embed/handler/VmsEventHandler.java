@@ -13,14 +13,13 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.transaction.CheckpointingAPI;
+import dk.ku.di.dms.vms.modb.transaction.CheckpointAPI;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.ISchedulerHandler;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
-import dk.ku.di.dms.vms.sdk.embed.ingest.BulkDataLoader;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
@@ -49,7 +48,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * Could also try to adapt to JNI:
  * <a href="https://nachtimwald.com/2017/06/17/calling-java-from-c/">...</a>
  */
-public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
+public final class VmsEventHandler extends SignalingStoppableRunnable {
 
     static final int DEFAULT_DELAY_FOR_BATCH_SEND = 3000;
 
@@ -78,7 +77,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
     private final Map<Integer, LockConnectionMetadata> producerConnectionMetadataMap;
 
     /** For checkpointing the state */
-    private final CheckpointingAPI checkpointingAPI;
+    private final CheckpointAPI checkpointingAPI;
 
     /** SERIALIZATION & DESERIALIZATION **/
     private final IVmsSerdesProxy serdesProxy;
@@ -131,22 +130,22 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
      */
     private final Map<Long, Map<String, Long>> tidToPrecedenceMap;
 
-    public static EmbeddedVmsEventHandler buildWithDefaults(// to identify which vms this is
-                                                            VmsNode me,
-                                                            // map event to VMSs
-                                                            Map<String, Deque<ConsumerVms>> eventToConsumersMap,
-                                                            // to checkpoint private state
-                                                            CheckpointingAPI checkpointingAPI,
-                                                            // for communicating with other components
-                                                            VmsEmbeddedInternalChannels vmsInternalChannels,
-                                                            // metadata about this vms
-                                                            VmsRuntimeMetadata vmsMetadata,
-                                                            // serialization/deserialization of objects
-                                                            IVmsSerdesProxy serdesProxy,
-                                                            // for recurrent and continuous tasks
-                                                            ExecutorService executorService) throws Exception {
+    public static VmsEventHandler buildWithDefaults(// to identify which vms this is
+                                                    VmsNode me,
+                                                    // map event to VMSs
+                                                    Map<String, Deque<ConsumerVms>> eventToConsumersMap,
+                                                    // to checkpoint private state
+                                                    CheckpointAPI checkpointingAPI,
+                                                    // for communicating with other components
+                                                    VmsEmbeddedInternalChannels vmsInternalChannels,
+                                                    // metadata about this vms
+                                                    VmsRuntimeMetadata vmsMetadata,
+                                                    // serialization/deserialization of objects
+                                                    IVmsSerdesProxy serdesProxy,
+                                                    // for recurrent and continuous tasks
+                                                    ExecutorService executorService) throws Exception {
         try {
-            return new EmbeddedVmsEventHandler(me, vmsMetadata,
+            return new VmsEventHandler(me, vmsMetadata,
                     eventToConsumersMap == null ? new ConcurrentHashMap<>() : eventToConsumersMap,
                     checkpointingAPI, vmsInternalChannels, serdesProxy, executorService);
         } catch (IOException e){
@@ -154,13 +153,13 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
         }
     }
 
-    private EmbeddedVmsEventHandler(VmsNode me,
-                                    VmsRuntimeMetadata vmsMetadata,
-                                    Map<String, Deque<ConsumerVms>> eventToConsumersMap,
-                                    CheckpointingAPI checkpointingAPI,
-                                    VmsEmbeddedInternalChannels vmsInternalChannels,
-                                    IVmsSerdesProxy serdesProxy,
-                                    ExecutorService executorService) throws IOException {
+    private VmsEventHandler(VmsNode me,
+                            VmsRuntimeMetadata vmsMetadata,
+                            Map<String, Deque<ConsumerVms>> eventToConsumersMap,
+                            CheckpointAPI checkpointingAPI,
+                            VmsEmbeddedInternalChannels vmsInternalChannels,
+                            IVmsSerdesProxy serdesProxy,
+                            ExecutorService executorService) throws IOException {
         super();
 
         // network and executor
@@ -357,7 +356,7 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
         @Override
         public Future<?> run() {
             vmsInternalChannels.batchCommitCommandQueue().remove();
-            return executorService.submit(EmbeddedVmsEventHandler.this::log);
+            return executorService.submit(VmsEventHandler.this::log);
         }
         @Override
         public boolean conditionHolds() {
@@ -688,28 +687,6 @@ public final class EmbeddedVmsEventHandler extends SignalingStoppableRunnable {
                     logger.info(me.vmsIdentifier+": Setting up consumption from producer "+producerVms);
                     this.channel.read(this.buffer, connMetadata, new VmsReadCompletionHandler(producerVms.vmsIdentifier));
 
-                }
-                case CLIENT -> {
-                    // used for bulk data loading for now (maybe used for tests later)
-
-                    String tableName = Presentation.readClient(this.buffer);
-                    this.buffer.clear();
-
-                    LockConnectionMetadata connMetadata = new LockConnectionMetadata(
-                            tableName.hashCode(),
-                            LockConnectionMetadata.NodeType.CLIENT,
-                            this.buffer,
-                            null,
-                            this.channel,
-                            null
-                    );
-
-                    BulkDataLoader bulkDataLoader = (BulkDataLoader) vmsMetadata.loadedVmsInstances().get("data_loader");
-                    if(bulkDataLoader != null) {
-                        bulkDataLoader.init(tableName, connMetadata);
-                    } else {
-                        logger.warning("Data loader is not loaded in the runtime.");
-                    }
                 }
                 default -> {
                     logger.warning("Presentation message from unknown source:" + nodeTypeIdentifier);

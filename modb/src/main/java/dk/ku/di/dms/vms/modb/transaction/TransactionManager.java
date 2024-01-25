@@ -38,7 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * in order to accommodate two or more VMSs in the same resource,
  *  it would need to make this class an instance (no static methods) and put it into modb modules
  */
-public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
+public final class TransactionManager implements OperationalAPI, CheckpointAPI {
 
     private static final ThreadLocal<Set<IMultiVersionIndex>> INDEX_WRITES = ThreadLocal.withInitial( () -> {
         if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
@@ -46,11 +46,6 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
         }
         return Collections.emptySet();
     });
-
-    /**
-     * Hashed by table name
-     */
-    private final Map<String, Table> tableMap;
 
     private final Analyzer analyzer;
 
@@ -62,16 +57,11 @@ public final class TransactionFacade implements OperationAPI, CheckpointingAPI {
      */
     private final Map<String, AbstractSimpleOperator> readQueryPlans;
 
-    private TransactionFacade(Map<String, Table> tableMap){
-        this.tableMap = tableMap;
+    public TransactionManager(){
         this.planner = new SimplePlanner();
-        this.analyzer = new Analyzer(tableMap);
+        this.analyzer = new Analyzer(null);
         // read-only transactions may put items here
         this.readQueryPlans = new ConcurrentHashMap<>();
-    }
-
-    public static TransactionFacade build(Map<String, Table> catalog){
-        return new TransactionFacade(catalog);
     }
 
     private boolean fkConstraintViolation(Table table, Object[] values){

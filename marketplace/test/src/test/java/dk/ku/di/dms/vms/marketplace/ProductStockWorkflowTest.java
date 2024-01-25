@@ -46,7 +46,7 @@ public class ProductStockWorkflowTest extends AbstractWorkflowTest {
         Thread thread = new Thread(new Producer());
         thread.start();
 
-        sleep(batchWindowInterval * 3); // 1000 to account for extra latency
+        sleep(batchWindowInterval * 3);
 
         assert coordinator.getBatchOffsetPendingCommit() == 2;
 

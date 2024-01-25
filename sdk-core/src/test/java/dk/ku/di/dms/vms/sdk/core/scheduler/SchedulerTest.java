@@ -39,7 +39,7 @@ public class SchedulerTest {
         VmsInternalChannels vmsInternalChannels = VmsInternalChannels.getInstance();
         @SuppressWarnings("unchecked")
         Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) NetworkRepositoryFacade.class.getConstructors()[0];
-        VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load(new String[]{"dk.ku.di.dms.vms.sdk.core.example"}, constructor);
+        VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example");
 
         VmsTransactionScheduler scheduler = new VmsTransactionScheduler("test",
                 readTaskPool, vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null);

@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.api.interfaces;
 
+import dk.ku.di.dms.vms.modb.api.annotations.Repository;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 
@@ -12,6 +13,7 @@ import java.util.List;
  * @param <PK> The primary key of the entity
  * @param <T> The entity type
  */
+@Repository
 public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
 
     void insert(T object);
@@ -19,13 +21,13 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
     void insertAll(List<T> entities);
     List<T> insertAllAndGet(List<T> entities);
 
-    T update(T object);
-    T updateAll(List<T> entities);
+    void update(T object);
+    void updateAll(List<T> entities);
 
-    T delete(T object);
-    T deleteAll(List<T> entities);
-    T deleteByKey(PK key);
-    T deleteAllByKey(List<PK> keys);
+    void delete(T object);
+    void deleteAll(List<T> entities);
+    void deleteByKey(PK key);
+    void deleteAllByKey(List<PK> keys);
 
     T lookupByKey(PK key);
     List<T> lookupByKeys(Collection<PK> keys);

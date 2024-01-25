@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.node;
 
-import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
+import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 
 import java.util.Map;
@@ -38,7 +38,7 @@ public class VmsNode extends NetworkNode {
     public long previousBatch;
 
     // data model
-    public final Map<String, VmsDataSchema> dataSchema;
+    public final Map<String, VmsDataModel> dataSchema;
 
     // event data model
     public final Map<String, VmsEventSchema> inputEventSchema;
@@ -47,7 +47,7 @@ public class VmsNode extends NetworkNode {
 
     public VmsNode(String host, int port, String vmsIdentifier,
                    long batch, long lastTidOfBatch, long previousBatch,
-                   Map<String, VmsDataSchema> dataSchema,
+                   Map<String, VmsDataModel> dataSchema,
                    Map<String, VmsEventSchema> inputEventSchema,
                    Map<String, VmsEventSchema> outputEventSchema) {
         super(host, port);

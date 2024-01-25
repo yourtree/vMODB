@@ -8,8 +8,8 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
+import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -35,19 +35,22 @@ public class Main {
 
     private static class ProductHttpHandler implements HttpHandler {
         private final Table table;
-        private final IVmsRepositoryFacade repository;
-        VmsApplication vms;
-        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+        private final AbstractProxyRepository<Product.ProductId, Product> repository;
+        private final VmsApplication vms;
+        private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+
+        @SuppressWarnings("unchecked")
         public ProductHttpHandler(VmsApplication vms){
             this.vms = vms;
             this.table = vms.getTable("products");
-            this.repository = vms.getRepositoryFacade("products");
+            this.repository = (AbstractProxyRepository<Product.ProductId, Product>) vms.getRepositoryProxy("products");
         }
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             String str = new String( exchange.getRequestBody().readAllBytes() );
-            Product product = this.serdes.deserialize(str, Product.class);
+            Product product = serdes.deserialize(str, Product.class);
+
             Object[] obj = this.repository.extractFieldValuesFromEntityObject(product);
             IKey key = KeyUtils.buildRecordKey( table.getSchema().getPrimaryKeyColumns(), obj );
             this.table.underlyingPrimaryKeyIndex_().insert(key, obj);

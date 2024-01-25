@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
-import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
+import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 
@@ -41,13 +41,13 @@ final class DefaultVmsSerdes implements IVmsSerdesProxy {
     }
 
     @Override
-    public String serializeDataSchema(Map<String, VmsDataSchema> vmsDataSchema) {
+    public String serializeDataSchema(Map<String, VmsDataModel> vmsDataSchema) {
         return this.gson.toJson( vmsDataSchema );
     }
 
     @Override
-    public Map<String, VmsDataSchema> deserializeDataSchema(String dataSchemaStr) {
-        return this.gson.fromJson(dataSchemaStr, new TypeToken<Map<String, VmsDataSchema>>(){}.getType());
+    public Map<String, VmsDataModel> deserializeDataSchema(String dataSchemaStr) {
+        return this.gson.fromJson(dataSchemaStr, new TypeToken<Map<String, VmsDataModel>>(){}.getType());
     }
 
     /**

@@ -57,7 +57,8 @@ public class PaymentService {
 
     private final IOrderPaymentCardRepository orderPaymentCardRepository;
 
-    public PaymentService(IOrderPaymentRepository orderPaymentRepository, IOrderPaymentCardRepository orderPaymentCardRepository){
+    public PaymentService(IOrderPaymentRepository orderPaymentRepository,
+                          IOrderPaymentCardRepository orderPaymentCardRepository){
         this.orderPaymentRepository = orderPaymentRepository;
         this.orderPaymentCardRepository = orderPaymentCardRepository;
     }

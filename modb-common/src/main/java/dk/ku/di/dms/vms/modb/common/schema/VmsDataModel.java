@@ -5,9 +5,9 @@ import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 
 /**
- * The <code>VmsSchema</code> record describes the schema of VmsTable.
+ * The <code>VmsDataModel</code> record describes the schema of VmsTable.
  */
-public class VmsDataSchema {
+public class VmsDataModel {
 
     // possibly a code might have more than a vms to execute
     // co-locate services
@@ -36,10 +36,10 @@ public class VmsDataSchema {
     // constraints, referred by column position
     public ConstraintReference[] constraintReferences;
 
-    public VmsDataSchema(){}
+    public VmsDataModel(){}
 
-    public VmsDataSchema(String vmsName, String tableName, int[] primaryKeyColumns, String[] columnNames, DataType[] columnDataTypes,
-                         ForeignKeyReference[] foreignKeyReferences, ConstraintReference[] constraintReferences) {
+    public VmsDataModel(String vmsName, String tableName, int[] primaryKeyColumns, String[] columnNames, DataType[] columnDataTypes,
+                        ForeignKeyReference[] foreignKeyReferences, ConstraintReference[] constraintReferences) {
         this.vmsName = vmsName;
         this.tableName = tableName;
         this.primaryKeyColumns = primaryKeyColumns;

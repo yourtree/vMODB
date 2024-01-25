@@ -27,4 +27,8 @@ public final class StockConfirmed {
         this.instanceId = instanceId;
     }
 
+    public int getCustomerId(){
+        return this.customerCheckout.CustomerId;
+    }
+
 }

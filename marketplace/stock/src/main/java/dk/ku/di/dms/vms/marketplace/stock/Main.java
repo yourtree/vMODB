@@ -8,8 +8,8 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
+import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -30,13 +30,15 @@ public class Main {
 
     private static class StockHttpHandler implements HttpHandler {
         private final Table table;
-        private final IVmsRepositoryFacade repository;
+        private final AbstractProxyRepository<StockItem.StockId, StockItem> repository;
         VmsApplication vms;
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+
+        @SuppressWarnings("unchecked")
         public StockHttpHandler(VmsApplication vms){
             this.vms = vms;
             this.table = vms.getTable("stock_items");
-            this.repository = vms.getRepositoryFacade("stock_items");
+            this.repository = (AbstractProxyRepository<StockItem.StockId, StockItem>) vms.getRepositoryProxy("stock_items");
         }
 
         @Override

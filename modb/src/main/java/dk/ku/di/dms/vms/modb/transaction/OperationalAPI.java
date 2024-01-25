@@ -12,9 +12,9 @@ import java.util.List;
 /**
  * Set of internal operations performed in the private state
  * It abstracts the possible calls {@link dk.ku.di.dms.vms.modb.api.interfaces.IRepository}
- * classes perform to the {@link TransactionFacade}.
+ * classes perform to the {@link TransactionManager}.
  */
-public interface OperationAPI {
+public interface OperationalAPI {
     void deleteByKey(Table table, Object[] valuesOfKey);
 
     Object[] lookupByKey(PrimaryIndex primaryKeyIndex, Object[] valuesOfKey);

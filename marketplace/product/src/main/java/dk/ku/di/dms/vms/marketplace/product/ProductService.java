@@ -15,7 +15,6 @@ public class ProductService {
 
     private final IProductRepository productRepository;
 
-
     public ProductService(IProductRepository productRepository) {
         this.productRepository = productRepository;
     }
@@ -24,7 +23,7 @@ public class ProductService {
     @Outbound("product_updated")
     @Transactional(type=W)
     public ProductUpdated updateProduct(UpdateProductEvent updateEvent) {
-        System.out.println("Product received an product update event");
+        System.out.println("Product received an product update event with version: "+updateEvent.version);
 
         // can use issue statement for faster update
         Product product = new Product(updateEvent.seller_id, updateEvent.product_id, updateEvent.name, updateEvent.sku, updateEvent.category,
@@ -41,8 +40,7 @@ public class ProductService {
     public TransactionMark updateProductPrice(UpdatePrice updatePriceEvent) {
         System.out.println("Stock received an update price event with TID: "+updatePriceEvent.instanceId);
 
-        // can use issue statement for faster update
-
+        // could use issue statement for faster update
         Product product = this.productRepository.lookupByKey(new Product.ProductId(updatePriceEvent.sellerId, updatePriceEvent.productId));
 
         product.version = updatePriceEvent.instanceId;

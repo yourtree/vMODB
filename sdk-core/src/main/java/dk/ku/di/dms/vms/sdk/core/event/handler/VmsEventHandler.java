@@ -231,7 +231,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         eventChannel.write( ByteBuffer.wrap(eventSchemaStr.getBytes(StandardCharsets.UTF_8)) );
 
         // send data schema
-        String dataSchemaStr = serdes.serializeDataSchema( vmsMetadata.dataSchema() );
+        String dataSchemaStr = serdes.serializeDataSchema( vmsMetadata.dataModel() );
         dataChannel.write( ByteBuffer.wrap(dataSchemaStr.getBytes(StandardCharsets.UTF_8)) );
 
         // PHASE 3 -  get confirmation whether the schemas are fine

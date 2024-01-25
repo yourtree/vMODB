@@ -1,23 +1,25 @@
 package dk.ku.di.dms.vms.sdk.embed.client;
 
+import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
-import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
+import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
 import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
-import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
-import dk.ku.di.dms.vms.sdk.embed.handler.EmbeddedVmsEventHandler;
+import dk.ku.di.dms.vms.sdk.embed.handler.VmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
+import org.reflections.Reflections;
 
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 
 /**
  * Starting point for initializing the VMS runtime
@@ -30,14 +32,14 @@ public final class VmsApplication {
 
     private final Map<String, Table> catalog;
 
-    private final EmbeddedVmsEventHandler eventHandler;
+    private final VmsEventHandler eventHandler;
 
     private final VmsTransactionScheduler scheduler;
 
     private final IVmsInternalChannels internalChannels;
 
     private VmsApplication(VmsRuntimeMetadata vmsRuntimeMetadata, Map<String, Table> catalog,
-                           EmbeddedVmsEventHandler eventHandler, VmsTransactionScheduler scheduler,
+                           VmsEventHandler eventHandler, VmsTransactionScheduler scheduler,
                            IVmsInternalChannels internalChannels) {
         this.vmsRuntimeMetadata = vmsRuntimeMetadata;
         this.catalog = catalog;
@@ -50,8 +52,8 @@ public final class VmsApplication {
         return this.catalog.get(table);
     }
 
-    public IVmsRepositoryFacade getRepositoryFacade(String table){
-        return this.vmsRuntimeMetadata.repositoryFacades().get(table);
+    public Object getRepositoryProxy(String table){
+        return this.vmsRuntimeMetadata.repositoryProxyMap().get(table);
     }
 
     /**
@@ -59,7 +61,7 @@ public final class VmsApplication {
      * (i) EventHandler, responsible for communicating with the external world
      * (ii) Scheduler, responsible for scheduling transactions and returning resulting events
      */
-    public static VmsApplication build(String host, int port, String[] packages, String... entitiesToExclude) throws Exception {
+    public static VmsApplication build(String host, int port, String[] packages) throws Exception {
 
         // check first whether we are in decoupled or embed mode
         Optional<Package> optional = Arrays.stream(Package.getPackages()).filter(p ->
@@ -79,22 +81,35 @@ public final class VmsApplication {
 
         VmsEmbeddedInternalChannels vmsInternalPubSubService = new VmsEmbeddedInternalChannels();
 
-        VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata(packages);
+        // operational API and checkpoint API
+        TransactionManager transactionFacade = new TransactionManager();
 
-        if( vmsMetadata == null ) throw new IllegalStateException("Cannot build VMS runtime metadata.");
+        Reflections reflections = VmsMetadataLoader.configureReflections( packages );
+
+        Set<Class<?>> vmsClasses = reflections.getTypesAnnotatedWith(Microservice.class);
+        if(vmsClasses.isEmpty()) throw new IllegalStateException("No classes annotated with @Microservice in this application.");
+        Map<Class<?>, String> entityToTableNameMap = VmsMetadataLoader.loadVmsTableNames(reflections);
+        Map<Class<?>, String> entityToVirtualMicroservice = VmsMetadataLoader.mapEntitiesToVirtualMicroservice(vmsClasses, entityToTableNameMap);
+        Map<String, VmsDataModel> vmsDataModelMap = VmsMetadataLoader.buildVmsDataModel( entityToVirtualMicroservice, entityToTableNameMap );
+
+        // load catalog so we can pass the table instance to proxy repository
+        Map<String, Table> catalog = EmbedMetadataLoader.loadCatalog(vmsDataModelMap, entityToTableNameMap);
+
+        Map<String, Object> tableToRepositoryMap = EmbedMetadataLoader.loadRepositoryClasses( vmsClasses, entityToTableNameMap, catalog,  transactionFacade );
+        Map<String, List<Object>> vmsToRepositoriesMap = EmbedMetadataLoader.mapRepositoriesToVms(vmsClasses, entityToTableNameMap, tableToRepositoryMap);
+
+        VmsRuntimeMetadata vmsMetadata = VmsMetadataLoader.load(
+                reflections,
+                vmsClasses,
+                vmsDataModelMap,
+                vmsToRepositoriesMap,
+                tableToRepositoryMap
+        );
 
         // for now only giving support to one vms
         Optional<Map.Entry<String, String>> entryOptional = vmsMetadata.clazzNameToVmsName().entrySet().stream().findFirst();
         if(entryOptional.isEmpty()) throw new IllegalStateException("Cannot find a single instance of VMS");
         String vmsName = entryOptional.get().getValue();
-
-        Set<String> toExclude = entitiesToExclude != null ? Arrays.stream(entitiesToExclude).collect(
-                Collectors.toSet()) : new HashSet<>();
-
-        // load catalog
-        Map<String, Table> catalog = EmbedMetadataLoader.loadCatalog(vmsMetadata, toExclude);
-
-        TransactionFacade transactionFacade = EmbedMetadataLoader.loadTransactionFacadeAndInjectIntoRepositories(vmsMetadata, catalog);
 
         // could be higher. must adjust according to the number of cores available
         ExecutorService readTaskPool = Executors.newSingleThreadExecutor();
@@ -113,14 +128,14 @@ public final class VmsApplication {
         VmsNode vmsIdentifier = new VmsNode(
                 host, port, vmsName,
                 0, 0,0,
-                vmsMetadata.dataSchema(),
+                vmsMetadata.dataModel(),
                 vmsMetadata.inputEventSchema(),
                 vmsMetadata.outputEventSchema());
 
         // at least two, one for acceptor and one for new events
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.buildWithDefaults(
+        VmsEventHandler eventHandler = VmsEventHandler.buildWithDefaults(
                 vmsIdentifier, null,
                 transactionFacade, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
 

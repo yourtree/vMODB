@@ -94,23 +94,11 @@ public class CheckoutWorkflow extends AbstractWorkflowTest {
         }
     }
 
-
     private Coordinator loadCoordinator() throws IOException {
         ServerIdentifier serverIdentifier = new ServerIdentifier( "localhost", 8080 );
 
         Map<Integer, ServerIdentifier> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
-
-//        TransactionDAG checkoutDag =  TransactionBootstrap.name("customer_checkout")
-//                .input( "a", "stock", "reserve_stock" )
-//                .internal( "b", "stock", "stock_confirmed", "a" )
-//                .internal("c", "order", "stock_confirmed", "b")
-//                .internal("d", "order", "invoice_issued", "c")
-//                .internal("e", "payment", "invoice_issued", "d")
-//                .internal("f", "payment", "payment_confirmed", "e")
-//                .terminal( "g", "customer", "f" )
-//                .terminal( "h", "shipment",  "f" )
-//                .build();
 
         TransactionDAG checkoutDag =  TransactionBootstrap.name("customer_checkout")
                 .input( "a", "stock", "reserve_stock" )
@@ -119,6 +107,17 @@ public class CheckoutWorkflow extends AbstractWorkflowTest {
                 .terminal( "d", "customer", "c" )
                 .terminal( "e", "shipment",  "c" )
                 .build();
+
+//        TransactionDAG checkoutDag =  TransactionBootstrap.name("customer_checkout")
+//                .input( "a", "stock", "reserve_stock" )
+//                .internal("b", "order", "stock_confirmed", "a")
+//                .internal("c", "seller", "invoice_issued", "b")
+//                .internal("c", "payment", "invoice_issued", "b")
+//                .internal("c", "seller", "payment_confirmed", "c")
+//                .internal( "e", "shipment",  "c" )
+//                .terminal("c", "seller", "shipment_notification", "e")
+//                .terminal( "d", "customer", "c" )
+//                .build();
 
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
         transactionMap.put(checkoutDag.name, checkoutDag);

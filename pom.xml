@@ -28,13 +28,14 @@
     <!-- operations -->
     <module>coordinator</module>
 
-    <!-- for tests -->
-    <module>playground</module>
+    <!-- marketplace -->
     <module>marketplace</module>
-      <module>marketplace/order</module>
-      <module>marketplace/payment</module>
-      <module>marketplace/shipment</module>
-      <module>marketplace/customer</module>
+    <module>marketplace/order</module>
+    <module>marketplace/payment</module>
+    <module>marketplace/shipment</module>
+    <module>marketplace/customer</module>
+    <module>marketplace/stock</module>
+    <module>marketplace/product</module>
 
   </modules>
 
@@ -49,7 +50,7 @@
 
     <!-- dependency versions -->
     <junit.version>4.13.2</junit.version>
-    <slf4j.version>1.7.32</slf4j.version>
+    <slf4j.version>2.0.5</slf4j.version>
 
     <!-- surefire plugin openjdk18 -->
     <argLine>--add-modules jdk.incubator.foreign --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED</argLine>
@@ -72,6 +73,14 @@
       <version>${slf4j.version}</version>
       <!--      <scope>compile</scope>-->
     </dependency>
+
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-nop</artifactId>
+      <version>2.0.11</version>
+<!--      <scope>test</scope>-->
+    </dependency>
+
 
   </dependencies>
 
@@ -128,7 +137,7 @@
   <developers>
     <developer>
       <id>rodrigolaigner</id>
-      <name>Rodigo Laigner</name>
+      <name>Rodrigo Laigner</name>
       <url>https://github.com/rnlaigner</url>
       <email>rnl@di.ku.dk</email>
     </developer>

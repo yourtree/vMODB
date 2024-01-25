@@ -10,7 +10,8 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
-import dk.ku.di.dms.vms.modb.transaction.CheckpointingAPI;
+import dk.ku.di.dms.vms.modb.transaction.CheckpointAPI;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
@@ -20,7 +21,6 @@ import dk.ku.di.dms.vms.sdk.embed.events.InputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample2;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample3;
-import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;
@@ -56,7 +56,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
 public class EventHandlerTest {
 
     private record VmsCtx (
-        EmbeddedVmsEventHandler eventHandler,
+        VmsEventHandler eventHandler,
         VmsTransactionScheduler scheduler) {
         public void stop() {
             this.scheduler.stop();
@@ -67,7 +67,7 @@ public class EventHandlerTest {
     private static final Logger logger = Logger.getLogger(EventHandlerTest.class.getName());
     private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-    private static final class DumbCheckpointAPI implements CheckpointingAPI {
+    private static final class DumbCheckpointAPI implements CheckpointAPI {
         @Override
         public void checkpoint() {
              logger.info("Checkpoint called at: "+System.currentTimeMillis());
@@ -88,11 +88,9 @@ public class EventHandlerTest {
                                            List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap, List<String> outToSwap)
             throws Exception {
 
-        VmsRuntimeMetadata vmsMetadata = EmbedMetadataLoader.loadRuntimeMetadata("dk.ku.di.dms.vms.sdk.embed");
+        VmsRuntimeMetadata vmsMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.embed");
 
         // discard events
-        assert vmsMetadata != null;
-
         for (String in : inToDiscard)
             vmsMetadata.inputEventSchema().remove(in);
 
@@ -119,12 +117,12 @@ public class EventHandlerTest {
         VmsNode vmsIdentifier = new VmsNode(
                 node.host, node.port, vmsName,
                 1, 0, 0,
-                vmsMetadata.dataSchema(),
+                vmsMetadata.dataModel(),
                 vmsMetadata.inputEventSchema(), vmsMetadata.outputEventSchema());
 
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        EmbeddedVmsEventHandler eventHandler = EmbeddedVmsEventHandler.buildWithDefaults(
+        VmsEventHandler eventHandler = VmsEventHandler.buildWithDefaults(
                 vmsIdentifier, eventToConsumersMap, new DumbCheckpointAPI(),
                 vmsInternalPubSubService,  vmsMetadata, serdes, socketPool );
 

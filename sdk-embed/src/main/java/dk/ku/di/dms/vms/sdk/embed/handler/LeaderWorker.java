@@ -17,7 +17,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
-import static dk.ku.di.dms.vms.sdk.embed.handler.EmbeddedVmsEventHandler.DEFAULT_DELAY_FOR_BATCH_SEND;
+import static dk.ku.di.dms.vms.sdk.embed.handler.VmsEventHandler.DEFAULT_DELAY_FOR_BATCH_SEND;
 
 /**
  * This class is responsible for all writes to the leader.

@@ -57,7 +57,7 @@ public class StockService {
 
         Map<StockItem.StockId, CartItem> cartItemMap = reserveStock.items.stream().collect( Collectors.toMap( (f)-> new StockItem.StockId(f.SellerId, f.ProductId), Function.identity()) );
 
-        List<StockItem> items = stockRepository.lookupByKeys(cartItemMap.keySet());
+        List<StockItem> items = this.stockRepository.lookupByKeys(cartItemMap.keySet());
 
         if(items.isEmpty()) {
             LOGGER.severe("No items found in private state");

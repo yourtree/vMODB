@@ -1,10 +1,12 @@
 package dk.ku.di.dms.vms.modb.definition.key;
 
+import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
+
 /**
  * Cache key objects for reuse across queries
  * Inspiration from JVM class: {jdk.internal.net.http.websocket.MessageQueue}
  * -
- * Used by the {@link dk.ku.di.dms.vms.modb.transaction.TransactionFacade} to
+ * Used by the {@link TransactionManager} to
  * create the input keys.
  * After the query is finished, the keys don't need to be returned to the cache,
  * but rather, the cache may need to grow to accommodate more queries.

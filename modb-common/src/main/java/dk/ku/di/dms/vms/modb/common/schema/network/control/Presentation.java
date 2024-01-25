@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.control;
 
-import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
+import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
@@ -184,7 +184,7 @@ public final class Presentation {
 
         String dataSchemaStr = ByteUtils.extractStringFromByteBuffer(buffer, sizeDataSchema);
 
-        Map<String, VmsDataSchema> dataSchema = serdesProxy.deserializeDataSchema( dataSchemaStr );
+        Map<String, VmsDataModel> dataSchema = serdesProxy.deserializeDataSchema( dataSchemaStr );
 
         int sizeInputEventSchema = buffer.getInt();
 

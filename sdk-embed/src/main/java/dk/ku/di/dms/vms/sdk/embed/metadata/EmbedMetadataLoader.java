@@ -3,8 +3,7 @@ package dk.ku.di.dms.vms.sdk.embed.metadata;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
-import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
-import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
@@ -17,17 +16,18 @@ import dk.ku.di.dms.vms.modb.index.unique.UniqueHashMapIndex;
 import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
 import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
-import dk.ku.di.dms.vms.modb.transaction.TransactionFacade;
+import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.IntegerPrimaryKeyGenerator;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
-import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
-import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
-import dk.ku.di.dms.vms.sdk.embed.facade.EmbedRepositoryFacade;
-import dk.ku.di.dms.vms.sdk.embed.ingest.BulkDataLoader;
+import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 import jdk.incubator.foreign.MemorySegment;
 import jdk.incubator.foreign.ResourceScope;
+import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.description.type.TypeDescription;
+import net.bytebuddy.dynamic.DynamicType;
+import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
+import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
 
 import javax.persistence.GeneratedValue;
 import java.io.File;
@@ -35,6 +35,8 @@ import java.io.IOException;
 import java.lang.ref.Cleaner;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.nio.channels.FileChannel;
 import java.util.*;
 import java.util.logging.Logger;
@@ -50,77 +52,143 @@ public class EmbedMetadataLoader {
 
     private static final boolean IN_MEMORY_STORAGE = true;
 
-    private static final boolean BULK_DATA_LOADER = false;
+    public static Map<String, Object> loadRepositoryClasses(Set<Class<?>> vmsClasses,
+                                                                      Map<Class<?>, String> entityToTableNameMap,
+                                                                      Map<String, Table> catalog,
+                                                                      OperationalAPI operationalAPI) throws InvocationTargetException, InstantiationException, IllegalAccessException, ClassNotFoundException {
+        Map<String, Object> tableToRepositoryMap = new HashMap<>();
+        for(Class<?> clazz : vmsClasses) {
 
-    public static VmsRuntimeMetadata loadRuntimeMetadata(String... packages) {
+            String clazzName = clazz.getCanonicalName();
 
-        try {
-            @SuppressWarnings("unchecked")
-            Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) EmbedRepositoryFacade.class.getConstructors()[0];
-            return VmsMetadataLoader.load(packages, constructor);
-        } catch (ClassNotFoundException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
-            logger.warning("Cannot start VMs, error loading metadata: "+e.getMessage());
+            Class<?> cls = Class.forName(clazzName);
+            Constructor<?>[] constructors = cls.getDeclaredConstructors();
+            Constructor<?> constructor = constructors[0];
+
+            // the IRepository required for this vms class
+            Class<?>[] repositoryTypes = constructor.getParameterTypes();
+
+            for (Class<?> repositoryType : repositoryTypes) {
+
+                Type[] types = getPkAndEntityTypesFromRepositoryClazz(repositoryType);
+
+                Class<?> pkClazz = (Class<?>) types[0];
+                Class<?> entityClazz = (Class<?>) types[1];
+
+                String tableName = entityToTableNameMap.get(entityClazz);
+
+                // generate type
+                TypeDescription.Generic generic = TypeDescription.Generic.Builder
+                        .parameterizedType(AbstractProxyRepository.class, pkClazz, entityClazz).build();
+
+                Class<?> type;
+                try (DynamicType.Unloaded<?> dynamicType = new ByteBuddy()
+                        .subclass(generic, ConstructorStrategy.Default.IMITATE_SUPER_CLASS)
+                        .implement(repositoryType)
+                        .name(repositoryType.getSimpleName().replaceFirst("I","") + "Impl")
+                        .make()) {
+                    type = dynamicType
+                            .load(ClassLoader.getSystemClassLoader(), ClassLoadingStrategy.Default.INJECTION)
+                            .getLoaded();
+                }
+
+                Object instance = type.getConstructors()[0].newInstance(
+                        pkClazz,
+                        entityClazz,
+                        catalog.get( tableName ),
+                        operationalAPI
+                );
+
+                tableToRepositoryMap.put( tableName, instance);
+
+            }
         }
-
-        return null;
-
+        return tableToRepositoryMap;
     }
 
-    public static TransactionFacade loadTransactionFacadeAndInjectIntoRepositories(
-            VmsRuntimeMetadata vmsRuntimeMetadata, Map<String, Table> catalog) {
-        TransactionFacade transactionFacade = TransactionFacade.build(catalog);
-        for(Map.Entry<String, IVmsRepositoryFacade> facadeEntry : vmsRuntimeMetadata.repositoryFacades().entrySet()){
-            ((EmbedRepositoryFacade)facadeEntry.getValue()).setDynamicDatabaseModules(transactionFacade, catalog.get(facadeEntry.getKey()));
+
+    /**
+     * Key: clazzName (annotated with @Microservice)
+     */
+    public static Map<String, List<Object>> mapRepositoriesToVms(
+                Set<Class<?>> vmsClasses,
+                Map<Class<?>, String> entityToTableNameMap,
+                Map<String, Object> tableToRepositoryMap)
+            throws ClassNotFoundException {
+        Map<String, List<Object>> repositoryClassMap = new HashMap<>();
+        for(Class<?> clazz : vmsClasses) {
+
+            String clazzName = clazz.getCanonicalName();
+
+            Class<?> cls = Class.forName(clazzName);
+            Constructor<?>[] constructors = cls.getDeclaredConstructors();
+            Constructor<?> constructor = constructors[0];
+
+            // the IRepository required for this vms class
+            Class<?>[] repositoryTypes = constructor.getParameterTypes();
+            List<Object> proxies = new ArrayList<>(repositoryTypes.length);
+
+            for (Class<?> repositoryType : repositoryTypes) {
+
+                Type[] types = getPkAndEntityTypesFromRepositoryClazz(repositoryType);
+
+                Class<?> pkClazz = (Class<?>) types[0];
+                Class<?> entityClazz = (Class<?>) types[1];
+
+                String tableName = entityToTableNameMap.get(entityClazz);
+
+                Object instance = tableToRepositoryMap.get(tableName);
+
+                proxies.add(instance);
+            }
+
+            // add to repository class map
+            repositoryClassMap.put( clazzName, proxies );
         }
-
-        // instantiate loader
-        if(BULK_DATA_LOADER) {
-            BulkDataLoader loader = new BulkDataLoader(vmsRuntimeMetadata.repositoryFacades(), vmsRuntimeMetadata.entityToTableNameMap(), VmsSerdesProxyBuilder.build());
-            vmsRuntimeMetadata.loadedVmsInstances().put("data_loader", loader);
-        }
-
-        return transactionFacade;
-
+        return repositoryClassMap;
     }
 
-    public static Map<String, Table> loadCatalog(VmsRuntimeMetadata vmsRuntimeMetadata, Set<String> entitiesToExclude) throws NoSuchFieldException {
+    private static Type[] getPkAndEntityTypesFromRepositoryClazz(Class<?> repositoryClazz){
+        return ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
+    }
 
-        Map<String, Table> catalog = new HashMap<>(vmsRuntimeMetadata.dataSchema().size());
-        Map<VmsDataSchema, Tuple<Schema, Map<String, int[]>>> dataSchemaToPkMap = new HashMap<>(vmsRuntimeMetadata.dataSchema().size());
+    public static Map<String, Table> loadCatalog(Map<String, VmsDataModel> vmsDataModelMap, Map<Class<?>, String> entityToTableNameMap) throws NoSuchFieldException {
+
+        Map<String, Table> catalog = new HashMap<>(vmsDataModelMap.size());
+        Map<VmsDataModel, Tuple<Schema, Map<String, int[]>>> dataSchemaToPkMap = new HashMap<>(vmsDataModelMap.size());
 
         /*
          * Build primary key index and map the foreign keys (internal to this VMS)
          */
-        for (VmsDataSchema vmsDataSchema : vmsRuntimeMetadata.dataSchema().values()) {
+        for (var entry : entityToTableNameMap.entrySet()) {
 
-            if(entitiesToExclude != null && entitiesToExclude.contains(vmsDataSchema.tableName)) continue;
+            VmsDataModel vmsDataModel = vmsDataModelMap.get( entry.getValue() );
 
             // check if autogenerated annotation is present. a reverse index would be nice here...
-            Class<?> clazz = vmsRuntimeMetadata.entityToTableNameMap().entrySet().stream().filter(e->e.getValue().contentEquals(vmsDataSchema.tableName)).findFirst().get().getKey();
+            Class<?> entityClazz = entry.getKey();
             boolean generated = false;
-            if(vmsDataSchema.primaryKeyColumns.length == 1){
+            if(vmsDataModel.primaryKeyColumns.length == 1){
                 // get primary key name
-                int pos = vmsDataSchema.primaryKeyColumns[0];
-                String pkColumn = vmsDataSchema.columnNames[pos];
-                generated = clazz.getDeclaredField(pkColumn).getAnnotation((GeneratedValue.class)) != null;
+                int pos = vmsDataModel.primaryKeyColumns[0];
+                String pkColumn = vmsDataModel.columnNames[pos];
+                generated = entityClazz.getDeclaredField(pkColumn).getAnnotation((GeneratedValue.class)) != null;
             }
 
-            final Schema schema = new Schema(vmsDataSchema.columnNames, vmsDataSchema.columnDataTypes,
-                    vmsDataSchema.primaryKeyColumns, vmsDataSchema.constraintReferences, generated);
+            final Schema schema = new Schema(vmsDataModel.columnNames, vmsDataModel.columnDataTypes,
+                    vmsDataModel.primaryKeyColumns, vmsDataModel.constraintReferences, generated);
 
-            if(vmsDataSchema.foreignKeyReferences != null && vmsDataSchema.foreignKeyReferences.length > 0){
+            if(vmsDataModel.foreignKeyReferences != null && vmsDataModel.foreignKeyReferences.length > 0){
                 // build
-                Map<String, List<ForeignKeyReference>> fksPerTable = Stream.of( vmsDataSchema.foreignKeyReferences )
-                                //.sorted( (x,y) -> schema.columnPosition( x.columnName() ) <= schema.columnPosition( y.columnName() ) ? -1 : 1 )
-                        .collect( Collectors.groupingBy(ForeignKeyReference::vmsTableName ) ); // Collectors.toUnmodifiableList() ) );
+                Map<String, List<ForeignKeyReference>> fksPerTable = Stream.of( vmsDataModel.foreignKeyReferences )
+                                .collect( Collectors.groupingBy(ForeignKeyReference::vmsTableName ) );
 
                 // table name, fields
-                Map<String, int[]> definitiveMap = buildSchemaForeignKeyMap(vmsDataSchema, fksPerTable, vmsRuntimeMetadata.dataSchema());
+                Map<String, int[]> definitiveMap = buildSchemaForeignKeyMap(vmsDataModel, fksPerTable, vmsDataModelMap);
 
-                dataSchemaToPkMap.put(vmsDataSchema, Tuple.of(schema, definitiveMap));
+                dataSchemaToPkMap.put(vmsDataModel, Tuple.of(schema, definitiveMap));
 
             } else {
-                dataSchemaToPkMap.put(vmsDataSchema, Tuple.of(schema, null));
+                dataSchemaToPkMap.put(vmsDataModel, Tuple.of(schema, null));
             }
 
         }
@@ -156,7 +224,7 @@ public class EmbedMetadataLoader {
         // now I have the pk indexes and the fks
         for (var entry : dataSchemaToPkMap.entrySet()) {
 
-            VmsDataSchema vmsDataSchema = entry.getKey();
+            VmsDataModel vmsDataSchema = entry.getKey();
             Tuple<Schema, Map<String, int[]>> tupleSchemaFKs = entry.getValue();
 
             PrimaryIndex primaryIndex = vmsDataSchemaToIndexMap.get( vmsDataSchema.tableName );
@@ -240,13 +308,13 @@ public class EmbedMetadataLoader {
 
     }
 
-    private static Map<String, int[]> buildSchemaForeignKeyMap(VmsDataSchema dataSchemaToBuild, Map<String, List<ForeignKeyReference>> fksPerTable, Map<String, VmsDataSchema> dataSchemaMap) {
+    private static Map<String, int[]> buildSchemaForeignKeyMap(VmsDataModel dataSchemaToBuild, Map<String, List<ForeignKeyReference>> fksPerTable, Map<String, VmsDataModel> dataSchemaMap) {
         Map<String, int[]> res = new HashMap<>();
         for( var entry : fksPerTable.entrySet() ){
             int[] intArray = new int[ entry.getValue().size() ];
             int i = 0;
             // get parent data schema
-            VmsDataSchema dataSchema = dataSchemaMap.get( entry.getKey() );
+            VmsDataModel dataSchema = dataSchemaMap.get( entry.getKey() );
             // first check if the foreign keys defined actually map to a column in parent table
             for(var fkColumn : entry.getValue()){
                 if(dataSchema.findColumnPosition(fkColumn.columnName()) == -1) {

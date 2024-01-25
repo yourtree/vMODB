@@ -23,11 +23,19 @@
 
   <dependencies>
 
+    <!-- to look for VMS annotated classes -->
     <dependency>
       <groupId>org.reflections</groupId>
       <artifactId>reflections</artifactId>
       <version>0.10.2</version>
 <!--      <scope>runtime</scope>-->
+    </dependency>
+
+    <!-- to avoid dynamic proxy -->
+    <dependency>
+      <groupId>net.bytebuddy</groupId>
+      <artifactId>byte-buddy</artifactId>
+      <version>1.14.11</version>
     </dependency>
 
     <dependency>

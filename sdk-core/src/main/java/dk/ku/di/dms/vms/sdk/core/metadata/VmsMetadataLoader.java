@@ -11,10 +11,9 @@ import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 import dk.ku.di.dms.vms.modb.common.constraint.ValueConstraintReference;
 import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
-import dk.ku.di.dms.vms.modb.common.schema.VmsDataSchema;
+import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
-import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NoPrimaryKeyFoundException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NotAcceptableTypeException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.QueueMappingException;
@@ -39,36 +38,40 @@ import java.util.stream.Stream;
 import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
 import static java.util.logging.Logger.getLogger;
 
-public class VmsMetadataLoader {
+public final class VmsMetadataLoader {
 
     private VmsMetadataLoader(){}
 
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
-    public static VmsRuntimeMetadata load(String[] packages, Constructor<IVmsRepositoryFacade> facadeConstructor)
+
+    public static VmsRuntimeMetadata load(String... packages)
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
-
         Reflections reflections = configureReflections(packages);
-
         Set<Class<?>> vmsClasses = reflections.getTypesAnnotatedWith(Microservice.class);
         if(vmsClasses.isEmpty()) throw new IllegalStateException("No classes annotated with @Microservice in this application.");
-
         Map<Class<?>, String> entityToTableNameMap = loadVmsTableNames(reflections);
-
-        Map<String, String> clazzNameToVmsNameMap = mapClazzNameToVmsName(vmsClasses);
-
         Map<Class<?>, String> entityToVirtualMicroservice = mapEntitiesToVirtualMicroservice(vmsClasses, entityToTableNameMap);
+        Map<String, VmsDataModel> vmsDataModelMap = buildVmsDataModel( entityToVirtualMicroservice, entityToTableNameMap );
+        return load(reflections,
+                vmsClasses,
+                vmsDataModelMap, Map.of(), Map.of());
+    }
 
-        Map<String, VmsDataSchema> vmsDataSchemas = buildDataSchema(entityToVirtualMicroservice, entityToTableNameMap);
+    public static VmsRuntimeMetadata load(Reflections reflections,
+                                          Set<Class<?>> vmsClasses,
+                                          Map<String, VmsDataModel> vmsDataModelMap,
+                                          Map<String, List<Object>> vmsToRepositoriesMap,
+                                          Map<String, Object> tableToRepositoryMap)
+            throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
-        Map<String, IVmsRepositoryFacade> repositoryFacades = new HashMap<>(5);
-
-        Map<String, Tuple<SelectStatement, Type>> staticQueriesMap = loadStaticQueries(reflections);
+        Set<Method> queryMethods = reflections.getMethodsAnnotatedWith(Query.class);
+        Map<String, Tuple<SelectStatement, Type>> staticQueriesMap = loadStaticQueries(queryMethods);
 
         // also load the corresponding repository facade
-        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses,
-                entityToTableNameMap, vmsDataSchemas, staticQueriesMap,
-                facadeConstructor, repositoryFacades);
+        Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(
+                vmsClasses,
+                vmsToRepositoriesMap);
 
         // necessary remaining data structures to store a vms metadata
         Map<String, VmsTransactionMetadata> queueToVmsTransactionMap = new HashMap<>();
@@ -83,27 +86,27 @@ public class VmsMetadataLoader {
         // key: queue name; value: (input),(output)
         Map<String, String> inputOutputEventDistinction = new HashMap<>();
 
-        mapVmsTransactionInputOutput(reflections,
+        Set<Method> transactionalMethods = reflections.getMethodsAnnotatedWith(Transactional.class);
+
+        mapVmsMethodInputOutput(transactionalMethods,
                 loadedVmsInstances, queueToEventMap, eventToQueueMap,
                 inputOutputEventDistinction, queueToVmsTransactionMap);
 
         Map<String, VmsEventSchema> inputEventSchemaMap = new HashMap<>();
         Map<String, VmsEventSchema> outputEventSchemaMap = new HashMap<>();
 
-        buildEventSchema( reflections,
+        Set<Class<?>> eventsClazz = reflections.getTypesAnnotatedWith(Event.class);
+
+        buildEventSchema(eventsClazz,
                 eventToQueueMap,
                 inputOutputEventDistinction,
                 inputEventSchemaMap,
-                outputEventSchemaMap );
+                outputEventSchemaMap);
 
-        /*
-         *   TODO look at this. we should provide this implementation
-         *   SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
-         *   SLF4J: Defaulting to no-operation (NOP) logger implementation
-         *   SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
-         */
+        Map<String, String> clazzNameToVmsNameMap = mapClazzNameToVmsName(vmsClasses);
+
         return new VmsRuntimeMetadata(
-                vmsDataSchemas,
+                vmsDataModelMap,
                 inputEventSchemaMap,
                 outputEventSchemaMap,
                 queueToVmsTransactionMap,
@@ -111,8 +114,7 @@ public class VmsMetadataLoader {
                 eventToQueueMap,
                 clazzNameToVmsNameMap,
                 loadedVmsInstances,
-                repositoryFacades,
-                entityToTableNameMap,
+                tableToRepositoryMap,
                 staticQueriesMap);
     }
 
@@ -125,7 +127,7 @@ public class VmsMetadataLoader {
         return map;
     }
 
-    private static Reflections configureReflections(String[] packages){
+    public static Reflections configureReflections(String[] packages){
 
         if(packages == null) {
             // https://stackoverflow.com/questions/67159160/java-using-reflections-to-scan-classes-from-all-packages
@@ -152,7 +154,7 @@ public class VmsMetadataLoader {
     /**
      * Map the entities annotated with {@link VmsTable}
      */
-    private static Map<Class<?>, String> loadVmsTableNames(Reflections reflections) {
+    public static Map<Class<?>, String> loadVmsTableNames(Reflections reflections) {
         Set<Class<?>> vmsTables = reflections.getTypesAnnotatedWith(VmsTable.class);
         Map<Class<?>, String> vmsTableNameMap = new HashMap<>();
         for(Class<?> vmsTable : vmsTables){
@@ -167,14 +169,12 @@ public class VmsMetadataLoader {
     /**
      * Building virtual microservice event schemas
      */
-    protected static void buildEventSchema(
-            Reflections reflections,
+    private static void buildEventSchema(
+            Set<Class<?>> eventsClazz,
             Map<Class<?>, String> eventToQueueMap,
             Map<String, String> inputOutputEventDistinction,
             Map<String, VmsEventSchema> inputEventSchemaMap,
             Map<String, VmsEventSchema> outputEventSchemaMap) {
-
-        Set<Class<?>> eventsClazz = reflections.getTypesAnnotatedWith( Event.class );
 
         for( Class<?> eventClazz : eventsClazz ){
 
@@ -218,10 +218,10 @@ public class VmsMetadataLoader {
      * Building virtual microservice table schemas
      */
     @SuppressWarnings("unchecked")
-    protected static Map<String, VmsDataSchema> buildDataSchema(Map<Class<?>, String> entityToVirtualMicroservice,
-                                                                Map<Class<?>, String> vmsTableNames) {
+    public static Map<String, VmsDataModel> buildVmsDataModel(Map<Class<?>, String> entityToVirtualMicroservice,
+                                                                 Map<Class<?>, String> vmsTableNames) {
 
-        Map<String, VmsDataSchema> schemaMap = new HashMap<>();
+        Map<String, VmsDataModel> schemaMap = new HashMap<>();
 
         // build schema of each table
         // we build the schema in order to look up the fields and define the pk hash index
@@ -304,7 +304,7 @@ public class VmsMetadataLoader {
             VmsTable vmsTableAnnotation = tableClass.getAnnotation(VmsTable.class);
             String vmsTableName = vmsTableAnnotation.name();
             String vms = entityToVirtualMicroservice.get( tableClass );
-            VmsDataSchema schema = new VmsDataSchema(vms, vmsTableName, pkFieldsStr, columnNamesArray, columnDataTypesArray, foreignKeyReferences, constraints);
+            VmsDataModel schema = new VmsDataModel(vms, vmsTableName, pkFieldsStr, columnNamesArray, columnDataTypesArray, foreignKeyReferences, constraints);
             schemaMap.put(vmsTableName, schema);
         }
 
@@ -394,8 +394,7 @@ public class VmsMetadataLoader {
 
     }
 
-    @SuppressWarnings({"unchecked","rawtypes"})
-    protected static Map<Class<?>, String> mapEntitiesToVirtualMicroservice(Set<Class<?>> vmsClasses, Map<Class<?>, String> entityToTableNameMap) {
+    public static Map<Class<?>, String> mapEntitiesToVirtualMicroservice(Set<Class<?>> vmsClasses, Map<Class<?>, String> entityToTableNameMap) {
 
         Map<Class<?>, String> entityToVirtualMicroservice = new HashMap<>();
 
@@ -411,86 +410,38 @@ public class VmsMetadataLoader {
 
     }
 
-    @SuppressWarnings({"rawtypes"})
-    protected static Map<String, Object> loadMicroserviceClasses(
+    private static Map<String, Object> loadMicroserviceClasses(
             Set<Class<?>> vmsClasses,
-            Map<Class<?>, String> entityToTableNameMap,
-            Map<String, VmsDataSchema> vmsDataSchemas,
-            Map<String, Tuple<SelectStatement, Type>> staticQueriesMap,
-            Constructor<IVmsRepositoryFacade> facadeConstructor,
-            Map<String, IVmsRepositoryFacade> repositoryFacades // the repository facade instances built here
-            )
+            Map<String, List<Object>> repositoryClassMap)
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
 
         Map<String, Object> loadedMicroserviceInstances = new HashMap<>();
-
         for(Class<?> clazz : vmsClasses) {
-
             // mapVmsTransactionInputOutput uses the canonical name
             String clazzName = clazz.getCanonicalName();
-
             Class<?> cls = Class.forName(clazzName);
             Constructor<?>[] constructors = cls.getDeclaredConstructors();
             Constructor<?> constructor = constructors[0];
-
-            // the IRepository required for this vms class
-            Class<?>[] parameterTypes = constructor.getParameterTypes();
-            List<Object> proxies = new ArrayList<>(parameterTypes.length);
-
-            for (Class parameterType : parameterTypes) {
-
-                // fill the repository facade map
-                Class<?> entityClazz = getEntityNameFromRepositoryClazz(parameterType);
-                String tableName = entityToTableNameMap.get(entityClazz);
-
-                IVmsRepositoryFacade facade = facadeConstructor.newInstance(
-                        parameterType,
-                        vmsDataSchemas.get(tableName),
-                        staticQueriesMap);
-
-                repositoryFacades.putIfAbsent( tableName, facade );
-
-                Object proxyInstance = Proxy.newProxyInstance(
-                        VmsMetadataLoader.class.getClassLoader(),
-                        new Class[]{parameterType},
-                        // it works without casting as long as all services respect
-                        // the constructor rule to have only repositories
-                        facade.asInvocationHandler());
-
-                proxies.add(proxyInstance);
-
-            }
-
-            Object vmsInstance = constructor.newInstance(proxies.toArray());
-
+            // these are the classes annotated with @Microservice
+            Object vmsInstance = constructor.newInstance(repositoryClassMap.get(clazzName).toArray());
             loadedMicroserviceInstances.put(clazzName, vmsInstance);
         }
-
         return loadedMicroserviceInstances;
-
-    }
-
-    private static Class<?> getEntityNameFromRepositoryClazz(Class<?> repositoryClazz){
-        Type[] types = ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
-        return (Class<?>) types[1];
     }
 
     /**
      * Map transactions to input and output events
      */
-    protected static void mapVmsTransactionInputOutput(Reflections reflections,
-                                                       Map<String, Object> loadedMicroserviceInstances,
-                                                       Map<String, Class<?>> queueToEventMap,
-                                                       Map<Class<?>, String> eventToQueueMap,
-                                                       Map<String, String> inputOutputEventDistinction,
-                                                       Map<String, VmsTransactionMetadata> queueToVmsTransactionMap) {
-
-        Set<Method> transactionalMethods = reflections.getMethodsAnnotatedWith(Transactional.class);
-
+    private static void mapVmsMethodInputOutput(Set<Method> transactionalMethods,
+                                                Map<String, Object> loadedVmsInstances,
+                                                Map<String, Class<?>> queueToEventMap,
+                                                Map<Class<?>, String> eventToQueueMap,
+                                                Map<String, String> inputOutputEventDistinction,
+                                                Map<String, VmsTransactionMetadata> queueToVmsTransactionMap) {
         for (Method method : transactionalMethods) {
 
             String className = method.getDeclaringClass().getCanonicalName();
-            Object obj = loadedMicroserviceInstances.get(className);
+            Object obj = loadedVmsInstances.get(className);
 
             Class<?> outputType;
             try{
@@ -686,11 +637,8 @@ public class VmsMetadataLoader {
         }
     }
 
-    private static Map<String, Tuple<SelectStatement, Type>> loadStaticQueries(Reflections reflections){
-
+    private static Map<String, Tuple<SelectStatement, Type>> loadStaticQueries(Set<Method> queryMethods){
         Map<String, Tuple<SelectStatement, Type>> res = new HashMap<>(3);
-        Set<Method> queryMethods = reflections.getMethodsAnnotatedWith(Query.class);
-
         for(Method queryMethod : queryMethods){
 
             try {
@@ -712,9 +660,7 @@ public class VmsMetadataLoader {
             }
 
         }
-
         return res;
-
     }
 
 }
