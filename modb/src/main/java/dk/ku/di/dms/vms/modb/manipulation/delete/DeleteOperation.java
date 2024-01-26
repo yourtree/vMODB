@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.manipulation.delete;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractBufferedIndex;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 
 /**
  * Modifies the active bit in a record

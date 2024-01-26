@@ -1,11 +1,11 @@
-package dk.ku.di.dms.vms.modb.query.planner.operators;
+package dk.ku.di.dms.vms.modb.query.execution.operators;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.query.planner.operators.join.UniqueHashJoinWithProjection;
-import dk.ku.di.dms.vms.modb.query.planner.operators.scan.AbstractScan;
-import dk.ku.di.dms.vms.modb.query.planner.operators.scan.FullScanWithProjection;
-import dk.ku.di.dms.vms.modb.query.planner.operators.scan.IndexScanWithProjection;
+import dk.ku.di.dms.vms.modb.query.execution.operators.join.UniqueHashJoinWithProjection;
+import dk.ku.di.dms.vms.modb.query.execution.operators.scan.AbstractScan;
+import dk.ku.di.dms.vms.modb.query.execution.operators.scan.FullScanWithProjection;
+import dk.ku.di.dms.vms.modb.query.execution.operators.scan.IndexScanWithProjection;
 import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
 
 /**
@@ -32,15 +32,15 @@ public abstract class AbstractSimpleOperator {
      */
     protected void ensureMemoryCapacity(){
 
-        if(currentBuffer.size() - currentBuffer.address() > entrySize){
+        if(this.currentBuffer != null && this.currentBuffer.size() - this.currentBuffer.address() > this.entrySize){
             return;
         }
 
         // else, get a new memory segment
         MemoryRefNode claimed = MemoryManager.getTemporaryDirectMemory();
 
-        claimed.next = memoryRefNode;
-        memoryRefNode = claimed;
+        claimed.next = this.memoryRefNode;
+        this.memoryRefNode = claimed;
 
         this.currentBuffer = new AppendOnlyBuffer(claimed.address(), claimed.bytes());
 
@@ -52,15 +52,15 @@ public abstract class AbstractSimpleOperator {
      */
     protected void ensureMemoryCapacity(int size){
 
-        if(currentBuffer.size() - currentBuffer.address() > size){
+        if(this.currentBuffer != null && this.currentBuffer.size() - this.currentBuffer.address() > size) {
             return;
         }
 
         // else, get a new memory segment
         MemoryRefNode claimed = MemoryManager.getTemporaryDirectMemory(size);
 
-        claimed.next = memoryRefNode;
-        memoryRefNode = claimed;
+        claimed.next = this.memoryRefNode;
+        this.memoryRefNode = claimed;
 
         this.currentBuffer = new AppendOnlyBuffer(claimed.address(), claimed.bytes());
 

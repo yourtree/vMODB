@@ -1,10 +1,10 @@
-package dk.ku.di.dms.vms.modb.query.planner.operators.sum;
+package dk.ku.di.dms.vms.modb.query.execution.operators.sum;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 /**

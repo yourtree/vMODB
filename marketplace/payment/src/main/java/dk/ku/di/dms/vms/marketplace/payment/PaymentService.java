@@ -13,10 +13,7 @@ import dk.ku.di.dms.vms.marketplace.payment.integration.PaymentIntentCreateOptio
 import dk.ku.di.dms.vms.marketplace.payment.provider.IExternalProvider;
 import dk.ku.di.dms.vms.marketplace.payment.repositories.IOrderPaymentCardRepository;
 import dk.ku.di.dms.vms.marketplace.payment.repositories.IOrderPaymentRepository;
-import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
-import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.annotations.*;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -66,6 +63,7 @@ public class PaymentService {
     @Inbound(values = {"invoice_issued"})
     @Outbound("payment_confirmed")
     @Transactional(type=W)
+    @Parallel
     public PaymentConfirmed processPayment(InvoiceIssued invoiceIssued) {
 
         System.out.println("Payment received an invoice issued event with TID: "+ invoiceIssued.instanceId);

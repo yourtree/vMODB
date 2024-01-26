@@ -39,7 +39,7 @@ public final class RecordBucketIterator extends CachingKeyIterator
     }
 
     public IKey key(){
-        return this.keyOf(UNSAFE.getInt(currAddress + OrderedRecordBuffer.deltaKey));
+        return this.keyOf(UNSAFE.getInt(this.currAddress + OrderedRecordBuffer.deltaKey));
     }
 
     /**
@@ -47,7 +47,7 @@ public final class RecordBucketIterator extends CachingKeyIterator
      * @return the primary key of the record in this bucket
      */
     public IKey primaryKey(){
-        long srcAddress = UNSAFE.getLong(currAddress + OrderedRecordBuffer.deltaOffset);
+        long srcAddress = UNSAFE.getLong(this.currAddress + OrderedRecordBuffer.deltaOffset);
         return this.keyOf(UNSAFE.getInt(srcAddress + Header.SIZE));
     }
 

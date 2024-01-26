@@ -1,10 +1,10 @@
-package dk.ku.di.dms.vms.modb.query.planner.operators.scan;
+package dk.ku.di.dms.vms.modb.query.execution.operators.scan;
 
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
-import dk.ku.di.dms.vms.modb.query.planner.operators.AbstractSimpleOperator;
+import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 public abstract class AbstractScan extends AbstractSimpleOperator {

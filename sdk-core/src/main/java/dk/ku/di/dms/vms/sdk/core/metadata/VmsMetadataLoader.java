@@ -44,7 +44,9 @@ public final class VmsMetadataLoader {
 
     private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
 
-
+    /**
+     * For tests that do not involve repositories (i.e., application code execution)
+     */
     public static VmsRuntimeMetadata load(String... packages)
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
         Reflections reflections = configureReflections(packages);
@@ -53,9 +55,7 @@ public final class VmsMetadataLoader {
         Map<Class<?>, String> entityToTableNameMap = loadVmsTableNames(reflections);
         Map<Class<?>, String> entityToVirtualMicroservice = mapEntitiesToVirtualMicroservice(vmsClasses, entityToTableNameMap);
         Map<String, VmsDataModel> vmsDataModelMap = buildVmsDataModel( entityToVirtualMicroservice, entityToTableNameMap );
-        return load(reflections,
-                vmsClasses,
-                vmsDataModelMap, Map.of(), Map.of());
+        return load(reflections, vmsClasses, vmsDataModelMap, Map.of(), Map.of());
     }
 
     public static VmsRuntimeMetadata load(Reflections reflections,
@@ -87,7 +87,6 @@ public final class VmsMetadataLoader {
         Map<String, String> inputOutputEventDistinction = new HashMap<>();
 
         Set<Method> transactionalMethods = reflections.getMethodsAnnotatedWith(Transactional.class);
-
         mapVmsMethodInputOutput(transactionalMethods,
                 loadedVmsInstances, queueToEventMap, eventToQueueMap,
                 inputOutputEventDistinction, queueToVmsTransactionMap);
@@ -96,7 +95,6 @@ public final class VmsMetadataLoader {
         Map<String, VmsEventSchema> outputEventSchemaMap = new HashMap<>();
 
         Set<Class<?>> eventsClazz = reflections.getTypesAnnotatedWith(Event.class);
-
         buildEventSchema(eventsClazz,
                 eventToQueueMap,
                 inputOutputEventDistinction,
@@ -216,6 +214,7 @@ public final class VmsMetadataLoader {
 
     /**
      * Building virtual microservice table schemas
+     * Map key is the table name
      */
     @SuppressWarnings("unchecked")
     public static Map<String, VmsDataModel> buildVmsDataModel(Map<Class<?>, String> entityToVirtualMicroservice,

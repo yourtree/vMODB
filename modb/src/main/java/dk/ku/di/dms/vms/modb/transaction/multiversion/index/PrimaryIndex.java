@@ -7,8 +7,8 @@ import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
+import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.query.execution.filter.FilterType;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.IPrimaryKeyGenerator;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.OperationSetOfKey;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
@@ -111,13 +111,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         return this.primaryKeyIndex.exists(key);
 
     }
-
-
-
-//    @Override
-//    public long address(IKey key) {
-//        return this.primaryKeyIndex.address(key);
-//    }
 
 
     // every condition checked is proceeded by a completion handler

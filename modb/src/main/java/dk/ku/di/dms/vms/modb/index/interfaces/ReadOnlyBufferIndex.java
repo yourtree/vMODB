@@ -4,8 +4,8 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterType;
+import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.query.execution.filter.FilterType;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import jdk.internal.misc.Unsafe;
 
@@ -60,13 +60,11 @@ public interface ReadOnlyBufferIndex<K> extends IIndex<K> {
         int size = schema().columnOffset().length;
         Object[] objects = new Object[size];
         long currAddress = address;
-
         for(int i = 0; i < size; i++) {
             DataType dt = schema().columnDataType(i);
             objects[i] = DataTypeUtils.getValue(
                     dt,
-                    currAddress );
-
+                    currAddress);
             currAddress += dt.value;
         }
         return objects;
@@ -77,7 +75,7 @@ public interface ReadOnlyBufferIndex<K> extends IIndex<K> {
      * Multiversion-based iterators must override this method
      */
     default boolean checkCondition(IRecordIterator<K> iterator, FilterContext filterContext){
-        return checkCondition( iterator.address(), filterContext );
+        return this.checkCondition( iterator.address(), filterContext );
     }
 
     default boolean checkCondition(K key, FilterContext filterContext){

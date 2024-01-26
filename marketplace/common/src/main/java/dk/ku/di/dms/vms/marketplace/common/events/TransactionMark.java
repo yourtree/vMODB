@@ -53,9 +53,9 @@ public final class TransactionMark {
     public String toString() {
         return "{" +
                 " \"tid\" : \"" + tid + "\"" +
-                ", \"type\" : \"" + type.toString() + "\"" +
+                ", \"type\" : \"" + type + "\"" +
                 ", \"actorId\" : " + actorId +
-                ", \"status\" : \"" + status.toString() + "\"" +
+                ", \"status\" : \"" + status + "\"" +
                 ", \"source\" : \"" + source + "\"" +
                 '}';
     }
@@ -75,6 +75,6 @@ public final class TransactionMark {
         ERROR,
         ABORT,
         NOT_ACCEPTED
-    };
+    }
 
 }

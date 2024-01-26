@@ -28,8 +28,8 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
      * @param param The column name
      * @return Resulting select with column
      */
-    public NewProjectionOrFromClause select(String param) {
-        return this.entryPoint.select(param);
+    public NewProjectionOrFromClause project(String param) {
+        return this.entryPoint.project(param);
     }
 
     public NewProjectionOrFromClause avg(String param){
@@ -53,7 +53,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
             this.statement.groupBySelectClause = new ArrayList<>();
         }
 
-        public NewProjectionOrFromClause select(String param) {
+        public NewProjectionOrFromClause project(String param) {
             String[] projection = param.replace(" ","").split(",");
             this.statement.selectClause.addAll( Arrays.asList(projection));
             this.statement.SQL.append(param);
@@ -96,8 +96,8 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
             this.entryPoint = entryPoint;
         }
 
-        public NewProjectionOrFromClause select(String param) {
-            return this.entryPoint.select(param);
+        public NewProjectionOrFromClause project(String param) {
+            return this.entryPoint.project(param);
         }
 
         public NewProjectionOrFromClause avg(String param){

@@ -1,9 +1,9 @@
-package dk.ku.di.dms.vms.modb.query.planner.filter;
+package dk.ku.di.dms.vms.modb.query.execution.filter;
 
 import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
-import dk.ku.di.dms.vms.modb.query.planner.filter.types.TypedBiPredicate;
+import dk.ku.di.dms.vms.modb.query.execution.filter.types.TypedBiPredicate;
 
 import java.util.ArrayList;
 import java.util.Arrays;

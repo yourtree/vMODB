@@ -1,10 +1,10 @@
-package dk.ku.di.dms.vms.modb.query.planner.operators.count;
+package dk.ku.di.dms.vms.modb.query.execution.operators.count;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 import java.util.HashMap;
@@ -59,7 +59,7 @@ public class IndexCountGroupBy extends AbstractCount {
 
         Object record = this.index.record( iterator );
 
-        // hash the groupby columns
+        // hash the group by columns
         int groupKey = KeyUtils.buildRecordKey( this.indexColumns, record ).hashCode();
 
         if( countMap.get(groupKey) == null ){

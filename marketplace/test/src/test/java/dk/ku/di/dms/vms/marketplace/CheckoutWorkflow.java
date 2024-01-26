@@ -54,7 +54,7 @@ public class CheckoutWorkflow extends AbstractWorkflowTest {
         Thread thread = new Thread(new CheckoutProducer());
         thread.start();
 
-        sleep(batchWindowInterval * 6);
+        sleep(batchWindowInterval * 7);
 
         assert coordinator.getCurrentBatchOffset() == 2;
 

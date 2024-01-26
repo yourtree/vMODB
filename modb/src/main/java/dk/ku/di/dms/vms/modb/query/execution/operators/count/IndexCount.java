@@ -1,14 +1,13 @@
-package dk.ku.di.dms.vms.modb.query.planner.operators.count;
+package dk.ku.di.dms.vms.modb.query.execution.operators.count;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
-import dk.ku.di.dms.vms.modb.query.planner.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 /**
- * No projecting any other column for now
- *
+ * Not projecting any other column for now.
  * Count is always integer. But can be indexed or not, like the scan
  * If DISTINCT, must maintain state.
  * 

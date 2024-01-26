@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.shipment.entities;
 
 import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
+import dk.ku.di.dms.vms.modb.api.annotations.VmsPartialIndex;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
@@ -69,6 +70,7 @@ public class Package implements IEntity<Package.PackageId> {
     public int quantity;
 
     @Column
+    @VmsPartialIndex(name = "shipped_idx", value = "shipped")
     public PackageStatus status;
 
     public Package() { }
@@ -96,6 +98,5 @@ public class Package implements IEntity<Package.PackageId> {
     public Date getShippingDate(){
         return this.shipping_date;
     }
-
 
 }

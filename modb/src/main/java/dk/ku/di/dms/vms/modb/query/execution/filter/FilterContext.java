@@ -1,6 +1,6 @@
-package dk.ku.di.dms.vms.modb.query.planner.filter;
+package dk.ku.di.dms.vms.modb.query.execution.filter;
 
-import dk.ku.di.dms.vms.modb.query.planner.filter.types.TypedBiPredicate;
+import dk.ku.di.dms.vms.modb.query.execution.filter.types.TypedBiPredicate;
 
 import java.util.List;
 import java.util.function.Predicate;

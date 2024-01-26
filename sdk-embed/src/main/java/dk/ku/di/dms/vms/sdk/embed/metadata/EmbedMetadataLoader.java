@@ -186,7 +186,6 @@ public class EmbedMetadataLoader {
                 Map<String, int[]> definitiveMap = buildSchemaForeignKeyMap(vmsDataModel, fksPerTable, vmsDataModelMap);
 
                 dataSchemaToPkMap.put(vmsDataModel, Tuple.of(schema, definitiveMap));
-
             } else {
                 dataSchemaToPkMap.put(vmsDataModel, Tuple.of(schema, null));
             }
@@ -239,7 +238,7 @@ public class EmbedMetadataLoader {
                     fks.put(vmsDataSchemaToIndexMap.get(fk.getKey()), fk.getValue());
                 }
 
-                Map<IIndexKey,NonUniqueSecondaryIndex> secIndexMap = new HashMap<>();
+                Map<IIndexKey, NonUniqueSecondaryIndex> secIndexMap = new HashMap<>();
 
                 // build secondary indexes (for foreign keys)
                 for (AbstractIndex<IKey> idx : vmsDataSchemaToSecondaryIndexMap.get(vmsDataSchema.tableName)) {

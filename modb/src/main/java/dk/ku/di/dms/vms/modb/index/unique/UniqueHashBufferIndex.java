@@ -81,7 +81,6 @@ public final class UniqueHashBufferIndex extends AbstractBufferedIndex<IKey> imp
         UNSAFE.putBoolean(null, pos, true);
         UNSAFE.putInt(null, pos, key.hashCode());
         UNSAFE.copyMemory(null, srcAddress, null, pos + Schema.RECORD_HEADER, schema.getRecordSizeWithoutHeader());
-
         this.size = this.size + 1;
     }
 
@@ -107,15 +106,11 @@ public final class UniqueHashBufferIndex extends AbstractBufferedIndex<IKey> imp
         long currAddress = pos + Schema.RECORD_HEADER;
 
         for(int index = 0; index < maxColumns; index++) {
-
             DataType dt = this.schema().columnDataType(index);
-
             DataTypeUtils.callWriteFunction( currAddress,
                     dt,
                     record[index] );
-
             currAddress += dt.value;
-
         }
     }
 
@@ -131,19 +126,13 @@ public final class UniqueHashBufferIndex extends AbstractBufferedIndex<IKey> imp
         long currAddress = pos + Schema.RECORD_HEADER;
 
         for(int index = 0; index < maxColumns; index++) {
-
             DataType dt = this.schema.columnDataType(index);
-
             DataTypeUtils.callWriteFunction( currAddress,
                     dt,
                     record[index] );
-
             currAddress += dt.value;
-
         }
-
         this.size = this.size + 1;
-
     }
 
     @Override
@@ -153,6 +142,7 @@ public final class UniqueHashBufferIndex extends AbstractBufferedIndex<IKey> imp
         this.size = this.size - 1;
     }
 
+    @Override
     public long address(IKey key) {
         return this.getPosition(key.hashCode());
     }
@@ -162,7 +152,7 @@ public final class UniqueHashBufferIndex extends AbstractBufferedIndex<IKey> imp
      */
     @Override
     public boolean exists(IKey key){
-        long pos = getPosition(key.hashCode());
+        long pos = this.getPosition(key.hashCode());
         return UNSAFE.getBoolean(null, pos);
     }
 
@@ -183,7 +173,9 @@ public final class UniqueHashBufferIndex extends AbstractBufferedIndex<IKey> imp
 
     @Override
     public IRecordIterator<IKey> iterator() {
-        return new RecordIterator(this.recordBufferContext.address, this.schema.getRecordSize(),
+        return new RecordIterator(
+                this.recordBufferContext.address,
+                this.schema.getRecordSize(),
                 this.recordBufferContext.capacity);
     }
 
@@ -193,10 +185,15 @@ public final class UniqueHashBufferIndex extends AbstractBufferedIndex<IKey> imp
     }
 
     @Override
+    public Object[] record(IRecordIterator<IKey> iterator) {
+        return this.readFromIndex(iterator.address() + Schema.RECORD_HEADER);
+    }
+
+    @Override
     public Object[] record(IKey key) {
         Object[] objectLookup = this.cacheObjectStore.get(key);
         if(objectLookup == null){
-            objectLookup = this.readFromIndex(this.address(key));
+            objectLookup = this.readFromIndex(this.address(key) + Schema.RECORD_HEADER);
             this.cacheObjectStore.put( key, objectLookup );
         }
         return objectLookup;
