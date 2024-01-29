@@ -2,8 +2,9 @@ package dk.ku.di.dms.vms.modb.index.non_unique;
 
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractBufferedIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteBufferIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.non_unique.BucketIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.non_unique.NonUniqueRecordIterator;
@@ -17,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Space conscious non-unique hash index
  * It manages a sequential buffer for each hash entry
  */
-public final class NonUniqueHashIndex extends AbstractBufferedIndex<IKey> {
+public final class NonUniqueHashBufferIndex extends ReadWriteIndex<IKey> implements ReadWriteBufferIndex<IKey> {
 
     // better to have a manager. to manage the append-only buffer
     // correctly (safety)... the manager will expand it if necessary
@@ -30,9 +31,9 @@ public final class NonUniqueHashIndex extends AbstractBufferedIndex<IKey> {
 
     private final Map<IKey, List<Object[]>> cacheObjectStore;
 
-    public NonUniqueHashIndex(OrderedRecordBuffer[] buffers,
-                              Schema schema,
-                              int... columnsIndex){
+    public NonUniqueHashBufferIndex(OrderedRecordBuffer[] buffers,
+                                    Schema schema,
+                                    int... columnsIndex){
         super(schema, columnsIndex);
         this.buffers = buffers;
         this.size = 0;
@@ -75,6 +76,16 @@ public final class NonUniqueHashIndex extends AbstractBufferedIndex<IKey> {
         buffers[bucket].update(key, srcAddress);
     }
 
+    @Override
+    public void insert(IKey key, Object[] record) {
+        throw new RuntimeException("Not implemented");
+    }
+
+    @Override
+    public void update(IKey key, Object[] record) {
+        throw new RuntimeException("Not implemented");
+    }
+
     /**
      * Must also mark the records as inactive
      */
@@ -84,6 +95,11 @@ public final class NonUniqueHashIndex extends AbstractBufferedIndex<IKey> {
         this.buffers[bucket].delete( key );
         int currSize = this.size;
         this.size = currSize - 1;
+    }
+
+    @Override
+    public Object[] lookupByKey(IKey key) {
+        throw new RuntimeException("Not implemented");
     }
 
     @Override

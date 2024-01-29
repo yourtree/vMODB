@@ -13,7 +13,7 @@ import jdk.internal.misc.Unsafe;
  * Base interface for operators that perform read-only queries.
  * @param <K> The key object identifier of a record
  */
-public interface ReadOnlyBufferIndex<K> extends IIndex<K> {
+public interface ReadOnlyBufferIndex<K> extends ReadOnlyIndex<K> {
 
     Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
@@ -30,21 +30,6 @@ public interface ReadOnlyBufferIndex<K> extends IIndex<K> {
      */
     default long address(K key) {
         throw new IllegalStateException("No support for direct addressing in this index.");
-    }
-
-    IRecordIterator<IKey> iterator();
-
-    /**
-     * For hash probing on a set of keys
-     * Can also be implemented by non-unique hash indexes,
-     * but may be expensive
-     */
-    default IRecordIterator<IKey> iterator(IKey[] keys) {
-        throw new IllegalStateException("No support for set of keys iteration in this index.");
-    }
-
-    default IRecordIterator<IKey> iterator(IKey key) {
-        throw new IllegalStateException("No support for key iteration in this index.");
     }
 
     default Object[] record(K key) {
@@ -70,16 +55,9 @@ public interface ReadOnlyBufferIndex<K> extends IIndex<K> {
         return objects;
     }
 
-    /**
-     * Default call from operators
-     * Multiversion-based iterators must override this method
-     */
+    @Override
     default boolean checkCondition(IRecordIterator<K> iterator, FilterContext filterContext){
         return this.checkCondition( iterator.address(), filterContext );
-    }
-
-    default boolean checkCondition(K key, FilterContext filterContext){
-        throw new IllegalStateException("No support for checking condition on key in this index.");
     }
 
     /**

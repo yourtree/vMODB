@@ -14,7 +14,7 @@ import java.util.List;
  * It abstracts the possible calls {@link dk.ku.di.dms.vms.modb.api.interfaces.IRepository}
  * classes perform to the {@link TransactionManager}.
  */
-public interface OperationalAPI {
+public sealed interface OperationalAPI permits TransactionManager {
     void deleteByKey(Table table, Object[] valuesOfKey);
 
     Object[] lookupByKey(PrimaryIndex primaryKeyIndex, Object[] valuesOfKey);
@@ -25,7 +25,7 @@ public interface OperationalAPI {
 
     void insert(Table table, Object[] values);
 
-    Object insertAndGet(Table table, Object[] values);
+    Object[] insertAndGet(Table table, Object[] values);
 
     void issue(Table table, IStatement arg) throws AnalyzerException;
 

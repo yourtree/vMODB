@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * User-facing database operations
@@ -33,6 +34,12 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
     List<T> lookupByKeys(Collection<PK> keys);
 
     List<T> getAll();
+
+    List<T> getAll(Predicate<T> p);
+
+    List<Object[]> fetch(SelectStatement selectStatement);
+
+    List<T> query(SelectStatement selectStatement);
 
     /**
      * Used for issuing update, insert, and delete statements.

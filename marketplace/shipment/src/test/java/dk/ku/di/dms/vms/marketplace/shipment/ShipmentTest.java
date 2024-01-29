@@ -3,6 +3,9 @@ package dk.ku.di.dms.vms.marketplace.shipment;
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
+import dk.ku.di.dms.vms.marketplace.shipment.repositories.IPackageRepository;
+import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
+import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import org.junit.Test;
@@ -13,6 +16,35 @@ import java.util.List;
 import static java.lang.Thread.sleep;
 
 public class ShipmentTest {
+
+    @Test
+    public void proxyTest() throws Exception {
+        VmsApplication vms = VmsApplication.build("localhost", 8084, new String[]{
+                "dk.ku.di.dms.vms.marketplace.shipment",
+                "dk.ku.di.dms.vms.marketplace.common"
+        });
+        vms.start();
+
+        IPackageRepository packageRepository = (IPackageRepository) vms.getRepositoryProxy("packages");
+
+        Object[] obj = new Object[] { 1, 1, 1, 1, "test", 1.0f, new Date(), new Date(), 1, "created"  };
+
+        vms.getTable("packages").underlyingPrimaryKeyIndex().insert(
+                KeyUtils.buildKey( new int[]{ 1, 1, 1} ),
+                obj
+        );
+
+        vms.getTable("packages").secondaryIndexMap.
+                get( (IIndexKey) KeyUtils.buildKey( new int[]{0,1} ) )
+                .insert(
+                    KeyUtils.buildKey( new int[]{ 1, 1 } ),
+                    obj
+        );
+
+        packageRepository.getPackagesByCustomerIdAndSellerId(1,1);
+
+        assert true;
+    }
 
     @Test
     public void test() throws Exception {

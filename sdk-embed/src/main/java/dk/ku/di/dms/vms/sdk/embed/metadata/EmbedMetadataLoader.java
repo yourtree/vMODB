@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.sdk.embed.metadata;
 
+import dk.ku.di.dms.vms.modb.api.annotations.Query;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
@@ -7,9 +8,9 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
-import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashBufferIndex;
 import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashMapIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashMapIndex;
@@ -20,6 +21,7 @@ import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.IntegerPrimaryKeyGenerator;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
+import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 import jdk.incubator.foreign.MemorySegment;
 import jdk.incubator.foreign.ResourceScope;
@@ -28,15 +30,14 @@ import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
+import net.bytebuddy.implementation.MethodDelegation;
+import net.bytebuddy.matcher.ElementMatchers;
 
 import javax.persistence.GeneratedValue;
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.Cleaner;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
+import java.lang.reflect.*;
 import java.nio.channels.FileChannel;
 import java.util.*;
 import java.util.logging.Logger;
@@ -53,9 +54,9 @@ public class EmbedMetadataLoader {
     private static final boolean IN_MEMORY_STORAGE = true;
 
     public static Map<String, Object> loadRepositoryClasses(Set<Class<?>> vmsClasses,
-                                                                      Map<Class<?>, String> entityToTableNameMap,
-                                                                      Map<String, Table> catalog,
-                                                                      OperationalAPI operationalAPI) throws InvocationTargetException, InstantiationException, IllegalAccessException, ClassNotFoundException {
+                                                          Map<Class<?>, String> entityToTableNameMap,
+                                                          Map<String, Table> catalog,
+                                                          OperationalAPI operationalAPI) throws InvocationTargetException, InstantiationException, IllegalAccessException, ClassNotFoundException, NoSuchMethodException {
         Map<String, Object> tableToRepositoryMap = new HashMap<>();
         for(Class<?> clazz : vmsClasses) {
 
@@ -81,25 +82,49 @@ public class EmbedMetadataLoader {
                 TypeDescription.Generic generic = TypeDescription.Generic.Builder
                         .parameterizedType(AbstractProxyRepository.class, pkClazz, entityClazz).build();
 
+                ByteBuddy byteBuddy = new ByteBuddy();
                 Class<?> type;
-                try (DynamicType.Unloaded<?> dynamicType = new ByteBuddy()
+                try (DynamicType.Unloaded<?> dynamicType = byteBuddy
                         .subclass(generic, ConstructorStrategy.Default.IMITATE_SUPER_CLASS)
                         .implement(repositoryType)
+                         .method(ElementMatchers.isAnnotatedWith(Query.class) )
+                        //.intercept(MethodCall.invoke( ElementMatchers.named("intercept")))
+                        .intercept(
+//                                ElementMatchers.definedMethod( Meth "intercept" )
+                                MethodDelegation.to(AbstractProxyRepository.Interceptor.class)
+//                                MethodCall.invoke( AbstractProxyRepository.class.getMethod(
+//                                        "intercept", Object[].class ) ).withAllArguments()
+////                                SuperMethodCall.INSTANCE.andThen(
+////                                        MethodCall.invoke(
+////                                                AbstractProxyRepository.class.getMethod( "intercept", Object[].class ) ) )
+                        )
                         .name(repositoryType.getSimpleName().replaceFirst("I","") + "Impl")
                         .make()) {
                     type = dynamicType
                             .load(ClassLoader.getSystemClassLoader(), ClassLoadingStrategy.Default.INJECTION)
                             .getLoaded();
+
+//                    type = byteBuddy.redefine(type)
+//                            .method(ElementMatchers.isAnnotatedWith(Query.class) )
+//                            .intercept( MethodCall.invoke(
+//                                    AbstractProxyRepository.class.getMethod( "intercept" , Object[].class))
+//                                    .onDefault()
+//                                    .withAllArguments() );
                 }
+
+                Method[] queryMethods = repositoryType.getDeclaredMethods();
+                // read queries
+                var repositoryQueriesMap = VmsMetadataLoader.loadStaticQueries(queryMethods);
 
                 Object instance = type.getConstructors()[0].newInstance(
                         pkClazz,
                         entityClazz,
                         catalog.get( tableName ),
-                        operationalAPI
+                        operationalAPI,
+                        repositoryQueriesMap
                 );
 
-                tableToRepositoryMap.put( tableName, instance);
+                tableToRepositoryMap.put(tableName, instance);
 
             }
         }
@@ -132,7 +157,6 @@ public class EmbedMetadataLoader {
 
                 Type[] types = getPkAndEntityTypesFromRepositoryClazz(repositoryType);
 
-                Class<?> pkClazz = (Class<?>) types[0];
                 Class<?> entityClazz = (Class<?>) types[1];
 
                 String tableName = entityToTableNameMap.get(entityClazz);
@@ -194,7 +218,7 @@ public class EmbedMetadataLoader {
 
         Map<String, PrimaryIndex> vmsDataSchemaToIndexMap = new HashMap<>(dataSchemaToPkMap.size());
 
-        Map<String, List<AbstractIndex<IKey>>> vmsDataSchemaToSecondaryIndexMap = new HashMap<>();
+        Map<String, List<ReadWriteIndex<IKey>>> vmsDataSchemaToSecondaryIndexMap = new HashMap<>();
 
         // mount vms data schema to consistent index map
         for (var entry : dataSchemaToPkMap.entrySet()) {
@@ -207,12 +231,12 @@ public class EmbedMetadataLoader {
 
             // secondary indexes
             if(entry.getValue().t2() != null) {
-                List<AbstractIndex<IKey>> listSecIndexes = new ArrayList<>(entry.getValue().t2().size());
+                List<ReadWriteIndex<IKey>> listSecIndexes = new ArrayList<>(entry.getValue().t2().size());
                 vmsDataSchemaToSecondaryIndexMap.put(entry.getKey().tableName, listSecIndexes);
 
                 // now create the secondary index (a - based on foreign keys and b - based on non-foreign keys)
                 for (var secIdx : entry.getValue().t2().entrySet()) {
-                    AbstractIndex<IKey> nuhi = createNonUniqueIndex(schema, secIdx.getValue(),
+                    ReadWriteIndex<IKey> nuhi = createNonUniqueIndex(schema, secIdx.getValue(),
                             entry.getKey().tableName + "_" + secIdx.getKey());
                     listSecIndexes.add(nuhi);
                 }
@@ -241,7 +265,7 @@ public class EmbedMetadataLoader {
                 Map<IIndexKey, NonUniqueSecondaryIndex> secIndexMap = new HashMap<>();
 
                 // build secondary indexes (for foreign keys)
-                for (AbstractIndex<IKey> idx : vmsDataSchemaToSecondaryIndexMap.get(vmsDataSchema.tableName)) {
+                for (ReadWriteIndex<IKey> idx : vmsDataSchemaToSecondaryIndexMap.get(vmsDataSchema.tableName)) {
                     secIndexMap.put(idx.key(), new NonUniqueSecondaryIndex(primaryIndex, idx));
                 }
                 table = new Table(vmsDataSchema.tableName, tupleSchemaFKs.t1(), primaryIndex, fks, secIndexMap);
@@ -255,14 +279,14 @@ public class EmbedMetadataLoader {
         return catalog;
     }
 
-    private static AbstractIndex<IKey> createNonUniqueIndex(Schema schema, int[] columnsIndex, String fileName){
+    private static ReadWriteIndex<IKey> createNonUniqueIndex(Schema schema, int[] columnsIndex, String fileName){
         if(IN_MEMORY_STORAGE){
             // return new PrimaryIndex(new UniqueHashMapIndex(schema));
             // TODO fix this later
-            return new NonUniqueHashMapIndex(schema);
+            return new NonUniqueHashMapIndex(schema, columnsIndex);
         } else {
             OrderedRecordBuffer[] buffers = loadOrderedBuffers(MemoryUtils.DEFAULT_NUM_BUCKETS, MemoryUtils.DEFAULT_PAGE_SIZE, fileName);
-            return new NonUniqueHashIndex(buffers, schema, columnsIndex);
+            return new NonUniqueHashBufferIndex(buffers, schema, columnsIndex);
         }
     }
 

@@ -39,17 +39,17 @@ public class Parser {
         assert i < tokens.length && tokens[i].equalsIgnoreCase("where");
         i++;
 
-        List<WhereClauseElement<?>> whereClauseElements = new ArrayList<>(2);
+        List<WhereClauseElement> whereClauseElements = new ArrayList<>(2);
 
         // get triples of values
         while(i < tokens.length){
             // remove comma from all
-            var left = tokens[i];
+            String left = tokens[i];
             i++;
-            var exp = getExpressionFromString(tokens[i]);
+            ExpressionTypeEnum exp = getExpressionFromString(tokens[i]);
 
             // skip the input
-            whereClauseElements.add( new WhereClauseElement<>(left, exp, null) );
+            whereClauseElements.add( new WhereClauseElement(left, exp, null) );
             i = i + 2;
 
             // for now all where clauses ony contain AND

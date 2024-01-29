@@ -8,6 +8,7 @@ public class WherePredicate {
 
     public final ColumnReference columnReference;
     public final ExpressionTypeEnum expression;
+
     public final Object value;
 
     public WherePredicate(ColumnReference columnReference, ExpressionTypeEnum expression, Object value) {

@@ -9,6 +9,7 @@ import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteBufferIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
@@ -57,9 +58,9 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
      */
     private final Map<String, AbstractSimpleOperator> readQueryPlans;
 
-    public TransactionManager(){
+    public TransactionManager(Map<String, Table> catalog){
         this.planner = new SimplePlanner();
-        this.analyzer = new Analyzer(null);
+        this.analyzer = new Analyzer(catalog);
         // read-only transactions may put items here
         this.readQueryPlans = new ConcurrentHashMap<>();
     }
@@ -92,7 +93,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
                 queryTree = this.analyzer.analyze(selectStatement);
                 wherePredicates = queryTree.wherePredicates;
                 scanOperator = this.planner.plan(queryTree);
-                readQueryPlans.put(sqlAsKey, scanOperator );
+                this.readQueryPlans.put(sqlAsKey, scanOperator );
             } catch (AnalyzerException ignored) { return null; }
 
         } else {
@@ -103,7 +104,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
             } catch (AnalyzerException ignored) { return null; }
         }
 
-        MemoryRefNode memRes = null;
+        MemoryRefNode memRes;
 
         // TODO complete for all types or migrate the choice to transaction facade
         //  make an enum, it is easier
@@ -160,7 +161,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
 
         // if the memory address is occupied, must log warning
         // so we can increase the table size
-        ReadWriteBufferIndex<IKey> index = table.underlyingPrimaryKeyIndex();
+        ReadWriteBufferIndex<IKey> index = (ReadWriteBufferIndex<IKey>) table.underlyingPrimaryKeyIndex();
         int sizeWithoutHeader = table.schema.getRecordSizeWithoutHeader();
         long currAddress = address;
 
@@ -245,7 +246,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
         throw new RuntimeException("Constraint violation.");
     }
 
-    public Object insertAndGet(Table table, Object[] values){
+    public Object[] insertAndGet(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
         if(!this.fkConstraintViolation(table, values)){
             IKey key_ = index.insertAndGetKey(values);
@@ -290,28 +291,36 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
 
     /****** SCAN OPERATORS *******/
 
+    /*
+     * Simple implementation to make package query work
+     */
     public MemoryRefNode run(Table table,
                              List<WherePredicate> wherePredicates,
                              IndexScanWithProjection operator){
 
-        List<Object> keyList = new ArrayList<>(operator.index.columns().length);
+        int i = 0;
+        Object[] keyList = new Object[operator.index.columns().length];
         List<WherePredicate> wherePredicatesNoIndex = new ArrayList<>(wherePredicates.size());
         // build filters for only those columns not in selected index
         for (WherePredicate wherePredicate : wherePredicates) {
             // not found, then build filter
             if(operator.index.containsColumn( wherePredicate.columnReference.columnPosition )){
-                keyList.add( wherePredicate.value );
+                keyList[i] = wherePredicate.value;
+                i++;
             } else {
                 wherePredicatesNoIndex.add(wherePredicate);
             }
         }
 
-        FilterContext filterContext = FilterContextBuilder.build(wherePredicatesNoIndex);
-
         // build input
-        IKey inputKey = KeyUtils.buildRecordKey( table.schema.getPrimaryKeyColumns(), keyList.toArray());
+        IKey inputKey = KeyUtils.buildKey( keyList );
 
-        return operator.run( table.underlyingPrimaryKeyIndex(), filterContext, inputKey );
+        FilterContext filterContext;
+        if(!wherePredicatesNoIndex.isEmpty()) {
+            filterContext = FilterContextBuilder.build(wherePredicatesNoIndex);
+            return operator.run( table.underlyingPrimaryKeyIndex(), filterContext, inputKey );
+        }
+        return operator.run(inputKey);
     }
 
     public MemoryRefNode run(Table table,

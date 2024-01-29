@@ -4,6 +4,9 @@ import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public final class KeyUtils {
 
     private KeyUtils(){}
@@ -96,7 +99,14 @@ public final class KeyUtils {
         return key;
     }
 
-    public static IKey buildKey(Object... values){
+    public static IKey buildKey(Object[] values){
+        if(values.length == 1) {
+            return SimpleKey.of(values);
+        }
+        return CompositeKey.of(values);
+    }
+
+    public static IKey buildKey(int[] values){
         if(values.length == 1)
             return SimpleKey.of(values);
         return CompositeKey.of(values);

@@ -55,7 +55,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
         public NewProjectionOrFromClause project(String param) {
             String[] projection = param.replace(" ","").split(",");
-            this.statement.selectClause.addAll( Arrays.asList(projection));
+            this.statement.selectClause.addAll(Arrays.asList(projection));
             this.statement.SQL.append(param);
             return new NewProjectionOrFromClause(this.statement,this);
         }
@@ -63,6 +63,12 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
         public NewProjectionOrFromClause avg(String param){
             GroupBySelectElement element = new GroupBySelectElement( param, GroupByOperationEnum.AVG );
             this.statement.SQL.append( GroupByOperationEnum.AVG.name() );
+            return this.agg(element);
+        }
+
+        public NewProjectionOrFromClause min(String param){
+            GroupBySelectElement element = new GroupBySelectElement( param, GroupByOperationEnum.MIN );
+            this.statement.SQL.append( GroupByOperationEnum.MIN.name() );
             return this.agg(element);
         }
 
@@ -102,6 +108,10 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
         public NewProjectionOrFromClause avg(String param){
             return this.entryPoint.avg(param);
+        }
+
+        public NewProjectionOrFromClause min(String param){
+            return this.entryPoint.min(param);
         }
 
         public OrderByGroupByJoinWhereClauseBridge from(String param) {
@@ -155,30 +165,13 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
     /**
      * Since after a FROM clause both WHERE and JOIN clauses can be specified, this class serves as bridge to define what comes next
      */
-    public class JoinWhereClauseBridge implements IQueryBuilder<SelectStatement> {
+    public class JoinWhereClauseBridge extends WhereClausePredicate<SelectStatement> {
 
         protected final SelectStatement statement;
 
         protected JoinWhereClauseBridge(SelectStatement statement){
+            super(statement);
             this.statement = statement;
-        }
-
-        public WhereClausePredicate<SelectStatement> where(final String param, final ExpressionTypeEnum expr, final Object value) {
-            WhereClauseElement<Object> element = new WhereClauseElement<>(param,expr,value);
-            this.statement.whereClause.add( element );
-            this.statement.SQL.append(param);
-            this.statement.SQL.append(expr.name);
-            this.statement.SQL.append('?');
-            return new WhereClausePredicate<>(this.statement);
-        }
-
-        public WhereClausePredicate<SelectStatement> where(String param1, ExpressionTypeEnum expr, String param2){
-            WhereClauseElement<String> element = new WhereClauseElement<>(param1,expr,param2);
-            this.statement.whereClause.add( element );
-            this.statement.SQL.append(param1);
-            this.statement.SQL.append(expr.name);
-            this.statement.SQL.append(param2);
-            return new WhereClausePredicate<>(this.statement);
         }
 
         public JoinClausePredicate join(String table, String column) {
@@ -224,13 +217,22 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
             this.statement = statement; // to avoid cast
         }
 
+        public OrderByGroupByJoinWhereClauseBridge where(final String param, final ExpressionTypeEnum expr, final Object value) {
+            WhereClauseElement element = new WhereClauseElement(param,expr,value);
+            this.statement.whereClause.add( element );
+            this.statement.SQL.append(param);
+            this.statement.SQL.append(expr.name);
+            this.statement.SQL.append('?');
+            return new OrderByGroupByJoinWhereClauseBridge(this.statement);
+        }
+
         public OrderByHavingBridge groupBy(String... params) {
 
             for( int i = 0; i < params.length; i++ ) {
                 params[i] = params[i].replace(" ", "");
             }
             this.statement.groupByClause = new ArrayList<>(Arrays.asList(params));
-            this.statement.SQL.append(params);
+//            this.statement.SQL.append(params);
             return new OrderByHavingBridge(this.statement);
         }
 
@@ -249,12 +251,17 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
     }
 
-    public class OrderByHavingBridge implements IQueryBuilder<SelectStatement> {
+    public static class OrderByHavingBridge implements IQueryBuilder<SelectStatement> {
 
         private final SelectStatement statement;
 
         protected OrderByHavingBridge(SelectStatement statement) {
             this.statement = statement; // to avoid cast
+        }
+
+        public QuerySeal limit(int limit){
+            this.statement.limit = limit;
+            return new QuerySeal(this.statement);
         }
 
         // only allowing one having for now

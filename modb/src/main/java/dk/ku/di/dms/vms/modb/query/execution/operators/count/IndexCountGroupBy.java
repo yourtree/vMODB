@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.query.execution.operators.count;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
@@ -18,7 +18,7 @@ public class IndexCountGroupBy extends AbstractCount {
     // the columns declared in the group by clause
     private final int[] indexColumns;
 
-    public IndexCountGroupBy(ReadOnlyBufferIndex<IKey> index,
+    public IndexCountGroupBy(ReadOnlyIndex<IKey> index,
                              int[] indexColumns) {
         super(index, Integer.BYTES);
         this.indexColumns = indexColumns;

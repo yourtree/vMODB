@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
 import java.util.ArrayDeque;
@@ -22,7 +22,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     private final PrimaryIndex primaryIndex;
 
     // a non-unique hash index
-    private final AbstractIndex<IKey> underlyingIndex;
+    private final ReadWriteIndex<IKey> underlyingIndex;
 
     // key: formed by secondary indexed columns
     // value: the corresponding pks
@@ -44,7 +44,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
      private static final Deque<WriteNode> writeNodeBuffer = new ArrayDeque<>();
 
-    public NonUniqueSecondaryIndex(PrimaryIndex primaryIndex, AbstractIndex<IKey> underlyingIndex) {
+    public NonUniqueSecondaryIndex(PrimaryIndex primaryIndex, ReadWriteIndex<IKey> underlyingIndex) {
         this.primaryIndex = primaryIndex;
         this.underlyingIndex = underlyingIndex;
         this.writesCache = new ConcurrentHashMap<>();
@@ -57,89 +57,13 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
     }
 
-//    @Override
-//    public IndexTypeEnum getType() {
-//        return this.underlyingIndex.getType();
-//    }
-//
-//    @Override
-//    public int size() {
-//        return this.underlyingIndex.size() + this.writesCache.size();
-//    }
+    public ReadWriteIndex<IKey> getUnderlyingIndex(){
+        return this.underlyingIndex;
+    }
 
 //    @Override
-//    public boolean exists(IKey key) {
+//    public IRecordIterator<IKey> iterator(IKey[] keys) {
 //
-//
-//        if(TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
-//
-//        }
-//
-//        return false;
-//    }
-
-//    @Override
-//    public IRecordIterator<IKey> iterator() {
-//        return null;
-//    }
-
-//    public IRecordIterator<IKey> iterator(IKey key){
-//        return new RecordBucketIterator(key);
-//    }
-
-    /**
-     * TODO finish
-     */
-//    private final class RecordBucketIterator implements IRecordIterator<IKey> {
-//
-//        OrderedRecordBuffer buffer;
-//
-//        long currentAddress;
-//
-//        boolean iteratorOpen;
-//
-//        IKey inputKey;
-//
-//        public RecordBucketIterator(IKey key){
-//            this.inputKey = key;
-//            this.buffer = underlyingIndex.getBucket( key );
-//            this.currentAddress = buffer.findFirstOccurrence(key);
-//            this.iteratorOpen = true;
-//        }
-//
-//        @Override
-//        public IKey get() {
-//            return null;
-//        }
-//
-//        @Override
-//        public void next() {
-//
-//            if(iteratorOpen){
-//                currentAddress = UNSAFE.getLong( currentAddress + deltaNext );
-//
-//                // does current element eky equals to input key?
-//                int currKey = UNSAFE.getInt(currentAddress + deltaKey);
-//
-//                if(inputKey.hashCode() != currKey) iteratorOpen = false;
-//
-//            } else {
-//
-//            }
-//
-//            // if has been deleted, move to next
-//        }
-//
-//        @Override
-//        public boolean hasElement() {
-//
-//            if(iteratorOpen){
-//                // currentAddress != 0L;
-//
-//            }
-//
-//            return false;
-//        }
 //    }
 
     /**
@@ -217,26 +141,29 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     @Override
     public void installWrites() {
         // TODO finish must consider inserts and deletes
+        throw new RuntimeException("Not implemented");
     }
 
     @Override
     public boolean insert(IKey key, Object[] record) {
-        return false;
+        this.underlyingIndex.insert(key, record);
+        // throw new RuntimeException("Not implemented");
+        return true;
     }
 
     @Override
     public boolean update(IKey key, Object[] record) {
-        return false;
+        throw new RuntimeException("Not implemented");
     }
 
     @Override
     public boolean remove(IKey key) {
-        return false;
+        throw new RuntimeException("Not implemented");
     }
 
     @Override
     public Object[] lookupByKey(IKey key) {
-        return new Object[0];
+        throw new RuntimeException("Not implemented");
     }
 
     /**
@@ -249,10 +176,6 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
         //this.underlyingIndex.delete(secIdxKey);
         WriteNode writeNode = getWriteNode( secIdxKey, null, WriteType.DELETE );
         updateTransactionWriteSet(writeNode);
-    }
-
-    public AbstractIndex<IKey> getUnderlyingIndex(){
-        return this.underlyingIndex;
     }
 
 }

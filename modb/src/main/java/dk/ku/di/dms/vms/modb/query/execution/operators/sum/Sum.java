@@ -3,7 +3,8 @@ package dk.ku.di.dms.vms.modb.query.execution.operators.sum;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
+import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
@@ -13,7 +14,7 @@ import java.util.function.Supplier;
 
 public class Sum extends AbstractSimpleOperator {
 
-    protected final ReadOnlyBufferIndex<IKey> index;
+    protected final ReadOnlyIndex<IKey> index;
 
     protected final int columnIndex;
 
@@ -21,7 +22,7 @@ public class Sum extends AbstractSimpleOperator {
 
     public Sum(DataType dataType,
                     int columnIndex,
-                    ReadOnlyBufferIndex<IKey> index) {
+                    AbstractIndex<IKey> index) {
         super(dataType.value);
         this.dataType = dataType;
         this.index = index;

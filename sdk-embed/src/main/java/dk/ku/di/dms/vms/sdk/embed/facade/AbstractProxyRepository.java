@@ -4,14 +4,20 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IDTO;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityUtils;
+import net.bytebuddy.implementation.bind.annotation.AllArguments;
+import net.bytebuddy.implementation.bind.annotation.Origin;
+import net.bytebuddy.implementation.bind.annotation.RuntimeType;
+import net.bytebuddy.implementation.bind.annotation.This;
 
 import java.io.Serializable;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -55,12 +61,15 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
      */
     private final OperationalAPI operationalAPI;
 
+    private Map<String, SelectStatement> repositoryQueriesMap;
+
     public AbstractProxyRepository(Class<PK> pkClazz,
                                   Class<T> entityClazz,
                                   Table table,
-                                  OperationalAPI operationalAPI
-//                                 Map<String, Tuple<SelectStatement, Type>> staticQueriesMap)
-    ) throws NoSuchMethodException, NoSuchFieldException, IllegalAccessException {
+                                  OperationalAPI operationalAPI,
+                                  // key: method name, value: select stmt
+                                  Map<String, SelectStatement> repositoryQueriesMap)
+            throws NoSuchMethodException, NoSuchFieldException, IllegalAccessException {
         this.entityConstructor = entityClazz.getDeclaredConstructor();
         this.entityFieldMap = EntityUtils.getVarHandleFieldsFromEntity(entityClazz, table.getSchema());
         if(pkClazz.getPackageName().equalsIgnoreCase("java.lang") || pkClazz.isPrimitive()){
@@ -70,10 +79,52 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         }
         this.table = table;
         this.operationalAPI = operationalAPI;
+        this.repositoryQueriesMap = repositoryQueriesMap;
+    }
+
+    /**
+     * <a href="http://mydailyjava.blogspot.com/2022/02/using-byte-buddy-for-proxy-creation.html">Proxy creation in ByteBuddy</a>
+     */
+    public static final class Interceptor {
+
+        @RuntimeType
+        public static Object intercept(
+                @This AbstractProxyRepository self,
+                @Origin Method method,
+                @AllArguments Object[] args){
+                // @SuperMethod(nullIfImpossible = true) Method superMethod,
+                // @Empty Object defaultValue)
+                // ) throws Throwable {
+
+            // System.out.println("I'm the proxy --> " + method.getName());
+            return self.intercept(method.getName(), args);
+//            Object object = superMethod.invoke(self, args);
+
+//            return object;
+
+        }
+    }
+
+    public final List<T> intercept(String methodName, Object[] args){
+
+        // retrieve statically defined query
+        SelectStatement selectStatement = this.repositoryQueriesMap.get(methodName);
+
+        // set query arguments
+        for(int i = 0; i < args.length; i++) {
+            selectStatement.whereClause.get(i).setValue( args[i] );
+        }
+
+        // submit for execution
+        MemoryRefNode memoryRefNode = this.operationalAPI.fetch( this.table, selectStatement );
+
+        // TODO parse into entity object
+
+        return null;
     }
 
     @Override
-    public T lookupByKey(PK key){
+    public final T lookupByKey(PK key){
         // this repository is oblivious to multi-versioning
         // given the single-thread model, we can work with writes easily
         // but reads are another story. multiple threads may be calling the repository facade
@@ -89,7 +140,7 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     }
 
     @Override
-    public List<T> lookupByKeys(Collection<PK> keys){
+    public final List<T> lookupByKeys(Collection<PK> keys){
         List<T> resultList = new ArrayList<>(keys.size());
         for(PK obj : keys){
             Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(obj);
@@ -100,23 +151,23 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     }
 
     @Override
-    public void insert(T entity) {
+    public final void insert(T entity) {
         Object[] values = this.extractFieldValuesFromEntityObject(entity);
         this.operationalAPI.insert(this.table, values);
     }
 
     @Override
-    public T insertAndGet(T entity){
+    public final T insertAndGet(T entity){
         // TODO check if PK is generated before returning the entity
         Object[] values = this.extractFieldValuesFromEntityObject(entity);
         // Object valuesWithKey =
-        this.operationalAPI.insertAndGet(this.table, values);
+        Object[] newValues = this.operationalAPI.insertAndGet(this.table, values);
         // this.setKeyValueOnObject( key_, cached );
         return entity;
     }
 
     @Override
-    public void insertAll(List<T> entities) {
+    public final void insertAll(List<T> entities) {
         // acts as a single transaction, so all constraints, of every single row must be present
         List<Object[]> parsedEntities = new ArrayList<>(entities.size());
         for (T entityObject : entities){
@@ -128,13 +179,13 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     }
 
     @Override
-    public void update(T entity) {
+    public final void update(T entity) {
         Object[] values = this.extractFieldValuesFromEntityObject(entity);
         this.operationalAPI.update(this.table, values);
     }
 
     @Override
-    public void updateAll(List<T> entities) {
+    public final void updateAll(List<T> entities) {
         List<Object[]> parsedEntities = new ArrayList<>(entities.size());
         for (T entityObject : entities){
             Object[] parsed = this.extractFieldValuesFromEntityObject(entityObject);
@@ -144,19 +195,19 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     }
 
     @Override
-    public void delete(T entity){
+    public final void delete(T entity){
         Object[] values = this.extractFieldValuesFromEntityObject(entity);
         this.operationalAPI.delete(this.table, values);
     }
 
     @Override
-    public void deleteByKey(PK key) {
+    public final void deleteByKey(PK key) {
         Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(key);
         this.operationalAPI.deleteByKey(this.table, valuesOfKey);
     }
 
     @Override
-    public void deleteAll(List<T> entities) {
+    public final void deleteAll(List<T> entities) {
         List<Object[]> parsedEntities = new ArrayList<>(entities.size());
         for (T entityObject : entities){
             Object[] parsed = this.extractFieldValuesFromEntityObject(entityObject);
@@ -172,7 +223,7 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
             int i;
             for(var entry : this.entityFieldMap.entrySet()){
                 // must get the index of the column first
-                i = this.table.underlyingPrimaryKeyIndex_().schema().columnPosition(entry.getKey());
+                i = this.table.underlyingPrimaryKeyIndex().schema().columnPosition(entry.getKey());
                 entry.getValue().set( entity, object[i] );
             }
             return entity;

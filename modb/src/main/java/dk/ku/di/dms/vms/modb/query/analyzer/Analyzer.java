@@ -57,7 +57,7 @@ public final class Analyzer {
         // from
         // obtain the tables to look for the columns in projection first
         for(String tableStr : statement.fromClause){
-            Table table = catalog.get(tableStr);
+            Table table = this.catalog.get(tableStr);
             if(table != null) queryTree.tables.put(tableStr,table);
         }
 
@@ -176,7 +176,7 @@ public final class Analyzer {
         //  e.g., numeric comparisons between numbers and string/characters
         // where
         if(statement.whereClause != null) {
-            for (WhereClauseElement<?> currWhere : statement.whereClause) {
+            for (WhereClauseElement currWhere : statement.whereClause) {
 
                 if (currWhere.value() == null) {
                     throw new AnalyzerException("Parameter of where clause cannot be null value");
@@ -242,10 +242,10 @@ public final class Analyzer {
      * @param whereClause the passed where clause
      * @return the parsed predicates
      */
-    public List<WherePredicate> analyzeWhere(Table table, List<WhereClauseElement<?>> whereClause) throws AnalyzerException {
+    public List<WherePredicate> analyzeWhere(Table table, List<WhereClauseElement> whereClause) throws AnalyzerException {
         List<WherePredicate> newList = new ArrayList<>(whereClause.size());
         // this assumes param is a value (number or char/string)
-        for(WhereClauseElement<?> element : whereClause){
+        for(WhereClauseElement element : whereClause){
 
             if(!columnNameIsFoundInSchema(element.column(), table.schema))
                 throw new AnalyzerException("Column does not exist in the table");
@@ -292,12 +292,9 @@ public final class Analyzer {
         throw new AnalyzerException("Column " + columnStr +" does not exist in the catalog of tables");
     }
 
-    private boolean columnNameIsFoundInSchema(String columnStr, Schema schema) throws AnalyzerException {
+    private boolean columnNameIsFoundInSchema(String columnStr, Schema schema) {
         Integer columnIndex = schema.columnPosition(columnStr);
-        if(columnIndex == null){
-            return false;
-        }
-        return true;
+        return columnIndex != null;
     }
 
     /**

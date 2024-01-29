@@ -48,6 +48,7 @@ public class QueryTree {
         this.wherePredicates = new ArrayList<>(3);
         this.groupByProjections = new ArrayList<>();
         this.groupByColumns = new ArrayList<>();
+        this.orderByPredicates = new ArrayList<>();
     }
 
     /**

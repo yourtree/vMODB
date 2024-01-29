@@ -2,21 +2,23 @@ package dk.ku.di.dms.vms.modb.index.non_unique;
 
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class NonUniqueHashMapIndex extends AbstractIndex<IKey> implements ReadWriteIndex<IKey> {
+public final class NonUniqueHashMapIndex extends ReadWriteIndex<IKey> {
 
+    // queue to allow concurrent inserts
     private final Map<IKey, Queue<Object[]>> store;
 
-    public NonUniqueHashMapIndex(Schema schema) {
-        super(schema, schema.getPrimaryKeyColumns());
+    public NonUniqueHashMapIndex(Schema schema, int[] columnsIndex) {
+        super(schema, columnsIndex);
         this.store = new ConcurrentHashMap<>();
     }
 
@@ -53,7 +55,50 @@ public class NonUniqueHashMapIndex extends AbstractIndex<IKey> implements ReadWr
 
     @Override
     public Object[] lookupByKey(IKey key) {
-        throw new RuntimeException("Cannot perform lookup by key in non unique hash index");
+        return this.store.get(key).toArray();
     }
 
+    @Override
+    public Object[] record(IRecordIterator<IKey> iterator) {
+        throw new RuntimeException("Not implemented");
+    }
+
+    @Override
+    public IRecordIterator<IKey> iterator(IKey[] keys) {
+        throw new RuntimeException("Not implemented");
+    }
+
+    // TODO finish implementation
+//    private class HashMapNonUniqueIndexIterator implements IRecordIterator<IKey> {
+//
+//        public HashMapNonUniqueIndexIterator(){
+//
+//        }
+//
+//        @Override
+//        public IKey get() {
+//            return null;
+//        }
+//
+//        @Override
+//        public void next() {
+//
+//        }
+//
+//        @Override
+//        public boolean hasElement() {
+//            return false;
+//        }
+//
+//    }
+
+    @Override
+    public IRecordIterator<IKey> iterator() {
+        throw new RuntimeException("Not implemented");
+    }
+
+    @Override
+    public boolean checkCondition(IRecordIterator<IKey> iterator, FilterContext filterContext) {
+        throw new RuntimeException("Not implemented");
+    }
 }

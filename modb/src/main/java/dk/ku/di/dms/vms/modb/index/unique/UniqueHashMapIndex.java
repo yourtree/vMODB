@@ -2,14 +2,15 @@ package dk.ku.di.dms.vms.modb.index.unique;
 
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class UniqueHashMapIndex extends AbstractIndex<IKey> implements ReadWriteIndex<IKey> {
+public final class UniqueHashMapIndex extends ReadWriteIndex<IKey> {
 
     private final Map<IKey,Object[]> store;
 
@@ -51,5 +52,20 @@ public class UniqueHashMapIndex extends AbstractIndex<IKey> implements ReadWrite
     @Override
     public Object[] lookupByKey(IKey key) {
         return this.store.get(key);
+    }
+
+    @Override
+    public Object[] record(IRecordIterator<IKey> iterator) {
+        return new Object[0];
+    }
+
+    @Override
+    public IRecordIterator<IKey> iterator() {
+        return null;
+    }
+
+    @Override
+    public boolean checkCondition(IRecordIterator<IKey> iterator, FilterContext filterContext) {
+        return false;
     }
 }

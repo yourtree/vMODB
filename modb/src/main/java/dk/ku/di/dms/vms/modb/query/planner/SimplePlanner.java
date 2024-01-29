@@ -9,6 +9,8 @@ import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
@@ -31,51 +33,38 @@ import java.util.stream.IntStream;
  * Those involving single tables and filters, and no
  * multiple aggregations or joins with more than 2 tables.
  */
-public class SimplePlanner {
+public final class SimplePlanner {
 
     public SimplePlanner(){}
 
-    private static class IndexSelectionVerdict implements Comparable<IndexSelectionVerdict> {
-
-        boolean indexIsUsedGivenWhereClause;
-
-        ReadOnlyBufferIndex<IKey> index;
-
-        // additional columns to be filtered, but not on index
-        int[] columnsToFilter;
-
-        public IndexSelectionVerdict(boolean indexIsUsedGivenWhereClause, ReadOnlyBufferIndex<IKey> index, int[] columnsToFilter) {
-            this.indexIsUsedGivenWhereClause = indexIsUsedGivenWhereClause;
-            this.index = index;
-            this.columnsToFilter = columnsToFilter;
-        }
+    /**
+     * @param columnsToFilter additional columns to be filtered, but not on index
+     */
+    private record IndexSelectionVerdict(boolean indexIsUsedGivenWhereClause,
+                                         ReadWriteIndex<IKey> index,
+                                         int[] columnsToFilter) implements Comparable<IndexSelectionVerdict> {
 
         @Override
         public int compareTo(IndexSelectionVerdict o) {
-
             // do both indexes can be effectively applied?
-            if( this.indexIsUsedGivenWhereClause && o.indexIsUsedGivenWhereClause ){
+            if (this.indexIsUsedGivenWhereClause && o.indexIsUsedGivenWhereClause) {
 
                 // are both unique?
-                if(this.index.getType() == IndexTypeEnum.UNIQUE && o.index.getType() == IndexTypeEnum.UNIQUE){
-
+                if (this.index.getType() == IndexTypeEnum.UNIQUE && o.index.getType() == IndexTypeEnum.UNIQUE) {
                     // which one has more columns to filter? leading to more rows cut
                     // that may not be correct given the selectivity of some values, simple heuristic here
-                    if(this.columnsToFilter.length > o.columnsToFilter.length) return 0;
-                    if(this.columnsToFilter.length < o.columnsToFilter.length) return 1;
+                    if (this.columnsToFilter.length > o.columnsToFilter.length) return 0;
+                    if (this.columnsToFilter.length < o.columnsToFilter.length) return 1;
 
                     // which one has larger table?
-                    if(this.index.size() < o.index.size()) return 0;
+                    if (this.index.size() < o.index.size()) return 0;
 
-                } else if(this.index.getType() == IndexTypeEnum.UNIQUE) return 0;
+                } else if (this.index.getType() == IndexTypeEnum.UNIQUE) return 0;
 
-            } else if( this.indexIsUsedGivenWhereClause ) {
-                    return 0; // must be deep left then
-
+            } else if (this.indexIsUsedGivenWhereClause) {
+                return 0; // must be deep left then
             }
-
             return 1;
-
         }
 
     }
@@ -83,19 +72,19 @@ public class SimplePlanner {
     public AbstractSimpleOperator plan(QueryTree queryTree) {
 
         if(queryTree.isSimpleScan()){
-            return planSimpleSelect(queryTree);
+            return this.planSimpleSelect(queryTree);
         }
 
         if(queryTree.isSimpleAggregate()){
-            return planSimpleAggregate(queryTree);
+            return this.planSimpleAggregate(queryTree);
         }
 
         if(queryTree.isSimpleJoin()){
-            return planSimpleJoin(queryTree);
+            return this.planSimpleJoin(queryTree);
         }
 
         if(queryTree.hasMultipleJoins()){
-            return planMultipleJoinsQuery(queryTree);
+            return this.planMultipleJoinsQuery(queryTree);
         }
 
         return null;
@@ -161,13 +150,13 @@ public class SimplePlanner {
         // Table tb = queryTree.groupByProjections.get(0).columnReference.table;
 
         // get the operations
-        // groupby selection
+        // group by selection
 
         // then just one since it is simple
         switch (queryTree.groupByProjections.get(0).groupByOperation){
             case SUM -> {
                 // is there any index that applies?
-                ReadOnlyBufferIndex<IKey> indexSelected = this.getOptimalIndex(
+                ReadWriteIndex<IKey> indexSelected = this.getOptimalIndex(
                         queryTree.groupByProjections.get(0).columnReference.table,
                         queryTree.wherePredicates
                         ).index;
@@ -182,7 +171,7 @@ public class SimplePlanner {
             }
             case COUNT -> {
                 Table tb = queryTree.groupByProjections.get(0).columnReference.table;
-                ReadOnlyBufferIndex<IKey> indexSelected = this.getOptimalIndex(
+                ReadOnlyIndex<IKey> indexSelected = this.getOptimalIndex(
                         queryTree.groupByProjections.get(0).columnReference.table,
                         queryTree.wherePredicates
                         ).index;
@@ -219,7 +208,7 @@ public class SimplePlanner {
 
         // avoid one of the columns to have expression different from EQUALS
         // to be picked by unique and non unique index
-        ReadOnlyBufferIndex<IKey> indexSelected = this.getOptimalIndex(tb, queryTree.wherePredicates).index;
+        ReadOnlyIndex<IKey> indexSelected = this.getOptimalIndex(tb, queryTree.wherePredicates).index();
 
         // build projection
 
@@ -234,7 +223,7 @@ public class SimplePlanner {
         }
 
         if(indexSelected != null) {
-            // return the indexscanwithprojection
+            // return the index scan with projection
             return new IndexScanWithProjection(tb, indexSelected, projectionColumns, entrySize);
 
         } else {
@@ -254,37 +243,36 @@ public class SimplePlanner {
                 )
                 .mapToInt( WherePredicate::getColumnPosition );
 
-        final int[] columnsToBeConsideredForIndexSelection = intStream.toArray();
+        final int[] columnsForIndexSelection = intStream.toArray();
 
         final IKey indexKey;
-        if(columnsToBeConsideredForIndexSelection.length == 1) {
-            indexKey = SimpleKey.of(columnsToBeConsideredForIndexSelection[0]);
+        if(columnsForIndexSelection.length == 1) {
+            indexKey = SimpleKey.of(columnsForIndexSelection[0]);
         } else {
-            indexKey = CompositeKey.of(columnsToBeConsideredForIndexSelection);
+            indexKey = CompositeKey.of(columnsForIndexSelection);
         }
 
         // fast path (1): all columns are part of the primary index
         if (table.underlyingPrimaryKeyIndex().key().equals(indexKey) ) {
-            int[] filterColumns = intStream.filter( w -> !table.underlyingPrimaryKeyIndex().containsColumn( w ) ).toArray();
-            return new IndexSelectionVerdict(true, table.underlyingPrimaryKeyIndex(), filterColumns);
+            // int[] filterColumns = intStream.filter( w -> !table.underlyingPrimaryKeyIndex_().containsColumn( w ) ).toArray();
+            return new IndexSelectionVerdict(true, table.underlyingPrimaryKeyIndex(), columnsForIndexSelection);
         }
 
         // fast path (2): all columns are part of a secondary index
         if(table.secondaryIndexMap.get(indexKey) != null){
-            int[] filterColumns = intStream.filter( w -> !table.underlyingPrimaryKeyIndex().containsColumn( w ) ).toArray();
+            // int[] filterColumns = Arrays.stream(columnsForIndexSelection).filter( w -> !table.underlyingPrimaryKeyIndex_().containsColumn( w ) ).toArray();
             return new IndexSelectionVerdict(true,
-                    null,
-                    // FIXME adjust later
-                    // table.secondaryIndexMap.get(indexKey)
-                    filterColumns);
+
+                    table.secondaryIndexMap.get(indexKey).getUnderlyingIndex(),
+                    columnsForIndexSelection);
         }
 
-        final ReadOnlyBufferIndex<IKey> indexSelected = this.getOptimalIndex(table, columnsToBeConsideredForIndexSelection);
+        final ReadOnlyBufferIndex<IKey> indexSelected = this.getOptimalIndex(table, columnsForIndexSelection);
 
         // is the index completely covered by the columns in the filter?
         if (indexSelected == null){
             // then just select the Primary index
-            return new IndexSelectionVerdict(false, table.underlyingPrimaryKeyIndex(), columnsToBeConsideredForIndexSelection);
+            return new IndexSelectionVerdict(false, table.underlyingPrimaryKeyIndex(), columnsForIndexSelection);
         }
 
         // columns not in the index, but require filtering
@@ -297,6 +285,7 @@ public class SimplePlanner {
         return new IndexSelectionVerdict(indexColumnInFilter, table.underlyingPrimaryKeyIndex(), filterColumns);
     }
 
+    @SuppressWarnings("unchecked")
     private ReadOnlyBufferIndex<IKey> getOptimalIndex(Table table, int[] filterColumns){
 
         IKey indexKey;

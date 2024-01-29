@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.query.execution.operators.count;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
@@ -14,7 +14,7 @@ import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
  */
 public class IndexCount extends AbstractCount {
 
-    public IndexCount(ReadOnlyBufferIndex<IKey> index) {
+    public IndexCount(ReadOnlyIndex<IKey> index) {
         super(index, Integer.BYTES);
     }
 

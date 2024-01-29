@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.index;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.interfaces.IIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 
 import java.util.HashSet;
 
@@ -14,7 +14,7 @@ import java.util.HashSet;
  * <a href="https://github.com/apache/flink/blob/master/flink-core/src/main/java/org/apache/flink/core/memory/MemorySegment.java">...</a>
  * <a href="https://stackoverflow.com/questions/24026918/java-nio-bytebuffer-allocatedirect-size-limit-over-the-int">...</a>
  */
-public abstract class AbstractIndex<K> implements IIndex<K> {
+public abstract class AbstractIndex<K> implements ReadOnlyIndex<K> {
 
     protected final int[] columns;
 
@@ -26,7 +26,7 @@ public abstract class AbstractIndex<K> implements IIndex<K> {
     // respective table of this index
     protected final Schema schema;
 
-    public AbstractIndex(Schema schema, int... columnsIndex) {
+    public AbstractIndex(Schema schema, int[] columnsIndex) {
         this.schema = schema;
         this.columns = columnsIndex;
         this.key = (IIndexKey) KeyUtils.buildKey(columnsIndex);
@@ -48,7 +48,7 @@ public abstract class AbstractIndex<K> implements IIndex<K> {
 
     @Override
     public final boolean containsColumn(int columnPos) {
-        return columnsHash.contains(columnPos);
+        return this.columnsHash.contains(columnPos);
     }
 
     @Override

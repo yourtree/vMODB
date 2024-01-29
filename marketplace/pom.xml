@@ -20,6 +20,7 @@
         <module>payment</module>
         <module>shipment</module>
         <module>customer</module>
+        <module>seller</module>
         <module>common</module>
         <module>test</module>
     </modules>

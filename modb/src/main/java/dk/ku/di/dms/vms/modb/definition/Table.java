@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.modb.definition;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteBufferIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
@@ -128,11 +128,7 @@ public final class Table {
         return this.name;
     }
 
-    public ReadWriteBufferIndex<IKey> underlyingPrimaryKeyIndex(){
-        return (ReadWriteBufferIndex<IKey>) this.primaryIndex.underlyingIndex();
-    }
-
-    public ReadWriteIndex<IKey> underlyingPrimaryKeyIndex_(){
+    public ReadWriteIndex<IKey> underlyingPrimaryKeyIndex(){
         return this.primaryIndex.underlyingIndex();
     }
 

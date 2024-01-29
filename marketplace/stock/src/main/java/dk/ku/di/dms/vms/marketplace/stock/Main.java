@@ -47,7 +47,7 @@ public class Main {
             StockItem stock = this.serdes.deserialize(str, StockItem.class);
             Object[] obj = this.repository.extractFieldValuesFromEntityObject(stock);
             IKey key = KeyUtils.buildRecordKey( table.getSchema().getPrimaryKeyColumns(), obj );
-            this.table.underlyingPrimaryKeyIndex_().insert(key, obj);
+            this.table.underlyingPrimaryKeyIndex().insert(key, obj);
 
             // response
             OutputStream outputStream = exchange.getResponseBody();

@@ -6,18 +6,20 @@ import dk.ku.di.dms.vms.marketplace.common.events.DeliveryNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
+import dk.ku.di.dms.vms.marketplace.shipment.dtos.OldestSellerPackageEntry;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.Package;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.PackageStatus;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.Shipment;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IPackageRepository;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IShipmentRepository;
-import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
-import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.annotations.*;
+import dk.ku.di.dms.vms.modb.api.query.builder.QueryBuilderFactory;
+import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
+import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
@@ -28,6 +30,12 @@ public class ShipmentService {
     private final IShipmentRepository shipmentRepository;
 
     private final IPackageRepository packageRepository;
+
+    @VmsPreparedStatement("oldestShipmentPerSeller")
+    private static final SelectStatement oldestShipmentPerSeller = QueryBuilderFactory.select()
+            .project("seller_id").project("customer_id").project("order_id").min("shipping_date")
+            .from("packages").where("status", ExpressionTypeEnum.EQUALS, "shipped")
+            .groupBy( "seller_id" ).limit(10).build();
 
     public ShipmentService(IShipmentRepository shipmentRepository, IPackageRepository packageRepository){
         this.shipmentRepository = shipmentRepository;
@@ -42,25 +50,35 @@ public class ShipmentService {
         System.out.println("Shipment received an update shipment event with TID: "+ instanceId);
         Date now = new Date();
 
-        List<Package> packages = this.packageRepository.getAll();
+        List<OldestSellerPackageEntry> packages = this.packageRepository.fetchMany(oldestShipmentPerSeller, OldestSellerPackageEntry.class);
 
-        Map<Integer, Package.PackageId> oldestOpenShipmentPerSeller = packages.stream()
-                .filter( p -> p.status.equals(PackageStatus.shipped) )
-                .collect(Collectors.groupingBy(Package::getSellerId,
-                        Collectors.minBy(Comparator.comparing( Package::getShippingDate ))
-                          ) ).entrySet().stream()
-                .filter(entry -> entry.getValue().isPresent())
-                .limit(10) // Limit the result to the first 10 sellers
-                .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().get().getId()));
-
+//        List<Package> packages = this.packageRepository.getAll(aPackage -> aPackage.status == PackageStatus.shipped);
+//        Map<Integer, Package.PackageId> oldestOpenShipmentPerSeller = packages.stream()
+////                .filter( p -> p.status.equals(PackageStatus.shipped) )
+//                .collect(Collectors.groupingBy(Package::getSellerId,
+//                        Collectors.minBy(Comparator.comparing( Package::getShippingDate ))
+//                          ) ).entrySet().stream()
+//                .filter(entry -> entry.getValue().isPresent())
+//                .limit(10) // Limit the result to the first 10 sellers
+//                .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().get().getId()));
 
         List<ShipmentNotification> shipmentNotifications = new ArrayList<>();
         List<DeliveryNotification> deliveryNotifications = new ArrayList<>();
 
-        for (Map.Entry<Integer, Package.PackageId> kv : oldestOpenShipmentPerSeller.entrySet()) {
-            List<Package> sellerPackages = packages.stream().filter( p-> p.seller_id == kv.getKey() && p.order_id == kv.getValue().order_id && p.customer_id == kv.getValue().customer_id ).toList();
+        for (var entry : packages) {
 
-            Shipment shipment = this.shipmentRepository.lookupByKey( new Shipment.ShipmentId( kv.getValue().customer_id, kv.getValue().order_id ) );
+//            SelectStatement selectStatement = QueryBuilderFactory.select().project("*")
+//                    .from("packages")
+//                    //.where( "seller_id", ExpressionTypeEnum.EQUALS, entry[0] )
+//                    .where( "customer_id", ExpressionTypeEnum.EQUALS, entry[1] )
+//                    .and( "order_id", ExpressionTypeEnum.EQUALS, entry[2] )
+//                    .build();
+
+            List<Package> orderPackages = packageRepository.getPackagesByCustomerIdAndSellerId( entry.getCustomerId(), entry.getOrderId() );
+
+//            List<Package> sellerPackages = packages.stream().filter( p-> p.seller_id == kv.getKey() && p.order_id == kv.getValue().order_id && p.customer_id == kv.getValue().customer_id ).toList();
+
+            Shipment shipment = this.shipmentRepository.lookupByKey( new Shipment.ShipmentId( entry.getCustomerId(), entry.getOrderId() ));
 
             if(shipment.status == ShipmentStatus.APPROVED){
                 shipment.status = ShipmentStatus.DELIVERY_IN_PROGRESS;
@@ -68,7 +86,8 @@ public class ShipmentService {
                 shipmentNotifications.add( new ShipmentNotification( shipment.customer_id, shipment.order_id, ShipmentStatus.DELIVERY_IN_PROGRESS, now ) );
             }
 
-            long countDelivered = packages.stream().filter(p-> p.customer_id == kv.getValue().customer_id && p.order_id == kv.getValue().order_id && p.status == PackageStatus.delivered).count();
+            long countDelivered = orderPackages.stream().filter(p-> p.status == PackageStatus.delivered).count();
+            var sellerPackages = orderPackages.stream().filter(p->p.seller_id == entry.getSellerId()).toList();
 
             for (Package pkg : sellerPackages) {
 
@@ -85,9 +104,7 @@ public class ShipmentService {
                         PackageStatus.delivered.name(),
                         now
                 );
-
                 deliveryNotifications.add(deliveryNotification);
-
             }
 
             if (shipment.package_count == countDelivered + sellerPackages.size()) {

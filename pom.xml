@@ -36,6 +36,7 @@
     <module>marketplace/customer</module>
     <module>marketplace/stock</module>
     <module>marketplace/product</module>
+      <module>marketplace/seller</module>
 
   </modules>
 

@@ -1,11 +1,8 @@
 package dk.ku.di.dms.vms.sdk.core.metadata;
 
-import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
-import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 
-import java.lang.reflect.Type;
 import java.util.Map;
 
 /**
@@ -35,9 +32,6 @@ public record VmsRuntimeMetadata(
         Map<String, Object> loadedVmsInstances,
 
         // key is the entity (or table) name
-        Map<String, Object> repositoryProxyMap,
-
-        // the return type may be a DTO
-        Map<String, Tuple<SelectStatement, Type>> staticQueries
+        Map<String, Object> repositoryProxyMap
 
 ){}

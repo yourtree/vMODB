@@ -4,9 +4,10 @@ import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractBufferedIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteBufferIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
@@ -23,7 +24,7 @@ import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
  * Could deal with collisions by having a linked list.
  * This index is oblivious to isolation level and relational constraints.
  */
-public final class UniqueHashBufferIndex extends AbstractBufferedIndex<IKey> implements ReadWriteIndex<IKey> {
+public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements ReadWriteBufferIndex<IKey> {
 
     private static final Logger logger = Logger.getLogger("UniqueHashIndex");
 
@@ -182,6 +183,11 @@ public final class UniqueHashBufferIndex extends AbstractBufferedIndex<IKey> imp
     @Override
     public IRecordIterator<IKey> iterator(IKey[] keys) {
         return new KeyRecordIterator(this, keys);
+    }
+
+    @Override
+    public boolean checkCondition(IRecordIterator<IKey> iterator, FilterContext filterContext) {
+        return false;
     }
 
     @Override

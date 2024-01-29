@@ -81,9 +81,6 @@ public final class VmsApplication {
 
         VmsEmbeddedInternalChannels vmsInternalPubSubService = new VmsEmbeddedInternalChannels();
 
-        // operational API and checkpoint API
-        TransactionManager transactionFacade = new TransactionManager();
-
         Reflections reflections = VmsMetadataLoader.configureReflections( packages );
 
         Set<Class<?>> vmsClasses = reflections.getTypesAnnotatedWith(Microservice.class);
@@ -95,7 +92,10 @@ public final class VmsApplication {
         // load catalog so we can pass the table instance to proxy repository
         Map<String, Table> catalog = EmbedMetadataLoader.loadCatalog(vmsDataModelMap, entityToTableNameMap);
 
-        Map<String, Object> tableToRepositoryMap = EmbedMetadataLoader.loadRepositoryClasses( vmsClasses, entityToTableNameMap, catalog,  transactionFacade );
+        // operational API and checkpoint API
+        TransactionManager transactionManager = new TransactionManager(catalog);
+
+        Map<String, Object> tableToRepositoryMap = EmbedMetadataLoader.loadRepositoryClasses( vmsClasses, entityToTableNameMap, catalog,  transactionManager );
         Map<String, List<Object>> vmsToRepositoriesMap = EmbedMetadataLoader.mapRepositoriesToVms(vmsClasses, entityToTableNameMap, tableToRepositoryMap);
 
         VmsRuntimeMetadata vmsMetadata = VmsMetadataLoader.load(
@@ -137,7 +137,7 @@ public final class VmsApplication {
 
         VmsEventHandler eventHandler = VmsEventHandler.buildWithDefaults(
                 vmsIdentifier, null,
-                transactionFacade, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
+                transactionManager, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
 
         return new VmsApplication( vmsMetadata, catalog, eventHandler, scheduler, vmsInternalPubSubService );
 

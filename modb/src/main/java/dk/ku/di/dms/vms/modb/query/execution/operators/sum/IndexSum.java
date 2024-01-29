@@ -3,7 +3,8 @@ package dk.ku.di.dms.vms.modb.query.execution.operators.sum;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
@@ -15,7 +16,7 @@ public class IndexSum extends Sum {
 
     public IndexSum(DataType dataType,
                     int columnIndex,
-                    ReadOnlyBufferIndex<IKey> index) {
+                    ReadWriteIndex<IKey> index) {
         super(dataType, columnIndex, index);
     }
 

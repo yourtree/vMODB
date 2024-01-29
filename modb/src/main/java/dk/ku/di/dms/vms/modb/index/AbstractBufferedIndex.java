@@ -17,7 +17,7 @@ public abstract class AbstractBufferedIndex<K> extends AbstractIndex<K> implemen
 
     protected static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
-    public AbstractBufferedIndex(Schema schema, int... columnsIndex) {
+    public AbstractBufferedIndex(Schema schema, int[] columnsIndex) {
         super(schema, columnsIndex);
     }
 }

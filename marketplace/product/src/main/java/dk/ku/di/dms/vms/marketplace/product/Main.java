@@ -53,7 +53,7 @@ public class Main {
 
             Object[] obj = this.repository.extractFieldValuesFromEntityObject(product);
             IKey key = KeyUtils.buildRecordKey( table.getSchema().getPrimaryKeyColumns(), obj );
-            this.table.underlyingPrimaryKeyIndex_().insert(key, obj);
+            this.table.underlyingPrimaryKeyIndex().insert(key, obj);
 
             // response
             OutputStream outputStream = exchange.getResponseBody();

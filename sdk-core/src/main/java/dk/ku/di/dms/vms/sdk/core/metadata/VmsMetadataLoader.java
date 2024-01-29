@@ -10,7 +10,6 @@ import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 import dk.ku.di.dms.vms.modb.common.constraint.ValueConstraintReference;
 import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
-import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
@@ -29,7 +28,10 @@ import javax.persistence.Column;
 import javax.persistence.Id;
 import javax.validation.constraints.*;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.*;
 import java.util.logging.Logger;
@@ -64,9 +66,6 @@ public final class VmsMetadataLoader {
                                           Map<String, List<Object>> vmsToRepositoriesMap,
                                           Map<String, Object> tableToRepositoryMap)
             throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException {
-
-        Set<Method> queryMethods = reflections.getMethodsAnnotatedWith(Query.class);
-        Map<String, Tuple<SelectStatement, Type>> staticQueriesMap = loadStaticQueries(queryMethods);
 
         // also load the corresponding repository facade
         Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(
@@ -112,8 +111,8 @@ public final class VmsMetadataLoader {
                 eventToQueueMap,
                 clazzNameToVmsNameMap,
                 loadedVmsInstances,
-                tableToRepositoryMap,
-                staticQueriesMap);
+                tableToRepositoryMap
+                );
     }
 
     private static Map<String, String> mapClazzNameToVmsName(Set<Class<?>> vmsClasses) {
@@ -636,8 +635,8 @@ public final class VmsMetadataLoader {
         }
     }
 
-    private static Map<String, Tuple<SelectStatement, Type>> loadStaticQueries(Set<Method> queryMethods){
-        Map<String, Tuple<SelectStatement, Type>> res = new HashMap<>(3);
+    public static Map<String, SelectStatement> loadStaticQueries(Method[] queryMethods){
+        Map<String, SelectStatement> res = new HashMap<>(queryMethods.length);
         for(Method queryMethod : queryMethods){
 
             try {
@@ -652,10 +651,10 @@ public final class VmsMetadataLoader {
                 SelectStatement selectStatement = Parser.parse(queryString);
                 selectStatement.SQL = new StringBuilder(queryString);
 
-                res.put(queryMethod.getName(), Tuple.of(selectStatement, queryMethod.getReturnType()));
+                res.put(queryMethod.getName(), selectStatement);
 
             } catch(Exception e){
-                throw new IllegalStateException("Error on processing the query annotation: "+e.getMessage());
+                throw new RuntimeException("Error on processing the query annotation: "+e.getMessage());
             }
 
         }
