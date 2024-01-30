@@ -109,9 +109,19 @@ public final class NonUniqueHashBufferIndex extends ReadWriteIndex<IKey> impleme
     }
 
     @Override
+    public boolean exists(long address) {
+        throw new RuntimeException("Not implemented");
+    }
+
+    @Override
     public long address(IKey key) {
         int bucket = this.getBucketIndex(key);
         return this.buffers[bucket].address();
+    }
+
+    @Override
+    public Object[] record(IKey key) {
+        throw new RuntimeException("Not implemented");
     }
 
     public IRecordIterator<IKey> iterator(IKey key) {

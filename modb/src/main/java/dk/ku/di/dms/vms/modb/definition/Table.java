@@ -1,11 +1,12 @@
 package dk.ku.di.dms.vms.modb.definition;
 
+import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.UniqueSecondaryIndex;
 
 import java.util.Collections;
 import java.util.List;
@@ -52,61 +53,48 @@ public final class Table {
     private final Map<PrimaryIndex, int[]> foreignKeys;
 
     /**
-     * Indexes from other tables pointing
-     * to the primary index of this table.
-     * This answers: Who is pointing to me? Who am I parenting?
-      */
-    public final List<NonUniqueSecondaryIndex> children;
-
-    /**
      * Other indexes from this table, hashed by the column set in order of the schema
      *  logical key - column list in order that appear in the schema
      *  physical key - column list in order of index definition
-      */
+     */
     public final Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap;
 
-//    public Table(String name, Schema schema, PrimaryIndex primaryIndex,
-//                    Map<PrimaryIndex, int[]> foreignKeys,
-//                    List<NonUniqueSecondaryIndex> secondaryIndexes,
-//                    List<NonUniqueSecondaryIndex> children){
-//        this.name = name;
-//        this.schema = schema;
-//        this.hashCode = name.hashCode();
-//        this.primaryIndex = primaryIndex;
-//        this.foreignKeys = foreignKeys;
-//        this.secondaryIndexMap = secondaryIndexes.stream().collect(Collectors.toMap(NonUniqueSecondaryIndex::key, Function.identity()));
-//        this.children = children;
-//    }
+    public final Map<IIndexKey, Tuple<Integer, Object>> partialIndexMetaMap;
+
+    public final Map<IIndexKey, UniqueSecondaryIndex> partialIndexMap;
+
+    /**
+     * Indexes from other tables pointing to the primary index of this table.
+     * It resolves the question: Who is pointing to me? Who am I parenting?
+     * In order to enable cascading DELETE
+      */
+    public final List<NonUniqueSecondaryIndex> children;
 
     public Table(String name, Schema schema, PrimaryIndex primaryIndex,
                  Map<PrimaryIndex, int[]> foreignKeys,
-                 Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap){
+                 Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap,
+                 Map<IIndexKey, Tuple<Integer, Object>> partialIndexMetaMap,
+                 Map<IIndexKey, UniqueSecondaryIndex> partialIndexMap){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
         this.primaryIndex = primaryIndex;
         this.foreignKeys = foreignKeys;
         this.secondaryIndexMap = secondaryIndexMap;
+        this.partialIndexMetaMap = partialIndexMetaMap;
+        this.partialIndexMap = partialIndexMap;
         this.children = Collections.emptyList();
     }
-
-//    public Table(String name, Schema schema, PrimaryIndex primaryIndex, Map<PrimaryIndex, int[]> foreignKeys){
-//        this.name = name;
-//        this.schema = schema;
-//        this.hashCode = name.hashCode();
-//        this.primaryIndex = primaryIndex;
-//        this.secondaryIndexMap = Collections.emptyMap();
-//        this.foreignKeys = foreignKeys;
-//        this.children = Collections.emptyList();
-//    }
 
     public Table(String name, Schema schema, PrimaryIndex primaryIndex){
         this.name = name;
         this.schema = schema;
         this.hashCode = name.hashCode();
         this.primaryIndex = primaryIndex;
-        this.secondaryIndexMap = Collections.emptyMap();
         this.foreignKeys = Collections.emptyMap();
+        this.secondaryIndexMap = Collections.emptyMap();
+        this.partialIndexMetaMap = Collections.emptyMap();
+        this.partialIndexMap = Collections.emptyMap();
         this.children = Collections.emptyList();
     }
 

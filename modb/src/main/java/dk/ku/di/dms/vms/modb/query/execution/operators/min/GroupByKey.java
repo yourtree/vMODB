@@ -7,7 +7,7 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
  * used in the group by
  * as well as the original PK this value refers to
  */
-public class GroupByKey implements IKey {
+public final class GroupByKey implements IKey {
 
     private final int hashKey;
     private final IKey pk;

@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
+import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
@@ -19,6 +20,7 @@ import dk.ku.di.dms.vms.modb.query.execution.operators.count.IndexCount;
 import dk.ku.di.dms.vms.modb.query.execution.operators.count.IndexCountGroupBy;
 import dk.ku.di.dms.vms.modb.query.execution.operators.join.UniqueHashJoinNonUniqueHashWithProjection;
 import dk.ku.di.dms.vms.modb.query.execution.operators.join.UniqueHashJoinWithProjection;
+import dk.ku.di.dms.vms.modb.query.execution.operators.min.IndexGroupByMinWithProjection;
 import dk.ku.di.dms.vms.modb.query.execution.operators.scan.AbstractScan;
 import dk.ku.di.dms.vms.modb.query.execution.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.execution.operators.scan.IndexScanWithProjection;
@@ -145,42 +147,52 @@ public final class SimplePlanner {
     }
 
     private AbstractSimpleOperator planSimpleAggregate(QueryTree queryTree) {
-
-        //
-        // Table tb = queryTree.groupByProjections.get(0).columnReference.table;
-
-        // get the operations
-        // group by selection
-
         // then just one since it is simple
-        switch (queryTree.groupByProjections.get(0).groupByOperation){
+        switch (queryTree.groupByProjections.get(0).groupByOperation()){
+            case MIN -> {
+                ReadWriteIndex<IKey> indexSelected = this.getOptimalIndex(
+                        queryTree.groupByProjections.get(0).columnReference().table,
+                        queryTree.wherePredicates
+                ).index();
+                int[] indexColumns = queryTree.groupByColumns.stream()
+                        .mapToInt(ColumnReference::getColumnPosition ).toArray();
+
+                final IntStream intStream = queryTree.projections.stream()
+                        .mapToInt( ColumnReference::getColumnPosition );
+                final int[] projectionColumns = intStream.toArray();
+
+                int minColumn = queryTree.groupByProjections.stream().mapToInt( GroupByPredicate::columnPosition ).toArray()[0];
+
+                // calculate entry size... sum of the size of the column types of the projection
+                return new IndexGroupByMinWithProjection( indexSelected, indexColumns, projectionColumns, minColumn, 128, queryTree.limit.get() );
+            }
             case SUM -> {
                 // is there any index that applies?
                 ReadWriteIndex<IKey> indexSelected = this.getOptimalIndex(
-                        queryTree.groupByProjections.get(0).columnReference.table,
+                        queryTree.groupByProjections.get(0).columnReference().table,
                         queryTree.wherePredicates
-                        ).index;
+                        ).index();
                 if(indexSelected == null){
-                    return new Sum(queryTree.groupByProjections.get(0).columnReference.dataType,
-                            queryTree.groupByProjections.get(0).columnReference.columnPosition,
-                            queryTree.groupByProjections.get(0).columnReference.table.underlyingPrimaryKeyIndex());
+                    return new Sum(
+                            queryTree.groupByProjections.get(0).columnReference().dataType,
+                            queryTree.groupByProjections.get(0).columnReference().columnPosition,
+                            queryTree.groupByProjections.get(0).columnReference().table.underlyingPrimaryKeyIndex());
                 }
-                return new IndexSum(queryTree.groupByProjections.get(0).columnReference.dataType,
-                        queryTree.groupByProjections.get(0).columnReference.columnPosition,
+                return new IndexSum(
+                        queryTree.groupByProjections.get(0).columnReference().dataType,
+                        queryTree.groupByProjections.get(0).columnReference().columnPosition,
                         indexSelected);
             }
             case COUNT -> {
-                Table tb = queryTree.groupByProjections.get(0).columnReference.table;
+                Table tb = queryTree.groupByProjections.get(0).columnReference().table;
                 ReadOnlyIndex<IKey> indexSelected = this.getOptimalIndex(
-                        queryTree.groupByProjections.get(0).columnReference.table,
+                        queryTree.groupByProjections.get(0).columnReference().table,
                         queryTree.wherePredicates
-                        ).index;
+                        ).index();
                 if(queryTree.groupByColumns.isEmpty()){
                     // then no group by
-
                     // how the user can specify a distinct?
                     return new IndexCount( indexSelected == null ? tb.underlyingPrimaryKeyIndex() : indexSelected );
-
                 } else {
                     int[] columns = queryTree.groupByColumns.stream()
                             .mapToInt(ColumnReference::getColumnPosition ).toArray();
@@ -190,7 +202,6 @@ public final class SimplePlanner {
             }
             default -> throw new IllegalStateException("Operator not yet implemented.");
         }
-
 
         // get the columns that must be considered for the aggregations
 
@@ -259,15 +270,22 @@ public final class SimplePlanner {
         }
 
         // fast path (2): all columns are part of a secondary index
-        if(table.secondaryIndexMap.get(indexKey) != null){
+        if(table.secondaryIndexMap.containsKey(indexKey)){
             // int[] filterColumns = Arrays.stream(columnsForIndexSelection).filter( w -> !table.underlyingPrimaryKeyIndex_().containsColumn( w ) ).toArray();
-            return new IndexSelectionVerdict(true,
-
+            return new IndexSelectionVerdict(
+                    true,
                     table.secondaryIndexMap.get(indexKey).getUnderlyingIndex(),
                     columnsForIndexSelection);
         }
 
-        final ReadOnlyBufferIndex<IKey> indexSelected = this.getOptimalIndex(table, columnsForIndexSelection);
+        if(table.partialIndexMap.containsKey(indexKey)){
+            return new IndexSelectionVerdict(
+                    true,
+                    table.partialIndexMap.get(indexKey).underlyingIndex(),
+                    columnsForIndexSelection);
+        }
+
+        final ReadWriteIndex<IKey> indexSelected = this.getOptimalIndex(table, columnsForIndexSelection);
 
         // is the index completely covered by the columns in the filter?
         if (indexSelected == null){
@@ -286,7 +304,7 @@ public final class SimplePlanner {
     }
 
     @SuppressWarnings("unchecked")
-    private ReadOnlyBufferIndex<IKey> getOptimalIndex(Table table, int[] filterColumns){
+    private ReadWriteIndex<IKey> getOptimalIndex(Table table, int[] filterColumns){
 
         IKey indexKey;
 
@@ -294,7 +312,7 @@ public final class SimplePlanner {
         List<int[]> combinations = Combinatorics.getAllPossibleColumnCombinations(filterColumns);
 
         // heuristic: return the one that embraces more columns
-        AbstractIndex<IKey> bestSoFar = null;
+        ReadWriteIndex<IKey> bestSoFar = null;
         int maxLength = 0;
         for(int[] arr : combinations) {
 
@@ -313,7 +331,7 @@ public final class SimplePlanner {
 
         }
 
-        return (ReadOnlyBufferIndex<IKey>) bestSoFar;
+        return bestSoFar;
 
     }
 

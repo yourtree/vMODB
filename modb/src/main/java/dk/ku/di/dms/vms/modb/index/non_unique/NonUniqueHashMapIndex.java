@@ -64,6 +64,11 @@ public final class NonUniqueHashMapIndex extends ReadWriteIndex<IKey> {
     }
 
     @Override
+    public Object[] record(IKey key) {
+        throw new RuntimeException("Not implemented");
+    }
+
+    @Override
     public IRecordIterator<IKey> iterator(IKey[] keys) {
         throw new RuntimeException("Not implemented");
     }
@@ -101,4 +106,5 @@ public final class NonUniqueHashMapIndex extends ReadWriteIndex<IKey> {
     public boolean checkCondition(IRecordIterator<IKey> iterator, FilterContext filterContext) {
         throw new RuntimeException("Not implemented");
     }
+
 }

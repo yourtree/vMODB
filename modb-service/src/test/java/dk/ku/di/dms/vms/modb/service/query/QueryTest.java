@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.service.query;
 
 public class QueryTest {
 
-    private static Catalog catalog;
+    // private static Catalog catalog;
 
 //    public static Catalog getDefaultCatalog(){
 //

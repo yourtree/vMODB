@@ -7,15 +7,12 @@ import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.OrderByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  *  Logical query plan tree
   */
-public class QueryTree {
+public final class QueryTree {
 
     // projection
     public List<ColumnReference> projections;
@@ -37,8 +34,19 @@ public class QueryTree {
     // TODO order by predicate
     public List<OrderByPredicate> orderByPredicates;
 
+    public Optional<Integer> limit;
+
     public QueryTree(List<WherePredicate> wherePredicates){
         this.wherePredicates = wherePredicates;
+
+        this.projections = Collections.emptyList();
+        this.tables = Collections.emptyMap();
+        this.joinPredicates = Collections.emptyList();
+        this.groupByProjections = Collections.emptyList();
+        this.groupByColumns = Collections.emptyList();
+        this.orderByPredicates = Collections.emptyList();
+
+        this.limit = Optional.empty();
     }
 
     public QueryTree() {
@@ -60,7 +68,7 @@ public class QueryTree {
       */
     public void addWhereClauseSortedByColumnIndex( WherePredicate wherePredicate ){
 
-        int size = wherePredicates.size();
+        int size = this.wherePredicates.size();
         if(size == 0){
             this.wherePredicates.add(wherePredicate);
             return;
@@ -68,7 +76,7 @@ public class QueryTree {
 
         if(size == 1){
             if(wherePredicate.columnReference.columnPosition >
-                    wherePredicates.get(0).columnReference.columnPosition) {
+                    this.wherePredicates.get(0).columnReference.columnPosition) {
                 this.wherePredicates.add(1,wherePredicate);
             } else {
                 this.wherePredicates.add(0, wherePredicate);
@@ -86,7 +94,7 @@ public class QueryTree {
 
             half = ((end + start) / 2);
 
-            if(wherePredicates.get(half).columnReference.columnPosition >
+            if(this.wherePredicates.get(half).columnReference.columnPosition >
                     wherePredicate.columnReference.columnPosition){
                 end = half; // always guarantee end is within bounds
             } else {
@@ -95,7 +103,7 @@ public class QueryTree {
 
         } while(start != end);
 
-        if(wherePredicates.get(half).columnReference.columnPosition <
+        if(this.wherePredicates.get(half).columnReference.columnPosition <
                 wherePredicate.columnReference.columnPosition){
             half++;
         }
@@ -109,11 +117,11 @@ public class QueryTree {
      * @return whether it is a simple scan
      */
     public boolean isSimpleScan(){
-        return isSingleTable() && this.joinPredicates.isEmpty() && this.groupByProjections.isEmpty() && this.orderByPredicates.isEmpty();
+        return this.isSingleTable() && this.joinPredicates.isEmpty() && this.groupByProjections.isEmpty() && this.orderByPredicates.isEmpty();
     }
 
     public boolean isSimpleAggregate(){
-        return isSingleTable() && this.groupByProjections.size() == 1 && this.projections.isEmpty() && this.joinPredicates.isEmpty() && this.orderByPredicates.isEmpty();
+        return this.isSingleTable() && this.groupByProjections.size() == 1 && this.joinPredicates.isEmpty() && this.orderByPredicates.isEmpty();
     }
 
     public boolean isSimpleJoin(){

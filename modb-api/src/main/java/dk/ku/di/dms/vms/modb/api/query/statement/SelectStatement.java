@@ -27,14 +27,16 @@ public final class SelectStatement extends AbstractStatement {
 
     public List<String> groupByClause;
 
-    public int limit;
+    public Integer limit;
 
-    public SelectStatement() {}
+    public SelectStatement() {
+        super();
+    }
 
     public SelectStatement(List<String> selectClause, String table, List<WhereClauseElement> whereClause) {
         this.selectClause = selectClause;
         this.fromClause = List.of(table);
-        this.whereClause = whereClause;
+        this.whereClause.addAll(whereClause);
     }
 
     @Override

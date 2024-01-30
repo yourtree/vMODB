@@ -19,6 +19,7 @@ import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Class responsible for analyzing a statement {@link IStatement}
@@ -41,11 +42,11 @@ public final class Analyzer {
     public QueryTree analyze(final IStatement statement) throws AnalyzerException {
 
         switch (statement.getType()){
-            case SELECT -> { return analyzeSelectStatement( statement.asSelectStatement() ); }
+            case SELECT -> { return this.analyzeSelectStatement( statement.asSelectStatement() ); }
             // case INSERT -> { return null; }
-            case UPDATE -> { return analyzeUpdateStatement( statement.asUpdateStatement()); }
-            case DELETE -> { return analyzeDeleteStatement( statement.asDeleteStatement()); }
-            default -> throw new IllegalStateException("No known/queryable statement type identified.");
+            case UPDATE -> { return this.analyzeUpdateStatement( statement.asUpdateStatement()); }
+            case DELETE -> { return this.analyzeDeleteStatement( statement.asDeleteStatement()); }
+            default -> throw new IllegalStateException("No statement type identified.");
         }
 
     }
@@ -135,7 +136,6 @@ public final class Analyzer {
             }
         }
 
-
         List<ColumnReference> groupByColumnsReference = null;
         if(statement.groupByClause != null) {
             for (String column : statement.groupByClause) {
@@ -161,76 +161,80 @@ public final class Analyzer {
                 ColumnReference columnReference;
                 if (element.column().contains(".")) {
                     String[] splitted = element.column().split("\\.");
-                    columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
+                    columnReference = this.findColumnReference(splitted[1], splitted[0], queryTree.tables);
                 } else {
-                    columnReference = findColumnReference(element.column(), queryTree.tables);
+                    columnReference = this.findColumnReference(element.column(), queryTree.tables);
                 }
                 // that means each aggregate final value must take into consideration the set of group by columns
                 queryTree.groupByProjections.add(new GroupByPredicate(columnReference, element.operation() ));
             }
         }
 
-        // TODO having clause
+        // having clause is missing for now
 
         // TODO make sure these exceptions coming from where clause are thrown in the analyzer
         //  e.g., numeric comparisons between numbers and string/characters
         // where
-        if(statement.whereClause != null) {
-            for (WhereClauseElement currWhere : statement.whereClause) {
+        for (WhereClauseElement currWhere : statement.whereClause) {
 
-                if (currWhere.value() == null) {
-                    throw new AnalyzerException("Parameter of where clause cannot be null value");
+            if (currWhere.value() == null) {
+                throw new AnalyzerException("Parameter of where clause cannot be null value");
+            }
+
+            ColumnReference columnReference;
+
+            String tableName;
+            String columnName;
+
+            if (currWhere.column().contains(".")) {
+                String[] split = currWhere.column().split("\\.");
+                tableName = split[0];
+                columnName = split[1];
+                Table table = queryTree.tables.get(tableName);
+                if (table != null) {
+                    columnReference = new ColumnReference(columnName, table);
+                } else {
+                    throw new AnalyzerException("Table not defined in the query: " + tableName);
                 }
+            } else {
+                columnReference = this.findColumnReference(currWhere.column(), queryTree.tables);
+            }
 
-                ColumnReference columnReference;
+            // 1. is it a reference to a table or a char? e.g., "'something'"
+            // 2. check if there is some inner join. i.e., the object is a literal?
+            if (currWhere.value() instanceof String value) {
 
-                String tableName;
-                String columnName;
+                ColumnReference columnReference1;
 
-                if (currWhere.column().contains(".")) {
-                    String[] split = currWhere.column().split("\\.");
+                if (value.contains(".")) {
+                    // <table>.<column>
+                    String[] split = value.split("\\.");
                     tableName = split[0];
                     columnName = split[1];
                     Table table = queryTree.tables.get(tableName);
                     if (table != null) {
-                        columnReference = new ColumnReference(columnName, table);
-                    } else {
-                        throw new AnalyzerException("Table not defined in the query: " + tableName);
-                    }
-                } else {
-                    columnReference = findColumnReference(currWhere.column(), queryTree.tables);
+                        columnReference1 = new ColumnReference(columnName, table);
+                        // build typed join clause
+                        JoinPredicate joinClause = new JoinPredicate(columnReference, columnReference1, currWhere.expression(), JoinTypeEnum.INNER_JOIN);
+                        queryTree.joinPredicates.add(joinClause);
+                        continue;
+                    }  // table is null, so no table, it is a literal
                 }
-
-                // 1. is it a reference to a table or a char? e.g., "'something'"
-                // 2. check if there is some inner join. i.e., the object is a literal?
-                if (currWhere.value() instanceof String value) {
-
-                    ColumnReference columnReference1;
-
-                    if (value.contains(".")) {
-                        // <table>.<column>
-                        String[] split = value.split("\\.");
-                        tableName = split[0];
-                        columnName = split[1];
-                        Table table = queryTree.tables.get(tableName);
-                        if (table != null) {
-                            columnReference1 = new ColumnReference(columnName, table);
-                            // build typed join clause
-                            JoinPredicate joinClause = new JoinPredicate(columnReference, columnReference1, currWhere.expression(), JoinTypeEnum.INNER_JOIN);
-                            queryTree.joinPredicates.add(joinClause);
-                            continue;
-                        }  // table is null, so no table, it is a literal
-                    }
-
-                }
-
-                // simple where... maybe I should check the type is correct?
-                WherePredicate whereClause = new WherePredicate(columnReference, currWhere.expression(), currWhere.value());
-
-                // The order of the columns declared in the index definition matters
-                queryTree.addWhereClauseSortedByColumnIndex(whereClause);
 
             }
+
+            // simple where... maybe I should check the type is correct?
+            WherePredicate whereClause = new WherePredicate(columnReference, currWhere.expression(), currWhere.value());
+
+            // The order of the columns declared in the index definition matters
+            queryTree.addWhereClauseSortedByColumnIndex(whereClause);
+
+        }
+
+        if(statement.limit != null){
+            queryTree.limit = Optional.of( statement.limit );
+        } else {
+            queryTree.limit = Optional.empty();
         }
 
         return queryTree;

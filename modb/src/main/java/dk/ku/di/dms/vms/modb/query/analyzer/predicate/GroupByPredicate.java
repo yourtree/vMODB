@@ -5,12 +5,23 @@ import dk.ku.di.dms.vms.modb.definition.ColumnReference;
 
 public class GroupByPredicate {
 
-    public final ColumnReference columnReference;
-    public final GroupByOperationEnum groupByOperation;
+    private final ColumnReference columnReference;
+    private final GroupByOperationEnum groupByOperation;
 
     public GroupByPredicate(ColumnReference columnReference, GroupByOperationEnum groupByOperation) {
         this.columnReference = columnReference;
         this.groupByOperation = groupByOperation;
     }
 
+    public ColumnReference columnReference() {
+        return columnReference;
+    }
+
+    public int columnPosition() {
+        return columnReference.getColumnPosition();
+    }
+
+    public GroupByOperationEnum groupByOperation() {
+        return groupByOperation;
+    }
 }

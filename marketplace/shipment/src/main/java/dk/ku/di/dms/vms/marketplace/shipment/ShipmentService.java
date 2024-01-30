@@ -32,7 +32,7 @@ public class ShipmentService {
     private final IPackageRepository packageRepository;
 
     @VmsPreparedStatement("oldestShipmentPerSeller")
-    private static final SelectStatement oldestShipmentPerSeller = QueryBuilderFactory.select()
+    public static final SelectStatement OLDEST_SHIPMENT_PER_SELLER = QueryBuilderFactory.select()
             .project("seller_id").project("customer_id").project("order_id").min("shipping_date")
             .from("packages").where("status", ExpressionTypeEnum.EQUALS, "shipped")
             .groupBy( "seller_id" ).limit(10).build();
@@ -50,7 +50,7 @@ public class ShipmentService {
         System.out.println("Shipment received an update shipment event with TID: "+ instanceId);
         Date now = new Date();
 
-        List<OldestSellerPackageEntry> packages = this.packageRepository.fetchMany(oldestShipmentPerSeller, OldestSellerPackageEntry.class);
+        List<OldestSellerPackageEntry> packages = this.packageRepository.fetchMany(OLDEST_SHIPMENT_PER_SELLER, OldestSellerPackageEntry.class);
 
 //        List<Package> packages = this.packageRepository.getAll(aPackage -> aPackage.status == PackageStatus.shipped);
 //        Map<Integer, Package.PackageId> oldestOpenShipmentPerSeller = packages.stream()

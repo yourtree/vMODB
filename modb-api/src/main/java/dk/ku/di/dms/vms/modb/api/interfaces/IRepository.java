@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.modb.api.interfaces;
 
-import dk.ku.di.dms.vms.modb.api.annotations.Repository;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 
@@ -14,7 +13,6 @@ import java.util.function.Predicate;
  * @param <PK> The primary key of the entity
  * @param <T> The entity type
  */
-@Repository
 public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
 
     void insert(T object);

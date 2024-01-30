@@ -83,31 +83,25 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
 
         String sqlAsKey = selectStatement.SQL.toString();
 
-        AbstractSimpleOperator scanOperator = this.readQueryPlans.get( sqlAsKey );
+        AbstractSimpleOperator scanOperator = this.readQueryPlans.getOrDefault( sqlAsKey, null );
 
         List<WherePredicate> wherePredicates;
 
         if(scanOperator == null){
-            QueryTree queryTree;
-            try {
-                queryTree = this.analyzer.analyze(selectStatement);
-                wherePredicates = queryTree.wherePredicates;
-                scanOperator = this.planner.plan(queryTree);
-                this.readQueryPlans.put(sqlAsKey, scanOperator );
-            } catch (AnalyzerException ignored) { return null; }
-
+            QueryTree queryTree = this.analyzer.analyze(selectStatement);
+            wherePredicates = queryTree.wherePredicates;
+            scanOperator = this.planner.plan(queryTree);
+            this.readQueryPlans.put(sqlAsKey, scanOperator );
         } else {
             // get only the where clause params
-            try {
-                wherePredicates = this.analyzer.analyzeWhere(
-                        scanOperator.asScan().table, selectStatement.whereClause);
-            } catch (AnalyzerException ignored) { return null; }
+            wherePredicates = this.analyzer.analyzeWhere(
+                    scanOperator.asScan().table, selectStatement.whereClause);
         }
 
         MemoryRefNode memRes;
 
         // TODO complete for all types or migrate the choice to transaction facade
-        //  make an enum, it is easier
+        // make an enum, it is easier
         if(scanOperator.isIndexScan()){
             // build keys and filters
             //memRes = OperatorExecution.run( wherePredicates, scanOperator.asIndexScan() );
@@ -118,7 +112,6 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
         }
 
         return memRes;
-
     }
 
     /**

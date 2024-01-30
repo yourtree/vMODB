@@ -56,6 +56,15 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
         public NewProjectionOrFromClause project(String param) {
             String[] projection = param.replace(" ","").split(",");
             this.statement.selectClause.addAll(Arrays.asList(projection));
+            this.statement.SQL.append("select ");
+            this.statement.SQL.append(param);
+            return new NewProjectionOrFromClause(this.statement,this);
+        }
+
+        public NewProjectionOrFromClause notFirstProject(String param) {
+            String[] projection = param.replace(" ","").split(",");
+            this.statement.selectClause.addAll(Arrays.asList(projection));
+            this.statement.SQL.append(",");
             this.statement.SQL.append(param);
             return new NewProjectionOrFromClause(this.statement,this);
         }
@@ -68,7 +77,11 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
         public NewProjectionOrFromClause min(String param){
             GroupBySelectElement element = new GroupBySelectElement( param, GroupByOperationEnum.MIN );
+            this.statement.SQL.append( ", " );
             this.statement.SQL.append( GroupByOperationEnum.MIN.name() );
+            this.statement.SQL.append( " ( " );
+            this.statement.SQL.append( param );
+            this.statement.SQL.append( " ) " );
             return this.agg(element);
         }
 
@@ -86,7 +99,6 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
         private NewProjectionOrFromClause agg(GroupBySelectElement element){
             this.statement.groupBySelectClause.add( element );
-            this.statement.SQL.append(element.column());
             return new NewProjectionOrFromClause(statement,this);
         }
 
@@ -103,7 +115,7 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
         }
 
         public NewProjectionOrFromClause project(String param) {
-            return this.entryPoint.project(param);
+            return this.entryPoint.notFirstProject(param);
         }
 
         public NewProjectionOrFromClause avg(String param){
@@ -117,8 +129,9 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
         public OrderByGroupByJoinWhereClauseBridge from(String param) {
             String[] projection = param.replace(" ","").split(",");
             this.statement.fromClause = new ArrayList<>(Arrays.asList(projection));
+            this.statement.SQL.append(" from ");
             this.statement.SQL.append(param);
-            return new OrderByGroupByJoinWhereClauseBridge(statement);
+            return new OrderByGroupByJoinWhereClauseBridge(this.statement);
         }
 
     }
@@ -212,18 +225,24 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
 
         private final SelectStatement statement;
 
+        private boolean firstWhere = true;
+
         protected OrderByGroupByJoinWhereClauseBridge(SelectStatement statement) {
             super(statement);
             this.statement = statement; // to avoid cast
         }
 
         public OrderByGroupByJoinWhereClauseBridge where(final String param, final ExpressionTypeEnum expr, final Object value) {
-            WhereClauseElement element = new WhereClauseElement(param,expr,value);
+            WhereClauseElement element = new WhereClauseElement(param, expr, value);
             this.statement.whereClause.add( element );
+            if(this.firstWhere) {
+                this.statement.SQL.append(" where ");
+                this.firstWhere = false;
+            }
             this.statement.SQL.append(param);
             this.statement.SQL.append(expr.name);
             this.statement.SQL.append('?');
-            return new OrderByGroupByJoinWhereClauseBridge(this.statement);
+            return this;
         }
 
         public OrderByHavingBridge groupBy(String... params) {
@@ -232,7 +251,10 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
                 params[i] = params[i].replace(" ", "");
             }
             this.statement.groupByClause = new ArrayList<>(Arrays.asList(params));
-//            this.statement.SQL.append(params);
+            this.statement.SQL.append(" group by ");
+            for(String param : params){
+                this.statement.SQL.append(param);
+            }
             return new OrderByHavingBridge(this.statement);
         }
 

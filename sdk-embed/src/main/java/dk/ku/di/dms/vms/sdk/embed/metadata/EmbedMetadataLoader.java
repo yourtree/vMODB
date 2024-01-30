@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.sdk.embed.metadata;
 
 import dk.ku.di.dms.vms.modb.api.annotations.Query;
+import dk.ku.di.dms.vms.modb.api.annotations.VmsPartialIndex;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
@@ -21,6 +22,7 @@ import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.IntegerPrimaryKeyGenerator;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.UniqueSecondaryIndex;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 import jdk.incubator.foreign.MemorySegment;
@@ -176,10 +178,20 @@ public class EmbedMetadataLoader {
         return ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
     }
 
-    public static Map<String, Table> loadCatalog(Map<String, VmsDataModel> vmsDataModelMap, Map<Class<?>, String> entityToTableNameMap) throws NoSuchFieldException {
+    private record PartialIndexMetadata(Integer columnPos, String indexName, Object value){}
+
+    private record SchemaMapping(
+            Schema schema,
+            // key: table name value: columns
+            Map<String, int[]> secondaryIndexMap,
+            // value: column, value
+            List<PartialIndexMetadata> partialIndexMetadataList){}
+
+    public static Map<String, Table> loadCatalog(Map<String, VmsDataModel> vmsDataModelMap,
+                                                 Map<Class<?>, String> entityToTableNameMap) throws NoSuchFieldException {
 
         Map<String, Table> catalog = new HashMap<>(vmsDataModelMap.size());
-        Map<VmsDataModel, Tuple<Schema, Map<String, int[]>>> dataSchemaToPkMap = new HashMap<>(vmsDataModelMap.size());
+        Map<VmsDataModel, SchemaMapping> dataSchemaToPkMap = new HashMap<>(vmsDataModelMap.size());
 
         /*
          * Build primary key index and map the foreign keys (internal to this VMS)
@@ -201,6 +213,16 @@ public class EmbedMetadataLoader {
             final Schema schema = new Schema(vmsDataModel.columnNames, vmsDataModel.columnDataTypes,
                     vmsDataModel.primaryKeyColumns, vmsDataModel.constraintReferences, generated);
 
+            // partial indexes
+            final List<Field> partialIndexList = Arrays.stream(entityClazz.getFields()).filter(f->f.getAnnotation(VmsPartialIndex.class)!=null).toList();
+            List<PartialIndexMetadata> partialIndexMetadataList = new ArrayList<>();
+            for(Field field : partialIndexList){
+                var ann = field.getAnnotation(VmsPartialIndex.class);
+                Integer pos = vmsDataModel.findColumnPosition(field.getName());
+                partialIndexMetadataList.add( new PartialIndexMetadata(pos, ann.name(), ann.value()) );
+            }
+
+            // indexes for foreign keys
             if(vmsDataModel.foreignKeyReferences != null && vmsDataModel.foreignKeyReferences.length > 0){
                 // build
                 Map<String, List<ForeignKeyReference>> fksPerTable = Stream.of( vmsDataModel.foreignKeyReferences )
@@ -209,69 +231,83 @@ public class EmbedMetadataLoader {
                 // table name, fields
                 Map<String, int[]> definitiveMap = buildSchemaForeignKeyMap(vmsDataModel, fksPerTable, vmsDataModelMap);
 
-                dataSchemaToPkMap.put(vmsDataModel, Tuple.of(schema, definitiveMap));
+                dataSchemaToPkMap.put(vmsDataModel, new SchemaMapping(schema, definitiveMap, partialIndexMetadataList));
             } else {
-                dataSchemaToPkMap.put(vmsDataModel, Tuple.of(schema, null));
+                dataSchemaToPkMap.put(vmsDataModel, new SchemaMapping(schema, Map.of(), partialIndexMetadataList));
             }
-
         }
 
-        Map<String, PrimaryIndex> vmsDataSchemaToIndexMap = new HashMap<>(dataSchemaToPkMap.size());
+        Map<String, PrimaryIndex> tableToPrimaryIndexMap = new HashMap<>(dataSchemaToPkMap.size());
+        Map<String, List<ReadWriteIndex<IKey>>> tableToSecondaryIndexMap = new HashMap<>();
+        Map<String, List<ReadWriteIndex<IKey>>> tableToPartialIndexMap = new HashMap<>();
 
-        Map<String, List<ReadWriteIndex<IKey>>> vmsDataSchemaToSecondaryIndexMap = new HashMap<>();
+        // partial indexes metadata
+        Map<IIndexKey, Tuple<Integer, Object>> partialIndexMetaMap = new HashMap<>();
 
         // mount vms data schema to consistent index map
         for (var entry : dataSchemaToPkMap.entrySet()) {
 
-            Schema schema = entry.getValue().t1();
-
+            Schema schema = entry.getValue().schema();
             PrimaryIndex consistentIndex = createPrimaryIndex(entry.getKey().tableName, schema);
+            tableToPrimaryIndexMap.put(entry.getKey().tableName, consistentIndex);
 
-            vmsDataSchemaToIndexMap.put( entry.getKey().tableName, consistentIndex );
+            List<ReadWriteIndex<IKey>> listSecondaryIndexes = new ArrayList<>();
+            tableToSecondaryIndexMap.put(entry.getKey().tableName, listSecondaryIndexes);
 
-            // secondary indexes
-            if(entry.getValue().t2() != null) {
-                List<ReadWriteIndex<IKey>> listSecIndexes = new ArrayList<>(entry.getValue().t2().size());
-                vmsDataSchemaToSecondaryIndexMap.put(entry.getKey().tableName, listSecIndexes);
+            List<ReadWriteIndex<IKey>> listPartialIndexes = new ArrayList<>();
+            tableToPartialIndexMap.put(entry.getKey().tableName, listPartialIndexes);
 
+            // secondary indexes based on foreign keys
+            if(!entry.getValue().secondaryIndexMap().isEmpty()) {
                 // now create the secondary index (a - based on foreign keys and b - based on non-foreign keys)
-                for (var secIdx : entry.getValue().t2().entrySet()) {
-                    ReadWriteIndex<IKey> nuhi = createNonUniqueIndex(schema, secIdx.getValue(),
-                            entry.getKey().tableName + "_" + secIdx.getKey());
-                    listSecIndexes.add(nuhi);
+                for (var secIdx : entry.getValue().secondaryIndexMap().entrySet()) {
+                    ReadWriteIndex<IKey> nuhi = createNonUniqueIndex(schema, secIdx.getValue(), "FK_"+secIdx.getKey() );
+                    listSecondaryIndexes.add(nuhi);
+                }
+            }
+
+            // secondary indexes based on annotation
+            if(!entry.getValue().partialIndexMetadataList().isEmpty()) {
+                for (var partialIdx : entry.getValue().partialIndexMetadataList()) {
+                    ReadWriteIndex<IKey> uniquePartialIndex = createUniqueIndex(schema, new int[]{ partialIdx.columnPos() }, partialIdx.indexName() );
+                    partialIndexMetaMap.put( uniquePartialIndex.key(), new Tuple<>(partialIdx.columnPos(), partialIdx.value() ) );
+                    listPartialIndexes.add(uniquePartialIndex);
                 }
             }
 
         }
 
-        // now I have the pk indexes and the fks
+        // now I have the primary key indexes, foreign-key indexes, and other secondary indexes
+        // build the multi-versioning layer on top of them!
         for (var entry : dataSchemaToPkMap.entrySet()) {
 
             VmsDataModel vmsDataSchema = entry.getKey();
-            Tuple<Schema, Map<String, int[]>> tupleSchemaFKs = entry.getValue();
+            SchemaMapping schemaMapping = entry.getValue();
 
-            PrimaryIndex primaryIndex = vmsDataSchemaToIndexMap.get( vmsDataSchema.tableName );
-            Table table;
+            PrimaryIndex primaryIndex = tableToPrimaryIndexMap.get(vmsDataSchema.tableName);
 
-            if(entry.getValue().t2() != null) {
-
-                Map<PrimaryIndex, int[]> fks = new HashMap<>(tupleSchemaFKs.t2().size());
-
-                // build fks
-                for (var fk : tupleSchemaFKs.t2().entrySet()) {
-                    fks.put(vmsDataSchemaToIndexMap.get(fk.getKey()), fk.getValue());
-                }
-
-                Map<IIndexKey, NonUniqueSecondaryIndex> secIndexMap = new HashMap<>();
-
-                // build secondary indexes (for foreign keys)
-                for (ReadWriteIndex<IKey> idx : vmsDataSchemaToSecondaryIndexMap.get(vmsDataSchema.tableName)) {
-                    secIndexMap.put(idx.key(), new NonUniqueSecondaryIndex(primaryIndex, idx));
-                }
-                table = new Table(vmsDataSchema.tableName, tupleSchemaFKs.t1(), primaryIndex, fks, secIndexMap);
-            } else {
-                table = new Table(vmsDataSchema.tableName, tupleSchemaFKs.t1(), primaryIndex);
+            // build foreign key indexes metadata
+            Map<PrimaryIndex, int[]> fks = new HashMap<>();
+            for (var fk : schemaMapping.secondaryIndexMap().entrySet()) {
+                fks.put(tableToPrimaryIndexMap.get(fk.getKey()), fk.getValue());
             }
+
+            // build foreign key secondary indexes
+            Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap = new HashMap<>();
+            for (ReadWriteIndex<IKey> idx : tableToSecondaryIndexMap.get(vmsDataSchema.tableName)) {
+                secondaryIndexMap.put(idx.key(), new NonUniqueSecondaryIndex(primaryIndex, idx));
+            }
+
+            // build partial indexes
+            Map<IIndexKey, UniqueSecondaryIndex> partialIndexMap = new HashMap<>();
+            for(ReadWriteIndex<IKey> idx : tableToPartialIndexMap.get(vmsDataSchema.tableName)){
+                partialIndexMap.put(idx.key(), new UniqueSecondaryIndex(idx));
+            }
+
+            Table table = new Table(vmsDataSchema.tableName,
+                    schemaMapping.schema(), primaryIndex,
+                    fks, secondaryIndexMap,
+                    partialIndexMetaMap, partialIndexMap);
 
             catalog.put( vmsDataSchema.tableName, table );
         }
@@ -279,13 +315,19 @@ public class EmbedMetadataLoader {
         return catalog;
     }
 
-    private static ReadWriteIndex<IKey> createNonUniqueIndex(Schema schema, int[] columnsIndex, String fileName){
+    private static ReadWriteIndex<IKey> createUniqueIndex(Schema schema, int[] columnsIndex, String indexName){
         if(IN_MEMORY_STORAGE){
-            // return new PrimaryIndex(new UniqueHashMapIndex(schema));
-            // TODO fix this later
+            return new UniqueHashMapIndex(schema, columnsIndex);
+        }
+        RecordBufferContext recordBufferContext = loadRecordBuffer(10, schema.getRecordSize(), indexName);
+        return new UniqueHashBufferIndex(recordBufferContext, schema);
+    }
+
+    private static ReadWriteIndex<IKey> createNonUniqueIndex(Schema schema, int[] columnsIndex, String indexName){
+        if(IN_MEMORY_STORAGE){
             return new NonUniqueHashMapIndex(schema, columnsIndex);
         } else {
-            OrderedRecordBuffer[] buffers = loadOrderedBuffers(MemoryUtils.DEFAULT_NUM_BUCKETS, MemoryUtils.DEFAULT_PAGE_SIZE, fileName);
+            OrderedRecordBuffer[] buffers = loadOrderedBuffers(MemoryUtils.DEFAULT_NUM_BUCKETS, MemoryUtils.DEFAULT_PAGE_SIZE, indexName);
             return new NonUniqueHashBufferIndex(buffers, schema, columnsIndex);
         }
     }
@@ -319,34 +361,35 @@ public class EmbedMetadataLoader {
     private static PrimaryIndex createPrimaryIndex(String fileName, Schema schema) {
         if(IN_MEMORY_STORAGE){
             if(schema.isPrimaryKeyAutoGenerated()){
-                return new PrimaryIndex(new UniqueHashMapIndex(schema), new IntegerPrimaryKeyGenerator());
+                return new PrimaryIndex(new UniqueHashMapIndex(schema, schema.getPrimaryKeyColumns()), new IntegerPrimaryKeyGenerator());
             }
-            return new PrimaryIndex(new UniqueHashMapIndex(schema));
+            return new PrimaryIndex(new UniqueHashMapIndex(schema, schema.getPrimaryKeyColumns()));
         } else {
             // map this to a file, so whenever a batch commit event arrives, it can trigger logging the entire file
             RecordBufferContext recordBufferContext = loadRecordBuffer(10, schema.getRecordSize(), fileName);
             UniqueHashBufferIndex pkIndex = new UniqueHashBufferIndex(recordBufferContext, schema);
             return new PrimaryIndex(pkIndex);
         }
-
     }
 
-    private static Map<String, int[]> buildSchemaForeignKeyMap(VmsDataModel dataSchemaToBuild, Map<String, List<ForeignKeyReference>> fksPerTable, Map<String, VmsDataModel> dataSchemaMap) {
+    private static Map<String, int[]> buildSchemaForeignKeyMap(VmsDataModel dataModelToBuild,
+                                                               Map<String, List<ForeignKeyReference>> fksPerTable,
+                                                               Map<String, VmsDataModel> dataModelMap) {
         Map<String, int[]> res = new HashMap<>();
         for( var entry : fksPerTable.entrySet() ){
             int[] intArray = new int[ entry.getValue().size() ];
             int i = 0;
             // get parent data schema
-            VmsDataModel dataSchema = dataSchemaMap.get( entry.getKey() );
+            VmsDataModel parentDataModel = dataModelMap.get( entry.getKey() );
             // first check if the foreign keys defined actually map to a column in parent table
             for(var fkColumn : entry.getValue()){
-                if(dataSchema.findColumnPosition(fkColumn.columnName()) == -1) {
+                if(parentDataModel.findColumnPosition(fkColumn.columnName()) == -1) {
                     throw new RuntimeException("Cannot find foreign key " + fkColumn + " that refers to a PK in parent table: " + entry.getKey());
                 }
-                intArray[i] = dataSchemaToBuild.findColumnPosition(fkColumn.columnName());
+                intArray[i] = dataModelToBuild.findColumnPosition(fkColumn.columnName());
                 i++;
             }
-            res.put( dataSchema.tableName, intArray );
+            res.put( parentDataModel.tableName, intArray );
         }
         return res;
     }
@@ -357,7 +400,6 @@ public class EmbedMetadataLoader {
     }
 
     private static RecordBufferContext loadRecordBuffer(int maxNumberOfRecords, int recordSize, String append){
-
         Cleaner cleaner = Cleaner.create();
         ResourceScope scope = ResourceScope.newSharedScope(cleaner);
         long sizeInBytes = (long) maxNumberOfRecords * recordSize;
@@ -369,7 +411,6 @@ public class EmbedMetadataLoader {
             MemorySegment segment = MemorySegment.allocateNative(sizeInBytes, scope);
             return new RecordBufferContext(segment, maxNumberOfRecords);
         }
-
     }
 
     private static MemorySegment mapFileIntoMemorySegment(long bytes, String append) {

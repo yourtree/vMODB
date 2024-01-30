@@ -649,7 +649,7 @@ public final class VmsMetadataLoader {
 
                 // build the query now. simple parser only
                 SelectStatement selectStatement = Parser.parse(queryString);
-                selectStatement.SQL = new StringBuilder(queryString);
+                selectStatement.SQL.append(queryString);
 
                 res.put(queryMethod.getName(), selectStatement);
 

@@ -4,10 +4,10 @@ import java.util.Date;
 
 public class OldestSellerPackageEntry {
 
-    int seller_id;
-    int customer_id;
-    int order_id;
-    Date shipping_date;
+    public int seller_id;
+    public int customer_id;
+    public int order_id;
+    public Date shipping_date;
 
     public OldestSellerPackageEntry() {
     }

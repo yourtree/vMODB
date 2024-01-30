@@ -8,6 +8,8 @@ public interface ReadOnlyIndex<K> extends IIndex<K> {
 
     Object[] record(IRecordIterator<IKey> iterator);
 
+    Object[] record(IKey key);
+
     IRecordIterator<IKey> iterator();
 
     /**

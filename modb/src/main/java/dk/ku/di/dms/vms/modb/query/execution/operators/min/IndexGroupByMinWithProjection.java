@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
@@ -13,7 +13,7 @@ import java.util.Map;
 
 public final class IndexGroupByMinWithProjection extends AbstractSimpleOperator {
 
-    private final ReadOnlyBufferIndex<IKey> index;
+    private final ReadWriteIndex<IKey> index;
 
     private final int[] indexColumns;
 
@@ -23,7 +23,7 @@ public final class IndexGroupByMinWithProjection extends AbstractSimpleOperator 
 
     private final int limit;
 
-    public IndexGroupByMinWithProjection(ReadOnlyBufferIndex<IKey> index,
+    public IndexGroupByMinWithProjection(ReadWriteIndex<IKey> index,
                                          int[] indexColumns,
                                          int[] projectionColumns,
                                          int minColumn,
@@ -69,7 +69,7 @@ public final class IndexGroupByMinWithProjection extends AbstractSimpleOperator 
 
     private void append(GroupByKey key) {
         this.ensureMemoryCapacity();
-        Object[] record = this.index.record(key.getPk());
+        Object[] record = this.index.record( key.getPk() );
         for (int projectionColumn : this.projectionColumns) {
             DataTypeUtils.callWriteFunction(this.currentBuffer.address(), this.index.schema().columnDataType(projectionColumn), record[projectionColumn]);
             this.currentBuffer.forwardOffset(this.index.schema().columnDataType(projectionColumn).value);
@@ -96,6 +96,11 @@ public final class IndexGroupByMinWithProjection extends AbstractSimpleOperator 
         }
 
 //        System.out.println("done");
+    }
+
+    @Override
+    public boolean isIndexScan(){
+        return true;
     }
 
 }

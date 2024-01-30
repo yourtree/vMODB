@@ -267,18 +267,19 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         return values;
     }
 
-    public Object fetch(SelectStatement selectStatement, Type type) {
+    @Override
+    public <DTO> List<DTO> fetchMany(SelectStatement statement, Class<DTO> clazz){
 
         // we need some context about the results in this memory space
         // number of records
         // schema of the return (maybe not if it is a dto)
-        var memRes = this.operationalAPI.fetch(this.table, selectStatement);
+        var memRes = this.operationalAPI.fetch(this.table, statement);
 
         // TODO parse output into object
-        if(type == IDTO.class) {
-            // look in the map of dto types for the setter and getter
-            return null;
-        }
+//        if(type == IDTO.class) {
+//            // look in the map of dto types for the setter and getter
+//            return null;
+//        }
 
         // then it is a primitive, just return the value
 //        int projectionColumnIndex = scanOperator.asScan().projectionColumns[0];

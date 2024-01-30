@@ -14,8 +14,8 @@ public final class UniqueHashMapIndex extends ReadWriteIndex<IKey> {
 
     private final Map<IKey,Object[]> store;
 
-    public UniqueHashMapIndex(Schema schema) {
-        super(schema, schema.getPrimaryKeyColumns());
+    public UniqueHashMapIndex(Schema schema, int[] columns) {
+        super(schema, columns);
         this.store = new ConcurrentHashMap<>();
     }
 
@@ -56,16 +56,21 @@ public final class UniqueHashMapIndex extends ReadWriteIndex<IKey> {
 
     @Override
     public Object[] record(IRecordIterator<IKey> iterator) {
-        return new Object[0];
+        throw new RuntimeException("Not implemented");
+    }
+
+    @Override
+    public Object[] record(IKey key) {
+        throw new RuntimeException("Not implemented");
     }
 
     @Override
     public IRecordIterator<IKey> iterator() {
-        return null;
+        throw new RuntimeException("Not implemented");
     }
 
     @Override
     public boolean checkCondition(IRecordIterator<IKey> iterator, FilterContext filterContext) {
-        return false;
+        throw new RuntimeException("Not implemented");
     }
 }

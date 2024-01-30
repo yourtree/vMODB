@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.modb.api.query.statement;
 
 import dk.ku.di.dms.vms.modb.api.query.clause.WhereClauseElement;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public sealed abstract class AbstractStatement implements IStatement
@@ -9,8 +10,11 @@ public sealed abstract class AbstractStatement implements IStatement
 
     // TODO make this a string
     // used to cache query plans. where clause only found in select, update, and delete
-    public StringBuilder SQL = new StringBuilder();
+    public final StringBuilder SQL = new StringBuilder();
 
-    public List<WhereClauseElement> whereClause;
+    public final List<WhereClauseElement> whereClause;
 
+    public AbstractStatement() {
+        this.whereClause = new ArrayList<>();
+    }
 }

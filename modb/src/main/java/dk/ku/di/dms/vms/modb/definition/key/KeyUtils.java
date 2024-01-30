@@ -101,14 +101,14 @@ public final class KeyUtils {
 
     public static IKey buildKey(Object[] values){
         if(values.length == 1) {
-            return SimpleKey.of(values);
+            return SimpleKey.of(values[0]);
         }
         return CompositeKey.of(values);
     }
 
     public static IKey buildKey(int[] values){
         if(values.length == 1)
-            return SimpleKey.of(values);
+            return SimpleKey.of(values[0]);
         return CompositeKey.of(values);
     }
 

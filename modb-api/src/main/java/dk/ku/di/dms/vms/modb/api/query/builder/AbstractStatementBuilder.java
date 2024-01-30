@@ -47,7 +47,6 @@ public abstract class AbstractStatementBuilder {
 
         protected WhereClausePredicate(T statement){
             this.statement = statement;
-            this.statement.whereClause = new ArrayList<>();
         }
 
         public WhereClausePredicate<T> and(String param, final ExpressionTypeEnum expr, final Object value) {
