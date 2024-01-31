@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.marketplace.customer;
 
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
+import dk.ku.di.dms.vms.marketplace.common.enums.PackageStatus;
 import dk.ku.di.dms.vms.marketplace.common.events.DeliveryNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
@@ -52,7 +53,7 @@ public class CustomerTest {
         vms.start();
 
         ShipmentUpdated shipmentUpdated = new ShipmentUpdated(
-                List.of( new DeliveryNotification( 1, 1, 1, 1, 1, "test", "DELIVERED", new Date() ) ),
+                List.of( new DeliveryNotification( 1, 1, 1, 1, 1, "test", PackageStatus.delivered, new Date() ) ),
                 null,
                 "1"
         );

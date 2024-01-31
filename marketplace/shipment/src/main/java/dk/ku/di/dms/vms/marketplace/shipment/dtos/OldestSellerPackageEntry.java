@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.marketplace.shipment.dtos;
 
 import java.util.Date;
 
-public class OldestSellerPackageEntry {
+public final class OldestSellerPackageEntry {
 
     public int seller_id;
     public int customer_id;

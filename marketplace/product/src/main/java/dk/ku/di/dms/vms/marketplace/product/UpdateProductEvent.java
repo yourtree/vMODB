@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.marketplace.product;
 import dk.ku.di.dms.vms.modb.api.annotations.Event;
 
 @Event
-public class UpdateProductEvent {
+public final class UpdateProductEvent {
 
     public int seller_id;
     public int product_id;
@@ -38,4 +38,5 @@ public class UpdateProductEvent {
         this.status = status;
         this.version = version;
     }
+
 }

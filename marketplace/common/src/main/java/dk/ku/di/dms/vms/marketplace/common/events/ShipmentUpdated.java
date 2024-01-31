@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.modb.api.annotations.Event;
 import java.util.List;
 
 @Event
-public class ShipmentUpdated {
+public final class ShipmentUpdated {
 
     public List<DeliveryNotification> deliveryNotifications;
 

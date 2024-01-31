@@ -7,8 +7,6 @@ import dk.ku.di.dms.vms.modb.index.non_unique.b_plus_tree.NonLeafNode;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import org.junit.Test;
 
-import java.util.Iterator;
-
 public class BTreeTest {
 
     private static final int PAGE_SIZE_KB = 128;

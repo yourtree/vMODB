@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.marketplace.shipment.entities;
+package dk.ku.di.dms.vms.marketplace.common.enums;
 
 public enum PackageStatus
 {

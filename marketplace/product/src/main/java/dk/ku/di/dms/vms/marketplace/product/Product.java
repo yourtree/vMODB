@@ -9,10 +9,9 @@ import javax.persistence.Id;
 import javax.persistence.IdClass;
 import java.io.Serializable;
 
-@Entity
 @VmsTable(name="products")
 @IdClass(Product.ProductId.class)
-public class Product implements IEntity<Product.ProductId> {
+public final class Product implements IEntity<Product.ProductId> {
 
     public static class ProductId implements Serializable {
         public int seller_id;

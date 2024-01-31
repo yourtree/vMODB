@@ -8,7 +8,7 @@ import java.util.Date;
 import java.util.List;
 
 @Event
-public class PaymentConfirmed {
+public final class PaymentConfirmed {
 
     public CustomerCheckout customerCheckout;
 

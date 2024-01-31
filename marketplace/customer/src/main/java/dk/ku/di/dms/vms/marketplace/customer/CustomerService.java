@@ -27,7 +27,6 @@ public final class CustomerService {
     @Inbound(values = {"payment_confirmed"})
     @Transactional(type=RW)
     public void processPaymentConfirmed(PaymentConfirmed paymentConfirmed){
-
         System.out.println("Customer received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
 
         Date now = new Date();
@@ -46,7 +45,6 @@ public final class CustomerService {
     @Inbound(values = {"shipment_updated"})
     @Transactional(type=W)
     public void processDeliveryNotification(ShipmentUpdated shipmentUpdated){
-
         Date now = new Date();
         for(DeliveryNotification delivery : shipmentUpdated.deliveryNotifications) {
             Customer customer = this.customerRepository.lookupByKey( delivery.customerId );
@@ -54,7 +52,6 @@ public final class CustomerService {
             customer.updated_at = now;
             this.customerRepository.update(customer);
         }
-
     }
 
 }

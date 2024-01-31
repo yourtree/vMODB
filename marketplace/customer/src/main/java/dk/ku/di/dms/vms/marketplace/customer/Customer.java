@@ -4,13 +4,11 @@ import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
 import javax.persistence.Column;
-import javax.persistence.Entity;
 import javax.persistence.Id;
 import java.util.Date;
 
-@Entity
 @VmsTable(name="customers")
-public class Customer implements IEntity<Integer> {
+public final class Customer implements IEntity<Integer> {
 
     @Id
     public int id;

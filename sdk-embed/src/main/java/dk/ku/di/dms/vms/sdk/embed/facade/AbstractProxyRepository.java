@@ -268,13 +268,13 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <DTO> List<DTO> fetchMany(SelectStatement statement, Class<DTO> clazz){
-
         // we need some context about the results in this memory space
+        // solved by now with the assumption the result is of the same size of memory
         // number of records
         // schema of the return (maybe not if it is a dto)
         var memRes = this.operationalAPI.fetch(this.table, statement);
-
         try {
             List<DTO> result = new ArrayList<>(10);
             Constructor<?> constructor = clazz.getDeclaredConstructors()[0];
@@ -301,15 +301,9 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
                 }
             }
             return result;
-
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
-
-        // then it is a primitive, just return the value
-//        int projectionColumnIndex = scanOperator.asScan().projectionColumns[0];
-//        DataType dataType = scanOperator.asScan().index.schema().getColumnDataType(projectionColumnIndex);
-//        return DataTypeUtils.getValue(dataType, memRes.address());
     }
 
     @Override

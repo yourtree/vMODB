@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.marketplace.order.entities;
+package dk.ku.di.dms.vms.marketplace.common.enums;
 
 public enum OrderStatus {
 

@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.common.entities;
 
-public class CustomerCheckout {
+public final class CustomerCheckout {
 
     public int CustomerId;
 

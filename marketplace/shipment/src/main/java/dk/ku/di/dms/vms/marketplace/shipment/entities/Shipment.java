@@ -10,7 +10,7 @@ import java.io.Serializable;
 import java.util.Date;
 
 @VmsTable(name="shipments")
-public class Shipment implements IEntity<Shipment.ShipmentId> {
+public final class Shipment implements IEntity<Shipment.ShipmentId> {
 
     public static class ShipmentId implements Serializable {
 

@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.shipment;
 
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
+import dk.ku.di.dms.vms.marketplace.common.enums.PackageStatus;
 import dk.ku.di.dms.vms.marketplace.common.enums.ShipmentStatus;
 import dk.ku.di.dms.vms.marketplace.common.events.DeliveryNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
@@ -8,7 +9,6 @@ import dk.ku.di.dms.vms.marketplace.common.events.ShipmentNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
 import dk.ku.di.dms.vms.marketplace.shipment.dtos.OldestSellerPackageEntry;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.Package;
-import dk.ku.di.dms.vms.marketplace.shipment.entities.PackageStatus;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.Shipment;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IPackageRepository;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IShipmentRepository;
@@ -46,7 +46,6 @@ public final class ShipmentService {
     @Outbound("shipment_updated")
     @Transactional(type=RW)
     public ShipmentUpdated updateShipment(String instanceId){
-
         System.out.println("Shipment received an update shipment event with TID: "+ instanceId);
         Date now = new Date();
 
@@ -83,7 +82,7 @@ public final class ShipmentService {
                         pkg.seller_id,
                         pkg.product_id,
                         pkg.product_name,
-                        PackageStatus.delivered.name(),
+                        PackageStatus.delivered,
                         now
                 );
                 deliveryNotifications.add(deliveryNotification);

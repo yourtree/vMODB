@@ -15,7 +15,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 
-public class Main {
+public final class Main {
 
 //    private static final Logger logger = Logger.getLogger("VmsApplication");
     public static void main(String[] args) throws Exception {

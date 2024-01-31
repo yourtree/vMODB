@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.common.entities;
 
-public class CartItem {
+public final class CartItem {
 
     public int SellerId;
 

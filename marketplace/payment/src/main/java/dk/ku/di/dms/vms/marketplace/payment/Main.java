@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.marketplace.payment;
 
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 
-public class Main {
+public final class Main {
 
     public static void main(String[] args) throws Exception {
 

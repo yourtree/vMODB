@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.marketplace.common.entities;
 
 import java.util.Date;
 
-public class OrderItem {
+public final class OrderItem {
 
     public int order_id;
 

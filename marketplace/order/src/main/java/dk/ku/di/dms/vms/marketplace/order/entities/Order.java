@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.order.entities;
 
+import dk.ku.di.dms.vms.marketplace.common.enums.OrderStatus;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
@@ -9,9 +10,8 @@ import javax.persistence.Id;
 import java.io.Serializable;
 import java.util.Date;
 
-@Entity
 @VmsTable(name="orders")
-public class Order implements IEntity<Order.OrderId> {
+public final class Order implements IEntity<Order.OrderId> {
 
     public static class OrderId implements Serializable {
 

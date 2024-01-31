@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.shipment.entities;
 
+import dk.ku.di.dms.vms.marketplace.common.enums.PackageStatus;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsPartialIndex;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
@@ -11,7 +12,7 @@ import java.io.Serializable;
 import java.util.Date;
 
 @VmsTable(name="packages")
-public class Package implements IEntity<Package.PackageId> {
+public final class Package implements IEntity<Package.PackageId> {
 
     public static class PackageId implements Serializable {
 

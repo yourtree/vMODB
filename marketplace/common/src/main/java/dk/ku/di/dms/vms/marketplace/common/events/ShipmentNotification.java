@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.marketplace.common.enums.ShipmentStatus;
 
 import java.util.Date;
 
-public class ShipmentNotification {
+public final class ShipmentNotification {
 
     public int customerId;
 

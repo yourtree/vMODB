@@ -1,8 +1,12 @@
 package dk.ku.di.dms.vms.marketplace.order;
 
+import dk.ku.di.dms.vms.marketplace.common.enums.OrderStatus;
 import dk.ku.di.dms.vms.marketplace.common.enums.ShipmentStatus;
 import dk.ku.di.dms.vms.marketplace.common.events.*;
-import dk.ku.di.dms.vms.marketplace.order.entities.*;
+import dk.ku.di.dms.vms.marketplace.order.entities.CustomerOrder;
+import dk.ku.di.dms.vms.marketplace.order.entities.Order;
+import dk.ku.di.dms.vms.marketplace.order.entities.OrderHistory;
+import dk.ku.di.dms.vms.marketplace.order.entities.OrderItem;
 import dk.ku.di.dms.vms.marketplace.order.repositories.ICustomerOrderRepository;
 import dk.ku.di.dms.vms.marketplace.order.repositories.IOrderHistoryRepository;
 import dk.ku.di.dms.vms.marketplace.order.repositories.IOrderItemRepository;

@@ -163,7 +163,6 @@ public final class DataTypeUtils {
     }
 
     private static String getString(ByteBuffer buffer) {
-
         if(buffer.isDirect()){
             StringBuilder sb = new StringBuilder();
             long currAddress = MemoryUtils.getByteBufferAddress(buffer);
@@ -173,7 +172,6 @@ public final class DataTypeUtils {
             }
             return sb.toString();
         }
-
         StringBuilder sb = new StringBuilder();
         for(int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
             sb.append( buffer.getChar() );
@@ -190,6 +188,21 @@ public final class DataTypeUtils {
         }
         if (Date.class.equals(type)) {
             return DataType.DATE;
+        }
+        if (float.class.equals(type)) {
+            return DataType.FLOAT;
+        }
+        if (double.class.equals(type)) {
+            return DataType.DOUBLE;
+        }
+        if (String.class.equals(type)) {
+            return DataType.STRING;
+        }
+        if (char.class.equals(type)) {
+            return DataType.CHAR;
+        }
+        if (boolean.class.equals(type)) {
+            return DataType.BOOL;
         }
         return null;
     }

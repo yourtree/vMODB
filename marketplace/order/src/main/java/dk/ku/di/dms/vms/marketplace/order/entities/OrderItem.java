@@ -10,9 +10,8 @@ import javax.persistence.Id;
 import java.io.Serializable;
 import java.util.Date;
 
-@Entity
 @VmsTable(name="order_items")
-public class OrderItem implements IEntity<OrderItem.OrderItemId> {
+public final class OrderItem implements IEntity<OrderItem.OrderItemId> {
 
     public static class OrderItemId implements Serializable {
 
