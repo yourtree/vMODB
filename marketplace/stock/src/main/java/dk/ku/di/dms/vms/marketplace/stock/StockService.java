@@ -5,10 +5,7 @@ import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdated;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
 import dk.ku.di.dms.vms.marketplace.common.events.StockConfirmed;
 import dk.ku.di.dms.vms.marketplace.common.events.TransactionMark;
-import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
-import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.annotations.*;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -21,7 +18,7 @@ import java.util.stream.Collectors;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 
 @Microservice("stock")
-public class StockService {
+public final class StockService {
 
     private static final Logger LOGGER = Logger.getLogger(StockService.class.getCanonicalName());
 
@@ -34,6 +31,7 @@ public class StockService {
     @Inbound(values = {"product_updated"})
     @Outbound("transaction_mark")
     @Transactional(type=RW)
+    @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     public TransactionMark updateProduct(ProductUpdated updateEvent) {
         System.out.println("Stock received an update product event with version: "+updateEvent.version);
 

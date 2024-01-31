@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -55,22 +56,23 @@ public final class UniqueHashMapIndex extends ReadWriteIndex<IKey> {
     }
 
     @Override
-    public Object[] record(IRecordIterator<IKey> iterator) {
+    public Object[] record(Iterator<IKey> iterator) {
         throw new RuntimeException("Not implemented");
     }
 
     @Override
     public Object[] record(IKey key) {
-        throw new RuntimeException("Not implemented");
+        return this.store.get(key);
     }
 
     @Override
-    public IRecordIterator<IKey> iterator() {
-        throw new RuntimeException("Not implemented");
+    public Iterator<IKey> iterator() {
+        return this.store.keySet().iterator();
     }
 
     @Override
-    public boolean checkCondition(IRecordIterator<IKey> iterator, FilterContext filterContext) {
+    public boolean checkCondition(Iterator<IKey> iterator, FilterContext filterContext) {
         throw new RuntimeException("Not implemented");
     }
+
 }

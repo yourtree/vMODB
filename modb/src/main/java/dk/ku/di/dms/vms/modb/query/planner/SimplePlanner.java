@@ -6,9 +6,7 @@ import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
@@ -143,7 +141,6 @@ public final class SimplePlanner {
         // ordered by the number of records? index type?
 
         return null;
-
     }
 
     private AbstractSimpleOperator planSimpleAggregate(QueryTree queryTree) {
@@ -157,14 +154,21 @@ public final class SimplePlanner {
                 int[] indexColumns = queryTree.groupByColumns.stream()
                         .mapToInt(ColumnReference::getColumnPosition ).toArray();
 
-                final IntStream intStream = queryTree.projections.stream()
-                        .mapToInt( ColumnReference::getColumnPosition );
-                final int[] projectionColumns = intStream.toArray();
-
+                // assumed to be only one
                 int minColumn = queryTree.groupByProjections.stream().mapToInt( GroupByPredicate::columnPosition ).toArray()[0];
 
+                final int[] projectionColumns = new int[queryTree.projections.size()+1];
+                int idxCol = 0;
+                for(var column : queryTree.projections){
+                    projectionColumns[idxCol] = column.getColumnPosition();
+                    idxCol++;
+                }
+                projectionColumns[idxCol] = minColumn;
+
                 // calculate entry size... sum of the size of the column types of the projection
-                return new IndexGroupByMinWithProjection( indexSelected, indexColumns, projectionColumns, minColumn, 128, queryTree.limit.get() );
+                int entrySize = calculateQueryResultEntrySize(indexSelected, queryTree.projections.size()+1, projectionColumns);
+
+                return new IndexGroupByMinWithProjection( indexSelected, indexColumns, projectionColumns, minColumn, entrySize, queryTree.limit.get() );
             }
             case SUM -> {
                 // is there any index that applies?
@@ -203,14 +207,8 @@ public final class SimplePlanner {
             default -> throw new IllegalStateException("Operator not yet implemented.");
         }
 
-        // get the columns that must be considered for the aggregations
-
-        // GroupByPredicate predicate = queryTree.groupByProjections.get(0).
-
     }
 
-    /**
-     */
     private AbstractScan planSimpleSelect(QueryTree queryTree) {
 
         // given it is simple, pick the table from one of the columns
@@ -219,30 +217,33 @@ public final class SimplePlanner {
 
         // avoid one of the columns to have expression different from EQUALS
         // to be picked by unique and non unique index
-        ReadOnlyIndex<IKey> indexSelected = this.getOptimalIndex(tb, queryTree.wherePredicates).index();
+        ReadWriteIndex<IKey> indexSelected = this.getOptimalIndex(tb, queryTree.wherePredicates).index();
 
         // build projection
 
         // compute before creating this. compute in startup
-        int nProj = queryTree.projections.size();
-        int[] projectionColumns = new int[nProj];
-        int entrySize = 0;
-        for(int i = 0; i < nProj; i++){
-            projectionColumns[i] = queryTree.projections.get(i).columnPosition;
-            entrySize += indexSelected.schema()
-                    .columnDataType( queryTree.projections.get(i).columnPosition ).value;
-        }
+        int[] projectionColumns = new int[queryTree.projections.size()];
+        int entrySize = calculateQueryResultEntrySize(indexSelected, queryTree.projections.size(), projectionColumns);
 
         if(indexSelected != null) {
             // return the index scan with projection
-            return new IndexScanWithProjection(tb, indexSelected, projectionColumns, entrySize);
+            return new IndexScanWithProjection(indexSelected, projectionColumns, entrySize);
 
         } else {
             // then must get the PK index, ScanWithProjection
-            return new FullScanWithProjection( tb, tb.underlyingPrimaryKeyIndex(), projectionColumns, entrySize );
+            return new FullScanWithProjection( tb.underlyingPrimaryKeyIndex(), projectionColumns, entrySize );
 
         }
 
+    }
+
+    private static int calculateQueryResultEntrySize(ReadWriteIndex<IKey> indexSelected, int nProj, int[] projectionColumns) {
+        int entrySize = 0;
+        for(int i = 0; i < nProj; i++){
+            entrySize += indexSelected.schema()
+                    .columnDataType( projectionColumns[i] ).value;
+        }
+        return entrySize;
     }
 
     public IndexSelectionVerdict getOptimalIndex(final Table table, List<WherePredicate> wherePredicates) {
@@ -265,13 +266,11 @@ public final class SimplePlanner {
 
         // fast path (1): all columns are part of the primary index
         if (table.underlyingPrimaryKeyIndex().key().equals(indexKey) ) {
-            // int[] filterColumns = intStream.filter( w -> !table.underlyingPrimaryKeyIndex_().containsColumn( w ) ).toArray();
             return new IndexSelectionVerdict(true, table.underlyingPrimaryKeyIndex(), columnsForIndexSelection);
         }
 
         // fast path (2): all columns are part of a secondary index
         if(table.secondaryIndexMap.containsKey(indexKey)){
-            // int[] filterColumns = Arrays.stream(columnsForIndexSelection).filter( w -> !table.underlyingPrimaryKeyIndex_().containsColumn( w ) ).toArray();
             return new IndexSelectionVerdict(
                     true,
                     table.secondaryIndexMap.get(indexKey).getUnderlyingIndex(),

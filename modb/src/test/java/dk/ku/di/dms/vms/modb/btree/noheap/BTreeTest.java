@@ -7,6 +7,8 @@ import dk.ku.di.dms.vms.modb.index.non_unique.b_plus_tree.NonLeafNode;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import org.junit.Test;
 
+import java.util.Iterator;
+
 public class BTreeTest {
 
     private static final int PAGE_SIZE_KB = 128;
@@ -36,8 +38,8 @@ public class BTreeTest {
 
         IRecordIterator<Long> iterator = parent.iterator();
 
-        while(iterator.hasElement()){
-            System.out.println(MemoryUtils.UNSAFE.getInt( iterator.get() + 1 + Long.BYTES + Integer.BYTES ));
+        while(iterator.hasNext()){
+            System.out.println(MemoryUtils.UNSAFE.getInt( iterator.next() + 1 + Long.BYTES + Integer.BYTES ));
             iterator.next();
         }
 

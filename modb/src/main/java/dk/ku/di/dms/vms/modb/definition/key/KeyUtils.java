@@ -4,9 +4,6 @@ import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public final class KeyUtils {
 
     private KeyUtils(){}

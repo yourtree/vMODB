@@ -13,10 +13,10 @@ import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
  */
 public final class UniqueSecondaryIndex implements IMultiVersionIndex {
 
-    private final ReadWriteIndex<IKey> primaryKeyIndex;
+    private final ReadWriteIndex<IKey> underlyingIndex;
 
-    public UniqueSecondaryIndex(ReadWriteIndex<IKey> primaryKeyIndex) {
-        this.primaryKeyIndex = primaryKeyIndex;
+    public UniqueSecondaryIndex(ReadWriteIndex<IKey> underlyingIndex) {
+        this.underlyingIndex = underlyingIndex;
     }
 
     @Override
@@ -31,7 +31,8 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
 
     @Override
     public boolean insert(IKey key, Object[] record) {
-        return false;
+        this.underlyingIndex.insert( key, record );
+        return true;
     }
 
     @Override
@@ -46,16 +47,15 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
 
     @Override
     public Object[] lookupByKey(IKey key){
-        if(this.primaryKeyIndex.exists(key)) {
-            return this.primaryKeyIndex.lookupByKey(key);
+        if(this.underlyingIndex.exists(key)) {
+            return this.underlyingIndex.lookupByKey(key);
         }
         return null;
     }
 
     public ReadWriteIndex<IKey> underlyingIndex(){
-        return this.primaryKeyIndex;
+        return this.underlyingIndex;
     }
-
 
 
 }

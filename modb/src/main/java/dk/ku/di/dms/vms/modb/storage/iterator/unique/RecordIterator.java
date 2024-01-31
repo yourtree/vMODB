@@ -25,7 +25,7 @@ public final class RecordIterator extends CachingKeyIterator implements IRecordI
     }
 
     @Override
-    public boolean hasElement() {
+    public boolean hasNext() {
         // check for bit active
 //        while(progress < capacity && !UNSAFE.getBoolean(null, nextAddress)){
 //            this.progress++;
@@ -35,14 +35,10 @@ public final class RecordIterator extends CachingKeyIterator implements IRecordI
     }
 
     @Override
-    public IKey get() {
-        return this.keyOf(UNSAFE.getInt(nextAddress + 1));
-    }
-
-    @Override
-    public void next() {
+    public IKey next() {
         this.progress++;
         this.nextAddress += recordSize;
+        return this.keyOf(UNSAFE.getInt(nextAddress + 1));
     }
 
     @Override

@@ -11,7 +11,7 @@ import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("product")
-public class ProductService {
+public final class ProductService {
 
     private final IProductRepository productRepository;
 

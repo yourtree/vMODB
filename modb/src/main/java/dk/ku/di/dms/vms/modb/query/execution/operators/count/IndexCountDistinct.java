@@ -4,9 +4,9 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyBufferIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -37,8 +37,8 @@ public class IndexCountDistinct extends AbstractCount {
 
         EphemeralState state = new EphemeralState();
 
-        IRecordIterator<IKey> iterator = this.index.iterator(keys);
-        while(iterator.hasElement()){
+        Iterator<IKey> iterator = this.index.iterator(keys);
+        while(iterator.hasNext()){
             if(index.checkCondition(iterator, filterContext)){
                 Object val = index.record(iterator)[distinctColumnIndex];
                 if( !state.valuesSeen.containsKey(val.hashCode())) {

@@ -22,14 +22,9 @@ public class NonUniqueRecordIterator implements IRecordIterator<IKey> {
     }
 
     @Override
-    public IKey get() {
-        return this.currentBucket.key();
-    }
+    public boolean hasNext() {
 
-    @Override
-    public boolean hasElement() {
-
-        if(this.currentBucket.hasElement()) return true;
+        if(this.currentBucket.hasNext()) return true;
 
         if( this.bucketIterator.hasNext() ){
             // move to another bucket
@@ -37,12 +32,12 @@ public class NonUniqueRecordIterator implements IRecordIterator<IKey> {
         }
 
         // the next bucket may have no element
-        return this.currentBucket.hasElement();
+        return this.currentBucket.hasNext();
     }
 
     @Override
-    public void next() {
-        this.currentBucket.next();
+    public IKey next() {
+        return this.currentBucket.key();
     }
 
 }

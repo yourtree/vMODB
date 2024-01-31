@@ -29,6 +29,7 @@ public enum DataType {
     // max 16 characters
     ENUM(Constants.DEFAULT_MAX_SIZE_STRING),
 
+    // JSON
     COMPLEX(Character.BYTES * Constants.DEFAULT_MAX_SIZE_STRING);
 
     public final int value;

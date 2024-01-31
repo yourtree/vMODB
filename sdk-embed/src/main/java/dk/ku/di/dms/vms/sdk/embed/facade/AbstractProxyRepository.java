@@ -1,10 +1,12 @@
 package dk.ku.di.dms.vms.sdk.embed.facade;
 
-import dk.ku.di.dms.vms.modb.api.interfaces.IDTO;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityUtils;
@@ -16,9 +18,9 @@ import net.bytebuddy.implementation.bind.annotation.This;
 import java.io.Serializable;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -38,8 +40,6 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
      * Respective table of the entity
      */
     private final Table table;
-
-//    private final Map<String, Tuple<SelectStatement, Type>> staticQueriesMap;
 
     private final Map<String, VarHandle> entityFieldMap;
 
@@ -61,7 +61,7 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
      */
     private final OperationalAPI operationalAPI;
 
-    private Map<String, SelectStatement> repositoryQueriesMap;
+    private final Map<String, SelectStatement> repositoryQueriesMap;
 
     public AbstractProxyRepository(Class<PK> pkClazz,
                                   Class<T> entityClazz,
@@ -275,16 +275,46 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         // schema of the return (maybe not if it is a dto)
         var memRes = this.operationalAPI.fetch(this.table, statement);
 
-        // TODO parse output into object
-//        if(type == IDTO.class) {
-//            // look in the map of dto types for the setter and getter
-//            return null;
-//        }
+        try {
+            List<DTO> result = new ArrayList<>(10);
+            Constructor<?> constructor = clazz.getDeclaredConstructors()[0];
+            Field[] fields = clazz.getFields();
+            long currAddress = memRes.address();
+            long lastOffset = currAddress + memRes.bytes();
+            while(memRes != null) {
+                DTO dto = (DTO) constructor.newInstance();
+                for (var field : fields) {
+                    DataType dt = DataTypeUtils.getDataTypeFromJavaType(field.getType());
+                    field.set(dto, DataTypeUtils.callReadFunction(currAddress, dt));
+                    currAddress += dt.value;
+                }
+                result.add(dto);
+
+                if(currAddress == lastOffset) {
+                    MemoryManager.releaseTemporaryDirectMemory(memRes.address());
+                    memRes = memRes.next;
+                    if(memRes != null){
+                        memRes = memRes.next;
+                        currAddress = memRes.address();
+                        lastOffset = currAddress + memRes.bytes();
+                    }
+                }
+            }
+            return result;
+
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
 
         // then it is a primitive, just return the value
 //        int projectionColumnIndex = scanOperator.asScan().projectionColumns[0];
 //        DataType dataType = scanOperator.asScan().index.schema().getColumnDataType(projectionColumnIndex);
 //        return DataTypeUtils.getValue(dataType, memRes.address());
+    }
+
+    @Override
+    public List<Object[]> fetch(SelectStatement statement){
+        MemoryRefNode memRes = this.operationalAPI.fetch(this.table, statement);
         return null;
     }
 

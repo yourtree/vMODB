@@ -18,4 +18,11 @@ public final class ProductUpdated {
         this.productId = productId;
         this.version = version;
     }
+
+    public ProductId getId(){
+        return new ProductId(this.sellerId, this.productId);
+    }
+
+    public record ProductId( int sellerId, int productId){}
+
 }

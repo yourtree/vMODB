@@ -3,10 +3,10 @@ package dk.ku.di.dms.vms.modb.query.execution.operators.sum;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+
+import java.util.Iterator;
 
 /**
  *
@@ -23,8 +23,8 @@ public class IndexSum extends Sum {
     @SuppressWarnings("unchecked, rawtypes")
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
         SumOperation sumOperation = buildOperation(dataType);
-        IRecordIterator<IKey> iterator = this.index.iterator(keys);
-        while(iterator.hasElement()){
+        Iterator<IKey> iterator = this.index.iterator(keys);
+        while(iterator.hasNext()){
             if(this.index.checkCondition(iterator, filterContext)){
                 sumOperation.accept(this.index.record(iterator)[this.columnIndex]);
             }

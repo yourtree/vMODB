@@ -5,8 +5,11 @@ import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
 import dk.ku.di.dms.vms.marketplace.shipment.dtos.OldestSellerPackageEntry;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IPackageRepository;
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.UniqueSecondaryIndex;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import org.junit.Test;
@@ -29,27 +32,39 @@ public class ShipmentTest {
 
         IPackageRepository packageRepository = (IPackageRepository) vms.getRepositoryProxy("packages");
 
-        Object[] obj = new Object[] { 1, 1, 1, 1, "test", 1.0f, new Date(), new Date(), 1, "shipped"  };
+        // customer_id, order_id, package_id, seller_id
+        Object[] obj1 = new Object[] { 1, 1, 1, 1, "test", 1.0f, new Date(), new Date(), 1, "shipped"  };
+        Object[] obj2 = new Object[] { 1, 1, 2, 2, "test", 1.0f, new Date(), new Date(), 1, "shipped"  };
 
         vms.getTable("packages").underlyingPrimaryKeyIndex().insert(
-                KeyUtils.buildKey( new int[]{ 1, 1, 1} ),
-                obj
+                KeyUtils.buildKey( new int[]{ 1, 1, 1 } ),
+                obj1
         );
 
-        vms.getTable("packages").secondaryIndexMap.
-                get( (IIndexKey) KeyUtils.buildKey( new int[]{ 0, 1} ) )
-                .insert(
-                    KeyUtils.buildKey( new int[]{ 1, 1 } ),
-                    obj
+        vms.getTable("packages").underlyingPrimaryKeyIndex().insert(
+                KeyUtils.buildKey( new int[]{ 1, 1, 2 } ),
+                obj2
         );
+
+        UniqueSecondaryIndex partialIndex = vms.getTable("packages").partialIndexMap.
+                get( (IIndexKey) KeyUtils.buildKey( new int[]{ 10 } ) );
+
+        partialIndex.insert(
+                    KeyUtils.buildKey( new int[]{ 1, 1, 1 } ),
+                    obj1
+        );
+
+        partialIndex.insert(
+                        KeyUtils.buildKey( new int[]{ 1, 1, 2 } ),
+                        obj2
+                );
 
         // packageRepository.getPackagesByCustomerIdAndSellerId(1,1);
 
         List<OldestSellerPackageEntry> packages = packageRepository.fetchMany(
                 OLDEST_SHIPMENT_PER_SELLER, OldestSellerPackageEntry.class);
 
-
-        assert !packages.isEmpty();
+        assert packages.size() == 10;
     }
 
     @Test

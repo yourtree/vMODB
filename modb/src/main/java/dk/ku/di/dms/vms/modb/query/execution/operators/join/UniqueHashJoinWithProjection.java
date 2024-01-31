@@ -6,7 +6,8 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+
+import java.util.Iterator;
 
 /**
  * Basic form of hash join
@@ -54,12 +55,12 @@ public class UniqueHashJoinWithProjection extends AbstractSimpleOperator {
 
     public MemoryRefNode run(FilterContext leftFilter, FilterContext rightFilter, IKey... keys) {
 
-        IRecordIterator<IKey> iterator = this.leftIndex.iterator(keys);
+        Iterator<IKey> iterator = this.leftIndex.iterator(keys);
 
-        while(iterator.hasElement()){
+        while(iterator.hasNext()){
             if(this.leftIndex.checkCondition(iterator, leftFilter) &&
                 // do the probing
-                this.rightIndex.checkCondition(iterator.get(), rightFilter)) {
+                this.rightIndex.checkCondition(iterator.next(), rightFilter)) {
                     append( iterator,
                             leftProjectionColumns, leftProjectionColumnsSize,
                             rightProjectionColumns, rightProjectionColumnsSize
@@ -75,11 +76,11 @@ public class UniqueHashJoinWithProjection extends AbstractSimpleOperator {
 
     public MemoryRefNode run(FilterContext leftFilter, FilterContext rightFilter) {
 
-        IRecordIterator<IKey> outerIterator = this.leftIndex.iterator();
+        Iterator<IKey> outerIterator = this.leftIndex.iterator();
 
-        while(outerIterator.hasElement()){
+        while(outerIterator.hasNext()){
             if(leftIndex.checkCondition(outerIterator, leftFilter)){
-                if(rightIndex.checkCondition(outerIterator.get(), rightFilter)) {
+                if(rightIndex.checkCondition(outerIterator.next(), rightFilter)) {
                     append( outerIterator, leftProjectionColumns, leftProjectionColumnsSize,
                             rightProjectionColumns, rightProjectionColumnsSize );
 
@@ -97,7 +98,7 @@ public class UniqueHashJoinWithProjection extends AbstractSimpleOperator {
      * Easier to ensure (implicitly) that remote calls between modules remain consistent
      * just by following conventions
      */
-    private void append(IRecordIterator<IKey> iterator,
+    private void append(Iterator<IKey> iterator,
                         int[] leftProjectionColumns, int[] leftValueSizeInBytes,
                         int[] rightProjectionColumns, int[] rightValueSizeInBytes){
 

@@ -23,7 +23,7 @@ import java.util.Properties;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("payment")
-public class PaymentService {
+public final class PaymentService {
 
     private static final boolean provider;
     private static final IExternalProvider externalProvider;
@@ -65,7 +65,6 @@ public class PaymentService {
     @Transactional(type=W)
     @Parallel
     public PaymentConfirmed processPayment(InvoiceIssued invoiceIssued) {
-
         System.out.println("Payment received an invoice issued event with TID: "+ invoiceIssued.instanceId);
 
         Date now = new Date();

@@ -55,7 +55,6 @@ public interface ReadOnlyBufferIndex<K> extends ReadOnlyIndex<K> {
         return objects;
     }
 
-    @Override
     default boolean checkCondition(IRecordIterator<K> iterator, FilterContext filterContext){
         return this.checkCondition( iterator.address(), filterContext );
     }

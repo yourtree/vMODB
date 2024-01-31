@@ -6,7 +6,8 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+
+import java.util.Iterator;
 
 /**
  * Hash join
@@ -52,20 +53,20 @@ public class UniqueHashJoinNonUniqueHashWithProjection extends AbstractSimpleOpe
 
     public MemoryRefNode run(FilterContext leftFilter, FilterContext rightFilter, IKey... keys) {
 
-        IRecordIterator<IKey> leftIterator = this.leftIndex.iterator(keys);
-        IRecordIterator<IKey> rightIterator;
+        Iterator<IKey> leftIterator = this.leftIndex.iterator(keys);
+        Iterator<IKey> rightIterator;
 
-        while(leftIterator.hasElement()) {
+        while(leftIterator.hasNext()) {
 
             if (!this.leftIndex.checkCondition(leftIterator, leftFilter)) continue;
 
-            rightIterator = this.rightIndex.iterator(leftIterator.get());
-            if (!rightIterator.hasElement()) {
+            rightIterator = this.rightIndex.iterator(leftIterator.next());
+            if (!rightIterator.hasNext()) {
                 leftIterator.next();
                 continue;
             }
 
-            while (rightIterator.hasElement()) {
+            while (rightIterator.hasNext()) {
                 if (this.rightIndex.checkCondition(rightIterator, rightFilter)) {
                     append(leftIterator, rightIterator,
                             leftProjectionColumns, leftProjectionColumnsSize,
@@ -88,7 +89,7 @@ public class UniqueHashJoinNonUniqueHashWithProjection extends AbstractSimpleOpe
      * Easier to ensure (implicitly) that remote calls between modules remain consistent
      * just by following conventions
      */
-    private void append(IRecordIterator<IKey> leftIterator, IRecordIterator<IKey> rightIterator,
+    private void append(Iterator<IKey> leftIterator, Iterator<IKey> rightIterator,
                         int[] leftProjectionColumns, int[] leftValueSizeInBytes,
                         int[] rightProjectionColumns, int[] rightValueSizeInBytes){
 

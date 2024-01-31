@@ -96,7 +96,7 @@ public final class MemoryManager {
 
     public static void releaseTemporaryDirectMemory(long address){
         MemoryRefNode refNode = assignedMemoryRef.remove( address );
-        memoryRefCache.put( refNode.bytes(), refNode);
+        memoryRefCache.put(refNode.bytes(), refNode);
     }
 
     public static ByteBuffer getTemporaryDirectBuffer(int size) {

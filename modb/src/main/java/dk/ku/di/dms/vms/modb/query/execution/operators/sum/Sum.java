@@ -7,8 +7,8 @@ import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
+import java.util.Iterator;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -109,8 +109,8 @@ public class Sum extends AbstractSimpleOperator {
 
         SumOperation sumOperation = buildOperation(dataType);
 
-        IRecordIterator<IKey> iterator = index.iterator();
-        while(iterator.hasElement()){
+        Iterator<IKey> iterator = index.iterator();
+        while(iterator.hasNext()){
             if(index.checkCondition(iterator, filterContext)){
                 Object val = index.record(iterator)[columnIndex];
                 sumOperation.accept(val);

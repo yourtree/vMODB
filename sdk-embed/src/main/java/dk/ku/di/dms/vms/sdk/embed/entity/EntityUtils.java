@@ -44,7 +44,6 @@ public final class EntityUtils {
 
         // usually the first, but to make sure lets do like this
         int pkColumn = schema.getPrimaryKeyColumns()[0];
-
         String pkColumnName = schema.columnNames()[pkColumn];
 
         Map<String, VarHandle> fieldMap = new HashMap<>(1);
@@ -62,9 +61,7 @@ public final class EntityUtils {
     public static Map<String, VarHandle> getVarHandleFieldsFromEntity(Class<? extends IEntity<?>> entityClazz,
                                                                       Schema schema)
             throws NoSuchFieldException, IllegalAccessException {
-
         MethodHandles.Lookup lookup_ = MethodHandles.privateLookupIn(entityClazz, lookup);
-
         Map<String, VarHandle> fieldMap = new HashMap<>(schema.columnNames().length);
         int i = 0;
         Class<?> typez;
@@ -74,16 +71,13 @@ public final class EntityUtils {
             } else {
                 typez = DataTypeUtils.getJavaTypeFromDataType(schema.columnDataTypes()[i]);
             }
-
             fieldMap.put(columnName,
                             lookup_.findVarHandle(entityClazz,
                                                   columnName,
                                                   typez) );
             i++;
         }
-
         return fieldMap;
-
     }
 
 }

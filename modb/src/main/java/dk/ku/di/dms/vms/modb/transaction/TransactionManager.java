@@ -3,13 +3,10 @@ package dk.ku.di.dms.vms.modb.transaction;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteBufferIndex;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
@@ -17,6 +14,7 @@ import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContextBuilder;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
+import dk.ku.di.dms.vms.modb.query.execution.operators.min.IndexGroupByMinWithProjection;
 import dk.ku.di.dms.vms.modb.query.execution.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.execution.operators.scan.IndexScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.planner.SimplePlanner;
@@ -24,7 +22,6 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
-import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -65,13 +62,13 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
         this.readQueryPlans = new ConcurrentHashMap<>();
     }
 
-    private boolean fkConstraintViolation(Table table, Object[] values){
+    private boolean fkConstraintViolationFree(Table table, Object[] values){
         for(var entry : table.foreignKeys().entrySet()){
             IKey fk = KeyUtils.buildRecordKey( entry.getValue(), values );
             // have some previous TID deleted it? or simply not exists
-            if (!entry.getKey().exists(fk)) return true;
+            if (!entry.getKey().exists(fk)) return false;
         }
-        return false;
+        return true;
     }
 
     /**
@@ -95,7 +92,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
         } else {
             // get only the where clause params
             wherePredicates = this.analyzer.analyzeWhere(
-                    scanOperator.asScan().table, selectStatement.whereClause);
+                    table, selectStatement.whereClause);
         }
 
         MemoryRefNode memRes;
@@ -104,11 +101,12 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
         // make an enum, it is easier
         if(scanOperator.isIndexScan()){
             // build keys and filters
-            //memRes = OperatorExecution.run( wherePredicates, scanOperator.asIndexScan() );
             memRes = this.run(table, wherePredicates, scanOperator.asIndexScan());
+        } else if(scanOperator.isIndexAggregationScan()){
+            memRes = this.run(wherePredicates, scanOperator.asIndexAggregationScan());
         } else {
             // build only filters
-            memRes = this.run(table, wherePredicates, scanOperator.asFullScan() );
+            memRes = this.run(table, wherePredicates, scanOperator.asFullScan());
         }
 
         return memRes;
@@ -139,30 +137,6 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
 
             }
             default -> throw new IllegalStateException("Statement type cannot be identified.");
-        }
-
-    }
-
-    /**
-     * It installs the writes without taking into consideration concurrency control.
-     * Used when the buffer received is aligned with how the data is stored in memory
-     */
-    public void bulkInsert(Table table, ByteBuffer buffer, int numberOfRecords){
-        // if the memory address is occupied, must log warning
-        // so we can increase the table size
-        long address = MemoryUtils.getByteBufferAddress(buffer);
-
-        // if the memory address is occupied, must log warning
-        // so we can increase the table size
-        ReadWriteBufferIndex<IKey> index = (ReadWriteBufferIndex<IKey>) table.underlyingPrimaryKeyIndex();
-        int sizeWithoutHeader = table.schema.getRecordSizeWithoutHeader();
-        long currAddress = address;
-
-        IKey key;
-        for (int i = 0; i < numberOfRecords; i++) {
-            key = KeyUtils.buildPrimaryKey(table.schema, currAddress);
-            index.insert( key, currAddress );
-            currAddress += sizeWithoutHeader;
         }
 
     }
@@ -222,7 +196,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
      */
     public void insert(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
-        if(!this.fkConstraintViolation(table, values)){
+        if(this.fkConstraintViolationFree(table, values)){
             IKey pk = index.insertAndGetKey(values);
             if(pk != null) {
                 INDEX_WRITES.get().add(index);
@@ -241,7 +215,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
 
     public Object[] insertAndGet(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
-        if(!this.fkConstraintViolation(table, values)){
+        if(this.fkConstraintViolationFree(table, values)){
             IKey key_ = index.insertAndGetKey(values);
             if(key_ != null) {
                 INDEX_WRITES.get().add(index);
@@ -263,7 +237,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
     public void update(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), values);
-        if(!this.fkConstraintViolation(table, values) && index.update(pk, values)){
+        if(this.fkConstraintViolationFree(table, values) && index.update(pk, values)){
             INDEX_WRITES.get().add(index);
             return;
         }
@@ -286,11 +260,16 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
 
     /*
      * Simple implementation to make package query work
+     * TODO disaggregate the index choice, limit, aka query details, from the operator
      */
+    public MemoryRefNode run(List<WherePredicate> wherePredicates,
+                             IndexGroupByMinWithProjection operator){
+        return operator.run();
+    }
+
     public MemoryRefNode run(Table table,
                              List<WherePredicate> wherePredicates,
                              IndexScanWithProjection operator){
-
         int i = 0;
         Object[] keyList = new Object[operator.index.columns().length];
         List<WherePredicate> wherePredicatesNoIndex = new ArrayList<>(wherePredicates.size());

@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.modb.query.execution.operators;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.query.execution.operators.join.UniqueHashJoinWithProjection;
+import dk.ku.di.dms.vms.modb.query.execution.operators.min.IndexGroupByMinWithProjection;
 import dk.ku.di.dms.vms.modb.query.execution.operators.scan.AbstractScan;
 import dk.ku.di.dms.vms.modb.query.execution.operators.scan.FullScanWithProjection;
 import dk.ku.di.dms.vms.modb.query.execution.operators.scan.IndexScanWithProjection;
@@ -31,19 +32,14 @@ public abstract class AbstractSimpleOperator {
      * Default method. Operators can create their own
      */
     protected void ensureMemoryCapacity(){
-
-        if(this.currentBuffer != null && this.currentBuffer.size() - this.currentBuffer.address() > this.entrySize){
+        if(this.currentBuffer != null && (this.currentBuffer.size() - (this.currentBuffer.address() - this.currentBuffer.nextOffset())) > this.entrySize){
             return;
         }
-
         // else, get a new memory segment
         MemoryRefNode claimed = MemoryManager.getTemporaryDirectMemory();
-
         claimed.next = this.memoryRefNode;
         this.memoryRefNode = claimed;
-
         this.currentBuffer = new AppendOnlyBuffer(claimed.address(), claimed.bytes());
-
     }
 
     /**
@@ -51,23 +47,22 @@ public abstract class AbstractSimpleOperator {
      * @param size the size needed next to allocate a new tuple
      */
     protected void ensureMemoryCapacity(int size){
-
         if(this.currentBuffer != null && this.currentBuffer.size() - this.currentBuffer.address() > size) {
             return;
         }
-
         // else, get a new memory segment
         MemoryRefNode claimed = MemoryManager.getTemporaryDirectMemory(size);
-
         claimed.next = this.memoryRefNode;
         this.memoryRefNode = claimed;
-
         this.currentBuffer = new AppendOnlyBuffer(claimed.address(), claimed.bytes());
-
     }
 
     // must be overridden by the concrete operators
     public boolean isFullScan(){
+        return false;
+    }
+
+    public boolean isIndexAggregationScan(){
         return false;
     }
 
@@ -76,6 +71,10 @@ public abstract class AbstractSimpleOperator {
     }
 
     public boolean isHashJoin() { return false; }
+
+    public IndexGroupByMinWithProjection asIndexAggregationScan(){
+        throw new IllegalStateException("No index scan operator");
+    }
 
     public IndexScanWithProjection asIndexScan(){
         throw new IllegalStateException("No index scan operator");

@@ -15,24 +15,24 @@ import java.util.*;
 public final class QueryTree {
 
     // projection
-    public List<ColumnReference> projections;
+    public final List<ColumnReference> projections;
 
     // store all tables included in this query, including those not participating in any join
-    public Map<String, Table> tables;
+    public final Map<String, Table> tables;
 
     // join operations
-    public List<JoinPredicate> joinPredicates;
+    public final List<JoinPredicate> joinPredicates;
 
     // predicates
-    public List<WherePredicate> wherePredicates;
+    public final List<WherePredicate> wherePredicates;
 
     // aggregate operations
-    public List<GroupByPredicate> groupByProjections;
+    public final List<GroupByPredicate> groupByProjections;
 
-    public List<ColumnReference> groupByColumns;
+    public final List<ColumnReference> groupByColumns;
 
     // TODO order by predicate
-    public List<OrderByPredicate> orderByPredicates;
+    public final List<OrderByPredicate> orderByPredicates;
 
     public Optional<Integer> limit;
 

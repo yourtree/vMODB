@@ -14,7 +14,7 @@ import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("customer")
-public class CustomerService {
+public final class CustomerService {
 
     private static final Logger LOGGER = Logger.getLogger(CustomerService.class.getCanonicalName());
 

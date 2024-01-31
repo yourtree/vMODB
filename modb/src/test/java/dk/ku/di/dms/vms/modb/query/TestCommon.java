@@ -55,7 +55,7 @@ public final class TestCommon {
 
         System.out.println( "o_id" +" - "+ "seller_id" +" - "+ "i_date" );
         var it = index.iterator();
-        while(it.hasElement()){
+        while(it.hasNext()){
             Object[] record = index.record( it );
             System.out.println( record[0] +" - "+ record[1] +" - "+ record[2] );
             it.next();

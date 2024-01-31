@@ -25,7 +25,7 @@ import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("shipment")
-public class ShipmentService {
+public final class ShipmentService {
 
     private final IShipmentRepository shipmentRepository;
 
@@ -50,33 +50,15 @@ public class ShipmentService {
         System.out.println("Shipment received an update shipment event with TID: "+ instanceId);
         Date now = new Date();
 
+        // can lock the packages
         List<OldestSellerPackageEntry> packages = this.packageRepository.fetchMany(OLDEST_SHIPMENT_PER_SELLER, OldestSellerPackageEntry.class);
-
-//        List<Package> packages = this.packageRepository.getAll(aPackage -> aPackage.status == PackageStatus.shipped);
-//        Map<Integer, Package.PackageId> oldestOpenShipmentPerSeller = packages.stream()
-////                .filter( p -> p.status.equals(PackageStatus.shipped) )
-//                .collect(Collectors.groupingBy(Package::getSellerId,
-//                        Collectors.minBy(Comparator.comparing( Package::getShippingDate ))
-//                          ) ).entrySet().stream()
-//                .filter(entry -> entry.getValue().isPresent())
-//                .limit(10) // Limit the result to the first 10 sellers
-//                .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().get().getId()));
 
         List<ShipmentNotification> shipmentNotifications = new ArrayList<>();
         List<DeliveryNotification> deliveryNotifications = new ArrayList<>();
 
         for (var entry : packages) {
 
-//            SelectStatement selectStatement = QueryBuilderFactory.select().project("*")
-//                    .from("packages")
-//                    //.where( "seller_id", ExpressionTypeEnum.EQUALS, entry[0] )
-//                    .where( "customer_id", ExpressionTypeEnum.EQUALS, entry[1] )
-//                    .and( "order_id", ExpressionTypeEnum.EQUALS, entry[2] )
-//                    .build();
-
-            List<Package> orderPackages = packageRepository.getPackagesByCustomerIdAndSellerId( entry.getCustomerId(), entry.getOrderId() );
-
-//            List<Package> sellerPackages = packages.stream().filter( p-> p.seller_id == kv.getKey() && p.order_id == kv.getValue().order_id && p.customer_id == kv.getValue().customer_id ).toList();
+            List<Package> orderPackages = this.packageRepository.getPackagesByCustomerIdAndSellerId( entry.getCustomerId(), entry.getOrderId() );
 
             Shipment shipment = this.shipmentRepository.lookupByKey( new Shipment.ShipmentId( entry.getCustomerId(), entry.getOrderId() ));
 
@@ -90,9 +72,9 @@ public class ShipmentService {
             var sellerPackages = orderPackages.stream().filter(p->p.seller_id == entry.getSellerId()).toList();
 
             for (Package pkg : sellerPackages) {
-
                 pkg.status = PackageStatus.delivered;
                 pkg.delivery_date = now;
+                this.packageRepository.update(pkg);
 
                 DeliveryNotification deliveryNotification = new DeliveryNotification(
                         shipment.customer_id,
@@ -121,8 +103,8 @@ public class ShipmentService {
 
     @Inbound(values = {"payment_confirmed"})
     @Transactional(type=W)
+    @Parallel
     public void processShipment(PaymentConfirmed paymentConfirmed){
-
         System.out.println("Shipment received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
         Date now = new Date();
 

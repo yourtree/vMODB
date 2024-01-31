@@ -1,25 +1,21 @@
 package dk.ku.di.dms.vms.modb.query.execution.operators.scan;
 
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
-import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+
+import java.util.Iterator;
 
 public abstract class AbstractScan extends AbstractSimpleOperator {
 
-    // for now used to build dynamically a new run
-    public final Table table;
-
-    public final ReadOnlyIndex<IKey> index;
+    public final ReadWriteIndex<IKey> index;
 
     // index of the columns
     public final int[] projectionColumns;
 
-    public AbstractScan(Table table, int entrySize, ReadOnlyIndex<IKey> index, int[] projectionColumns) {
+    public AbstractScan(int entrySize, ReadWriteIndex<IKey> index, int[] projectionColumns) {
         super(entrySize);
-        this.table = table;
         this.index = index;
         this.projectionColumns = projectionColumns;
     }
@@ -29,7 +25,7 @@ public abstract class AbstractScan extends AbstractSimpleOperator {
         return this;
     }
 
-    protected void append(IRecordIterator<IKey> iterator, int[] projectionColumns) {
+    protected void append(Iterator<IKey> iterator, int[] projectionColumns) {
         ensureMemoryCapacity();
         Object[] record = index.record(iterator);
         for (int projectionColumn : projectionColumns) {

@@ -10,7 +10,8 @@ import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
  * Encapsulates an iteration over records that belong
  * to a non-unique index hash bucket
  */
-public final class RecordBucketIterator extends CachingKeyIterator
+public final class RecordBucketIterator
+        extends CachingKeyIterator
         implements IRecordIterator<Long> {
 
     private long currAddress;
@@ -33,7 +34,7 @@ public final class RecordBucketIterator extends CachingKeyIterator
      * @return whether there is a next element
      */
     @Override
-    public boolean hasElement() {
+    public boolean hasNext() {
         return this.progress < size;
         // return UNSAFE.getBoolean(null, address);
     }
@@ -51,22 +52,18 @@ public final class RecordBucketIterator extends CachingKeyIterator
         return this.keyOf(UNSAFE.getInt(srcAddress + Header.SIZE));
     }
 
-    @Override
-    public Long get() {
-        return this.currAddress;
-    }
-
     public long address() {
         return this.currAddress;
     }
 
     @Override
-    public void next() {
+    public Long next() {
         this.progress++;
         // src address
         if(progress < size) {
             this.currAddress = UNSAFE.getLong(this.currAddress + OrderedRecordBuffer.deltaNext);
         }
+        return this.currAddress;
     }
 
 }

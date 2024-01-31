@@ -30,8 +30,9 @@ public final class KeyRecordIterator implements IRecordIterator<IKey> {
     }
 
     @Override
-    public boolean hasElement() {
-        while(!index.exists(currentAddress) && position < numberOfKeys){
+    public boolean hasNext() {
+        // iterate until find one feasible entry
+        while(!index.exists(this.currentAddress) && position < numberOfKeys){
             position++;
             currentKey = keys[position];
             currentAddress = index.address(currentKey);
@@ -40,15 +41,12 @@ public final class KeyRecordIterator implements IRecordIterator<IKey> {
     }
 
     @Override
-    public void next() {
+    public IKey next() {
+        var toReturn = this.currentKey;
         position++;
         currentKey = keys[position];
         currentAddress = index.address(currentKey);
-    }
-
-    @Override
-    public IKey get(){
-        return this.currentKey;
+        return toReturn;
     }
 
     @Override

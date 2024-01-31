@@ -1,19 +1,19 @@
 package dk.ku.di.dms.vms.modb.query.execution.operators.scan;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+
+import java.util.Iterator;
 
 public class FullScanWithProjection extends AbstractScan {
 
-    public FullScanWithProjection(Table table,
-                                  ReadOnlyIndex<IKey> index,
+    public FullScanWithProjection(ReadWriteIndex<IKey> index,
                                   int[] projectionColumns,
                                   int entrySize) {
-        super(table, entrySize, index, projectionColumns);
+        super(entrySize, index, projectionColumns);
     }
 
     public MemoryRefNode run(FilterContext filterContext){
@@ -21,8 +21,8 @@ public class FullScanWithProjection extends AbstractScan {
     }
 
     public MemoryRefNode run(ReadOnlyIndex<IKey> index, FilterContext filterContext){
-        IRecordIterator<IKey> iterator = index.iterator();
-        while(iterator.hasElement()){
+        Iterator<IKey> iterator = index.iterator();
+        while(iterator.hasNext()){
             if(index.checkCondition(iterator, filterContext)){
                 append(iterator, projectionColumns);
             }

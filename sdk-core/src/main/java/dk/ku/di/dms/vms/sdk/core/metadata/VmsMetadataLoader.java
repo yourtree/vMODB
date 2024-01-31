@@ -599,8 +599,8 @@ public final class VmsMetadataLoader {
             return DataType.STRING_ARRAY;
         }
         else {
+            logger.warning(attributeCanonicalName + " will be recognized as a complex data type");
             return DataType.COMPLEX;
-            // throw new NotAcceptableTypeException(attributeType.getCanonicalName() + " is not accepted");
         }
     }
 

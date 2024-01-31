@@ -1,11 +1,12 @@
 package dk.ku.di.dms.vms.modb.query.execution.operators.scan;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+
+import java.util.Iterator;
 
 /**
  * On-flight scanning, filtering, and projection in a single operator.
@@ -20,11 +21,10 @@ import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 public final class IndexScanWithProjection extends AbstractScan {
 
     public IndexScanWithProjection(
-                     Table table,
-                     ReadOnlyIndex<IKey> index,
+                     ReadWriteIndex<IKey> index,
                      int[] projectionColumns,
                      int entrySize) {
-        super(table, entrySize, index, projectionColumns);
+        super(entrySize, index, projectionColumns);
     }
 
     @Override
@@ -45,8 +45,8 @@ public final class IndexScanWithProjection extends AbstractScan {
     // transactional call
     public MemoryRefNode run(ReadOnlyIndex<IKey> index, FilterContext filterContext, IKey... keys) {
         // unifying in terms of iterator
-        IRecordIterator<IKey> iterator = index.iterator(keys);
-        while(iterator.hasElement()){
+        Iterator<IKey> iterator = index.iterator(keys);
+        while(iterator.hasNext()){
             if(index.checkCondition(iterator, filterContext)){
                 this.append(iterator, this.projectionColumns);
             }
@@ -56,8 +56,8 @@ public final class IndexScanWithProjection extends AbstractScan {
     }
 
     public MemoryRefNode run(IKey... keys) {
-        IRecordIterator<IKey> iterator = this.index.iterator(keys);
-        while(iterator.hasElement()){
+        Iterator<IKey> iterator = this.index.iterator(keys);
+        while(iterator.hasNext()){
             this.append(iterator, this.projectionColumns);
             iterator.next();
         }
@@ -66,8 +66,8 @@ public final class IndexScanWithProjection extends AbstractScan {
 
     public MemoryRefNode run(ReadOnlyIndex<IKey> index, IKey... keys) {
         // unifying in terms of iterator
-        IRecordIterator<IKey> iterator = index.iterator(keys);
-        while(iterator.hasElement()){
+        Iterator<IKey> iterator = index.iterator(keys);
+        while(iterator.hasNext()){
             this.append(iterator, this.projectionColumns);
             iterator.next();
         }

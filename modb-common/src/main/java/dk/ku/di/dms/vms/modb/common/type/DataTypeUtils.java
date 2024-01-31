@@ -81,6 +81,22 @@ public final class DataTypeUtils {
         }
     }
 
+    public static Object callReadFunction(long address, DataType dt){
+        switch (dt){
+            case BOOL -> { return UNSAFE.getBoolean(null, address); }
+            case INT -> { return UNSAFE.getInt(null, address); }
+            case CHAR -> { return UNSAFE.getChar(null, address); }
+            case STRING -> {
+                return "";
+            }
+            case LONG -> { return UNSAFE.getLong(null, address); }
+            case DATE -> { return new Date(UNSAFE.getLong(null, address)); }
+            case FLOAT -> { return UNSAFE.getFloat(null, address); }
+            case DOUBLE -> { return UNSAFE.getDouble(null, address); }
+            default -> throw new IllegalStateException("Unknown data type");
+        }
+    }
+
     // just a wrapper
     public static void callWriteFunction(long address, DataType dt, Object value){
         switch (dt){
@@ -101,9 +117,14 @@ public final class DataTypeUtils {
                         currPos += Character.BYTES;
                     }
                 }
-
             }
-            case LONG, DATE -> UNSAFE.putLong(null, address, (long)value);
+            case LONG -> UNSAFE.putLong(null, address, (long)value);
+            case DATE -> {
+                if(value instanceof Date date){
+                    UNSAFE.putLong(null, address, date.getTime());
+                }
+                else UNSAFE.putLong(null, address, (long)value);
+            }
             case FLOAT -> UNSAFE.putFloat(null, address, (float)value);
             case DOUBLE -> UNSAFE.putDouble(null, address, (double)value);
             default -> throw new IllegalStateException("Unknown data type");
@@ -160,8 +181,20 @@ public final class DataTypeUtils {
         return sb.toString();
     }
 
-    public static Class<?> getJavaTypeFromDataType(DataType dataType) {
+    public static DataType getDataTypeFromJavaType(Class<?> type){
+        if (int.class.equals(type)) {
+            return DataType.INT;
+        }
+        if (long.class.equals(type)) {
+            return DataType.LONG;
+        }
+        if (Date.class.equals(type)) {
+            return DataType.DATE;
+        }
+        return null;
+    }
 
+    public static Class<?> getJavaTypeFromDataType(DataType dataType) {
         switch (dataType) {
             case BOOL -> {
                 return boolean.class;

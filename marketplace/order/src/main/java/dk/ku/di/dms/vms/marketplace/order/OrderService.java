@@ -16,7 +16,7 @@ import java.util.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 
 @Microservice("order")
-public class OrderService {
+public final class OrderService {
 
     private final IOrderRepository orderRepository;
 

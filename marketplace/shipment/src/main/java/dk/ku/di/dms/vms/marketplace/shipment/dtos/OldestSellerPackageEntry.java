@@ -9,8 +9,7 @@ public class OldestSellerPackageEntry {
     public int order_id;
     public Date shipping_date;
 
-    public OldestSellerPackageEntry() {
-    }
+    public OldestSellerPackageEntry() { }
 
     public int getSellerId() {
         return seller_id;
@@ -27,4 +26,5 @@ public class OldestSellerPackageEntry {
     public Date getShippingDate() {
         return shipping_date;
     }
+
 }

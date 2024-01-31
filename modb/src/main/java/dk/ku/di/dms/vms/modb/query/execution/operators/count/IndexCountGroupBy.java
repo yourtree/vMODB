@@ -5,9 +5,9 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -28,11 +28,11 @@ public class IndexCountGroupBy extends AbstractCount {
 
         Map<Integer,Integer> countMap = new HashMap<>();
 
-        IRecordIterator<IKey> iterator = index.iterator(keys);
+        Iterator<IKey> iterator = index.iterator(keys);
 
-        while(iterator.hasElement()){
-            if(index.checkCondition(iterator, filterContext)){
-                compute(iterator, countMap);
+        while(iterator.hasNext()){
+            if(this.index.checkCondition(iterator, filterContext)){
+                this.compute(iterator, countMap);
             }
             iterator.next();
         }
@@ -55,7 +55,7 @@ public class IndexCountGroupBy extends AbstractCount {
 
     }
 
-    private void compute(IRecordIterator<IKey> iterator, Map<Integer,Integer> countMap) {
+    private void compute(Iterator<IKey> iterator, Map<Integer,Integer> countMap) {
 
         Object record = this.index.record( iterator );
 

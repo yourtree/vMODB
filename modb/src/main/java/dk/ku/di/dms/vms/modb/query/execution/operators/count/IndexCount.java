@@ -4,7 +4,8 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
+
+import java.util.Iterator;
 
 /**
  * Not projecting any other column for now.
@@ -22,8 +23,8 @@ public class IndexCount extends AbstractCount {
 
         int count = 0;
 
-        IRecordIterator<IKey> iterator = this.index.iterator(keys);
-        while(iterator.hasElement()){
+        Iterator<IKey> iterator = this.index.iterator(keys);
+        while(iterator.hasNext()){
             if(index.checkCondition(iterator, filterContext)){
                 count++;
             }
