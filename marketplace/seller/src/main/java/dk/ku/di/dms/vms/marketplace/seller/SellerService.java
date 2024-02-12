@@ -8,12 +8,11 @@ import dk.ku.di.dms.vms.marketplace.common.events.DeliveryNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
+import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Parallel;
-import dk.ku.di.dms.vms.modb.api.annotations.Subscribe;
 
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 @Microservice("seller")
@@ -25,7 +24,7 @@ public final class SellerService {
         this.orderEntryRepository = orderEntryRepository;
     }
 
-    @Subscribe("invoice_issued")
+    @Inbound(values = "invoice_issued")
     @Parallel
     public void processInvoiceIssued(InvoiceIssued invoiceIssued){
         System.out.println("Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
@@ -58,7 +57,7 @@ public final class SellerService {
         this.orderEntryRepository.insertAll(list);
     }
 
-    @Subscribe("shipment_updated")
+    @Inbound(values = "shipment_updated")
     public void processShipmentUpdate(ShipmentUpdated shipmentUpdated){
         System.out.println("Seller received a shipment update event with TID: "+ shipmentUpdated.instanceId);
         for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {

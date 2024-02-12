@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractMemoryBasedOperator;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
 
 import java.util.Iterator;
@@ -14,7 +15,7 @@ import java.util.Iterator;
  * where both indexes are hashed by the same
  * set of columns
  */
-public class UniqueHashJoinWithProjection extends AbstractSimpleOperator {
+public class UniqueHashJoinWithProjection extends AbstractMemoryBasedOperator {
 
     public final ReadOnlyIndex<IKey> leftIndex;
     public final ReadOnlyIndex<IKey> rightIndex;
@@ -58,10 +59,12 @@ public class UniqueHashJoinWithProjection extends AbstractSimpleOperator {
         Iterator<IKey> iterator = this.leftIndex.iterator(keys);
 
         while(iterator.hasNext()){
-            if(this.leftIndex.checkCondition(iterator, leftFilter) &&
+            IKey nextLeft = iterator.next();
+            IKey rightKey = iterator.next();
+            if(this.leftIndex.checkCondition(nextLeft, leftFilter) &&
                 // do the probing
-                this.rightIndex.checkCondition(iterator.next(), rightFilter)) {
-                    append( iterator,
+                this.rightIndex.checkCondition(rightKey, rightFilter)) {
+                    append( nextLeft, rightKey,
                             leftProjectionColumns, leftProjectionColumnsSize,
                             rightProjectionColumns, rightProjectionColumnsSize
                     );
@@ -79,9 +82,11 @@ public class UniqueHashJoinWithProjection extends AbstractSimpleOperator {
         Iterator<IKey> outerIterator = this.leftIndex.iterator();
 
         while(outerIterator.hasNext()){
-            if(leftIndex.checkCondition(outerIterator, leftFilter)){
-                if(rightIndex.checkCondition(outerIterator.next(), rightFilter)) {
-                    append( outerIterator, leftProjectionColumns, leftProjectionColumnsSize,
+            IKey leftKey = outerIterator.next();
+            if(leftIndex.checkCondition(leftKey, leftFilter)){
+                IKey rightKey = outerIterator.next();
+                if(rightIndex.checkCondition(rightKey, rightFilter)) {
+                    append( leftKey, rightKey, leftProjectionColumns, leftProjectionColumnsSize,
                             rightProjectionColumns, rightProjectionColumnsSize );
 
                 }
@@ -98,16 +103,16 @@ public class UniqueHashJoinWithProjection extends AbstractSimpleOperator {
      * Easier to ensure (implicitly) that remote calls between modules remain consistent
      * just by following conventions
      */
-    private void append(Iterator<IKey> iterator,
+    private void append(IKey keyLeft, IKey keyRight,
                         int[] leftProjectionColumns, int[] leftValueSizeInBytes,
                         int[] rightProjectionColumns, int[] rightValueSizeInBytes){
 
         int leftProjIdx = 0;
         int rightProjIdx = 0;
 
-        Object[] leftRecord = this.leftIndex.record(iterator);
+        Object[] leftRecord = this.leftIndex.record(keyLeft);
         // not the address of left iterator
-        Object[] rightRecord = this.rightIndex.record(iterator);
+        Object[] rightRecord = this.rightIndex.record(keyRight);
 
         for(int projOrdIdx = 0; projOrdIdx < projectionOrder.length; projOrdIdx++) {
 

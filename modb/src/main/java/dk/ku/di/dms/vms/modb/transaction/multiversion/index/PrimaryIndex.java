@@ -2,13 +2,13 @@ package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
+import dk.ku.di.dms.vms.modb.common.transaction.TransactionId;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
-import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
-import dk.ku.di.dms.vms.modb.query.execution.filter.FilterType;
+import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIFO;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.IPrimaryKeyGenerator;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.OperationSetOfKey;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
@@ -16,6 +16,7 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
 
@@ -43,35 +44,35 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     private final Map<IKey, OperationSetOfKey> updatesPerKeyMap;
 
     // for PK generation. for now, all strategies use this (auto, sequence, etc)
-    private final IPrimaryKeyGenerator<?> primaryKeyGenerator;
+    private final Optional<IPrimaryKeyGenerator<?>> primaryKeyGenerator;
 
     /**
      * Optimization is verifying whether this thread is R or RW.
      * If R, no need to allocate a List
      */
-    private final ThreadLocal<List<IKey>> KEY_WRITES = ThreadLocal.withInitial(() -> {
+    private final ThreadLocal<Set<IKey>> KEY_WRITES = ThreadLocal.withInitial(() -> {
         if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
-            var pulled = writeListBuffer.poll();
+            Set<IKey> pulled = WRITE_SET_BUFFER.poll();
             if(pulled == null)
-                return new ArrayList<>(2);
+                return new HashSet<>();
             return pulled;
         }
         // immutable, empty list for read-only transactions
-        return Collections.emptyList();
+        return Collections.emptySet();
     });
 
-    private static final Deque<List<IKey>> writeListBuffer = new ArrayDeque<>();
+    private static final Deque<Set<IKey>> WRITE_SET_BUFFER = new ConcurrentLinkedDeque<>();
 
     public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
-        this.primaryKeyGenerator = null;
+        this.primaryKeyGenerator = Optional.empty();
     }
 
     public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
-        this.primaryKeyGenerator = primaryKeyGenerator;
+        this.primaryKeyGenerator = Optional.of( primaryKeyGenerator );
     }
 
     @Override
@@ -90,12 +91,9 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      * @return whether the record exists for this transaction, respecting atomic visibility
      */
     public boolean exists(IKey key) {
-
         // O(1)
         OperationSetOfKey opSet = this.updatesPerKeyMap.get(key);
-
         if(opSet != null){
-
             // why checking first if I am a WRITE. because by checking if I am right, I don't need to pay O(log n)
             // 1 write thread at a time. if that is a writer thread, does not matter my lastTid. I can just check the last write for this entry
             if( !TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly ){
@@ -107,63 +105,13 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             if(floorEntry == null) return this.primaryKeyIndex.exists(key);
             return floorEntry.val().type != WriteType.DELETE;
         }
-
         return this.primaryKeyIndex.exists(key);
-
     }
 
 
     // every condition checked is proceeded by a completion handler
     // can maintain the boolean return but all operators (for read queries)
     // necessarily require appending to a memory result space
-
-
-    /**
-     * This is the basic check condition. Does not take into consideration the
-     * versioned values.
-     * @param record record values
-     * @param filterContext the filter to be applied
-     * @return the correct data item version
-     */
-    @SuppressWarnings("unchecked")
-    public boolean checkConditionVersioned(FilterContext filterContext, Object[] record){
-
-        if(filterContext == null) return true;
-
-        boolean conditionHolds = true;
-
-        // the number of filters to apply
-        int filterIdx = 0;
-
-        // the filter index on which a given param (e.g., literals, zero, 1, 'SURNAME', etc) should apply
-        int biPredIdx = 0;
-
-        // simple predicates, do not involve input params (i.e, NULL, NOT NULL, EXISTS?, etc)
-        int predIdx = 0;
-
-        while( conditionHolds && filterIdx < filterContext.filterTypes.size() ){
-
-            int columnIndex = filterContext.filterColumns.get(filterIdx);
-
-            Object val = record[columnIndex];
-
-            // it is a literal passed to the query
-            if(filterContext.filterTypes.get(filterIdx) == FilterType.BP) {
-                conditionHolds = filterContext.biPredicates.get(biPredIdx).
-                        apply(val, filterContext.biPredicateParams.get(biPredIdx));
-                biPredIdx++;
-            } else {
-                conditionHolds = filterContext.predicates.get(predIdx).test( val );
-                predIdx++;
-            }
-
-            filterIdx++;
-
-        }
-
-        return conditionHolds;
-
-    }
 
     /**
      * Methods for insert/update operations.
@@ -208,13 +156,9 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                         constraintHolds = CharOrStringTypeConstraintHelper.eval((String) values[c.getKey()], c.getValue().constraint );
 
             }
-
             if(!constraintHolds) return true;
-
         }
-
         return false;
-
     }
 
     private static class NullableTypeConstraintHelper {
@@ -227,9 +171,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     private static class CharOrStringTypeConstraintHelper {
-
         public static boolean eval(String value, ConstraintEnum constraint){
-
             if (constraint == ConstraintEnum.NOT_BLANK) {
                 for(int i = 0; i < value.length(); i++){
                     if(value.charAt(i) != ' ') return true;
@@ -240,7 +182,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             }
             return false;
         }
-
     }
 
     /**
@@ -321,7 +262,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             this.updatesPerKeyMap.put( key, operationSet );
         }
 
-        operationSet.updateHistoryMap.put( TransactionMetadata.TRANSACTION_CONTEXT.get().tid, entry);
+        operationSet.updateHistoryMap.put(TransactionMetadata.TRANSACTION_CONTEXT.get().tid, entry);
         operationSet.lastWriteType = WriteType.INSERT;
         operationSet.lastVersion = values;
 
@@ -364,8 +305,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     public IKey insertAndGetKey(Object[] values){
-        if(this.primaryKeyGenerator != null){
-            Object key_ = this.primaryKeyGenerator.next();
+        if(this.primaryKeyGenerator.isPresent()){
+            Object key_ = this.primaryKeyGenerator.get().next();
             values[this.primaryKeyIndex.columns()[0]] = key_;
             IKey key = KeyUtils.buildRecordKey( this.primaryKeyIndex.schema().getPrimaryKeyColumns(),  key_ );
             if(this.insert( key, values )){
@@ -423,12 +364,21 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     }
 
+    @Override
+    public int[] indexColumns() {
+        return this.primaryKeyIndex.columns();
+    }
+
+    @Override
+    public boolean containsColumn(int columnPos) {
+        return this.primaryKeyIndex.containsColumn(columnPos);
+    }
+
     /**
      * Called when a constraint is violated, leading to a transaction abort
      */
     public void undoTransactionWrites(){
-
-        var writesOfTid = KEY_WRITES.get();
+        Set<IKey> writesOfTid = KEY_WRITES.get();
         if(writesOfTid == null) return;
 
         for(var key : writesOfTid) {
@@ -438,31 +388,99 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         }
 
         writesOfTid.clear();
-        writeListBuffer.add(writesOfTid);
+        // TODO perhaps don't need to return it, since the same thread will be running logic again....
+        WRITE_SET_BUFFER.add(writesOfTid);
         KEY_WRITES.set(null);
-
     }
 
     public void installWrites(){
-
         for(Map.Entry<IKey, OperationSetOfKey> entry : this.updatesPerKeyMap.entrySet()) {
-
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(entry.getKey());
-
             switch (operationSetOfKey.lastWriteType){
                 case UPDATE -> this.primaryKeyIndex.update(entry.getKey(), operationSetOfKey.lastVersion);
                 case INSERT -> this.primaryKeyIndex.insert(entry.getKey(), operationSetOfKey.lastVersion);
                 case DELETE -> this.primaryKeyIndex.delete(entry.getKey());
             }
-
             operationSetOfKey.updateHistoryMap.clear();
-
         }
-
     }
 
     public ReadWriteIndex<IKey> underlyingIndex(){
         return this.primaryKeyIndex;
+    }
+
+    /**
+     * Mostly applies to full scan
+     */
+    @Override
+    public Iterator<Object[]> iterator() {
+        // TODO integrate with underlying iterator
+        // 1 - collect all records eligible in this.updatesPerKeyMap (use a hashmap)
+        // 2 - build a iterator object that iterates over the records of the underling index
+        // 3. for each key, check if it is present in the set (1)
+        // 3a. if so, just return the fresh record as next. remember to remove it from the set
+        // 3b. otherwise, return the object as it is
+        // 4. when the iteration over the underlying index finishes, continue from the remaining set
+        return new MultiVersionIterator();
+    }
+
+    protected class MultiVersionIterator implements Iterator<Object[]>{
+
+        // Map<IKey, Object[]> freshSet;
+        Iterator<Map.Entry<IKey,Object[]>> freshSetIterator;
+
+        public MultiVersionIterator(){
+            this.freshSetIterator = collectFreshSet().entrySet().iterator();
+        }
+
+        public MultiVersionIterator(IKey[] keys){
+            this.freshSetIterator = collectFreshSet(keys).entrySet().iterator();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return this.freshSetIterator.hasNext();
+        }
+
+        @Override
+        public Object[] next() {
+            return this.freshSetIterator.next().getValue();
+        }
+    }
+
+    private Map<IKey, Object[]> collectFreshSet() {
+        Map<IKey, Object[]> freshSet = new HashMap<>();
+        // iterate over keys
+        for(Map.Entry<IKey, OperationSetOfKey> entry : this.updatesPerKeyMap.entrySet()) {
+            var obj = entry.getValue().updateHistoryMap.floorEntry(TransactionMetadata.TRANSACTION_CONTEXT.get().lastTid);
+            if (obj != null) {
+                freshSet.put(entry.getKey(), obj.val().record);
+            }
+        }
+        return freshSet;
+    }
+
+    private Map<IKey, Object[]> collectFreshSet(IKey[] keys) {
+        Map<IKey, Object[]> freshSet = new HashMap<>();
+        // iterate over keys
+        for(IKey key : keys){
+            var operation = this.updatesPerKeyMap.get(key);
+            SingleWriterMultipleReadersFIFO.Entry<TransactionId, TransactionWrite> obj = operation.updateHistoryMap.floorEntry(TransactionMetadata.TRANSACTION_CONTEXT.get().lastTid);
+            if (obj != null) {
+                freshSet.put(key, obj.val().record);
+            }
+        }
+        return freshSet;
+    }
+
+    public SingleWriterMultipleReadersFIFO.Entry<TransactionId, TransactionWrite> getFloorEntry(IKey key){
+        OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
+        return operation.updateHistoryMap.floorEntry(TransactionMetadata.TRANSACTION_CONTEXT.get().lastTid);
+    }
+
+    @Override
+    public Iterator<Object[]> iterator(IKey[] keys) {
+        return new MultiVersionIterator(keys);
     }
 
 }

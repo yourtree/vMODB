@@ -6,12 +6,10 @@ import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
 import javax.persistence.Column;
-import javax.persistence.Entity;
 import javax.persistence.Id;
 import java.io.Serializable;
 import java.util.Date;
 
-@Entity
 @VmsTable(name="order_payments")
 public final class OrderPayment implements IEntity<OrderPayment.OrderPaymentId> {
 

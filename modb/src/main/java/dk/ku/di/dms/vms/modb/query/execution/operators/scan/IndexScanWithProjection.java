@@ -1,12 +1,18 @@
 package dk.ku.di.dms.vms.modb.query.execution.operators.scan;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.index.AbstractIndex;
+import dk.ku.di.dms.vms.modb.index.interfaces.IIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * On-flight scanning, filtering, and projection in a single operator.
@@ -21,7 +27,7 @@ import java.util.Iterator;
 public final class IndexScanWithProjection extends AbstractScan {
 
     public IndexScanWithProjection(
-                     ReadWriteIndex<IKey> index,
+                     IMultiVersionIndex index,
                      int[] projectionColumns,
                      int entrySize) {
         super(entrySize, index, projectionColumns);
@@ -37,41 +43,49 @@ public final class IndexScanWithProjection extends AbstractScan {
         return this;
     }
 
-    // default call
+    public List<Object[]> runAsEmbedded(){
+        // TODO return objects
+        Iterator<Object[]> iterator = this.index.iterator();
+        while(iterator.hasNext()){
+
+            iterator.next();
+        }
+        // return this.memoryRefNode;
+        return null;
+    }
+
+    public List<Object[]> runAsEmbedded(IKey[] keys){
+        List<Object[]> res = new ArrayList<>();
+        Iterator<Object[]> iterator = this.index.iterator(keys);
+        while(iterator.hasNext()){
+            res.add( iterator.next() );
+        }
+        return res;
+    }
+
     public MemoryRefNode run(FilterContext filterContext, IKey... keys) {
-        return this.run(this.index, filterContext, keys);
-    }
-
-    // transactional call
-    public MemoryRefNode run(ReadOnlyIndex<IKey> index, FilterContext filterContext, IKey... keys) {
         // unifying in terms of iterator
-        Iterator<IKey> iterator = index.iterator(keys);
+        Iterator<Object[]> iterator = index.iterator(keys);
         while(iterator.hasNext()){
-            if(index.checkCondition(iterator, filterContext)){
-                this.append(iterator, this.projectionColumns);
+            Object[] record = iterator.next();
+            if(index.checkCondition(filterContext, record)){
+                // this.append(iterator, this.projectionColumns);
             }
-            iterator.next();
+
         }
-        return this.memoryRefNode;
+        // return this.memoryRefNode;
+        return null;
     }
 
-    public MemoryRefNode run(IKey... keys) {
-        Iterator<IKey> iterator = this.index.iterator(keys);
-        while(iterator.hasNext()){
-            this.append(iterator, this.projectionColumns);
-            iterator.next();
-        }
-        return this.memoryRefNode;
-    }
+//    public MemoryRefNode run(IKey... keys) {
+//        Iterator<IKey> iterator = this.index.iterator(keys);
+//        while(iterator.hasNext()){
+//            this.append(iterator, this.projectionColumns);
+//            iterator.next();
+//        }
+//        return this.memoryRefNode;
+//    }
 
-    public MemoryRefNode run(ReadOnlyIndex<IKey> index, IKey... keys) {
-        // unifying in terms of iterator
-        Iterator<IKey> iterator = index.iterator(keys);
-        while(iterator.hasNext()){
-            this.append(iterator, this.projectionColumns);
-            iterator.next();
-        }
-        return this.memoryRefNode;
-    }
+    // return entities directly
 
 }

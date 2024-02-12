@@ -24,7 +24,7 @@ public final class Table {
 
     public final String name;
 
-    public final Schema schema;
+    private final Schema schema;
 
     /**
      * All tables must have a pk, thus a primary index.
@@ -108,7 +108,7 @@ public final class Table {
         return this.hashCode;
     }
 
-    public Schema getSchema(){
+    public Schema schema(){
         return this.schema;
     }
 

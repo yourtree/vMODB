@@ -52,7 +52,7 @@ public final class Main {
             Product product = serdes.deserialize(str, Product.class);
 
             Object[] obj = this.repository.extractFieldValuesFromEntityObject(product);
-            IKey key = KeyUtils.buildRecordKey( table.getSchema().getPrimaryKeyColumns(), obj );
+            IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), obj );
             this.table.underlyingPrimaryKeyIndex().insert(key, obj);
 
             // response

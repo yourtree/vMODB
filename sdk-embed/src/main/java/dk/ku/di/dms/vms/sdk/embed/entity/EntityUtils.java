@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.modb.definition.Schema;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
@@ -18,6 +19,16 @@ public final class EntityUtils {
     private static final MethodHandles.Lookup lookup;
     static {
         lookup = MethodHandles.lookup();
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> Constructor<T> getEntityConstructor(Class<T> entityClazz){
+        for(var constructor : entityClazz.getDeclaredConstructors()){
+            if(constructor.getParameters().length == 0){
+                return (Constructor<T>) constructor;
+            }
+        }
+        throw new RuntimeException("No default constructor found");
     }
 
     public static Map<String, VarHandle> getVarHandleFieldsFromCompositePk(Class<?> pkClazz) throws NoSuchFieldException, IllegalAccessException {

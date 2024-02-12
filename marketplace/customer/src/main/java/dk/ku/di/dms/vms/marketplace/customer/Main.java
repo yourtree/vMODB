@@ -49,7 +49,7 @@ public final class Main {
             String str = new String( exchange.getRequestBody().readAllBytes() );
             Customer customer = this.serdes.deserialize(str, Customer.class);
             Object[] obj = this.repository.extractFieldValuesFromEntityObject(customer);
-            IKey key = KeyUtils.buildRecordKey( table.getSchema().getPrimaryKeyColumns(), obj );
+            IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), obj );
             this.table.underlyingPrimaryKeyIndex().insert(key, obj);
 
             // response

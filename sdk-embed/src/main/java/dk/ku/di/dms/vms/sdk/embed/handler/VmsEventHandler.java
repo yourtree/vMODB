@@ -188,7 +188,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         this.batchToNextBatchMap = new ConcurrentHashMap<>();
         this.tidToPrecedenceMap = new ConcurrentHashMap<>();
 
-        this.schedulerHandler = new EmbeddedSchedulerHandler();
+        this.schedulerHandler = new BatchCommitHandler();
 
         // set leader off
         this.leader = new ServerIdentifier("localhost",0);
@@ -210,13 +210,13 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
      */
     private void eventLoop(){
 
-        this.logger.info(me.vmsIdentifier+": Event handler has started.");
+        this.logger.info(this.me.vmsIdentifier+": Event handler has started.");
 
         this.connectToStarterConsumers();
 
         // setup accept since we need to accept connections from the coordinator and other VMSs
         this.serverSocket.accept( null, new AcceptCompletionHandler());
-        this.logger.info(me.vmsIdentifier+": Accept handler has been setup.");
+        this.logger.info(this.me.vmsIdentifier+": Accept handler has been setup");
 
         while(this.isRunning()){
 
@@ -235,14 +235,14 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
                     VmsTransactionResult txResult = this.vmsInternalChannels.transactionOutputQueue().take();
 
-                    this.logger.info(me.vmsIdentifier+": New transaction result in event handler. TID = "+txResult.tid);
+                    this.logger.info(this.me.vmsIdentifier+": New transaction result in event handler. TID = "+txResult.tid);
 
                     this.lastTidFinished = txResult.tid;
 
                     Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(this.lastTidFinished);
 
                     if(precedenceMap == null){
-                        logger.warning(me.vmsIdentifier+": No precedence map found for TID: "+txResult.tid);
+                        logger.warning(this.me.vmsIdentifier+": No precedence map found for TID: "+txResult.tid);
                         continue;
                     }
 
@@ -261,13 +261,13 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
                this.moveBatchIfNecessary();
 
             } catch (Exception e) {
-                this.logger.log(Level.SEVERE, "Problem on handling event: "+e.getMessage());
+                this.logger.log(Level.SEVERE, this.me.vmsIdentifier+": Problem on handling event: "+e.getMessage());
             }
 
         }
 
         this.failSafeClose();
-        this.logger.info("Event handler has finished execution.");
+        this.logger.info(this.me.vmsIdentifier+": Event handler has finished execution.");
 
     }
 
@@ -317,14 +317,14 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         // have we processed all the TIDs of this batch?
         if(this.currentBatch.isOpen() && this.currentBatch.lastTid <= this.lastTidFinished){
             // we need to alert the scheduler...
-            this.logger.info(me.vmsIdentifier+": The last TID for the current batch has arrived");
+            this.logger.info(this.me.vmsIdentifier+": The last TID for the current batch has arrived");
 
             // many outputs from the same transaction may arrive here, but can only send the batch commit once
             this.currentBatch.setStatus(BatchContext.Status.BATCH_COMPLETED);
 
             // if terminal, must send batch complete
             if(this.currentBatch.terminal) {
-                logger.info(me.vmsIdentifier+": Time to inform the coordinator about the current batch completion since I am a terminal node");
+                logger.info(this.me.vmsIdentifier+": Time to inform the coordinator about the current batch completion since I am a terminal node");
                 // must be queued in case leader is off and comes back online
                 this.leaderWorkerQueue.add(new LeaderWorker.Message(LeaderWorker.Command.SEND_BATCH_COMPLETE,
                         BatchComplete.of(this.currentBatch.batch, this.me.vmsIdentifier)));
@@ -343,7 +343,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
     private void failSafeClose(){
         // safe close
         try { if(this.serverSocket.isOpen()) this.serverSocket.close(); } catch (IOException ignored) {
-            logger.warning("Could not close socket");
+            logger.warning(this.me.vmsIdentifier+": Could not close socket");
         }
     }
 
@@ -352,7 +352,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         this.eventLoop();
     }
 
-    private final class EmbeddedSchedulerHandler implements ISchedulerHandler {
+    private final class BatchCommitHandler implements ISchedulerHandler {
         @Override
         public Future<?> run() {
             vmsInternalChannels.batchCommitCommandQueue().remove();

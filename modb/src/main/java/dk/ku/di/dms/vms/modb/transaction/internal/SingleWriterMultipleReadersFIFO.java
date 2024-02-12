@@ -47,7 +47,6 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
         @SuppressWarnings("unchecked")
         public Entry<K,V> clone() throws CloneNotSupportedException {
             return  (Entry<K, V>) super.clone();
-            // return new Entry<>(this.key, this.val, this.next);
         }
 
         public void recycle(K key, V val){
@@ -85,7 +84,6 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
      * key; if no such entry exists, returns {@code null}.
      */
     public Entry<K,V> floorEntry(K key) {
-
         if(this.first == null) return null;
 
         Entry<K,V> curr = this.first;
@@ -98,7 +96,6 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
 
         if(cmp <= 0) return curr;
         return null;
-
     }
 
     /**

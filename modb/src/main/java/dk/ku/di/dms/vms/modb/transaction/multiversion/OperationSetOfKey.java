@@ -9,7 +9,7 @@ import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIF
  * Since we have the last write type and the cached entity,
  * they naturally reference the insert (or last updated)...
  */
-public class OperationSetOfKey {
+public final class OperationSetOfKey {
 
     /**
      * Maybe the entry of this map can be a thread local variable?
@@ -17,7 +17,7 @@ public class OperationSetOfKey {
      * Contains the write (insert, delete, update) operations of records.
      * If delete operation, no new records can be added to the key.
      */
-    public SingleWriterMultipleReadersFIFO<TransactionId, TransactionWrite> updateHistoryMap;
+    public final SingleWriterMultipleReadersFIFO<TransactionId, TransactionWrite> updateHistoryMap;
 
     /**
      * Nothing impedes the user from deleting and inserting again the same record.

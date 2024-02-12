@@ -65,7 +65,6 @@ public final class Shipment implements IEntity<Shipment.ShipmentId> {
     @Column
     public String state;
 
-
     public Shipment(){}
 
     public Shipment(

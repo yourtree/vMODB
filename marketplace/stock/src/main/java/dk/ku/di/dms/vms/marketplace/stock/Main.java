@@ -46,7 +46,7 @@ public class Main {
             String str = new String( exchange.getRequestBody().readAllBytes() );
             StockItem stock = this.serdes.deserialize(str, StockItem.class);
             Object[] obj = this.repository.extractFieldValuesFromEntityObject(stock);
-            IKey key = KeyUtils.buildRecordKey( table.getSchema().getPrimaryKeyColumns(), obj );
+            IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), obj );
             this.table.underlyingPrimaryKeyIndex().insert(key, obj);
 
             // response

@@ -6,13 +6,14 @@ package dk.ku.di.dms.vms.modb.common.transaction;
  * If modb-service, then we need another mapping scheme.
  * <a href="https://stackoverflow.com/questions/21884359/java-threadlocal-vs-concurrenthashmap">...</a>
  * This is a bridge between sdk-core and sdk-embed modules, sdk-core cannot see sdk-embed.
+ * Could be moved to TransactionManager...
  */
 public final class TransactionMetadata {
 
     public static final ThreadLocal<TransactionContext> TRANSACTION_CONTEXT = new ThreadLocal<>();
 
     // avoid threads to get this value from their thread cache memory, force the thread to read from cpu mem space
-    // as I only have one thread, I don't need synchronization. java gives before-or-after atomicity by design
+    // as I only have one writer thread, I don't need synchronization. java gives before-or-after atomicity by design
     // this value is only set when all writes of the tid is written to their respective history map
     private static volatile TransactionId lastWriteTaskFinished = new TransactionId(0,0);
 

@@ -9,6 +9,6 @@ import java.util.List;
 public interface IPackageRepository extends IRepository<Package.PackageId, Package> {
 
     @Query("select * from packages where customer_id = :customerId and order_id = :orderId")
-    List<Package> getPackagesByCustomerIdAndSellerId(int customerId, int orderId);
+    List<Package> getPackagesByCustomerIdAndOrderId(int customerId, int orderId);
 
 }

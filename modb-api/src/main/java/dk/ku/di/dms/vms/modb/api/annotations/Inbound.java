@@ -8,7 +8,9 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface Inbound {
+
     String[] values();
+
     String precedence() default "";
 
     // this is across different events. but what about the case of one event triggering multiple methods?

@@ -55,11 +55,6 @@ public final class UniqueHashMapIndex extends ReadWriteIndex<IKey> {
     }
 
     @Override
-    public Object[] record(Iterator<IKey> iterator) {
-        throw new RuntimeException("Not implemented");
-    }
-
-    @Override
     public Object[] record(IKey key) {
         return this.store.get(key);
     }
@@ -67,11 +62,6 @@ public final class UniqueHashMapIndex extends ReadWriteIndex<IKey> {
     @Override
     public Iterator<IKey> iterator() {
         return this.store.keySet().iterator();
-    }
-
-    @Override
-    public boolean checkCondition(Iterator<IKey> iterator, FilterContext filterContext) {
-        throw new RuntimeException("Not implemented");
     }
 
 }

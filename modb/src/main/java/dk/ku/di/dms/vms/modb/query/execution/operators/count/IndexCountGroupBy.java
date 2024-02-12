@@ -31,8 +31,9 @@ public class IndexCountGroupBy extends AbstractCount {
         Iterator<IKey> iterator = index.iterator(keys);
 
         while(iterator.hasNext()){
-            if(this.index.checkCondition(iterator, filterContext)){
-                this.compute(iterator, countMap);
+            IKey key = iterator.next();
+            if(this.index.checkCondition(key, filterContext)){
+                this.compute(key, countMap);
             }
             iterator.next();
         }
@@ -55,9 +56,9 @@ public class IndexCountGroupBy extends AbstractCount {
 
     }
 
-    private void compute(Iterator<IKey> iterator, Map<Integer,Integer> countMap) {
+    private void compute(IKey key, Map<Integer,Integer> countMap) {
 
-        Object record = this.index.record( iterator );
+        Object record = this.index.record( key );
 
         // hash the group by columns
         int groupKey = KeyUtils.buildRecordKey( this.indexColumns, record ).hashCode();

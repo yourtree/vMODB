@@ -175,7 +175,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         this.currentOffset = new OffsetTracker(0, 1);
         this.currentOffset.signalTaskFinished();
         this.offsetMap.put(0L, this.currentOffset);
-        // this.logger.info("Offset initialized");
     }
 
     /**
@@ -194,7 +193,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
             if(context.asSimple().future.isCancelled()) {
                 // TODO needs to handle cases where the code fails. ideally it should be correct by design
-                logger.severe("Problem in the execution of a VMS");
+                logger.severe(this.vmsIdentifier+": Problem in the execution of a VMS");
             }
 
             if(!context.asSimple().future.isDone()) return;
@@ -211,7 +210,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                                 List.of(context.asSimple().result.result())) );
                 this.transactionContextMap.remove(this.currentOffset.tid());
             } catch (Exception e){
-                this.logger.warning("A task supposedly done returned an exception: "+e.getMessage());
+                this.logger.warning(this.vmsIdentifier+": A task supposedly done returned an exception: "+e.getMessage());
             }
             return;
         }
@@ -253,7 +252,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 }
 
             } catch (InterruptedException | ExecutionException e) {
-                this.logger.warning("A task supposedly done returned an exception: "+e.getMessage());
+                this.logger.warning(this.vmsIdentifier+": A task supposedly done returned an exception: "+e.getMessage());
             }
 
         }
@@ -389,7 +388,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             }
 
             if(!found){
-                throw new IllegalStateException("Input event not mapped correctly.");
+                throw new IllegalStateException(this.vmsIdentifier+": Input event not mapped correctly -> "+inboundEvent.event());
             }
 
             task.putEventInput( j, inboundEvent.input() );

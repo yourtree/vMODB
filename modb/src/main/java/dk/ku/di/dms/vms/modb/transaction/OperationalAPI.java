@@ -29,7 +29,9 @@ public sealed interface OperationalAPI permits TransactionManager {
 
     void issue(Table table, IStatement arg) throws AnalyzerException;
 
-    MemoryRefNode fetch(Table table, SelectStatement selectStatement);
+    MemoryRefNode fetchMemoryReference(Table table, SelectStatement selectStatement);
+
+    List<Object[]> fetch(Table table, SelectStatement selectStatement);
 
     void updateAll(Table table, List<Object[]> parsedEntities);
 

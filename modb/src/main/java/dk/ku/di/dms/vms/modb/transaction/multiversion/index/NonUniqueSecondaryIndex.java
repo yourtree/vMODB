@@ -1,15 +1,15 @@
 package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 
+import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
+import dk.ku.di.dms.vms.modb.common.transaction.TransactionId;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIFO;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -17,8 +17,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
+    private final ThreadLocal<Map<IKey, Tuple<Object[], WriteType>>> KEY_WRITES = ThreadLocal.withInitial(HashMap::new);
+
     // pointer to primary index
-    // necessary because of transaction, concurrency control
+    // necessary because of concurrency control
+    // secondary index point to records held in primary index
     private final PrimaryIndex primaryIndex;
 
     // a non-unique hash index
@@ -26,70 +29,17 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
     // key: formed by secondary indexed columns
     // value: the corresponding pks
-    private final Map<IKey, Set<IKey>> writesCache;
-
-    private static class WriteNode {
-        public IKey secKey;
-        public IKey pk;
-        public WriteNode next;
-        public WriteType type; // FIXME if always writes on append cache, no need for type
-        public WriteNode(IKey secKey, IKey pk, WriteType type) {
-            this.secKey = secKey;
-            this.pk = pk;
-            this.type = type;
-        }
-    }
-
-    private final ThreadLocal<WriteNode> KEY_WRITES = new ThreadLocal<>();
-
-     private static final Deque<WriteNode> writeNodeBuffer = new ArrayDeque<>();
+    private final Map<IKey, Set<IKey>> keyMap;
 
     public NonUniqueSecondaryIndex(PrimaryIndex primaryIndex, ReadWriteIndex<IKey> underlyingIndex) {
         this.primaryIndex = primaryIndex;
         this.underlyingIndex = underlyingIndex;
-        this.writesCache = new ConcurrentHashMap<>();
-
-        // initialize write node buffer with 10 elements
-        IKey key = SimpleKey.of(0);
-        for(int i = 0; i < 10; i++){
-            writeNodeBuffer.add( new WriteNode(key,key,WriteType.INSERT) );
-        }
-
+        this.keyMap = new ConcurrentHashMap<>();
     }
 
     public ReadWriteIndex<IKey> getUnderlyingIndex(){
         return this.underlyingIndex;
     }
-
-//    @Override
-//    public IRecordIterator<IKey> iterator(IKey[] keys) {
-//
-//    }
-
-    /**
-     * The semantics of this method:
-     * The bucket must have at least one record
-     * Writers must read their writes.
-     */
-//    @Override
-//    public boolean exists(IKey key) {
-//
-//        // find record in secondary index
-//        if(this.writesCache.get(key) == null){
-//            return this.underlyingSecondaryIndex.exists(key);
-//        }
-//
-//        return true;
-//
-//        // retrieve PK from record
-//
-//        // make sure record exists in PK
-//
-//        // if not, delete from sec idx and return false
-//
-//        // if so, return yes
-//
-//    }
 
     /**
      * Called by the primary key index
@@ -98,84 +48,138 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
      * A secondary key point to several primary keys in the primary index
      * @param primaryKey may have many secIdxKey associated
      */
-    public void appendDelta(IKey primaryKey, Object[] record){
-        IKey secIdxKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
-        WriteNode writeNode = getWriteNode(secIdxKey, primaryKey, WriteType.INSERT);
-        updateTransactionWriteSet(writeNode);
-        Set<IKey> pkSet = this.writesCache
-                .computeIfAbsent(secIdxKey, k -> ConcurrentHashMap.newKeySet());
-        pkSet.add(primaryKey);
-    }
-
-    private void updateTransactionWriteSet(WriteNode writeNode) {
-        WriteNode latest = KEY_WRITES.get();
-        if( latest != null ) {
-            writeNode.next = latest;
-            KEY_WRITES.set(writeNode);
+    @Override
+    public boolean insert(IKey primaryKey, Object[] record){
+        IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
+        Set<IKey> set = this.keyMap.computeIfAbsent(secKey, (x)-> new HashSet<>());
+        if(!set.contains(primaryKey)) {
+            KEY_WRITES.get().put(primaryKey, new Tuple<>(record, WriteType.INSERT));
+            set.add(primaryKey);
         }
-    }
-
-    private static WriteNode getWriteNode(IKey secIdxKey, IKey primaryKey, WriteType type) {
-        WriteNode writeNode = writeNodeBuffer.poll();
-        if(writeNode == null) {
-            writeNode = new WriteNode(secIdxKey, primaryKey, type );
-        } else {
-            writeNode.secKey = secIdxKey;
-            writeNode.pk = primaryKey;
-            writeNode.type = type;
-            writeNode.next = null;
-        }
-        return writeNode;
+        return true;
     }
 
     @Override
     public void undoTransactionWrites(){
-        WriteNode currentNode = KEY_WRITES.get();
-        while (currentNode != null){
-            if(currentNode.type == WriteType.INSERT)
-                this.writesCache.get(currentNode.secKey).remove(currentNode.pk);
-            currentNode = currentNode.next;
+        var writes = KEY_WRITES.get();
+        for(var entry : writes.entrySet()){
+            IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), entry.getValue().t1() );
+            Set<IKey> set = this.keyMap.get(secKey);
+            set.remove(entry.getKey());
         }
     }
 
     @Override
     public void installWrites() {
-        // TODO finish must consider inserts and deletes
-        throw new RuntimeException("Not implemented");
-    }
-
-    @Override
-    public boolean insert(IKey key, Object[] record) {
-        this.underlyingIndex.insert(key, record);
-        // throw new RuntimeException("Not implemented");
-        return true;
+        // just remove the delete TODO separate INSERT and DELETE into different maps
+        var deletes = KEY_WRITES.get().entrySet().stream().filter(p->p.getValue().t2()==WriteType.DELETE).toList();
+        for(var entry : deletes){
+            IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), entry.getValue().t1() );
+            Set<IKey> set = this.keyMap.get(secKey);
+            set.remove(entry.getKey());
+        }
     }
 
     @Override
     public boolean update(IKey key, Object[] record) {
-        throw new RuntimeException("Not implemented");
+        // KEY_WRITES.get().put(key, new Tuple<>(record, WriteType.UPDATE));
+        // key already there
+        return true;
     }
 
     @Override
     public boolean remove(IKey key) {
-        throw new RuntimeException("Not implemented");
+        // how to know the sec idx if we don't have the record?
+        return false;
+    }
+
+    public boolean remove(IKey key, Object[] record){
+        KEY_WRITES.get().put(key, new Tuple<>(record, WriteType.DELETE));
+        return true;
     }
 
     @Override
     public Object[] lookupByKey(IKey key) {
-        throw new RuntimeException("Not implemented");
+        throw new RuntimeException("Not supported");
     }
 
-    /**
-     * An iterator over a secondary index must consider the PK
-     */
-    public void delete(Object[] record) {
-        IKey secIdxKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
-        //this.writesCache.remove(secIdxKey);
-        // also delete from underlying?
-        //this.underlyingIndex.delete(secIdxKey);
-        WriteNode writeNode = getWriteNode( secIdxKey, null, WriteType.DELETE );
-        updateTransactionWriteSet(writeNode);
+    @Override
+    public Iterator<Object[]> iterator() {
+        return new MultiVersionIterator();
+    }
+
+    private static class MultiVersionIterator implements Iterator<Object[]> {
+
+        public MultiVersionIterator(){
+
+        }
+
+        @Override
+        public boolean hasNext() {
+            return false;
+        }
+
+        @Override
+        public Object[] next() {
+            return new Object[0];
+        }
+    }
+
+    @Override
+    public Iterator<Object[]> iterator(IKey[] keys) {
+        return new MultiKeyMultiVersionIterator(this.primaryIndex, keys, this.keyMap);
+    }
+
+    private static class MultiKeyMultiVersionIterator implements Iterator<Object[]> {
+
+        private final Map<IKey, Set<IKey>> keyMap;
+        private final PrimaryIndex primaryIndex;
+        private Iterator<IKey> currentIterator;
+
+        private final IKey[] keys;
+
+        int idx;
+
+        IKey key;
+
+        SingleWriterMultipleReadersFIFO.Entry<TransactionId, TransactionWrite> entry;
+
+        public MultiKeyMultiVersionIterator(PrimaryIndex primaryIndex, IKey[] keys, Map<IKey, Set<IKey>> keyMap){
+            this.primaryIndex = primaryIndex;
+            this.idx = 0;
+            this.keys = keys;
+            this.currentIterator = keyMap.get(keys[this.idx]).iterator();
+            this.keyMap = keyMap;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return currentIterator.hasNext() || idx < keys.length - 1;
+        }
+
+        @Override
+        public Object[] next() {
+            if(!currentIterator.hasNext()){
+                idx++;
+                currentIterator = keyMap.get(keys[this.idx]).iterator();
+            }
+            key = currentIterator.next();
+            entry = primaryIndex.getFloorEntry(key);
+            if (entry != null)
+                return entry.val().record;
+            return null;
+        }
+
+    }
+
+    @Override
+    public int[] indexColumns() {
+        return this.underlyingIndex.columns();
+    }
+
+    @Override
+    public boolean containsColumn(int columnPos) {
+        return this.underlyingIndex.containsColumn(columnPos);
     }
 
 }

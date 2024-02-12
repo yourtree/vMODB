@@ -4,9 +4,7 @@ import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
-import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,45 +54,6 @@ public final class NonUniqueHashMapIndex extends ReadWriteIndex<IKey> {
     @Override
     public Object[] lookupByKey(IKey key) {
         return this.store.get(key).toArray();
-    }
-
-    @Override
-    public Object[] record(Iterator<IKey> iterator) {
-        throw new RuntimeException("Not implemented");
-    }
-
-    @Override
-    public Object[] record(IKey key) {
-        throw new RuntimeException("Not implemented");
-    }
-
-    // TODO finish implementation
-//    private class HashMapNonUniqueIndexIterator implements IRecordIterator<IKey> {
-//
-//        public HashMapNonUniqueIndexIterator(){
-//
-//        }
-//
-//        @Override
-//        public IKey get() {
-//            return null;
-//        }
-//
-//        @Override
-//        public void next() {
-//
-//        }
-//
-//        @Override
-//        public boolean hasElement() {
-//            return false;
-//        }
-//
-//    }
-
-    @Override
-    public boolean checkCondition(Iterator<IKey> iterator, FilterContext filterContext) {
-        throw new RuntimeException("Not implemented");
     }
 
 }

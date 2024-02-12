@@ -25,10 +25,11 @@ public class IndexSum extends Sum {
         SumOperation sumOperation = buildOperation(dataType);
         Iterator<IKey> iterator = this.index.iterator(keys);
         while(iterator.hasNext()){
-            if(this.index.checkCondition(iterator, filterContext)){
-                sumOperation.accept(this.index.record(iterator)[this.columnIndex]);
+            IKey key =   iterator.next();
+            if(this.index.checkCondition(key, filterContext)){
+                sumOperation.accept(this.index.record(key)[this.columnIndex]);
             }
-            iterator.next();
+
         }
         appendResult(sumOperation);
         return this.memoryRefNode;

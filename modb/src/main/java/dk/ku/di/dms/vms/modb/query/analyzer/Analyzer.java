@@ -113,7 +113,7 @@ public final class Analyzer {
 
             // iterate over all tables involved
             for (final Table table : queryTree.tables.values()) {
-                Schema tableSchema = table.getSchema();
+                Schema tableSchema = table.schema();
                 int colPos = 0;
                 for (String columnName : tableSchema.columnNames()) {
                     queryTree.projections.add(new ColumnReference(columnName, colPos, table));
@@ -251,7 +251,7 @@ public final class Analyzer {
         // this assumes param is a value (number or char/string)
         for(WhereClauseElement element : whereClause){
 
-            if(!columnNameIsFoundInSchema(element.column(), table.schema))
+            if(!columnNameIsFoundInSchema(element.column(), table.schema()))
                 throw new AnalyzerException("Column does not exist in the table");
 
             ColumnReference columnReference = new ColumnReference(element.column(), table);
@@ -280,7 +280,7 @@ public final class Analyzer {
         ColumnReference columnReferenceToResult = null;
 
         for(Table table : tables.values()){
-            final Schema schema = table.getSchema();
+            final Schema schema = table.schema();
             final Integer columnIndex = schema.columnPosition(columnStr);
             if(columnIndex != null) {
                 if(columnReferenceToResult == null) {
@@ -316,7 +316,7 @@ public final class Analyzer {
             throw new AnalyzerException("Table "+ tableName + " does not exist in the catalog.");
         }
         final Table table = tables.get(tableName);
-        final Schema schema = table.getSchema();
+        final Schema schema = table.schema();
         Integer columnIndex = schema.columnPosition(columnName);
         if(columnIndex == null){
             throw new AnalyzerException("Column does not exist in the table "+ tableName);

@@ -7,10 +7,6 @@ import java.util.Iterator;
 
 public interface ReadOnlyIndex<K> extends IIndex<K> {
 
-    default Object[] record(Iterator<IKey> iterator){
-        throw new RuntimeException("No support for checking condition on key in this index.");
-    }
-
     default Object[] record(IKey key){
         throw new RuntimeException("No support for checking condition on key in this index.");
     }
@@ -30,14 +26,6 @@ public interface ReadOnlyIndex<K> extends IIndex<K> {
 
     default Iterator<IKey> iterator(IKey key) {
         throw new RuntimeException("No support for key iteration in this index.");
-    }
-
-    /**
-     * Default call from operators
-     * Multiversion-based iterators must override this method
-     */
-    default boolean checkCondition(Iterator<K> iterator, FilterContext filterContext){
-        throw new RuntimeException("No support for checking condition on key in this index.");
     }
 
     default boolean checkCondition(K key, FilterContext filterContext){

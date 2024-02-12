@@ -1,34 +1,37 @@
 package dk.ku.di.dms.vms.modb.query.execution.operators.scan;
 
-import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
-import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 
 import java.util.Iterator;
+import java.util.List;
 
 public class FullScanWithProjection extends AbstractScan {
 
-    public FullScanWithProjection(ReadWriteIndex<IKey> index,
+    public FullScanWithProjection(IMultiVersionIndex index,
                                   int[] projectionColumns,
                                   int entrySize) {
         super(entrySize, index, projectionColumns);
     }
 
-    public MemoryRefNode run(FilterContext filterContext){
-        return this.run(this.index, filterContext);
-    }
+//    public MemoryRefNode run(FilterContext filterContext){
+//        Iterator<IKey> iterator = index.iterator();
+//        while(iterator.hasNext()){
+//            if(index.checkCondition(iterator, filterContext)){
+//                append(iterator, projectionColumns);
+//            }
+//            iterator.next();
+//        }
+//        return memoryRefNode;
+//    }
 
-    public MemoryRefNode run(ReadOnlyIndex<IKey> index, FilterContext filterContext){
-        Iterator<IKey> iterator = index.iterator();
+    public List<Object[]> runAsEmbedded(){
+        // TODO return objects
+        Iterator<Object[]> iterator = this.index.iterator();
         while(iterator.hasNext()){
-            if(index.checkCondition(iterator, filterContext)){
-                append(iterator, projectionColumns);
-            }
             iterator.next();
         }
-        return memoryRefNode;
+        // return this.memoryRefNode;
+        return null;
     }
 
     @Override

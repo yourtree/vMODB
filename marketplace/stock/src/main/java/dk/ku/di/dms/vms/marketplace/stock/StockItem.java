@@ -4,14 +4,12 @@ import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
 import javax.persistence.Column;
-import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.IdClass;
 import java.io.Serializable;
 import java.util.Date;
 import java.util.Objects;
 
-@Entity
 @VmsTable(name="stock_items")
 @IdClass(StockItem.StockId.class)
 public class StockItem implements IEntity<StockItem.StockId> {

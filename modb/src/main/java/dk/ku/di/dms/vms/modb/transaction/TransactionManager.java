@@ -40,7 +40,8 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
 
     private static final ThreadLocal<Set<IMultiVersionIndex>> INDEX_WRITES = ThreadLocal.withInitial( () -> {
         if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
-            return new HashSet<>(2);
+            // TODO buffer of hashsets...
+            return new HashSet<>(4); // 4 maximum indexes used per task
         }
         return Collections.emptySet();
     });
@@ -53,13 +54,12 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
      * Operators output results
      * They are read-only operations, do not modify data
      */
-    private final Map<String, AbstractSimpleOperator> readQueryPlans;
+    private final Map<String, AbstractSimpleOperator> queryPlansCache;
 
     public TransactionManager(Map<String, Table> catalog){
         this.planner = new SimplePlanner();
         this.analyzer = new Analyzer(catalog);
-        // read-only transactions may put items here
-        this.readQueryPlans = new ConcurrentHashMap<>();
+        this.queryPlansCache = new ConcurrentHashMap<>();
     }
 
     private boolean fkConstraintViolationFree(Table table, Object[] values){
@@ -71,24 +71,49 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
         return true;
     }
 
-    /**
-     * Best guess return type. Differently from the parameter type received.
-     * @param selectStatement a select statement
-     * @return the query result in a memory space
-     */
-    public MemoryRefNode fetch(Table table, SelectStatement selectStatement) {
-
+    @Override
+    public List<Object[]> fetch(Table table, SelectStatement selectStatement){
         String sqlAsKey = selectStatement.SQL.toString();
-
-        AbstractSimpleOperator scanOperator = this.readQueryPlans.getOrDefault( sqlAsKey, null );
-
+        AbstractSimpleOperator scanOperator = this.queryPlansCache.getOrDefault( sqlAsKey, null );
         List<WherePredicate> wherePredicates;
 
         if(scanOperator == null){
             QueryTree queryTree = this.analyzer.analyze(selectStatement);
             wherePredicates = queryTree.wherePredicates;
             scanOperator = this.planner.plan(queryTree);
-            this.readQueryPlans.put(sqlAsKey, scanOperator );
+            this.queryPlansCache.put(sqlAsKey, scanOperator);
+        } else {
+            // get only the where clause params
+            wherePredicates = this.analyzer.analyzeWhere(
+                    table, selectStatement.whereClause);
+        }
+
+        if(scanOperator.isIndexScan()){
+            IKey key = getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
+            return scanOperator.asIndexScan().runAsEmbedded(new IKey[]{ key });
+        } else if(scanOperator.isIndexAggregationScan()){
+            return scanOperator.asIndexAggregationScan().runAsEmbedded();
+        } else {
+            return scanOperator.asFullScan().runAsEmbedded();
+        }
+    }
+
+    /**
+     * Best guess return type. Differently from the parameter type received.
+     * @param selectStatement a select statement
+     * @return the query result in a memory space
+     */
+    @Override
+    public MemoryRefNode fetchMemoryReference(Table table, SelectStatement selectStatement) {
+        String sqlAsKey = selectStatement.SQL.toString();
+        AbstractSimpleOperator scanOperator = this.queryPlansCache.getOrDefault( sqlAsKey, null );
+        List<WherePredicate> wherePredicates;
+
+        if(scanOperator == null){
+            QueryTree queryTree = this.analyzer.analyze(selectStatement);
+            wherePredicates = queryTree.wherePredicates;
+            scanOperator = this.planner.plan(queryTree);
+            this.queryPlansCache.put(sqlAsKey, scanOperator);
         } else {
             // get only the where clause params
             wherePredicates = this.analyzer.analyzeWhere(
@@ -101,7 +126,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
         // make an enum, it is easier
         if(scanOperator.isIndexScan()){
             // build keys and filters
-            memRes = this.run(table, wherePredicates, scanOperator.asIndexScan());
+            memRes = this.run(wherePredicates, scanOperator.asIndexScan());
         } else if(scanOperator.isIndexAggregationScan()){
             memRes = this.run(wherePredicates, scanOperator.asIndexAggregationScan());
         } else {
@@ -129,9 +154,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
                 // UpdateOperator.run(statement.asUpdateStatement(), table.primaryKeyIndex() );
             }
             case INSERT -> {
-
                 // TODO get columns, put object array in order and submit to entity api
-
             }
             case DELETE -> {
 
@@ -166,12 +189,12 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
      * Not yet considering this record can serve as FK to a record in another table.
      */
     public void delete(Table table, Object[] values) {
-        IKey pk = KeyUtils.buildRecordKey(table.schema.getPrimaryKeyColumns(), values);
+        IKey pk = KeyUtils.buildRecordKey(table.schema().getPrimaryKeyColumns(), values);
         this.deleteByKey(table, pk);
     }
 
     public void deleteByKey(Table table, Object[] keyValues) {
-        IKey pk = KeyUtils.buildRecordKey(table.schema.getPrimaryKeyColumns(), keyValues);
+        IKey pk = KeyUtils.buildKey(keyValues);
         this.deleteByKey(table, pk);
     }
 
@@ -186,7 +209,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
     }
 
     public Object[] lookupByKey(PrimaryIndex index, Object... valuesOfKey){
-        IKey pk = KeyUtils.buildRecordKey( index.underlyingIndex().schema().getPrimaryKeyColumns(), valuesOfKey);
+        IKey pk = KeyUtils.buildKey(valuesOfKey);
         return index.lookupByKey(pk);
     }
 
@@ -204,7 +227,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
                 // this is the delta. records that the underlying index does not know yet
                 for (NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()) {
                     INDEX_WRITES.get().add(secIndex);
-                    secIndex.appendDelta(pk, values);
+                    secIndex.insert(pk, values);
                 }
                 return;
             }
@@ -221,7 +244,7 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
                 INDEX_WRITES.get().add(index);
                 for(NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()){
                     INDEX_WRITES.get().add(secIndex);
-                    secIndex.appendDelta( key_, values );
+                    secIndex.insert( key_, values );
                 }
                 return values;
             }
@@ -264,47 +287,59 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
      */
     public MemoryRefNode run(List<WherePredicate> wherePredicates,
                              IndexGroupByMinWithProjection operator){
-        return operator.run();
+        return null; // operator.run();
     }
 
-    public MemoryRefNode run(Table table,
-                             List<WherePredicate> wherePredicates,
-                             IndexScanWithProjection operator){
+    private IKey getIndexKeysFromWhereClause(List<WherePredicate> wherePredicates, IMultiVersionIndex index){
         int i = 0;
-        Object[] keyList = new Object[operator.index.columns().length];
+        Object[] keyList = new Object[index.indexColumns().length];
         List<WherePredicate> wherePredicatesNoIndex = new ArrayList<>(wherePredicates.size());
         // build filters for only those columns not in selected index
         for (WherePredicate wherePredicate : wherePredicates) {
             // not found, then build filter
-            if(operator.index.containsColumn( wherePredicate.columnReference.columnPosition )){
+            if (index.containsColumn(wherePredicate.columnReference.columnPosition)) {
                 keyList[i] = wherePredicate.value;
                 i++;
-            } else {
-                wherePredicatesNoIndex.add(wherePredicate);
             }
         }
+        return KeyUtils.buildKey(keyList);
+    }
+
+    public MemoryRefNode run(List<WherePredicate> wherePredicates,
+                             IndexScanWithProjection operator){
+//        int i = 0;
+//        Object[] keyList = new Object[operator.index.columns().length];
+//        List<WherePredicate> wherePredicatesNoIndex = new ArrayList<>(wherePredicates.size());
+//        // build filters for only those columns not in selected index
+//        for (WherePredicate wherePredicate : wherePredicates) {
+//            // not found, then build filter
+//            if(operator.index.containsColumn( wherePredicate.columnReference.columnPosition )){
+//                keyList[i] = wherePredicate.value;
+//                i++;
+//            } else {
+//                wherePredicatesNoIndex.add(wherePredicate);
+//            }
+//        }
 
         // build input
-        IKey inputKey = KeyUtils.buildKey( keyList );
-
-        FilterContext filterContext;
-        if(!wherePredicatesNoIndex.isEmpty()) {
-            filterContext = FilterContextBuilder.build(wherePredicatesNoIndex);
-            return operator.run( table.underlyingPrimaryKeyIndex(), filterContext, inputKey );
-        }
-        return operator.run(inputKey);
+//        IKey inputKey = KeyUtils.buildKey( keyList );
+//
+//        FilterContext filterContext;
+//        if(!wherePredicatesNoIndex.isEmpty()) {
+//            filterContext = FilterContextBuilder.build(wherePredicatesNoIndex);
+////            return operator.run( table.underlyingPrimaryKeyIndex(), filterContext, inputKey );
+//            return operator.run( filterContext, inputKey );
+//        }
+//        return operator.run(inputKey);
+        return null;
     }
 
     public MemoryRefNode run(Table table,
                              List<WherePredicate> wherePredicates,
                              FullScanWithProjection operator){
         FilterContext filterContext = FilterContextBuilder.build(wherePredicates);
-        return operator.run( table.underlyingPrimaryKeyIndex(), filterContext );
+        return null; //operator.run( table.underlyingPrimaryKeyIndex(), filterContext );
     }
-
-    /****** WRITE OPERATORS *******/
-
-
 
     /**
      * CHECKPOINTING

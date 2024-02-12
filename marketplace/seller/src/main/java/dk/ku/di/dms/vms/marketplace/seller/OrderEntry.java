@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.marketplace.seller;
 
 import dk.ku.di.dms.vms.marketplace.common.enums.OrderStatus;
 import dk.ku.di.dms.vms.marketplace.common.enums.PackageStatus;
+import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
@@ -19,7 +20,8 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
         public int order_id;
         public int product_id;
 
-        public OrderEntryId(){}
+        public OrderEntryId() {
+        }
 
         public OrderEntryId(int customer_id, int order_id, int product_id) {
             this.customer_id = customer_id;
@@ -27,10 +29,6 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
             this.product_id = product_id;
         }
 
-    }
-
-    public OrderEntryId getId(){
-        return new OrderEntryId( this.customer_id, this.order_id, this.package_id );
     }
 
     @Id
@@ -43,6 +41,7 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
     public int product_id;
 
     @Column
+    @VmsForeignKey(table = Seller.class, column = "id")
     public int seller_id;
 
     @Column
@@ -109,4 +108,9 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
         this.order_status = order_status;
         this.delivery_status = delivery_status;
     }
+
+    public OrderEntryId getId(){
+        return new OrderEntryId( this.customer_id, this.order_id, this.package_id );
+    }
+
 }

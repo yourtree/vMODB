@@ -39,8 +39,9 @@ public class IndexCountDistinct extends AbstractCount {
 
         Iterator<IKey> iterator = this.index.iterator(keys);
         while(iterator.hasNext()){
-            if(index.checkCondition(iterator, filterContext)){
-                Object val = index.record(iterator)[distinctColumnIndex];
+            IKey key = iterator.next();
+            if(index.checkCondition(key, filterContext)){
+                Object val = index.record(key)[distinctColumnIndex];
                 if( !state.valuesSeen.containsKey(val.hashCode())) {
                     state.count++;
                     state.valuesSeen.put(val.hashCode(), 1);

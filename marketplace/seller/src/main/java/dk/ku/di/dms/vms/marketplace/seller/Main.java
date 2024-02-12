@@ -3,9 +3,16 @@ package dk.ku.di.dms.vms.marketplace.seller;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.definition.Table;
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
+import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 
 public final class Main {
@@ -19,15 +26,49 @@ public final class Main {
 
         // initialize HTTP server to serve seller dashboard online requests
         HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", 8007), 0);
-        httpServer.createContext("/product", new SellerHttpHandler());
+        httpServer.createContext("/seller", new SellerHttpHandler(vms));
         httpServer.start();
     }
 
     private static class SellerHttpHandler implements HttpHandler {
 
+        private final VmsApplication vms;
+
+        private final IOrderEntryRepository orderEntryRepository;
+
+        private final Table sellerTable;
+
+        private final AbstractProxyRepository<Integer, Seller> sellerRepository;
+
+        private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+
+        @SuppressWarnings("unchecked")
+        private SellerHttpHandler(VmsApplication vms) {
+            this.vms = vms;
+            this.orderEntryRepository = (IOrderEntryRepository) vms.getRepositoryProxy("packages");
+            this.sellerTable = vms.getTable("sellers");
+            this.sellerRepository = (AbstractProxyRepository<Integer, Seller>) vms.getRepositoryProxy("sellers");
+        }
+
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            // TODO finish
+            if(exchange.getRequestMethod().contentEquals("POST")){
+                String str = new String( exchange.getRequestBody().readAllBytes() );
+                Seller seller = serdes.deserialize(str, Seller.class);
+
+                Object[] obj = this.sellerRepository.extractFieldValuesFromEntityObject(seller);
+                IKey key = KeyUtils.buildRecordKey( sellerTable.schema().getPrimaryKeyColumns(), obj );
+                this.sellerTable.underlyingPrimaryKeyIndex().insert(key, obj);
+
+                // response
+                OutputStream outputStream = exchange.getResponseBody();
+                exchange.sendResponseHeaders(200, 0);
+                outputStream.flush();
+                outputStream.close();
+            }
+
+            // TODO seller dashboard. send fetch and fetchMany directly to transaction manager? the tx manager assigns the last finished tid to thread, thus obtaining the freshest snapshot possible
+            //this.orderEntryRepository.insert();
         }
     }
 

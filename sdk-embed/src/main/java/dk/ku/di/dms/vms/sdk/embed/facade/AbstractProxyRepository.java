@@ -63,17 +63,18 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
 
     private final Map<String, SelectStatement> repositoryQueriesMap;
 
+    @SuppressWarnings("unchecked")
     public AbstractProxyRepository(Class<PK> pkClazz,
                                   Class<T> entityClazz,
                                   Table table,
                                   OperationalAPI operationalAPI,
                                   // key: method name, value: select stmt
                                   Map<String, SelectStatement> repositoryQueriesMap)
-            throws NoSuchMethodException, NoSuchFieldException, IllegalAccessException {
-        this.entityConstructor = entityClazz.getDeclaredConstructor();
-        this.entityFieldMap = EntityUtils.getVarHandleFieldsFromEntity(entityClazz, table.getSchema());
+            throws NoSuchFieldException, IllegalAccessException {
+        this.entityConstructor = EntityUtils.getEntityConstructor(entityClazz);
+        this.entityFieldMap = EntityUtils.getVarHandleFieldsFromEntity(entityClazz, table.schema());
         if(pkClazz.getPackageName().equalsIgnoreCase("java.lang") || pkClazz.isPrimitive()){
-            this.pkFieldMap = EntityUtils.getVarHandleFieldFromPk(entityClazz, table.getSchema());
+            this.pkFieldMap = EntityUtils.getVarHandleFieldFromPk(entityClazz, table.schema());
         } else {
             this.pkFieldMap = EntityUtils.getVarHandleFieldsFromCompositePk(pkClazz);
         }
@@ -86,26 +87,16 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
      * <a href="http://mydailyjava.blogspot.com/2022/02/using-byte-buddy-for-proxy-creation.html">Proxy creation in ByteBuddy</a>
      */
     public static final class Interceptor {
-
         @RuntimeType
         public static Object intercept(
                 @This AbstractProxyRepository self,
                 @Origin Method method,
-                @AllArguments Object[] args){
-                // @SuperMethod(nullIfImpossible = true) Method superMethod,
-                // @Empty Object defaultValue)
-                // ) throws Throwable {
-
-            // System.out.println("I'm the proxy --> " + method.getName());
+                @AllArguments Object[] args) {
             return self.intercept(method.getName(), args);
-//            Object object = superMethod.invoke(self, args);
-
-//            return object;
-
         }
     }
 
-    public final List<T> intercept(String methodName, Object[] args){
+    public final List<T> intercept(String methodName, Object[] args) {
 
         // retrieve statically defined query
         SelectStatement selectStatement = this.repositoryQueriesMap.get(methodName);
@@ -116,11 +107,14 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         }
 
         // submit for execution
-        MemoryRefNode memoryRefNode = this.operationalAPI.fetch( this.table, selectStatement );
+        List<Object[]> records = this.operationalAPI.fetch( this.table, selectStatement );
 
-        // TODO parse into entity object
+        List<T> result = new ArrayList<>(records.size());
+        for(Object[] record : records) {
+            result.add( this.parseObjectIntoEntity(record) );
+        }
 
-        return null;
+        return result;
     }
 
     @Override
@@ -236,7 +230,6 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
      * Must be a linked sorted map. Ordered by the columns that appear on the key object.
      */
     private Object[] extractFieldValuesFromKeyObject(PK keyObject) {
-
         Object[] values = new Object[this.pkFieldMap.size()];
 
         if(keyObject instanceof Number){
@@ -254,62 +247,81 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     }
 
     public final Object[] extractFieldValuesFromEntityObject(T entityObject) {
-
-        Object[] values = new Object[this.table.getSchema().columnNames().length];
+        Object[] values = new Object[this.table.schema().columnNames().length];
         // TODO objectCacheStore.peek()
 
         int fieldIdx = 0;
         // get values from entity
-        for(String columnName : this.table.schema.columnNames()){
+        for(String columnName : this.table.schema().columnNames()){
             values[fieldIdx] = this.entityFieldMap.get(columnName).get(entityObject);
             fieldIdx++;
         }
         return values;
     }
 
+    /**
+     * TODO This implementation should be used is a possible implementation with a sidecar
+     * We can return objects in embedded mode. See last method
+     */
+//    @Override
+//    @SuppressWarnings("unchecked")
+//    public <DTO> List<DTO> fetchMany(SelectStatement statement, Class<DTO> clazz){
+//        // we need some context about the results in this memory space
+//        // solved by now with the assumption the result is of the same size of memory
+//        // number of records
+//        // schema of the return (maybe not if it is a dto)
+//        var memRes = this.operationalAPI.fetchMemoryReference(this.table, statement);
+//        try {
+//            List<DTO> result = new ArrayList<>(10);
+//            Constructor<?> constructor = clazz.getDeclaredConstructors()[0];
+//            Field[] fields = clazz.getFields();
+//            long currAddress = memRes.address();
+//            long lastOffset = currAddress + memRes.bytes();
+//            while(memRes != null) {
+//                DTO dto = (DTO) constructor.newInstance();
+//                for (var field : fields) {
+//                    DataType dt = DataTypeUtils.getDataTypeFromJavaType(field.getType());
+//                    field.set(dto, DataTypeUtils.callReadFunction(currAddress, dt));
+//                    currAddress += dt.value;
+//                }
+//                result.add(dto);
+//
+//                if(currAddress == lastOffset) {
+//                    MemoryManager.releaseTemporaryDirectMemory(memRes.address());
+//                    memRes = memRes.next;
+//                    if(memRes != null){
+//                        memRes = memRes.next;
+//                        currAddress = memRes.address();
+//                        lastOffset = currAddress + memRes.bytes();
+//                    }
+//                }
+//            }
+//            return result;
+//        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
+
     @Override
-    @SuppressWarnings("unchecked")
-    public <DTO> List<DTO> fetchMany(SelectStatement statement, Class<DTO> clazz){
-        // we need some context about the results in this memory space
-        // solved by now with the assumption the result is of the same size of memory
-        // number of records
-        // schema of the return (maybe not if it is a dto)
-        var memRes = this.operationalAPI.fetch(this.table, statement);
+    public <DTO> List<DTO> query(SelectStatement statement, Class<DTO> clazz){
+        List<Object[]> objects = this.operationalAPI.fetch(this.table, statement);
+        Constructor<?> constructor = clazz.getDeclaredConstructors()[0];
+        Field[] fields = clazz.getFields();
+        List<DTO> result = new ArrayList<>();
         try {
-            List<DTO> result = new ArrayList<>(10);
-            Constructor<?> constructor = clazz.getDeclaredConstructors()[0];
-            Field[] fields = clazz.getFields();
-            long currAddress = memRes.address();
-            long lastOffset = currAddress + memRes.bytes();
-            while(memRes != null) {
+            for(Object[] object : objects){
                 DTO dto = (DTO) constructor.newInstance();
+                int i = 0;
                 for (var field : fields) {
-                    DataType dt = DataTypeUtils.getDataTypeFromJavaType(field.getType());
-                    field.set(dto, DataTypeUtils.callReadFunction(currAddress, dt));
-                    currAddress += dt.value;
+                    field.set(dto, object[i]);
+                    i++;
                 }
                 result.add(dto);
-
-                if(currAddress == lastOffset) {
-                    MemoryManager.releaseTemporaryDirectMemory(memRes.address());
-                    memRes = memRes.next;
-                    if(memRes != null){
-                        memRes = memRes.next;
-                        currAddress = memRes.address();
-                        lastOffset = currAddress + memRes.bytes();
-                    }
-                }
             }
-            return result;
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    @Override
-    public List<Object[]> fetch(SelectStatement statement){
-        MemoryRefNode memRes = this.operationalAPI.fetch(this.table, statement);
-        return null;
+        return result;
     }
 
 }

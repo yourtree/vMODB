@@ -6,13 +6,14 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.AbstractIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractMemoryBasedOperator;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
 
 import java.util.Iterator;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class Sum extends AbstractSimpleOperator {
+public class Sum extends AbstractMemoryBasedOperator {
 
     protected final ReadOnlyIndex<IKey> index;
 
@@ -111,8 +112,9 @@ public class Sum extends AbstractSimpleOperator {
 
         Iterator<IKey> iterator = index.iterator();
         while(iterator.hasNext()){
-            if(index.checkCondition(iterator, filterContext)){
-                Object val = index.record(iterator)[columnIndex];
+            IKey key = iterator.next();
+            if(index.checkCondition(key, filterContext)){
+                Object val = index.record(key)[columnIndex];
                 sumOperation.accept(val);
             }
             iterator.next();

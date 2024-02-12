@@ -301,7 +301,7 @@ public class EmbedMetadataLoader {
             // build partial indexes
             Map<IIndexKey, UniqueSecondaryIndex> partialIndexMap = new HashMap<>();
             for(ReadWriteIndex<IKey> idx : tableToPartialIndexMap.get(vmsDataSchema.tableName)){
-                partialIndexMap.put(idx.key(), new UniqueSecondaryIndex(idx));
+                partialIndexMap.put(idx.key(), new UniqueSecondaryIndex(primaryIndex));
             }
 
             Table table = new Table(vmsDataSchema.tableName,

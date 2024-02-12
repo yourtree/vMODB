@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractMemoryBasedOperator;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
 
 import java.util.Iterator;
@@ -14,7 +15,7 @@ import java.util.Iterator;
  * where outer index is unique hash
  * and inner index is non unique hash
  */
-public class UniqueHashJoinNonUniqueHashWithProjection extends AbstractSimpleOperator {
+public class UniqueHashJoinNonUniqueHashWithProjection extends AbstractMemoryBasedOperator {
 
     public final ReadOnlyIndex<IKey> leftIndex;
     public final ReadOnlyIndex<IKey> rightIndex;
@@ -58,17 +59,18 @@ public class UniqueHashJoinNonUniqueHashWithProjection extends AbstractSimpleOpe
 
         while(leftIterator.hasNext()) {
 
-            if (!this.leftIndex.checkCondition(leftIterator, leftFilter)) continue;
+            IKey leftKey = leftIterator.next();
+            if (!this.leftIndex.checkCondition(leftKey, leftFilter)) continue;
 
             rightIterator = this.rightIndex.iterator(leftIterator.next());
             if (!rightIterator.hasNext()) {
                 leftIterator.next();
                 continue;
             }
-
+            IKey rightKey = leftIterator.next();
             while (rightIterator.hasNext()) {
-                if (this.rightIndex.checkCondition(rightIterator, rightFilter)) {
-                    append(leftIterator, rightIterator,
+                if (this.rightIndex.checkCondition(rightKey, rightFilter)) {
+                    append(leftKey, rightKey,
                             leftProjectionColumns, leftProjectionColumnsSize,
                             rightProjectionColumns, rightProjectionColumnsSize
                     );
@@ -89,15 +91,15 @@ public class UniqueHashJoinNonUniqueHashWithProjection extends AbstractSimpleOpe
      * Easier to ensure (implicitly) that remote calls between modules remain consistent
      * just by following conventions
      */
-    private void append(Iterator<IKey> leftIterator, Iterator<IKey> rightIterator,
+    private void append(IKey leftKey, IKey rightKey,
                         int[] leftProjectionColumns, int[] leftValueSizeInBytes,
                         int[] rightProjectionColumns, int[] rightValueSizeInBytes){
 
         int leftProjIdx = 0;
         int rightProjIdx = 0;
 
-        Object[] leftRecord = this.leftIndex.record(leftIterator);
-        Object[] rightRecord = this.rightIndex.record(rightIterator);
+        Object[] leftRecord = this.leftIndex.record(leftKey);
+        Object[] rightRecord = this.rightIndex.record(rightKey);
 
         for(int projOrdIdx = 0; projOrdIdx < projectionOrder.length; projOrdIdx++) {
 
