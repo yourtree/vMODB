@@ -1,11 +1,9 @@
 package dk.ku.di.dms.vms.modb.query.execution.operators.min;
 
-import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.execution.operators.scan.AbstractScan;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 
@@ -39,7 +37,7 @@ public final class IndexGroupByMinWithProjection extends AbstractScan {
     }
 
     public List<Object[]> runAsEmbedded(){
-        Map<GroupByKey, Comparable<?>> minMap = new HashMap<>();
+        Map<GroupByKey, Tuple<Comparable<?>,Object[]>> minMap = new HashMap<>();
         Iterator<Object[]> iterator = this.index.iterator();
         // build hash with min per group (defined in group by)
         while(iterator.hasNext()){
@@ -72,25 +70,6 @@ public final class IndexGroupByMinWithProjection extends AbstractScan {
 //
 //    }
 
-    private List<Object[]> project(Map<GroupByKey, Comparable<?>> minMap){
-        int i = 0;
-        int j;
-        List<Object[]> result = new ArrayList<>();
-        for(var entry : minMap.entrySet()){
-            Object[] record = this.index.lookupByKey( entry.getKey().getPk() );
-            Object[] projection = new Object[this.projectionColumns.length];
-            j = 0;
-            for (int projectionColumn : this.projectionColumns) {
-                projection[j] = record[projectionColumn];
-                j++;
-            }
-            result.add(projection);
-            i++;
-            if(i == this.limit) break;
-        }
-        return result;
-    }
-
 //    private void project(Map<GroupByKey, Comparable<?>> minMap){
 //        int i = 0;
 //        for(var entry : minMap.entrySet()){
@@ -108,21 +87,40 @@ public final class IndexGroupByMinWithProjection extends AbstractScan {
 //        }
 //    }
 
-    private void compute(Object[] record, Map<GroupByKey, Comparable<?>> minMap) {
-
+    private void compute(Object[] record, Map<GroupByKey, Tuple<Comparable<?>, Object[]>> minMap) {
+        if(record == null) return;
         // hash the group by columns
         IKey pk = KeyUtils.buildRecordKey(schema.getPrimaryKeyColumns(), record);
         IKey groupByKey = KeyUtils.buildRecordKey(this.indexColumns, record);
         GroupByKey groupKey = new GroupByKey( groupByKey.hashCode(), pk );
 
         if(!minMap.containsKey(groupKey)){
-            minMap.put(groupKey, (Comparable<?>) record[minColumn]);
+            minMap.put(groupKey, new Tuple<>( (Comparable<?>) record[minColumn], record) );
         } else {
-            Comparable currVal = minMap.get(groupKey);
+            Comparable currVal = minMap.get(groupKey).t1();
             if (currVal.compareTo(record[minColumn]) > 0){
-                minMap.put(groupKey, (Comparable<?>) record[minColumn]);
+                minMap.put(groupKey, new Tuple<>( (Comparable<?>) record[minColumn], record) );
             }
         }
+    }
+
+    private List<Object[]> project(Map<GroupByKey, Tuple<Comparable<?>,Object[]>> minMap){
+        int i = 0;
+        int j;
+        List<Object[]> result = new ArrayList<>();
+        for(var entry : minMap.entrySet()){
+            Object[] record = entry.getValue().t2();
+            Object[] projection = new Object[this.projectionColumns.length];
+            j = 0;
+            for (int projectionColumn : this.projectionColumns) {
+                projection[j] = record[projectionColumn];
+                j++;
+            }
+            result.add(projection);
+            i++;
+            if(i == this.limit) break;
+        }
+        return result;
     }
 
     @Override

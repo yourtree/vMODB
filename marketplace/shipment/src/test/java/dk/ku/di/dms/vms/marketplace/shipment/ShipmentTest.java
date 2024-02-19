@@ -20,7 +20,7 @@ import java.util.function.BiFunction;
 import static dk.ku.di.dms.vms.marketplace.shipment.ShipmentService.OLDEST_SHIPMENT_PER_SELLER;
 import static java.lang.Thread.sleep;
 
-public class ShipmentTest {
+public final class ShipmentTest {
 
     private static VmsApplication getVmsApplication() throws Exception {
         return VmsApplication.build("localhost", 8084, new String[]{
@@ -53,7 +53,7 @@ public class ShipmentTest {
 
         sleep(2000);
 
-        TransactionMetadata.registerTransactionStart( 4, 0, true );
+        TransactionMetadata.registerTransactionStart( 4, 0, 3, true );
 
         IPackageRepository packageRepository = (IPackageRepository) vms.getRepositoryProxy("packages");
         List<dk.ku.di.dms.vms.marketplace.shipment.entities.Package> list =
@@ -69,32 +69,18 @@ public class ShipmentTest {
 
         IPackageRepository packageRepository = (IPackageRepository) vms.getRepositoryProxy("packages");
 
-        // customer_id, order_id, package_id, seller_id
-        Object[] obj1 = new Object[] { 1, 1, 1, 1, "test", 1.0f, new Date(), new Date(), 1, "shipped"  };
-        Object[] obj2 = new Object[] { 1, 1, 2, 2, "test", 1.0f, new Date(), new Date(), 1, "shipped"  };
+        for(int i = 1; i <= 10; i++) {
+            CustomerCheckout customerCheckout = customerCheckoutBiFunction.apply(i, String.valueOf(i));
+            PaymentConfirmed paymentConfirmed = paymentConfirmedBiFunction.apply(customerCheckout, i);
 
-        vms.getTable("packages").underlyingPrimaryKeyIndex().insert(
-                KeyUtils.buildKey( new int[]{ 1, 1, 1 } ),
-                obj1
-        );
+            InboundEvent inboundEvent = new InboundEvent(i, i-1, 1,
+                    "payment_confirmed", PaymentConfirmed.class, paymentConfirmed);
+            vms.internalChannels().transactionInputQueue().add(inboundEvent);
+        }
 
-        vms.getTable("packages").underlyingPrimaryKeyIndex().insert(
-                KeyUtils.buildKey( new int[]{ 1, 1, 2 } ),
-                obj2
-        );
+        sleep(5000);
 
-        UniqueSecondaryIndex partialIndex = vms.getTable("packages").partialIndexMap.
-                get( (IIndexKey) KeyUtils.buildKey( new int[]{ 10 } ) );
-
-        partialIndex.insert(
-                    KeyUtils.buildKey( new int[]{ 1, 1, 1 } ),
-                    obj1
-        );
-
-        partialIndex.insert(
-                        KeyUtils.buildKey( new int[]{ 1, 1, 2 } ),
-                        obj2
-                );
+        TransactionMetadata.registerTransactionStart( 11, 0, 10, true );
 
         List<OldestSellerPackageEntry> packages = packageRepository.query(
                 OLDEST_SHIPMENT_PER_SELLER, OldestSellerPackageEntry.class);

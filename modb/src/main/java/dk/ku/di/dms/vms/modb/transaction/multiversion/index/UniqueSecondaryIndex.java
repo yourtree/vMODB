@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionId;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIFO;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
@@ -9,7 +8,6 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 
 /**
  * The same key from PK is used to find records in this index
@@ -72,56 +70,51 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
 
     @Override
     public Object[] lookupByKey(IKey key){
-        return null; // should never call it. this index does not have the record
+        // should never call it. this index does not have the record
+        return null;
     }
 
     @Override
     public Iterator<Object[]> iterator() {
-        return new MultiVersionIterator(this.primaryIndex, KEY_WRITES.get(), this.keyMap.iterator());
+        return new MultiVersionIterator(this.primaryIndex, new HashMap<>( KEY_WRITES.get() ), this.keyMap.iterator());
     }
 
     private static class MultiVersionIterator implements Iterator<Object[]> {
 
         private final PrimaryIndex primaryIndex;
         private final Iterator<IKey> iterator;
-
         private final Map<IKey, WriteType> writeSet;
         private Iterator<Map.Entry<IKey, WriteType>> currentTidIterator;
-
-        SingleWriterMultipleReadersFIFO.Entry<TransactionId, TransactionWrite> entry;
-        IKey key;
-
-        Supplier<Boolean> iteratorSupplier;
 
         public MultiVersionIterator(PrimaryIndex primaryIndex, Map<IKey, WriteType> writeSet, Iterator<IKey> iterator){
             this.primaryIndex = primaryIndex;
             this.writeSet = writeSet;
             this.iterator = iterator;
-            this.iteratorSupplier = iterator::hasNext;
         }
 
         @Override
         public boolean hasNext() {
-            return iteratorSupplier.get();
+            if(!this.iterator.hasNext()){
+                this.currentTidIterator = this.writeSet.entrySet().iterator();
+                return this.currentTidIterator.hasNext();
+            }
+            return true;
         }
 
         @Override
         public Object[] next() {
-            if(iterator.hasNext()) {
-                key = iterator.next();
+            IKey key;
+            if(this.iterator.hasNext()) {
+                key = this.iterator.next();
                 // remove if it contains the key
-                writeSet.remove(key);
-                if(!iterator.hasNext()){
-                    this.currentTidIterator = writeSet.entrySet().iterator();
-                    this.iteratorSupplier = currentTidIterator::hasNext;
-                }
+                this.writeSet.remove(key);
             } else {
-                var entryCurr = currentTidIterator.next();
+                var entryCurr = this.currentTidIterator.next();
                 if(entryCurr.getValue() == WriteType.DELETE)
                     return null;
                 key = entryCurr.getKey();
             }
-            entry = primaryIndex.getFloorEntry(key);
+            SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> entry = this.primaryIndex.getFloorEntry(key);
             if (entry != null)
                 return entry.val().record;
             return null;

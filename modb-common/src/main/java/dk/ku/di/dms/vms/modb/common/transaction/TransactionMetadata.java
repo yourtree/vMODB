@@ -6,7 +6,7 @@ package dk.ku.di.dms.vms.modb.common.transaction;
  * If modb-service, then we need another mapping scheme.
  * <a href="https://stackoverflow.com/questions/21884359/java-threadlocal-vs-concurrenthashmap">...</a>
  * This is a bridge between sdk-core and sdk-embed modules, sdk-core cannot see sdk-embed.
- * Could be moved to TransactionManager...
+ * Could be moved to TransactionManager... Could also be substituted by scopeLocal...
  */
 public final class TransactionMetadata {
 
@@ -15,18 +15,18 @@ public final class TransactionMetadata {
     // avoid threads to get this value from their thread cache memory, force the thread to read from cpu mem space
     // as I only have one writer thread, I don't need synchronization. java gives before-or-after atomicity by design
     // this value is only set when all writes of the tid is written to their respective history map
-    private static volatile TransactionId lastWriteTaskFinished = new TransactionId(0,0);
+//    private static volatile TransactionId lastWriteTaskFinished = new TransactionId(0,0);
 
     // a tid might have multiple tasks
     // so a tid can be executed by two different threads
-    public static void registerWriteTransactionFinish(){
-        lastWriteTaskFinished = TRANSACTION_CONTEXT.get().tid;
-    }
+//    public static void registerWriteTransactionFinish(){
+//        lastWriteTaskFinished = TRANSACTION_CONTEXT.get().tid;
+//    }
 
-    public static void registerTransactionStart(long tid, int identifier, boolean readOnly){
+    public static void registerTransactionStart(long tid, int identifier, long lastTid, boolean readOnly){
         TRANSACTION_CONTEXT.set( new TransactionContext(
-                new TransactionId(tid, identifier),
-                lastWriteTaskFinished,
+                tid,
+                lastTid,
                 readOnly )
         );
     }

@@ -2,11 +2,13 @@ package dk.ku.di.dms.vms.modb.transaction;
 
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
+import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
+import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
@@ -21,6 +23,7 @@ import dk.ku.di.dms.vms.modb.query.planner.SimplePlanner;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.UniqueSecondaryIndex;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * in order to accommodate two or more VMSs in the same resource,
  *  it would need to make this class an instance (no static methods) and put it into modb modules
  */
-public final class TransactionManager implements OperationalAPI, CheckpointAPI {
+public final class TransactionManager implements OperationalAPI, TransactionalAPI {
 
     private static final ThreadLocal<Set<IMultiVersionIndex>> INDEX_WRITES = ThreadLocal.withInitial( () -> {
         if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
@@ -218,16 +221,24 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
      * @param values The fields extracted from the entity
      */
     public void insert(Table table, Object[] values){
-        PrimaryIndex index = table.primaryKeyIndex();
+        PrimaryIndex primaryIndex = table.primaryKeyIndex();
         if(this.fkConstraintViolationFree(table, values)){
-            IKey pk = index.insertAndGetKey(values);
+            IKey pk = primaryIndex.insertAndGetKey(values);
             if(pk != null) {
-                INDEX_WRITES.get().add(index);
+                INDEX_WRITES.get().add(primaryIndex);
                 // iterate over secondary indexes to insert the new write
                 // this is the delta. records that the underlying index does not know yet
                 for (NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()) {
                     INDEX_WRITES.get().add(secIndex);
                     secIndex.insert(pk, values);
+                }
+                for(var entry : table.partialIndexMap.entrySet()){
+                    // does the record "fits" the partial index?
+                    Tuple<Integer, Object> check = table.partialIndexMetaMap.get( entry.getKey() );
+                    if (primaryIndex.meetPartialIndex( values, check.t1(), check.t2() )){
+                        INDEX_WRITES.get().add(entry.getValue());
+                        entry.getValue().insert( pk, values );
+                    }
                 }
                 return;
             }
@@ -237,14 +248,21 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
     }
 
     public Object[] insertAndGet(Table table, Object[] values){
-        PrimaryIndex index = table.primaryKeyIndex();
+        PrimaryIndex primaryIndex = table.primaryKeyIndex();
         if(this.fkConstraintViolationFree(table, values)){
-            IKey key_ = index.insertAndGetKey(values);
-            if(key_ != null) {
-                INDEX_WRITES.get().add(index);
+            IKey pk = primaryIndex.insertAndGetKey(values);
+            if(pk != null) {
+                INDEX_WRITES.get().add(primaryIndex);
                 for(NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()){
                     INDEX_WRITES.get().add(secIndex);
-                    secIndex.insert( key_, values );
+                    secIndex.insert( pk, values );
+                }
+                for(var entry : table.partialIndexMap.entrySet()){
+                    Tuple<Integer, Object> check = table.partialIndexMetaMap.get( entry.getKey() );
+                    if (primaryIndex.meetPartialIndex( values, check.t1(), check.t2() )){
+                        INDEX_WRITES.get().add(entry.getValue());
+                        entry.getValue().insert( pk, values );
+                    }
                 }
                 return values;
             }
@@ -342,25 +360,21 @@ public final class TransactionManager implements OperationalAPI, CheckpointAPI {
     }
 
     /**
-     * CHECKPOINTING
+     * TODO checkpoint
+     * Must log the updates in a separate file. no need for WAL, no need to store before and after
      * Only log those data versions until the corresponding batch.
      * TIDs are not necessarily a sequence.
      */
     public void checkpoint(){
-
         // make state durable
         // get buffered writes in transaction facade and merge in memory
-        var indexes = INDEX_WRITES.get();
+    }
 
+    public void commit(){
+        var indexes = INDEX_WRITES.get();
         for(var index : indexes){
             index.installWrites();
-            // log index since all updates are made
-            // index.asUniqueHashIndex().buffer().log();
         }
-
-        // TODO must modify corresponding secondary indexes too
-        //  must log the updates in a separate file. no need for WAL, no need to store before and after
-
     }
 
 }

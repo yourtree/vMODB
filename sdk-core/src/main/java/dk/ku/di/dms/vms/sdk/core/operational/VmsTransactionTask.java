@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
 import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
+import dk.ku.di.dms.vms.sdk.core.scheduler.ITransactionalHandler;
 
 import java.util.concurrent.Callable;
 
@@ -10,12 +10,16 @@ import java.util.concurrent.Callable;
  * that form the input of a data operation.
  * In other words, the actual data operation ready for execution.
  */
-public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
+public final class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
 
     // this is the global tid
     private final long tid;
 
+    private final long lastTid;
+
     private final long batch;
+
+    private final ITransactionalHandler transactionalHandler;
 
     // the information necessary to run the method
     private final VmsTransactionSignature signature;
@@ -29,8 +33,10 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
 
     private int remainingInputs;
 
-    public VmsTransactionTask (long tid, long batch, VmsTransactionSignature signature, int inputSize){
+    public VmsTransactionTask(ITransactionalHandler transactionalHandler, long tid, long lastTid, long batch, VmsTransactionSignature signature, int inputSize){
+        this.transactionalHandler = transactionalHandler;
         this.tid = tid;
+        this.lastTid = lastTid;
         this.batch = batch;
         this.signature = signature;
         this.inputs = new Object[inputSize];
@@ -70,7 +76,7 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
     public VmsTransactionTaskResult call() {
 
         // register thread in the transaction facade
-        TransactionMetadata.registerTransactionStart(this.tid, this.identifier, this.signature.transactionType() == TransactionTypeEnum.R);
+        this.transactionalHandler.beginTransaction(this.tid, this.identifier, this.lastTid, this.signature.transactionType() == TransactionTypeEnum.R);
 
         try {
 
@@ -81,11 +87,10 @@ public class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
             // then send to the leader...
             OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
 
-            // TODO we need to erase the transactions that are not seen by any more new transactions
+            // TODO we need to erase the entries that are no longer seen by new transactions
             // need to move
             if(this.signature.transactionType() != TransactionTypeEnum.R){
-                // work like a commit, but not. it serves to set the visibility of future tasks
-                TransactionMetadata.registerWriteTransactionFinish();
+                this.transactionalHandler.commit();
             }
 
             return new VmsTransactionTaskResult(

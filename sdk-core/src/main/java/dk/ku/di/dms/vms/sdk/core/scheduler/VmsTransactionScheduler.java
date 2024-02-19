@@ -72,23 +72,58 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     // reuse same collection to avoid many allocations
     private final Collection<InboundEvent> inputEvents;
 
-    private final ISchedulerHandler handler;
+    // used to receive external signals that require the scheduler to pause and run tasks, e.g., checkpointing
+    private final ITransactionalHandler handler;
 
     // used to identify in which VMS scheduler a possible problem has happened
     private final String vmsIdentifier;
 
-    public VmsTransactionScheduler(String vmsIdentifier,
+    public static VmsTransactionScheduler build(String vmsIdentifier,
+                        IVmsInternalChannels vmsChannels,
+                        // (input) queue to transactions map
+                        Map<String, VmsTransactionMetadata> transactionMetadataMap,
+                        ITransactionalHandler handler){
+        // could be higher. must adjust according to the number of cores available
+        return new VmsTransactionScheduler( vmsIdentifier,
+               Executors.newSingleThreadExecutor(), Executors.newSingleThreadExecutor(),
+               vmsChannels, transactionMetadataMap, handler );
+    }
+
+    public static VmsTransactionScheduler buildNoCheckpointing(String vmsIdentifier,
+                                                IVmsInternalChannels vmsChannels,
+                                                // (input) queue to transactions map
+                                                Map<String, VmsTransactionMetadata> transactionMetadataMap){
+        return new VmsTransactionScheduler(vmsIdentifier, Executors.newSingleThreadExecutor(), Executors.newSingleThreadExecutor(), vmsChannels, transactionMetadataMap, new ITransactionalHandler() {
+            @Override
+            public void checkpoint() { }
+
+            @Override
+            public boolean mustCheckpoint() {
+                return false;
+            }
+
+            @Override
+            public void commit() { }
+
+            @Override
+            public void beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) { }
+
+        });
+    }
+
+    private VmsTransactionScheduler(String vmsIdentifier,
                                    ExecutorService readTaskPool,
+                                   ExecutorService writeTaskPool,
                                    IVmsInternalChannels vmsChannels,
                                    // (input) queue to transactions map
                                    Map<String, VmsTransactionMetadata> transactionMetadataMap,
-                                   ISchedulerHandler handler){
+                                   ITransactionalHandler handler){
         super();
 
         this.vmsIdentifier = vmsIdentifier;
         // thread pools
         this.readTaskPool = readTaskPool;
-        this.writeTaskPool = Executors.newSingleThreadExecutor();
+        this.writeTaskPool = writeTaskPool;
 
         // infra (come from external)
         this.transactionMetadataMap = transactionMetadataMap;
@@ -133,7 +168,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     @Override
     public void run() {
 
-        this.logger.info(vmsIdentifier+": Transaction scheduler has started");
+        this.logger.info(this.vmsIdentifier+": Transaction scheduler has started");
 
         this.initializeOffset();
 
@@ -144,8 +179,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 this.processTaskResult();
                 this.moveOffsetPointerIfNecessary();
                 // let's wait for now. in the future may add more semantics (e.g., no wait)
-                if( this.handler != null && this.handler.conditionHolds() ) {
-                    this.handler.run().get();
+                if( this.handler.mustCheckpoint() ) {
+                    // run in the same thread although impl is in another class
+                    this.handler.checkpoint();
                 }
             } catch(Exception e){
                 this.logger.warning("Error on scheduler loop: "+e.getMessage());
@@ -338,7 +374,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
             VmsTransactionSignature signature = node.object();
             task = new VmsTransactionTask(
+                    this.handler,
                     inboundEvent.tid(),
+                    inboundEvent.lastTid(),
                     inboundEvent.batch(),
                     node.object(),
                     signature.inputQueues().length
@@ -443,9 +481,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     }
 
     /**
-     * Assumption: we always have at least one offset in the list. Of course,
-     * I could do this by design but the code guarantees that
-     * Is it safe to move the offset pointer? this method takes care of that
+     * Assumption: we always have at least one offset in the list.
+     * Of course, I could do this by design but the code guarantees that
+     * Is it safe to move the offset pointer? This method takes care of that
      */
     private void moveOffsetPointerIfNecessary(){
 

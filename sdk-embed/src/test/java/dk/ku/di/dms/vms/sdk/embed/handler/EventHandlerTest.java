@@ -10,7 +10,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
-import dk.ku.di.dms.vms.modb.transaction.CheckpointAPI;
+import dk.ku.di.dms.vms.modb.transaction.TransactionalAPI;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
@@ -67,10 +67,15 @@ public class EventHandlerTest {
     private static final Logger logger = Logger.getLogger(EventHandlerTest.class.getName());
     private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-    private static final class DumbCheckpointAPI implements CheckpointAPI {
+    private static final class DumbCheckpointAPI implements TransactionalAPI {
         @Override
         public void checkpoint() {
              logger.info("Checkpoint called at: "+System.currentTimeMillis());
+        }
+
+        @Override
+        public void commit() {
+            logger.info("Commit called at: "+System.currentTimeMillis());
         }
     }
 
@@ -107,12 +112,11 @@ public class EventHandlerTest {
             vmsMetadata.inputEventSchema().put(in, eventSchema);
         }
 
-        ExecutorService readTaskPool = Executors.newSingleThreadExecutor();
-
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        VmsTransactionScheduler scheduler = new VmsTransactionScheduler("test", readTaskPool, vmsInternalPubSubService,
-                        vmsMetadata.queueToVmsTransactionMap(),null);
+        VmsTransactionScheduler scheduler = VmsTransactionScheduler.buildNoCheckpointing(
+                "test", vmsInternalPubSubService,
+                        vmsMetadata.queueToVmsTransactionMap());
 
         VmsNode vmsIdentifier = new VmsNode(
                 node.host, node.port, vmsName,

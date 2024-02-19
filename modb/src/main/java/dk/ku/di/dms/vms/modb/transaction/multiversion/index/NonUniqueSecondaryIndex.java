@@ -138,11 +138,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
         private final IKey[] keys;
 
-        int idx;
-
-        IKey key;
-
-        SingleWriterMultipleReadersFIFO.Entry<TransactionId, TransactionWrite> entry;
+        private int idx;
 
         public MultiKeyMultiVersionIterator(PrimaryIndex primaryIndex, IKey[] keys, Map<IKey, Set<IKey>> keyMap){
             this.primaryIndex = primaryIndex;
@@ -163,8 +159,8 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
                 idx++;
                 currentIterator = keyMap.get(keys[this.idx]).iterator();
             }
-            key = currentIterator.next();
-            entry = primaryIndex.getFloorEntry(key);
+            IKey key = currentIterator.next();
+            SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> entry = primaryIndex.getFloorEntry(key);
             if (entry != null)
                 return entry.val().record;
             return null;

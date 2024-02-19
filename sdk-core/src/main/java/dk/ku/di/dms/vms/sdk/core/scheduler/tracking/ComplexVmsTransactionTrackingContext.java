@@ -11,8 +11,7 @@ import java.util.concurrent.Future;
 
 /**
  * The context of the tasks from a transaction
- * (thus having the same TID)
- * in a single VMS.
+ * (thus having the same TID) in a single VMS.
  * --
  * The tasks found in the lists are READY to be scheduled for execution.
  * In other words, all inputs are fulfilled.

@@ -35,14 +35,13 @@ public class SchedulerTest {
     public void test() throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException, InterruptedException {
 
         // what do I need to set up a vms transaction scheduler?
-        ExecutorService readTaskPool = Executors.newSingleThreadExecutor();
         VmsInternalChannels vmsInternalChannels = VmsInternalChannels.getInstance();
         @SuppressWarnings("unchecked")
         Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) NetworkRepositoryFacade.class.getConstructors()[0];
         VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example");
 
-        VmsTransactionScheduler scheduler = new VmsTransactionScheduler("test",
-                readTaskPool, vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null);
+        VmsTransactionScheduler scheduler = VmsTransactionScheduler.buildNoCheckpointing(
+                "test", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap());
 
         Thread schedulerThread = new Thread(scheduler);
         schedulerThread.start();
@@ -66,8 +65,8 @@ public class SchedulerTest {
 
         // tricky to simulate we have a scheduler in other microservice.... we need a new scheduler because of the tid
         // could reset the tid to 0, but would need to synchronize to avoid exceptions
-        scheduler = new VmsTransactionScheduler("vmsTest",
-                readTaskPool, vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null);
+        scheduler = VmsTransactionScheduler.buildNoCheckpointing(
+                "vmsTest", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap());
 
         schedulerThread = new Thread(scheduler);
         schedulerThread.start();

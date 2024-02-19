@@ -59,6 +59,7 @@ public final class Table {
      */
     public final Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap;
 
+    // column position, value expected
     public final Map<IIndexKey, Tuple<Integer, Object>> partialIndexMetaMap;
 
     public final Map<IIndexKey, UniqueSecondaryIndex> partialIndexMap;

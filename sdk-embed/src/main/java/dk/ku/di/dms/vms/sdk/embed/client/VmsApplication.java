@@ -111,20 +111,9 @@ public final class VmsApplication {
         if(entryOptional.isEmpty()) throw new IllegalStateException("Cannot find a single instance of VMS");
         String vmsName = entryOptional.get().getValue();
 
-        // could be higher. must adjust according to the number of cores available
-        ExecutorService readTaskPool = Executors.newSingleThreadExecutor();
-
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        VmsTransactionScheduler scheduler =
-                new VmsTransactionScheduler(
-                        vmsName,
-                        readTaskPool,
-                        vmsInternalPubSubService,
-                        vmsMetadata.queueToVmsTransactionMap(), null);
-
         // ideally lastTid and lastBatch must be read from the storage
-
         VmsNode vmsIdentifier = new VmsNode(
                 host, port, vmsName,
                 0, 0,0,
@@ -135,9 +124,15 @@ public final class VmsApplication {
         // at least two, one for acceptor and one for new events
         ExecutorService socketPool = Executors.newFixedThreadPool(2);
 
-        VmsEventHandler eventHandler = VmsEventHandler.buildWithDefaults(
-                vmsIdentifier, null,
-                transactionManager, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
+        VmsEventHandler eventHandler = VmsEventHandler.build(
+                vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
+
+        VmsTransactionScheduler scheduler =
+                VmsTransactionScheduler.build(
+                        vmsName,
+                        vmsInternalPubSubService,
+                        vmsMetadata.queueToVmsTransactionMap(),
+                        eventHandler.schedulerHandler());
 
         return new VmsApplication( vmsMetadata, catalog, eventHandler, scheduler, vmsInternalPubSubService );
 
@@ -145,18 +140,18 @@ public final class VmsApplication {
 
     public void start(){
         // one way to accomplish that, but that would require keep checking the thread status
-        Thread eventHandlerThread = new Thread(eventHandler);
+        Thread eventHandlerThread = new Thread(this.eventHandler);
         eventHandlerThread.start();
-        Thread schedulerThread = new Thread(scheduler);
+        Thread schedulerThread = new Thread(this.scheduler);
         schedulerThread.start();
     }
 
     public void stop(){
-        eventHandler.stop();
-        scheduler.stop();
+        this.eventHandler.stop();
+        this.scheduler.stop();
     }
 
     public IVmsInternalChannels internalChannels() {
-        return internalChannels;
+        return this.internalChannels;
     }
 }

@@ -274,7 +274,6 @@ public class EmbedMetadataLoader {
                     listPartialIndexes.add(uniquePartialIndex);
                 }
             }
-
         }
 
         // now I have the primary key indexes, foreign-key indexes, and other secondary indexes

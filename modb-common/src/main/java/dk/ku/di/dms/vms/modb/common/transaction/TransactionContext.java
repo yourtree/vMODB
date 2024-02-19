@@ -2,13 +2,13 @@ package dk.ku.di.dms.vms.modb.common.transaction;
 
 public class TransactionContext {
 
-    public TransactionId tid;
+    public final long tid;
 
-    public TransactionId lastTid;
+    public final long lastTid;
 
-    public boolean readOnly;
+    public final boolean readOnly;
 
-    public TransactionContext(TransactionId tid, TransactionId lastTid, boolean readOnly) {
+    public TransactionContext(long tid, long lastTid, boolean readOnly) {
         this.tid = tid;
         this.lastTid = lastTid;
         this.readOnly = readOnly;

@@ -13,11 +13,13 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.transaction.CheckpointAPI;
+import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
+import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
+import dk.ku.di.dms.vms.modb.transaction.TransactionalAPI;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
-import dk.ku.di.dms.vms.sdk.core.scheduler.ISchedulerHandler;
+import dk.ku.di.dms.vms.sdk.core.scheduler.ITransactionalHandler;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
@@ -52,8 +54,6 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
     static final int DEFAULT_DELAY_FOR_BATCH_SEND = 3000;
 
-    private final ExecutorService executorService;
-
     /** SERVER SOCKET **/
     // other VMSs may want to connect in order to send events
     private final AsynchronousServerSocketChannel serverSocket;
@@ -77,7 +77,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
     private final Map<Integer, LockConnectionMetadata> producerConnectionMetadataMap;
 
     /** For checkpointing the state */
-    private final CheckpointAPI checkpointingAPI;
+    private final TransactionalAPI transactionalAPI;
 
     /** SERIALIZATION & DESERIALIZATION **/
     private final IVmsSerdesProxy serdesProxy;
@@ -122,52 +122,63 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
     private final Map<Long, Long> batchToNextBatchMap;
 
-    public final ISchedulerHandler schedulerHandler;
+    private final ITransactionalHandler schedulerHandler;
 
-    /*
+    /**
      * It is necessary a way to store the tid received to a
      * corresponding dependence map.
      */
     private final Map<Long, Map<String, Long>> tidToPrecedenceMap;
 
-    public static VmsEventHandler buildWithDefaults(// to identify which vms this is
-                                                    VmsNode me,
+    public static VmsEventHandler build(// to identify which vms this is
+                                        VmsNode me,
+                                        // to checkpoint private state
+                                        TransactionalAPI checkpointingAPI,
+                                        // for communicating with other components
+                                        VmsEmbeddedInternalChannels vmsInternalChannels,
+                                        // metadata about this vms
+                                        VmsRuntimeMetadata vmsMetadata,
+                                        // serialization/deserialization of objects
+                                        IVmsSerdesProxy serdesProxy,
+                                        // for recurrent and continuous tasks
+                                        ExecutorService socketPool){
+        try {
+            return new VmsEventHandler(me, vmsMetadata, new ConcurrentHashMap<>(),
+                    checkpointingAPI, vmsInternalChannels, serdesProxy, socketPool);
+        } catch (IOException e){
+            throw new RuntimeException("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
+        }
+    }
+
+    public static VmsEventHandler buildWithDefaults(VmsNode me,
                                                     // map event to VMSs
                                                     Map<String, Deque<ConsumerVms>> eventToConsumersMap,
-                                                    // to checkpoint private state
-                                                    CheckpointAPI checkpointingAPI,
-                                                    // for communicating with other components
+                                                    TransactionalAPI checkpointingAPI,
                                                     VmsEmbeddedInternalChannels vmsInternalChannels,
-                                                    // metadata about this vms
                                                     VmsRuntimeMetadata vmsMetadata,
-                                                    // serialization/deserialization of objects
                                                     IVmsSerdesProxy serdesProxy,
-                                                    // for recurrent and continuous tasks
-                                                    ExecutorService executorService) throws Exception {
+                                                    ExecutorService socketPool) {
         try {
-            return new VmsEventHandler(me, vmsMetadata,
-                    eventToConsumersMap == null ? new ConcurrentHashMap<>() : eventToConsumersMap,
-                    checkpointingAPI, vmsInternalChannels, serdesProxy, executorService);
+            return new VmsEventHandler(me, vmsMetadata, eventToConsumersMap,
+                    checkpointingAPI, vmsInternalChannels, serdesProxy, socketPool);
         } catch (IOException e){
-            throw new Exception("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
+            throw new RuntimeException("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
     }
 
     private VmsEventHandler(VmsNode me,
                             VmsRuntimeMetadata vmsMetadata,
                             Map<String, Deque<ConsumerVms>> eventToConsumersMap,
-                            CheckpointAPI checkpointingAPI,
+                            TransactionalAPI transactionalAPI,
                             VmsEmbeddedInternalChannels vmsInternalChannels,
                             IVmsSerdesProxy serdesProxy,
-                            ExecutorService executorService) throws IOException {
+                            ExecutorService socketPool) throws IOException {
         super();
 
         // network and executor
-        this.group = AsynchronousChannelGroup.withThreadPool(executorService);
+        this.group = AsynchronousChannelGroup.withThreadPool(socketPool);
         this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
         this.serverSocket.bind(me.asInetSocketAddress());
-
-        this.executorService = executorService;
 
         this.vmsInternalChannels = vmsInternalChannels;
         this.me = me;
@@ -177,7 +188,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         this.consumerConnectionMetadataMap = new ConcurrentHashMap<>(10);
         this.producerConnectionMetadataMap = new ConcurrentHashMap<>(10);
 
-        this.checkpointingAPI = checkpointingAPI;
+        this.transactionalAPI = transactionalAPI;
 
         this.serdesProxy = serdesProxy;
 
@@ -352,16 +363,30 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         this.eventLoop();
     }
 
-    private final class BatchCommitHandler implements ISchedulerHandler {
+    private final class BatchCommitHandler implements ITransactionalHandler {
         @Override
-        public Future<?> run() {
+        public void checkpoint() {
             vmsInternalChannels.batchCommitCommandQueue().remove();
-            return executorService.submit(VmsEventHandler.this::log);
+            log();
         }
         @Override
-        public boolean conditionHolds() {
+        public boolean mustCheckpoint() {
             return !vmsInternalChannels.batchCommitCommandQueue().isEmpty();
         }
+
+        @Override
+        public void commit(){
+            // set the visibility of writes to future tasks
+            // TransactionMetadata.registerWriteTransactionFinish();
+            transactionalAPI.commit();
+        }
+
+        @Override
+        public void beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) {
+            TransactionMetadata.registerTransactionStart(tid, identifier, lastTid, readOnly);
+        }
+
+
     }
 
     private void log() {
@@ -369,9 +394,11 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         // of course, I do not need to stop the scheduler on commit
         // I need to make access to the data versions data race free
         // so new transactions get data versions from the version map or the store
-        this.checkpointingAPI.checkpoint();
+        this.transactionalAPI.checkpoint();
 
         this.currentBatch.setStatus(BatchContext.Status.BATCH_COMMITTED);
+
+        // TODO this may not be necessary. the leader has already moved on at this point
         this.leaderWorkerQueue.add( new LeaderWorker.Message( LeaderWorker.Command.SEND_BATCH_COMMIT_ACK,
                 BatchCommitAck.of(this.currentBatch.batch, this.me.vmsIdentifier) ));
     }
@@ -990,6 +1017,10 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         BatchContext batchContext = BatchContext.build(batchCommitCommand);
         this.batchContextMap.put(batchCommitCommand.batch(), batchContext);
         this.batchToNextBatchMap.put( batchCommitCommand.previousBatch(), batchCommitCommand.batch() );
+    }
+
+    public ITransactionalHandler schedulerHandler() {
+        return this.schedulerHandler;
     }
 
 }

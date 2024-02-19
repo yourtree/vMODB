@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.modb.transaction.multiversion;
 
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionId;
 import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIFO;
 
 /**
@@ -17,7 +16,7 @@ public final class OperationSetOfKey {
      * Contains the write (insert, delete, update) operations of records.
      * If delete operation, no new records can be added to the key.
      */
-    public final SingleWriterMultipleReadersFIFO<TransactionId, TransactionWrite> updateHistoryMap;
+    public final SingleWriterMultipleReadersFIFO<Long, TransactionWrite> updateHistoryMap;
 
     /**
      * Nothing impedes the user from deleting and inserting again the same record.
