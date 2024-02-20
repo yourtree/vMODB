@@ -18,7 +18,13 @@ import java.util.logging.Logger;
 
 public class AbstractWorkflowTest {
 
-    protected static final int batchWindowInterval = 3000;
+    protected static final int BATCH_WINDOW_INTERVAL = 3000;
+
+    protected static final int MAX_ITEMS = 10;
+
+    protected static final int MAX_CUSTOMERS = 10;
+
+    protected static final int MAX_SELLERS = 10;
 
     protected static final Logger logger = Logger.getLogger(AbstractWorkflowTest.class.getCanonicalName());
 
@@ -42,30 +48,27 @@ public class AbstractWorkflowTest {
             .POST(HttpRequest.BodyPublishers.ofString( str ))
             .build();
 
-    protected static final int MAX_ITEMS = 10;
-    protected static final int MAX_CUSTOMERS = 10;
-
     protected void ingestDataIntoProductVms() throws IOException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();
         String str1;
         for(int i = 1; i <= MAX_ITEMS; i++){
-            str1 = new Product( 1, i, "test", "test", "test", "test", 1.0f, 1.0f,  "test", "1" ).toString();
+            str1 = new Product( i, 1, "test", "test", "test", "test", 1.0f, 1.0f,  "test", "1" ).toString();
             HttpRequest prodReq = httpRequestProductSupplier.apply(str1);
             client.send(prodReq, HttpResponse.BodyHandlers.ofString());
         }
     }
 
-    protected void ingestDataIntoStockVms() throws IOException, InterruptedException {
+    protected void insertItemsInStockVms() throws IOException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();
         String str2;
         for(int i = 1; i <= MAX_ITEMS; i++){
-            str2 = new StockItem( 1, i, 100, 0, 0, 0,  "test", "1" ).toString();
+            str2 = new StockItem( i, 1, 100, 0, 0, 0,  "test", "1" ).toString();
             HttpRequest stockReq = httpRequestStockSupplier.apply(str2);
             client.send(stockReq, HttpResponse.BodyHandlers.ofString());
         }
     }
 
-    protected void ingestDataIntoCustomerVms() throws IOException, InterruptedException {
+    protected void insertCustomersInCustomerVms() throws IOException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();
         String str2;
         for(int i = 1; i <= MAX_CUSTOMERS; i++){

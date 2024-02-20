@@ -39,7 +39,7 @@ public class StockOrderWorkflowTest extends AbstractWorkflowTest {
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
         dk.ku.di.dms.vms.marketplace.order.Main.main(null);
 
-        this.ingestDataIntoStockVms();
+        this.insertItemsInStockVms();
 
         Coordinator coordinator = loadCoordinator();
 
@@ -55,14 +55,11 @@ public class StockOrderWorkflowTest extends AbstractWorkflowTest {
         Thread thread = new Thread(new InputProducer());
         thread.start();
 
-        sleep(batchWindowInterval * 3);
+        sleep(BATCH_WINDOW_INTERVAL * 3);
 
         assert coordinator.getCurrentBatchOffset() == 2;
-
         assert coordinator.getBatchOffsetPendingCommit() == 2;
-
         assert coordinator.getTid() == 21;
-
     }
 
     private class InputProducer implements Runnable {
@@ -112,9 +109,8 @@ public class StockOrderWorkflowTest extends AbstractWorkflowTest {
         NetworkAddress orderAddress = new NetworkAddress("localhost", 8083);
         VMSs.put(orderAddress.hashCode(), orderAddress);
 
-        return Coordinator.buildDefault(
+        return Coordinator.build(
                 serverMap,
-                null,
                 VMSs,
                 transactionMap,
                 serverIdentifier,

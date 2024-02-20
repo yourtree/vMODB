@@ -3,6 +3,8 @@ package dk.ku.di.dms.vms.marketplace.seller;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
+import dk.ku.di.dms.vms.marketplace.seller.repositories.IOrderEntryRepository;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
@@ -32,8 +34,6 @@ public final class Main {
 
     private static class SellerHttpHandler implements HttpHandler {
 
-        private final VmsApplication vms;
-
         private final IOrderEntryRepository orderEntryRepository;
 
         private final Table sellerTable;
@@ -44,7 +44,6 @@ public final class Main {
 
         @SuppressWarnings("unchecked")
         private SellerHttpHandler(VmsApplication vms) {
-            this.vms = vms;
             this.orderEntryRepository = (IOrderEntryRepository) vms.getRepositoryProxy("packages");
             this.sellerTable = vms.getTable("sellers");
             this.sellerRepository = (AbstractProxyRepository<Integer, Seller>) vms.getRepositoryProxy("sellers");

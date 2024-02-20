@@ -21,7 +21,7 @@ import java.util.function.Function;
 
 import static java.lang.Thread.sleep;
 
-public class CheckoutWorkflow extends AbstractWorkflowTest {
+public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits UpdateShipmentWorkflowTest {
 
     private static final Function<Integer,CustomerCheckout> customerCheckoutFunction = customerId -> new CustomerCheckout(
             customerId, "test", "test", "test", "test","test",
@@ -29,47 +29,57 @@ public class CheckoutWorkflow extends AbstractWorkflowTest {
             "test", "test", "test", 1,"1"
     );
 
-    @Test
-    public void testFullCheckout() throws Exception {
-
+    private void initVMSs() throws Exception {
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
         dk.ku.di.dms.vms.marketplace.order.Main.main(null);
         dk.ku.di.dms.vms.marketplace.payment.Main.main(null);
         dk.ku.di.dms.vms.marketplace.shipment.Main.main(null);
         dk.ku.di.dms.vms.marketplace.customer.Main.main(null);
 
-        this.ingestDataIntoStockVms();
-        this.ingestDataIntoCustomerVms();
+        this.insertItemsInStockVms();
+        this.insertCustomersInCustomerVms();
+    }
 
-        Coordinator coordinator = loadCoordinator();
+    @Test
+    public void testCustomerCheckout() throws Exception {
+
+        this.initVMSs();
+
+        Coordinator coordinator = this.loadCoordinator();
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
 
+        this.triggerCheckoutWorkflow(coordinator);
+
+        sleep(BATCH_WINDOW_INTERVAL * 7);
+
+        assert coordinator.getCurrentBatchOffset() == 2;
+        assert coordinator.getBatchOffsetPendingCommit() == 2;
+        assert coordinator.getTid() == 11;
+    }
+
+    protected void triggerCheckoutWorkflow(Coordinator coordinator) throws Exception {
         Map<String, VmsIdentifier> connectedVMSs;
+        int numStarterVMSs = coordinator.getStarterVMSs().size();
         do{
             sleep(2000);
             connectedVMSs = coordinator.getConnectedVMSs();
-        } while (connectedVMSs.size() < 5);
+        } while (connectedVMSs.size() < numStarterVMSs);
 
-        Thread thread = new Thread(new CheckoutProducer());
+        Thread thread = new Thread(new CustomerCheckoutProducer());
         thread.start();
-
-        sleep(batchWindowInterval * 7);
-
-        assert coordinator.getCurrentBatchOffset() == 2;
-
-        assert coordinator.getBatchOffsetPendingCommit() == 2;
-
-        assert coordinator.getTid() == 11;
     }
 
     private static final Random random = new Random();
 
-    private class CheckoutProducer implements Runnable {
+    private class CustomerCheckoutProducer implements Runnable {
+
+        private final String name = CustomerCheckoutProducer.class.getSimpleName();
+
         @Override
         public void run() {
-            logger.info("[CheckoutProducer] Starting...");
-            IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
+            logger.info("["+name+"] Starting...");
+            IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
             int val = 1;
             while(val <= 10) {
 
@@ -85,15 +95,27 @@ public class CheckoutWorkflow extends AbstractWorkflowTest {
                 String payload_ = serdes.serialize(reserveStockEvent, ReserveStock.class);
                 TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
                 TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
-                logger.info("[CheckoutProducer] New reserve stock event with version: "+val);
+                logger.info("["+name+"] New reserve stock event with version: "+val);
                 parsedTransactionRequests.add(txInput_);
 
                 val++;
             }
-            logger.info("[CheckoutProducer] Going to bed definitely... ");
+            logger.info("["+name+"] Going to bed definitely...");
         }
     }
 
+    /**  // Another way to define the DAG
+         TransactionDAG checkoutDag =  TransactionBootstrap.name("customer_checkout")
+         .input( "a", "stock", "reserve_stock" )
+         .internal("b", "order", "stock_confirmed", "a")
+         .internal("c", "seller", "invoice_issued", "b")
+         .internal("c", "payment", "invoice_issued", "b")
+         .internal("c", "seller", "payment_confirmed", "c")
+         .internal( "e", "shipment",  "c" )
+         .terminal("c", "seller", "shipment_notification", "e")
+         .terminal( "d", "customer", "c" )
+         .build();
+     */
     private Coordinator loadCoordinator() throws IOException {
         ServerIdentifier serverIdentifier = new ServerIdentifier( "localhost", 8080 );
 
@@ -108,38 +130,26 @@ public class CheckoutWorkflow extends AbstractWorkflowTest {
                 .terminal( "e", "shipment",  "c" )
                 .build();
 
-//        TransactionDAG checkoutDag =  TransactionBootstrap.name("customer_checkout")
-//                .input( "a", "stock", "reserve_stock" )
-//                .internal("b", "order", "stock_confirmed", "a")
-//                .internal("c", "seller", "invoice_issued", "b")
-//                .internal("c", "payment", "invoice_issued", "b")
-//                .internal("c", "seller", "payment_confirmed", "c")
-//                .internal( "e", "shipment",  "c" )
-//                .terminal("c", "seller", "shipment_notification", "e")
-//                .terminal( "d", "customer", "c" )
-//                .build();
-
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
         transactionMap.put(checkoutDag.name, checkoutDag);
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        Map<Integer, NetworkAddress> VMSs = new HashMap<>(3);
+        Map<Integer, NetworkAddress> starterVMSs = new HashMap<>(3);
         NetworkAddress stockAddress = new NetworkAddress("localhost", 8082);
-        VMSs.put(stockAddress.hashCode(), stockAddress);
+        starterVMSs.put(stockAddress.hashCode(), stockAddress);
         NetworkAddress orderAddress = new NetworkAddress("localhost", 8083);
-        VMSs.put(orderAddress.hashCode(), orderAddress);
+        starterVMSs.put(orderAddress.hashCode(), orderAddress);
         NetworkAddress paymentAddress = new NetworkAddress("localhost", 8084);
-        VMSs.put(paymentAddress.hashCode(), paymentAddress);
+        starterVMSs.put(paymentAddress.hashCode(), paymentAddress);
         NetworkAddress shipmentAddress = new NetworkAddress("localhost", 8085);
-        VMSs.put(shipmentAddress.hashCode(), shipmentAddress);
+        starterVMSs.put(shipmentAddress.hashCode(), shipmentAddress);
         NetworkAddress customerAddress = new NetworkAddress("localhost", 8086);
-        VMSs.put(customerAddress.hashCode(), customerAddress);
+        starterVMSs.put(customerAddress.hashCode(), customerAddress);
 
-        return Coordinator.buildDefault(
+        return Coordinator.build(
                 serverMap,
-                null,
-                VMSs,
+                starterVMSs,
                 transactionMap,
                 serverIdentifier,
                 new CoordinatorOptions().withBatchWindow(3000),
@@ -149,6 +159,5 @@ public class CheckoutWorkflow extends AbstractWorkflowTest {
                 serdes
         );
     }
-
 
 }

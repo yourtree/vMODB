@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.*;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.IVmsWorker.State.*;
@@ -157,7 +158,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             try {
                 this.channel.connect(this.consumerVms.asInetSocketAddress()).get();
             } catch (Exception e){
-                logger.severe("Error on connecting: "+e.getMessage());
+                logger.severe("[Leader] Error on connecting to "+consumerVms+": "+e.getMessage());
                 return;
             }
             this.state = CONNECTION_ESTABLISHED;
@@ -366,7 +367,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 }
                 case BATCH_COMMIT_ACK -> {
                     BatchCommitAck.Payload response = BatchCommitAck.read(readBuffer);
-                    logger.info("Just logging it, since we don't necessarily need to wait for that. "+response);
+                    logger.log(Level.CONFIG, "Just logging it, since we don't necessarily need to wait for that. "+response);
                     coordinatorQueue.add( new Coordinator.Message( Coordinator.Type.BATCH_COMMIT_ACK, response));
                 }
                 case TX_ABORT -> {

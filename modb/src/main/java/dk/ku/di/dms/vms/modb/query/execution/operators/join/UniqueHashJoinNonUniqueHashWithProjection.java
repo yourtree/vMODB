@@ -6,7 +6,6 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractMemoryBasedOperator;
-import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
 
 import java.util.Iterator;
 

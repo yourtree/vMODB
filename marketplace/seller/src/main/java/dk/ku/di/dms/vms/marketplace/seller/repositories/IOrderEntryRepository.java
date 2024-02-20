@@ -1,5 +1,6 @@
-package dk.ku.di.dms.vms.marketplace.seller;
+package dk.ku.di.dms.vms.marketplace.seller.repositories;
 
+import dk.ku.di.dms.vms.marketplace.seller.entities.OrderEntry;
 import dk.ku.di.dms.vms.modb.api.annotations.Query;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.marketplace.seller;
+package dk.ku.di.dms.vms.marketplace.seller.entities;
 
 import dk.ku.di.dms.vms.marketplace.common.enums.OrderStatus;
 import dk.ku.di.dms.vms.marketplace.common.enums.PackageStatus;

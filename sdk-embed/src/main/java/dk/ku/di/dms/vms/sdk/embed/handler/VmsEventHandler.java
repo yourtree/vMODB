@@ -14,7 +14,6 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
-import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
 import dk.ku.di.dms.vms.modb.transaction.TransactionalAPI;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
@@ -385,7 +384,6 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         public void beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) {
             TransactionMetadata.registerTransactionStart(tid, identifier, lastTid, readOnly);
         }
-
 
     }
 

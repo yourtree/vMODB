@@ -7,7 +7,6 @@ import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
-import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
@@ -163,7 +162,7 @@ public final class SimplePlanner {
                 int entrySize = calculateQueryResultEntrySize(tb.schema(), queryTree.projections.size()+1, projectionColumns);
 
                 return new IndexGroupByMinWithProjection( indexSelected, tb.schema(),
-                        indexColumns, projectionColumns, minColumn, entrySize, queryTree.limit.get() );
+                        indexColumns, projectionColumns, minColumn, entrySize, queryTree.limit.orElse(Integer.MAX_VALUE));
             }
             case SUM -> {
                 // is there any index that applies?

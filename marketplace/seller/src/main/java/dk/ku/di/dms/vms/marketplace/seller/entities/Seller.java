@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.marketplace.seller;
+package dk.ku.di.dms.vms.marketplace.seller.entities;
 
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
@@ -64,6 +64,25 @@ public final class Seller implements IEntity<Integer> {
         this.city = city;
         this.state = state;
         this.zip_code = zip_code;
+    }
+
+    @Override
+    public String toString() {
+        return "{"
+                + "\"id\":\"" + id + "\""
+                + ", \"name\":\"" + name + "\""
+                + ", \"company_name\":\"" + company_name + "\""
+                + ", \"email\":\"" + email + "\""
+                + ", \"phone\":\"" + phone + "\""
+                + ", \"mobile_phone\":\"" + mobile_phone + "\""
+                + ", \"cpf\":\"" + cpf + "\""
+                + ", \"cnpj\":\"" + cnpj + "\""
+                + ", \"address\":\"" + address + "\""
+                + ", \"complement\":\"" + complement + "\""
+                + ", \"city\":\"" + city + "\""
+                + ", \"state\":\"" + state + "\""
+                + ", \"zip_code\":\"" + zip_code + "\""
+                + "}";
     }
 
 }

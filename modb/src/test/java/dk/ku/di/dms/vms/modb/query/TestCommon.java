@@ -1,19 +1,14 @@
 package dk.ku.di.dms.vms.modb.query;
 
 import dk.ku.di.dms.vms.modb.ExecutorTest;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
-import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
-import dk.ku.di.dms.vms.modb.query.execution.operators.min.IndexGroupByMinWithProjection;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 import jdk.incubator.foreign.MemorySegment;
 import jdk.incubator.foreign.ResourceScope;
-import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;

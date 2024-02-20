@@ -8,6 +8,9 @@ import dk.ku.di.dms.vms.marketplace.common.events.DeliveryNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
+import dk.ku.di.dms.vms.marketplace.seller.entities.OrderEntry;
+import dk.ku.di.dms.vms.marketplace.seller.repositories.IOrderEntryRepository;
+import dk.ku.di.dms.vms.marketplace.seller.repositories.ISellerRepository;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Parallel;
@@ -18,9 +21,12 @@ import java.util.List;
 @Microservice("seller")
 public final class SellerService {
 
+    private final ISellerRepository sellerRepository;
+
     private final IOrderEntryRepository orderEntryRepository;
 
-    public SellerService(IOrderEntryRepository orderEntryRepository){
+    public SellerService(ISellerRepository sellerRepository, IOrderEntryRepository orderEntryRepository){
+        this.sellerRepository = sellerRepository;
         this.orderEntryRepository = orderEntryRepository;
     }
 

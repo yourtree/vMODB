@@ -6,7 +6,10 @@ import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIF
 import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -18,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class UniqueSecondaryIndex implements IMultiVersionIndex {
 
+    // not all writes reach it here
     private final ThreadLocal<Map<IKey, WriteType>> KEY_WRITES = ThreadLocal.withInitial(HashMap::new);
 
     private final PrimaryIndex primaryIndex;

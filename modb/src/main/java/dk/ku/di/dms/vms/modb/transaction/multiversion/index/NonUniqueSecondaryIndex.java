@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionId;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
@@ -61,8 +60,8 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
     @Override
     public void undoTransactionWrites(){
-        var writes = KEY_WRITES.get();
-        for(var entry : writes.entrySet()){
+        var writes = KEY_WRITES.get().entrySet().stream().filter(p->p.getValue().t2()==WriteType.INSERT).toList();
+        for(var entry : writes){
             IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), entry.getValue().t1() );
             Set<IKey> set = this.keyMap.get(secKey);
             set.remove(entry.getKey());

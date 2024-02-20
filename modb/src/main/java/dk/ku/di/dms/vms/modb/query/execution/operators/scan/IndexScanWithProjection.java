@@ -1,12 +1,7 @@
 package dk.ku.di.dms.vms.modb.query.execution.operators.scan;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.index.AbstractIndex;
-import dk.ku.di.dms.vms.modb.index.interfaces.IIndex;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadOnlyIndex;
-import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 

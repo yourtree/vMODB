@@ -152,25 +152,24 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     private final BlockingQueue<Message> coordinatorQueue;
 
-    public static Coordinator buildDefault(// obtained from leader election or passed by parameter on setup
-                                           Map<Integer, ServerIdentifier> servers,
-                                           Map<Integer, LockConnectionMetadata> serverConnectionMetadataMap,
-                                           // passed by parameter
-                                           Map<Integer, NetworkAddress> startersVMSs,
-                                           Map<String, TransactionDAG> transactionMap,
-                                           ServerIdentifier me,
-                                           // coordinator configuration
-                                           CoordinatorOptions options,
-                                           // starting batch offset (may come from storage after a crash)
-                                           long startingBatchOffset,
-                                           // starting tid (may come from storage after a crash)
-                                           long startingTid,
-                                           // queue containing the input transactions. ingestion performed by http server
-                                           BlockingQueue<TransactionInput> parsedTransactionRequests,
-                                           IVmsSerdesProxy serdesProxy) throws IOException {
+    public static Coordinator build(// obtained from leader election or passed by parameter on setup
+                                    Map<Integer, ServerIdentifier> servers,
+                                    // passed by parameter
+                                    Map<Integer, NetworkAddress> startersVMSs,
+                                    Map<String, TransactionDAG> transactionMap,
+                                    ServerIdentifier me,
+                                    // coordinator configuration
+                                    CoordinatorOptions options,
+                                    // starting batch offset (may come from storage after a crash)
+                                    long startingBatchOffset,
+                                    // starting tid (may come from storage after a crash)
+                                    long startingTid,
+                                    // queue containing the input transactions. ingestion performed by http server
+                                    BlockingQueue<TransactionInput> parsedTransactionRequests,
+                                    IVmsSerdesProxy serdesProxy) throws IOException {
         return new Coordinator(servers == null ? new ConcurrentHashMap<>() : servers,
-                serverConnectionMetadataMap == null ? new HashMap<>() : serverConnectionMetadataMap,
-                startersVMSs, Objects.requireNonNull(transactionMap), me, options, startingBatchOffset, startingTid,
+                new HashMap<>(), startersVMSs, Objects.requireNonNull(transactionMap),
+                me, options, startingBatchOffset, startingTid,
                 parsedTransactionRequests, serdesProxy);
     }
 
@@ -259,6 +258,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         while(isRunning()){
             try {
+                // FIXME think about another way to avoid  this sleep
                 sleep(this.options.getBatchWindow());
                 this.processEventsSentByVmsWorkers();
                 this.processTransactionInputEvents();
@@ -928,5 +928,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     public long getBatchOffsetPendingCommit() {
         return this.batchOffsetPendingCommit;
+    }
+
+    public Map<Integer, NetworkAddress> getStarterVMSs(){
+        return this.starterVMSs;
     }
 }

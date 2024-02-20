@@ -398,10 +398,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 case INSERT -> this.primaryKeyIndex.insert(key, operationSetOfKey.lastVersion);
                 case DELETE -> this.primaryKeyIndex.delete(key);
             }
-            // operationSetOfKey.updateHistoryMap.clear();
         }
-        // cannot clean because read and write transactions may require older versions
-//        this.updatesPerKeyMap.clear();
+        // cannot clear updatesPerKeyMap because read and write transactions may require older versions
     }
 
     public ReadWriteIndex<IKey> underlyingIndex(){

@@ -8,7 +8,6 @@ import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
@@ -23,7 +22,6 @@ import dk.ku.di.dms.vms.modb.query.planner.SimplePlanner;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.index.UniqueSecondaryIndex;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -92,7 +90,7 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
         }
 
         if(scanOperator.isIndexScan()){
-            IKey key = getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
+            IKey key = this.getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
             return scanOperator.asIndexScan().runAsEmbedded(new IKey[]{ key });
         } else if(scanOperator.isIndexAggregationScan()){
             return scanOperator.asIndexAggregationScan().runAsEmbedded();
@@ -221,6 +219,10 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
      * @param values The fields extracted from the entity
      */
     public void insert(Table table, Object[] values){
+        this.doInsert(table, values);
+    }
+
+    private Object[] doInsert(Table table, Object[] values) {
         PrimaryIndex primaryIndex = table.primaryKeyIndex();
         if(this.fkConstraintViolationFree(table, values)){
             IKey pk = primaryIndex.insertAndGetKey(values);
@@ -235,33 +237,9 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
                 for(var entry : table.partialIndexMap.entrySet()){
                     // does the record "fits" the partial index?
                     Tuple<Integer, Object> check = table.partialIndexMetaMap.get( entry.getKey() );
-                    if (primaryIndex.meetPartialIndex( values, check.t1(), check.t2() )){
+                    if (primaryIndex.meetPartialIndex(values, check.t1(), check.t2() )){
                         INDEX_WRITES.get().add(entry.getValue());
-                        entry.getValue().insert( pk, values );
-                    }
-                }
-                return;
-            }
-        }
-        this.undoTransactionWrites();
-        throw new RuntimeException("Constraint violation.");
-    }
-
-    public Object[] insertAndGet(Table table, Object[] values){
-        PrimaryIndex primaryIndex = table.primaryKeyIndex();
-        if(this.fkConstraintViolationFree(table, values)){
-            IKey pk = primaryIndex.insertAndGetKey(values);
-            if(pk != null) {
-                INDEX_WRITES.get().add(primaryIndex);
-                for(NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()){
-                    INDEX_WRITES.get().add(secIndex);
-                    secIndex.insert( pk, values );
-                }
-                for(var entry : table.partialIndexMap.entrySet()){
-                    Tuple<Integer, Object> check = table.partialIndexMetaMap.get( entry.getKey() );
-                    if (primaryIndex.meetPartialIndex( values, check.t1(), check.t2() )){
-                        INDEX_WRITES.get().add(entry.getValue());
-                        entry.getValue().insert( pk, values );
+                        entry.getValue().insert( pk, values);
                     }
                 }
                 return values;
@@ -269,6 +247,10 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
         }
         this.undoTransactionWrites();
         throw new RuntimeException("Constraint violation.");
+    }
+
+    public Object[] insertAndGet(Table table, Object[] values){
+        return this.doInsert(table, values);
     }
 
     /**
@@ -287,7 +269,6 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
     }
 
     /**
-     * TODO Must unmark secondary index records as deleted...
      * how can I do that more optimized? creating another interface so secondary indexes also have the #undoTransactionWrites ?
      * INDEX_WRITES can have primary indexes and secondary indexes...
      */

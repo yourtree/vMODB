@@ -34,6 +34,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.*;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
@@ -599,7 +600,7 @@ public final class VmsMetadataLoader {
             return DataType.STRING_ARRAY;
         }
         else {
-            logger.warning(attributeCanonicalName + " will be recognized as a complex data type");
+            logger.log( Level.CONFIG, attributeCanonicalName + " will be recognized as a complex data type");
             return DataType.COMPLEX;
         }
     }

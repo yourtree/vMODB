@@ -17,7 +17,6 @@ import java.net.InetSocketAddress;
 
 public final class Main {
 
-//    private static final Logger logger = Logger.getLogger("VmsApplication");
     public static void main(String[] args) throws Exception {
 
         // initialize threads
@@ -36,12 +35,10 @@ public final class Main {
     private static class ProductHttpHandler implements HttpHandler {
         private final Table table;
         private final AbstractProxyRepository<Product.ProductId, Product> repository;
-        private final VmsApplication vms;
         private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         @SuppressWarnings("unchecked")
         public ProductHttpHandler(VmsApplication vms){
-            this.vms = vms;
             this.table = vms.getTable("products");
             this.repository = (AbstractProxyRepository<Product.ProductId, Product>) vms.getRepositoryProxy("products");
         }

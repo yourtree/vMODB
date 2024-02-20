@@ -25,11 +25,10 @@ public class ProductStockWorkflowTest extends AbstractWorkflowTest {
     public void testLargeBatchWithTwoVMSs() throws Exception {
 
         dk.ku.di.dms.vms.marketplace.product.Main.main(null);
-
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
 
         this.ingestDataIntoProductVms();
-        this.ingestDataIntoStockVms();
+        this.insertItemsInStockVms();
 
         // initialize coordinator
         Coordinator coordinator = loadCoordinator();
@@ -46,14 +45,11 @@ public class ProductStockWorkflowTest extends AbstractWorkflowTest {
         Thread thread = new Thread(new Producer());
         thread.start();
 
-        sleep(batchWindowInterval * 3);
+        sleep(BATCH_WINDOW_INTERVAL * 3);
 
         assert coordinator.getBatchOffsetPendingCommit() == 2;
-
         assert coordinator.getTid() == 10;
-
         assert coordinator.getCurrentBatchOffset() == 2;
-
     }
 
     private Coordinator loadCoordinator() throws IOException {
@@ -85,13 +81,12 @@ public class ProductStockWorkflowTest extends AbstractWorkflowTest {
         VMSs.put(productAddress.hashCode(), productAddress);
         VMSs.put(stockAddress.hashCode(), stockAddress);
 
-        return Coordinator.buildDefault(
+        return Coordinator.build(
                 serverMap,
-                null,
                 VMSs,
                 transactionMap,
                 serverIdentifier,
-                new CoordinatorOptions().withBatchWindow(batchWindowInterval),
+                new CoordinatorOptions().withBatchWindow(BATCH_WINDOW_INTERVAL),
                 1,
                 1,
                 parsedTransactionRequests,
@@ -108,7 +103,6 @@ public class ProductStockWorkflowTest extends AbstractWorkflowTest {
             int val = 1;
 
             while(val < 10) {
-
                 UpdateProductEvent updateProductEvent = new UpdateProductEvent(
                         1,1,"test","test","test","test",10.0F,10.0F,"test",String.valueOf(val)
                 );
@@ -124,9 +118,7 @@ public class ProductStockWorkflowTest extends AbstractWorkflowTest {
                 parsedTransactionRequests.add(txInput);
 
                 val++;
-
             }
-
             logger.info("Producer going to bed definitely... ");
         }
     }
