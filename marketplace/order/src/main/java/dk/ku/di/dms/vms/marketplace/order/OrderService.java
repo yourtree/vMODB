@@ -48,6 +48,7 @@ public final class OrderService {
     @Inbound(values = {"shipment_updated"})
     @Transactional(type=RW)
     public void processShipmentNotification(ShipmentUpdated shipmentUpdated){
+        System.out.println("Order received a shipment updated event with TID: "+ shipmentUpdated.instanceId);
 
         Date now = new Date();
         for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {

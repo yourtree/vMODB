@@ -42,7 +42,6 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
 
     @Test
     public void testCustomerCheckout() throws Exception {
-
         this.initVMSs();
 
         Coordinator coordinator = this.loadCoordinator();
@@ -66,8 +65,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
             connectedVMSs = coordinator.getConnectedVMSs();
         } while (connectedVMSs.size() < numStarterVMSs);
 
-        Thread thread = new Thread(new CustomerCheckoutProducer());
-        thread.start();
+        new CustomerCheckoutProducer().run();
     }
 
     private static final Random random = new Random();
@@ -87,7 +85,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
                 ReserveStock reserveStockEvent = new ReserveStock(
                         new Date(), customerCheckoutFunction.apply( random.nextInt(1,MAX_CUSTOMERS+1) ),
                         List.of(
-                                new CartItem(1,1,"test",
+                                new CartItem(val,1,"test",
                                         1.0f, 1.0f, 1, 1.0f, "1")
                         ),
                         String.valueOf(val)

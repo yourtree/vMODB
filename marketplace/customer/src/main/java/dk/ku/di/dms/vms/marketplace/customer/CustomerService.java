@@ -45,6 +45,8 @@ public final class CustomerService {
     @Inbound(values = {"shipment_updated"})
     @Transactional(type=W)
     public void processDeliveryNotification(ShipmentUpdated shipmentUpdated){
+        System.out.println("Customer received a shipment updated event with TID: "+ shipmentUpdated.instanceId);
+
         Date now = new Date();
         for(DeliveryNotification delivery : shipmentUpdated.deliveryNotifications) {
             Customer customer = this.customerRepository.lookupByKey( delivery.customerId );

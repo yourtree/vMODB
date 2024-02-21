@@ -10,6 +10,7 @@ import java.lang.invoke.VarHandle;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class EntityUtils {
@@ -36,7 +37,7 @@ public final class EntityUtils {
         MethodHandles.Lookup lookup_ = MethodHandles.privateLookupIn(pkClazz, lookup);
 
         Field[] fields = pkClazz.getDeclaredFields();
-        Map<String, VarHandle> fieldMap = new HashMap<>(  );
+        Map<String, VarHandle> fieldMap = new LinkedHashMap<>(fields.length);
 
         for(Field field : fields){
             fieldMap.put(

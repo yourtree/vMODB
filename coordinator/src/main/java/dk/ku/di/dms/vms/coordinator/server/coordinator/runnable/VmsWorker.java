@@ -158,7 +158,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             try {
                 this.channel.connect(this.consumerVms.asInetSocketAddress()).get();
             } catch (Exception e){
-                logger.severe("[Leader] Error on connecting to "+consumerVms+": "+e.getMessage());
+                logger.severe("Leader: Error on connecting to "+consumerVms+": "+e.getMessage());
                 return;
             }
             this.state = CONNECTION_ESTABLISHED;
@@ -345,7 +345,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             switch (type) {
 
                 case PRESENTATION -> {
-                    if(vmsNode != null && !vmsNode.vmsIdentifier.contentEquals("unknown")){
+                    if(!vmsNode.vmsIdentifier.contentEquals("unknown")){
                         // in the future it can be an update of the vms schema
                         logger.warning("Presentation already received from this VMS.");
                     } else {

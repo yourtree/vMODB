@@ -256,20 +256,22 @@ public final class Coordinator extends SignalingStoppableRunnable {
             this.setupStarterVMSs();
         }
 
-        while(isRunning()){
-            try {
-                // FIXME think about another way to avoid  this sleep
-                sleep(this.options.getBatchWindow());
-                this.processEventsSentByVmsWorkers();
-                this.processTransactionInputEvents();
-                this.advanceCurrentBatchAndSpawnSendBatchOfEvents();
-            } catch (InterruptedException e) {
-                this.logger.warning("Exception captured: "+e.getMessage());
-            }
+        // process all VMS_IDENTIFIER first before submitting transactions
+        while(this.vmsMetadataMap.size() < this.starterVMSs.size()){
+            this.processEventsSentByVmsWorkers();
         }
 
-        failSafeClose();
+        long start = System.currentTimeMillis();
+        while(isRunning()){
+            do {
+                this.processEventsSentByVmsWorkers();
+                this.processTransactionInputEvents();
+            } while(System.currentTimeMillis() - start < this.options.getBatchWindow());
+            this.advanceCurrentBatchAndSpawnSendBatchOfEvents();
+            start = System.currentTimeMillis();
+        }
 
+        this.failSafeClose();
     }
 
     /**
@@ -481,7 +483,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         BatchContext previousBatch = this.batchContextMap.get( this.currentBatchOffset - 1 );
         // have we processed any input event since the start of this coordinator thread?
         if(previousBatch.lastTid == this.tid - 1){
-            // logger.info("No new transaction since last batch generation. Current batch "+generateBatch+" won't be spawned this time.");
+            logger.config("No new transaction since last batch generation. Current batch "+this.currentBatchOffset+" won't be spawned this time.");
             return;
         }
 
@@ -542,7 +544,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
     }
 
     private void replicateBatchWithReplicas(BatchContext batchContext) {
-        if ( this.options.getBatchReplicationStrategy() == NONE) return;
+        if (this.options.getBatchReplicationStrategy() == NONE) return;
 
         // to refrain the number of servers increasing concurrently, instead of
         // synchronizing the operation, I can simply obtain the collection first
@@ -653,6 +655,10 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
     }
 
+    /**
+     * Local list of requests to be processed
+     * Must be cleaned after use
+     */
     private final Collection<TransactionInput> transactionRequests = new ArrayList<>(100);
 
     /**
@@ -666,11 +672,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
      */
     private void processTransactionInputEvents(){
 
-        int size = this.parsedTransactionRequests.size();
-        if( size == 0 ){
+        if( this.parsedTransactionRequests.isEmpty() ){
             return;
         }
-
         this.parsedTransactionRequests.drainTo( this.transactionRequests );
 
         for(TransactionInput transactionInput : this.transactionRequests){
@@ -678,7 +682,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
             TransactionDAG transactionDAG = this.transactionMap.get( transactionInput.name );
 
 //            boolean allKnown = true;
-
             // first make sure the metadata of this vms is known
             // that ensures that, even if the vms is down, eventually it will come to life
 //            for (TransactionInput.Event inputEvent : transactionInput.events) {
@@ -759,6 +762,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
             // this.batchContextMap.get(this.currentBatchOffset).lastTid = tid_;
         }
 
+        // clear it, otherwise it will issue duplicate events
+        this.transactionRequests.clear();
     }
 
     private void updateBatchAndPrecedenceIfNecessary(VmsNode vms) {
@@ -781,7 +786,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
         // it is ok to keep this loop. at some point events from VMSs will stop arriving
         while(!this.coordinatorQueue.isEmpty()){
-
             try {
                 Message message = this.coordinatorQueue.take();
                 switch(message.type){
@@ -798,6 +802,8 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         }
                         // if all metadata, from all starter vms have arrived, then send the signal to them
 
+                        logger.info("Leader: All VMS starter have sent their VMS_IDENTIFIER");
+
                         // new VMS may join, requiring updating the consumer set
                         Map<String, List<NetworkAddress>> vmsConsumerSet;
 
@@ -808,7 +814,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
 
                             NetworkAddress vms = this.starterVMSs.get( vmsIdentifier.node().hashCode() );
                             if(vms == null) {
-                                logger.warning("Could not identify "+vmsIdentifier.getIdentifier()+" from set of starter VMSs");
+                                logger.warning("Leader: Could not identify "+vmsIdentifier.getIdentifier()+" from set of starter VMSs");
                                 continue;
                             }
 
@@ -824,11 +830,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
                             String mapStr = "";
                             if (!vmsConsumerSet.isEmpty()) {
                                 mapStr = this.serdesProxy.serializeConsumerSet(vmsConsumerSet);
-                                logger.info(vmsIdentifier.getIdentifier()+": Consumer set built for "+mapStr);
+                                logger.info("Leader: " + vmsIdentifier.getIdentifier()+": Consumer set built for "+mapStr);
                             }
-
                             vmsIdentifier.worker().queue().add( new IVmsWorker.Message( SEND_CONSUMER_SET, mapStr ));
-
                         }
 
                     }
@@ -850,19 +854,20 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         // what if ACKs from VMSs take too long? or never arrive?
                         // need to deal with intersecting batches? actually just continue emitting for higher throughput
                         BatchComplete.Payload msg = message.asBatchComplete();
-                        logger.info("Coordinator received a BATCH_COMPLETE from: "+msg.vms());
+                        logger.info("Leader: Received a BATCH_COMPLETE from: "+msg.vms());
                         BatchContext batchContext = this.batchContextMap.get( msg.batch() );
                         // only if it is not a duplicate vote
                         batchContext.missingVotes.remove( msg.vms() );
                         if( batchContext.missingVotes.size() == 0 ){
-                            logger.info("Coordinator received all missing votes of batch: "+ msg.batch());
+                            logger.info("Leader: Received all missing votes of batch: "+ msg.batch());
                             // making this implement order-independent, so not assuming batch commit are received in order,
                             // although they are necessarily applied in order both here and in the VMSs
                             // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes,
                             // it must check the batch context match to see whether it is completed
                             if( batchContext.batchOffset == this.batchOffsetPendingCommit && batchContext.missingVotes.size() == 0 ){
                                 this.sendCommitRequestToVMSs(batchContext);
-                                // TODO do I need this variable???
+                                // TODO a vms may not participate in every batch. this variable must be adjusted respecting this invariant
+                                // this would only works if the batch commit is sent to all vmss, not only those participating in the batch
                                 this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
                             }
 
@@ -874,15 +879,14 @@ public final class Coordinator extends SignalingStoppableRunnable {
                         // only when all vms respond with BATCH_COMMIT_ACK we move this ...
                         //        this.batchOffsetPendingCommit = batchContext.batchOffset;
                         BatchCommitAck.Payload msg = message.asBatchCommitAck();
-                        this.logger.info("Batch "+ msg.batch() +" commit ACK received from "+msg.vms());
+                        this.logger.info("Leader: Batch "+ msg.batch() +" commit ACK received from "+msg.vms());
                     }
-                    default -> logger.warning("Coordinator received an unidentified message: "+message.type);
+                    default -> logger.warning("Leader: Received an unidentified message: "+message.type);
                 }
 
             } catch (InterruptedException e) {
-                this.logger.warning("Exception caught while looping through coordinatorQueue: "+e.getMessage());
+                this.logger.warning("Leader: Exception caught while looping through coordinatorQueue: "+e.getMessage());
             }
-
 
         }
 
@@ -894,13 +898,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
     private void sendCommitRequestToVMSs(BatchContext batchContext){
         for(VmsIdentifier vms : this.vmsMetadataMap.values()){
             if(batchContext.terminalVMSs.contains(vms.getIdentifier())) {
-                logger.info("Coordinator will not send commit request to VMS "+ vms.getIdentifier() + " because it is a terminal VMS");
+                logger.info("Leader: Will not send commit request to VMS "+ vms.getIdentifier() + " because it is a terminal VMS");
                 continue;
             }
 
             // has this VMS participated in this batch?
             if(!batchContext.lastTidOfBatchPerVms.containsKey(vms.getIdentifier())){
-                logger.info("Coordinator will not send commit request to VMS "+ vms.getIdentifier() + " because it is has not participated in this batch.");
+                logger.info("Leader: Will not send commit request to VMS "+ vms.getIdentifier() + " because it is has not participated in this batch.");
                 continue;
             }
 

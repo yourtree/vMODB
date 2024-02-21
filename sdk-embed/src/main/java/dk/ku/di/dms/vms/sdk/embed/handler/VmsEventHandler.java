@@ -809,7 +809,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
             public void completed(Integer result, Void attachment) {
                 state = State.PRESENTATION_SENT;
                 // set up leader worker
-                leaderWorker = new LeaderWorker(leader, leaderConnectionMetadata, eventsToSendToLeader, leaderWorkerQueue);
+                leaderWorker = new LeaderWorker(me, leader, leaderConnectionMetadata, eventsToSendToLeader, leaderWorkerQueue);
                 new Thread(leaderWorker).start();
                 logger.info(me.vmsIdentifier+": Leader worker set up");
                 buffer.clear();

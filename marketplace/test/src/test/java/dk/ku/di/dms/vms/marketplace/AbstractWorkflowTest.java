@@ -50,33 +50,33 @@ public class AbstractWorkflowTest {
 
     protected void ingestDataIntoProductVms() throws IOException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();
-        String str1;
+        String str;
         for(int i = 1; i <= MAX_ITEMS; i++){
-            str1 = new Product( i, 1, "test", "test", "test", "test", 1.0f, 1.0f,  "test", "1" ).toString();
-            HttpRequest prodReq = httpRequestProductSupplier.apply(str1);
+            str = new Product( i, 1, "test", "test", "test", "test", 1.0f, 1.0f,  "test", "1" ).toString();
+            HttpRequest prodReq = httpRequestProductSupplier.apply(str);
             client.send(prodReq, HttpResponse.BodyHandlers.ofString());
         }
     }
 
     protected void insertItemsInStockVms() throws IOException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();
-        String str2;
+        String str;
         for(int i = 1; i <= MAX_ITEMS; i++){
-            str2 = new StockItem( i, 1, 100, 0, 0, 0,  "test", "1" ).toString();
-            HttpRequest stockReq = httpRequestStockSupplier.apply(str2);
+            str = new StockItem( i, 1, 100, 0, 0, 0,  "test", "1" ).toString();
+            HttpRequest stockReq = httpRequestStockSupplier.apply(str);
             client.send(stockReq, HttpResponse.BodyHandlers.ofString());
         }
     }
 
     protected void insertCustomersInCustomerVms() throws IOException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();
-        String str2;
+        String str;
         for(int i = 1; i <= MAX_CUSTOMERS; i++){
-            str2 = new Customer( i, "test", "test", "test", "test",
+            str = new Customer( i, "test", "test", "test", "test",
                     "test", "test", "test", "test", "test",
                     "test", "test", "test", "CREDIT_CARD",
                     0, 0, 0, "test" ).toString();
-            HttpRequest stockReq = httpRequestCustomerSupplier.apply(str2);
+            HttpRequest stockReq = httpRequestCustomerSupplier.apply(str);
             client.send(stockReq, HttpResponse.BodyHandlers.ofString());
         }
     }
