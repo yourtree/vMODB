@@ -8,29 +8,41 @@ import dk.ku.di.dms.vms.marketplace.common.events.DeliveryNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
+import dk.ku.di.dms.vms.marketplace.seller.dtos.OrderSellerView;
 import dk.ku.di.dms.vms.marketplace.seller.entities.OrderEntry;
 import dk.ku.di.dms.vms.marketplace.seller.repositories.IOrderEntryRepository;
 import dk.ku.di.dms.vms.marketplace.seller.repositories.ISellerRepository;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
 import dk.ku.di.dms.vms.modb.api.annotations.Parallel;
+import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
+import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("seller")
 public final class SellerService {
 
+    // necessary to force vms loader to load this repository
     private final ISellerRepository sellerRepository;
 
     private final IOrderEntryRepository orderEntryRepository;
 
+    private final Map<Integer, OrderSellerView> orderSellerViewMap;
+
     public SellerService(ISellerRepository sellerRepository, IOrderEntryRepository orderEntryRepository){
         this.sellerRepository = sellerRepository;
         this.orderEntryRepository = orderEntryRepository;
+        this.orderSellerViewMap = new ConcurrentHashMap<>(10000);
     }
 
     @Inbound(values = "invoice_issued")
+    @Transactional(type=W)
     @Parallel
     public void processInvoiceIssued(InvoiceIssued invoiceIssued){
         System.out.println("Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
@@ -41,9 +53,9 @@ public final class SellerService {
             OrderEntry orderEntry = new OrderEntry(
                     invoiceIssued.customer.CustomerId,
                     invoiceIssued.orderId,
-                    -1,
-                    orderItem.seller_id,
                     orderItem.product_id,
+                    orderItem.seller_id,
+                    -1,
                     orderItem.product_name,
                     "",
                     orderItem.unit_price,
@@ -64,6 +76,7 @@ public final class SellerService {
     }
 
     @Inbound(values = "shipment_updated")
+    @Transactional(type=RW)
     public void processShipmentUpdate(ShipmentUpdated shipmentUpdated){
         System.out.println("Seller received a shipment update event with TID: "+ shipmentUpdated.instanceId);
         for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {

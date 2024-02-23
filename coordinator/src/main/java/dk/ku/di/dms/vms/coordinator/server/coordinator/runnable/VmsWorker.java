@@ -271,7 +271,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private void sendBatchCommitRequest(Message workerMessage) {
         BatchCommitCommand.Payload commitRequest = workerMessage.asBatchCommitCommand();
         try {
-            ByteBuffer writeBuffer = retrieveByteBuffer();
+            ByteBuffer writeBuffer = this.retrieveByteBuffer();
             BatchCommitCommand.write(writeBuffer, commitRequest);
             writeBuffer.flip();
             this.WRITE_SYNCHRONIZER.take();
@@ -458,7 +458,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private ByteBuffer retrieveByteBuffer() throws InterruptedException {
         ByteBuffer bb = this.writeBufferPool.poll();
         if(bb != null) return bb;
-        logger.info("New ByteBuffer will be created");
+        //logger.info("New ByteBuffer will be created");
         return buildByteBuffer();
     }
 
@@ -494,7 +494,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 sleep_();
 
             } catch (Exception e) {
-                logger.severe("Leader: Error on submitting "+count+" events to "+vmsNode.vmsIdentifier);
+                this.logger.severe("Leader: Error on submitting "+count+" events to "+vmsNode.vmsIdentifier);
                 // return events to the deque
                 for(TransactionEvent.Payload event : this.events) {
                     eventsToSendToVms.offerFirst(event);

@@ -7,13 +7,14 @@ import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
-import dk.ku.di.dms.vms.sdk.core.event.channel.IVmsInternalChannels;
+import dk.ku.di.dms.vms.sdk.core.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.VmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
+import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 import org.reflections.Reflections;
 
 import java.util.*;
@@ -34,12 +35,14 @@ public final class VmsApplication {
 
     private final VmsEventHandler eventHandler;
 
-    private final VmsTransactionScheduler scheduler;
+    private final StoppableRunnable scheduler;
 
     private final IVmsInternalChannels internalChannels;
 
-    private VmsApplication(VmsRuntimeMetadata vmsRuntimeMetadata, Map<String, Table> catalog,
-                           VmsEventHandler eventHandler, VmsTransactionScheduler scheduler,
+    private VmsApplication(VmsRuntimeMetadata vmsRuntimeMetadata,
+                           Map<String, Table> catalog,
+                           VmsEventHandler eventHandler,
+                           StoppableRunnable scheduler,
                            IVmsInternalChannels internalChannels) {
         this.vmsRuntimeMetadata = vmsRuntimeMetadata;
         this.catalog = catalog;
@@ -127,15 +130,19 @@ public final class VmsApplication {
         VmsEventHandler eventHandler = VmsEventHandler.build(
                 vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
 
-        VmsTransactionScheduler scheduler =
-                VmsTransactionScheduler.build(
-                        vmsName,
-                        vmsInternalPubSubService,
-                        vmsMetadata.queueToVmsTransactionMap(),
-                        eventHandler.schedulerHandler());
+//        VmsComplexTransactionScheduler scheduler =
+//                VmsComplexTransactionScheduler.build(
+//                        vmsName,
+//                        vmsInternalPubSubService,
+//                        vmsMetadata.queueToVmsTransactionMap(),
+//                        eventHandler.schedulerHandler());
+        StoppableRunnable scheduler = VmsTransactionScheduler.build(
+                vmsName,
+                vmsInternalPubSubService,
+                vmsMetadata.queueToVmsTransactionMap(),
+                eventHandler.schedulerHandler() );
 
         return new VmsApplication( vmsMetadata, catalog, eventHandler, scheduler, vmsInternalPubSubService );
-
     }
 
     public void start(){

@@ -8,15 +8,6 @@ import java.util.List;
  * A collection of results of a given transaction (tid) in a specific VMS
  * It bundles everything necessary to commit this transaction as part of a batch
  */
-public class VmsTransactionResult {
-
-    public final long tid;
-
-    public final List<OutboundEventResult> resultTasks;
-
-    public VmsTransactionResult(long tid, List<OutboundEventResult> resultTasks) {
-        this.tid = tid;
-        this.resultTasks = resultTasks;
-    }
+public record VmsTransactionResult(long tid, List<OutboundEventResult> resultTasks) {
 
 }

@@ -1,18 +1,18 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler.tracking;
 
-import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
+import dk.ku.di.dms.vms.sdk.core.operational.VmsComplexTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 
 import java.util.concurrent.Future;
 
 /**
  * For cases where only one task is involved
- * To avoid the overhead of creating many data structures for every new task
- * as found in the complex
+ * The idea is to avoid the overhead of creating many data structures
+ * for every new task as found in the complex ({@link ComplexVmsTransactionTrackingContext}
  */
 public class SimpleVmsTransactionTrackingContext implements IVmsTransactionTrackingContext {
 
-    public VmsTransactionTask task;
+    public VmsComplexTransactionTask task;
 
     public Future<VmsTransactionTaskResult> future;
 

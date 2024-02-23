@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler.tracking;
 
-import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
+import dk.ku.di.dms.vms.sdk.core.operational.VmsComplexTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskResult;
 
 import java.util.ArrayDeque;
@@ -10,9 +10,7 @@ import java.util.Queue;
 import java.util.concurrent.Future;
 
 /**
- * The context of the tasks from a transaction
- * (thus having the same TID) in a single VMS.
- * --
+ * The context of the tasks from a transaction (thus having the same TID) in a single VMS.
  * The tasks found in the lists are READY to be scheduled for execution.
  * In other words, all inputs are fulfilled.
  */
@@ -21,10 +19,10 @@ public class ComplexVmsTransactionTrackingContext implements IVmsTransactionTrac
     private int nextTaskIdentifier;
 
     // the R tasks ready for execution
-    public final List<VmsTransactionTask> readTasks;
+    public final List<VmsComplexTransactionTask> readTasks;
 
     // the RW and W ready for execution
-    public final Queue<VmsTransactionTask> writeTasks;
+    public final Queue<VmsComplexTransactionTask> writeTasks;
 
     public final List<Future<VmsTransactionTaskResult>> submittedTasks;
 

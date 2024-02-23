@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.sdk.core.event.channel;
+package dk.ku.di.dms.vms.sdk.core.channel;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;

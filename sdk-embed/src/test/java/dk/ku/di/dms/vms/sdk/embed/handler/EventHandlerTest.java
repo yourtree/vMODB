@@ -15,7 +15,7 @@ import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
-import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
+import dk.ku.di.dms.vms.sdk.core.scheduler.VmsComplexTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.events.InputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample1;
@@ -57,7 +57,7 @@ public class EventHandlerTest {
 
     private record VmsCtx (
         VmsEventHandler eventHandler,
-        VmsTransactionScheduler scheduler) {
+        VmsComplexTransactionScheduler scheduler) {
         public void stop() {
             this.scheduler.stop();
             this.eventHandler.stop();
@@ -114,7 +114,7 @@ public class EventHandlerTest {
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        VmsTransactionScheduler scheduler = VmsTransactionScheduler.buildNoCheckpointing(
+        VmsComplexTransactionScheduler scheduler = VmsComplexTransactionScheduler.buildNoCheckpointing(
                 "test", vmsInternalPubSubService,
                         vmsMetadata.queueToVmsTransactionMap());
 
@@ -197,7 +197,7 @@ public class EventHandlerTest {
         var input1ForVms2 = channelForAddingInput.transactionOutputQueue().poll(5, TimeUnit.SECONDS);
         assert input1ForVms2 != null;
 
-        for(var res : input1ForVms2.resultTasks){
+        for(var res : input1ForVms2.resultTasks()){
             Class<?> clazz =  res.outputQueue().equalsIgnoreCase("out1") ? OutputEventExample1.class : OutputEventExample2.class;
             InboundEvent event_ = new InboundEvent(1,0,1,res.outputQueue(),clazz,res.output());
             channelForGettingOutput.transactionInputQueue().add(event_);
@@ -206,12 +206,12 @@ public class EventHandlerTest {
         // subscribe to output event out3
         VmsTransactionResult result = channelForGettingOutput.transactionOutputQueue().poll(5, TimeUnit.SECONDS);
 
-        assert result != null && result.resultTasks != null && !result.resultTasks.isEmpty();
+        assert result != null && result.resultTasks() != null && !result.resultTasks().isEmpty();
 
         vmsCtx.stop();
         vmsCtx2.stop();
 
-        assert ((OutputEventExample3) result.resultTasks.get(0).output()).id == 2;
+        assert ((OutputEventExample3) result.resultTasks().get(0).output()).id == 2;
     }
 
     /**

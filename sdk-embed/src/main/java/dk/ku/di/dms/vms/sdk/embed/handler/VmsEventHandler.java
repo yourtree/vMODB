@@ -220,7 +220,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
      */
     private void eventLoop(){
 
-        this.logger.info(this.me.vmsIdentifier+": Event handler has started.");
+        this.logger.info(this.me.vmsIdentifier+": Event handler has started");
 
         this.connectToStarterConsumers();
 
@@ -245,14 +245,14 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
                     VmsTransactionResult txResult = this.vmsInternalChannels.transactionOutputQueue().take();
 
-                    this.logger.info(this.me.vmsIdentifier+": New transaction result in event handler. TID = "+txResult.tid);
+                    this.logger.info(this.me.vmsIdentifier+": New transaction result in event handler. TID = "+txResult.tid());
 
-                    this.lastTidFinished = txResult.tid;
+                    this.lastTidFinished = txResult.tid();
 
                     Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(this.lastTidFinished);
 
                     if(precedenceMap == null){
-                        logger.warning(this.me.vmsIdentifier+": No precedence map found for TID: "+txResult.tid);
+                        logger.warning(this.me.vmsIdentifier+": No precedence map found for TID: "+txResult.tid());
                         continue;
                     }
 
@@ -262,7 +262,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
                     String precedenceMapUpdated = this.serdesProxy.serializeMap(precedenceMap);
 
                     // just send events to appropriate targets
-                    for(OutboundEventResult outputEvent : txResult.resultTasks){
+                    for(OutboundEventResult outputEvent : txResult.resultTasks()){
                         this.processOutputEvent(outputEvent, precedenceMapUpdated);
                     }
 
@@ -326,7 +326,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
         // have we processed all the TIDs of this batch?
         if(this.currentBatch.isOpen() && this.currentBatch.lastTid <= this.lastTidFinished){
-            // we need to alert the scheduler...
+
             this.logger.info(this.me.vmsIdentifier+": The last TID for the current batch has arrived");
 
             // many outputs from the same transaction may arrive here, but can only send the batch commit once
@@ -438,8 +438,8 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
     }
 
     /**
-     * Responsible for making sure the handshake protocol is successfully performed
-     * with a consumer VMS
+     * Responsible for making sure the handshake protocol is
+     * successfully performed with a consumer VMS
      */
     private final class ConnectToConsumerVmsProtocol {
 
@@ -506,6 +506,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
                             return;
                         }
 
+                        // in case this was not part of starter consumers
                         if(!(address instanceof ConsumerVms consumerVms)) {
 
                             ConsumerVms consumerVms = new ConsumerVms(address, new Timer("vms-sender-timer", true));
@@ -522,7 +523,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
                         } else {
                             // just set up the timer
-                            consumerVms.timer = new Timer("vms-sender-timer", true);
+                            consumerVms.timer = new Timer("vms-sender-timer" , true);
                             consumerVms.timer.scheduleAtFixedRate(new ConsumerVmsWorker(me, consumerVms, connMetadata), DEFAULT_DELAY_FOR_BATCH_SEND, DEFAULT_DELAY_FOR_BATCH_SEND);
                         }
 

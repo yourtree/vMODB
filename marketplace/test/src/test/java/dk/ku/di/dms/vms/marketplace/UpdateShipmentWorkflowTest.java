@@ -5,7 +5,6 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -13,14 +12,8 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 
 import static java.lang.Thread.sleep;
 
@@ -58,7 +51,6 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
 
         sleep(BATCH_WINDOW_INTERVAL * 3);
 
-        //
         assert coordinator.getCurrentBatchOffset() == 3;
         assert coordinator.getBatchOffsetPendingCommit() == 3;
         assert coordinator.getTid() == 12;
@@ -93,31 +85,10 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
         dk.ku.di.dms.vms.marketplace.payment.Main.main(null);
         dk.ku.di.dms.vms.marketplace.shipment.Main.main(null);
         dk.ku.di.dms.vms.marketplace.customer.Main.main(null);
-        // dk.ku.di.dms.vms.marketplace.seller.Main.main(null);
 
         this.insertItemsInStockVms();
         this.insertCustomersInCustomerVms();
-        // this.insertSellersInSellerVms();
     }
-
-    protected void insertSellersInSellerVms() throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newHttpClient();
-        String str;
-        for(int i = 1; i <= MAX_SELLERS; i++){
-            str = new Seller(i, "test", "test", "test",
-                    "test", "test", "test", "test",
-                    "test", "test", "test", "test", "test").toString();
-            HttpRequest sellerReq = httpRequestSellerSupplier.apply(str);
-            client.send(sellerReq, HttpResponse.BodyHandlers.ofString());
-        }
-    }
-
-    protected static final Function<String, HttpRequest> httpRequestSellerSupplier = str -> HttpRequest.newBuilder(
-            URI.create( "http://localhost:8007/seller" ) )
-            .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
-            .version(HttpClient.Version.HTTP_2)
-            .POST(HttpRequest.BodyPublishers.ofString( str ))
-            .build();
 
     private Coordinator loadCoordinator() throws IOException {
         ServerIdentifier serverIdentifier = new ServerIdentifier( "localhost", 8080 );

@@ -45,7 +45,6 @@ import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.V
 import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.SERVER;
 import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.UNREACHABLE_NODE;
 import static dk.ku.di.dms.vms.web_common.meta.NetworkConfigConstants.DEFAULT_BUFFER_SIZE;
-import static java.lang.Thread.sleep;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -526,7 +525,6 @@ public final class Coordinator extends SignalingStoppableRunnable {
             // in this case, it must receive at least the batch commit info
             // to know when to send the batch complete message
             if(vms.worker().transactionEventsPerBatch(generateBatch).isEmpty()
-                    // .computeIfAbsent(this.currentBatchOffset, k -> new LinkedBlockingDeque<>()).isEmpty()
                     && !isTerminal){
                 continue;
             }

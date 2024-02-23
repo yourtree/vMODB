@@ -5,7 +5,7 @@ package dk.ku.di.dms.vms.sdk.core.scheduler;
  * tracks the underlying tasks of a given transaction, this class tracks the transaction offset (i.e. TID)
  * to allow the scheduler to progress to other TIDs and batches.
  */
-class OffsetTracker {
+final class OffsetTracker {
 
     enum OffsetStatus {
         NEW,

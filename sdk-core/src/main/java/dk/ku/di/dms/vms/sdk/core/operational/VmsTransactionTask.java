@@ -3,16 +3,10 @@ package dk.ku.di.dms.vms.sdk.core.operational;
 import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
 import dk.ku.di.dms.vms.sdk.core.scheduler.ITransactionalHandler;
 
-import java.util.concurrent.Callable;
+public final class VmsTransactionTask implements Runnable {
 
-/**
- * A class that encapsulates the events
- * that form the input of a data operation.
- * In other words, the actual data operation ready for execution.
- */
-public final class VmsTransactionTask implements Callable<VmsTransactionTaskResult> {
+//    private static final Logger LOGGER = Logger.getLogger(VmsTransactionTask.class.getSimpleName());
 
-    // this is the global tid
     private final long tid;
 
     private final long lastTid;
@@ -21,96 +15,107 @@ public final class VmsTransactionTask implements Callable<VmsTransactionTaskResu
 
     private final ITransactionalHandler transactionalHandler;
 
+    private final ISchedulerCallback schedulerCallback;
+
     // the information necessary to run the method
     private final VmsTransactionSignature signature;
 
-    // internal identification of this specific task in the scheduler
-    // used to allow atomic visibility
-    // (can be later used to specify ordering criteria between tasks)
-    private int identifier;
+    private final Object input;
 
-    private final Object[] inputs;
+    private volatile Status status;
 
-    private int remainingInputs;
-
-    public VmsTransactionTask(ITransactionalHandler transactionalHandler, long tid, long lastTid, long batch, VmsTransactionSignature signature, int inputSize){
+    public VmsTransactionTask(ITransactionalHandler transactionalHandler,
+                              ISchedulerCallback schedulerCallback,
+                              long tid, long lastTid, long batch,
+                              VmsTransactionSignature signature,
+                              Object input){
         this.transactionalHandler = transactionalHandler;
+        this.schedulerCallback = schedulerCallback;
         this.tid = tid;
         this.lastTid = lastTid;
         this.batch = batch;
         this.signature = signature;
-        this.inputs = new Object[inputSize];
-        this.remainingInputs = inputSize;
+        this.input = input;
+        this.status = Status.NEW;
     }
 
-    public void putEventInput(int index, Object event){
-        this.inputs[index] = event;
-        this.remainingInputs--;
+    public VmsTransactionTask(long tid){
+        this.transactionalHandler = null;
+        this.schedulerCallback = null;
+        this.tid = tid;
+        this.lastTid = 0;
+        this.batch = 0;
+        this.signature = null;
+        this.input = null;
+        this.status = Status.OUTPUT_SENT;
     }
 
-    /**
-     * Only set for write transactions.
-     * @param identifier a task identifier among the tasks of a TID
-     */
-    public void setIdentifier(int identifier){
-        this.identifier = identifier;
+    public enum Status {
+        NEW(1),
+        READY(2),
+        RUNNING(3),
+        FINISHED(4),
+        OUTPUT_SENT(5);
+
+        public final int value;
+
+        Status(int value) {
+            this.value = value;
+        }
     }
 
-    public TransactionTypeEnum transactionType(){
-        return this.signature.transactionType();
+    @Override
+    public void run() {
+
+        this.status = Status.RUNNING;
+
+        this.transactionalHandler.beginTransaction(this.tid, -1, this.lastTid, this.signature.transactionType() == TransactionTypeEnum.R);
+
+        try {
+            Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.input);
+
+            OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
+
+            if(this.signature.transactionType() != TransactionTypeEnum.R){
+                this.transactionalHandler.commit();
+            }
+
+            this.status = Status.FINISHED;
+            this.schedulerCallback.success(signature.executionMode(), eventOutput);
+
+        } catch (Exception e) {
+            this.schedulerCallback.error(signature.executionMode(), this.tid, e);
+        }
+
     }
 
     public long tid() {
         return this.tid;
     }
 
-    public boolean isReady(){
-        return this.remainingInputs == 0;
+    public long lastTid() {
+        return this.lastTid;
     }
 
     public VmsTransactionSignature signature(){
         return this.signature;
     }
 
-    @Override
-    public VmsTransactionTaskResult call() {
+    public Object input(){
+        return input;
+    }
 
-        // register thread in the transaction facade
-        this.transactionalHandler.beginTransaction(this.tid, this.identifier, this.lastTid, this.signature.transactionType() == TransactionTypeEnum.R);
+    public Status status(){
+        return this.status;
+    }
 
-        try {
+    // set as ready for execution. the thread pool is able to execute it
+    public void signalReady(){
+        this.status = Status.READY;
+    }
 
-            Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.inputs);
-
-            // can be null, given we have terminal events (void method)
-            // could also be terminal and generate event... maybe an external system wants to consume
-            // then send to the leader...
-            OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
-
-            // TODO we need to erase the entries that are no longer seen by new transactions
-            // need to move
-            if(this.signature.transactionType() != TransactionTypeEnum.R){
-                this.transactionalHandler.commit();
-            }
-
-            return new VmsTransactionTaskResult(
-                    this.tid,
-                    this.identifier,
-                    eventOutput,
-                    VmsTransactionTaskResult.Status.SUCCESS);
-
-        } catch (Exception e) {
-            // (i) whether to return to the scheduler or (ii) to push to the payload handler for forwarding it to the queue
-            // we can only notify it because the scheduler does not need to know the events. the scheduler just needs to
-            // know whether the processing of events has been completed can be directly sent to the microservice outside
-            // taskResultQueue.add(new VmsTransactionTaskResult(threadId, tid, identifier, true));
-            return new VmsTransactionTaskResult(
-                    this.tid,
-                    this.identifier,
-                    null,
-                    VmsTransactionTaskResult.Status.FAILURE);
-        }
-
+    public void signalOutputSent(){
+        this.status = Status.OUTPUT_SENT;
     }
 
 }

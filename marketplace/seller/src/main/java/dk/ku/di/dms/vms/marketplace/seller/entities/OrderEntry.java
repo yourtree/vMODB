@@ -88,7 +88,7 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
 
     public OrderEntry() { }
 
-    public OrderEntry(int customer_id, int order_id, int package_id, int seller_id, int product_id, String product_name, String product_category, float unit_price, int quantity, float total_items, float total_amount, float total_invoice, float total_incentive, float freight_value, Date shipment_date, Date delivery_date, OrderStatus order_status, PackageStatus delivery_status) {
+    public OrderEntry(int customer_id, int order_id, int product_id, int seller_id, int package_id, String product_name, String product_category, float unit_price, int quantity, float total_items, float total_amount, float total_invoice, float total_incentive, float freight_value, Date shipment_date, Date delivery_date, OrderStatus order_status, PackageStatus delivery_status) {
         this.customer_id = customer_id;
         this.order_id = order_id;
         this.package_id = package_id;

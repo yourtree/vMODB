@@ -385,7 +385,7 @@ public class EmbedMetadataLoader {
                 if(parentDataModel.findColumnPosition(fkColumn.columnName()) == -1) {
                     throw new RuntimeException("Cannot find foreign key " + fkColumn + " that refers to a PK in parent table: " + entry.getKey());
                 }
-                intArray[i] = dataModelToBuild.findColumnPosition(fkColumn.columnName());
+                intArray[i] = fkColumn.columnIndex();
                 i++;
             }
             res.put( parentDataModel.tableName, intArray );

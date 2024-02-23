@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.modb.api.annotations;
 
 import dk.ku.di.dms.vms.modb.api.enums.IsolationLevelEnum;
-import dk.ku.di.dms.vms.modb.api.enums.TransactionPropagationEnum;
 import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
 
 import java.lang.annotation.ElementType;
@@ -14,5 +13,4 @@ import java.lang.annotation.Target;
 public @interface Transactional {
     TransactionTypeEnum type() default TransactionTypeEnum.RW;
     IsolationLevelEnum isolation() default IsolationLevelEnum.SERIALIZABLE;
-    TransactionPropagationEnum propagation() default TransactionPropagationEnum.REQUIRES_NEW;
 }

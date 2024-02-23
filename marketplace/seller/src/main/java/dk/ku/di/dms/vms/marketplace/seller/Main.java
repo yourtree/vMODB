@@ -67,9 +67,11 @@ public final class Main {
                 return;
             }
 
-            
-            // exchange.getRequestURI().getPath().contentEquals("dashboard")
-            // TODO seller dashboard. send fetch and fetchMany directly to transaction manager? the tx manager assigns the last finished tid to thread, thus obtaining the freshest snapshot possible
+            if(exchange.getRequestURI().getPath().contentEquals("dashboard")){
+
+            }
+            // TODO seller dashboard. send fetch and fetchMany directly to transaction manager?
+            //  the tx manager assigns the last finished tid to thread, thus obtaining the freshest snapshot possible
             //this.orderEntryRepository.insert();
         }
     }

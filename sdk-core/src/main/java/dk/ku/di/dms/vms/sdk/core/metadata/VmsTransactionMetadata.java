@@ -10,7 +10,7 @@ import java.util.List;
  * It contains the method signatures for a given transaction
  * as well as aggregated contextual information (to create a flock)
  */
-public class VmsTransactionMetadata {
+public final class VmsTransactionMetadata {
 
     public int numReadTasks;
     public int numWriteTasks;

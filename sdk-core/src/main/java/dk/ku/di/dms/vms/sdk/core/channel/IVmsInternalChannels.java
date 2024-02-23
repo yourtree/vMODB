@@ -1,15 +1,15 @@
-package dk.ku.di.dms.vms.sdk.core.event.channel;
+package dk.ku.di.dms.vms.sdk.core.channel;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
-import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
+import dk.ku.di.dms.vms.sdk.core.scheduler.VmsComplexTransactionScheduler;
 
 import java.util.concurrent.BlockingQueue;
 
 /**
  * In a virtual microservice paradigm, internal components exchange a lot of internal events.
- * Some components require consuming from different streams (e.g. {@link VmsTransactionScheduler}).
+ * Some components require consuming from different streams (e.g. {@link VmsComplexTransactionScheduler}).
  * Other only publish (task) and others consume from one and publish to another.
  * There are some limitations with Java interfaces. One of them is that a class cannot
  * implement the same interface twice, even though different types are used.

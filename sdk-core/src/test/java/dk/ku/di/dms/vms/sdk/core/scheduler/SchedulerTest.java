@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
-import dk.ku.di.dms.vms.sdk.core.event.channel.VmsInternalChannels;
+import dk.ku.di.dms.vms.sdk.core.channel.VmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.example.InputEventExample1;
 import dk.ku.di.dms.vms.sdk.core.example.MicroserviceExample2;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
@@ -38,7 +38,7 @@ public class SchedulerTest {
         Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) NetworkRepositoryFacade.class.getConstructors()[0];
         VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example");
 
-        VmsTransactionScheduler scheduler = VmsTransactionScheduler.buildNoCheckpointing(
+        VmsComplexTransactionScheduler scheduler = VmsComplexTransactionScheduler.buildNoCheckpointing(
                 "test", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap());
 
         Thread schedulerThread = new Thread(scheduler);
@@ -63,13 +63,13 @@ public class SchedulerTest {
 
         // tricky to simulate we have a scheduler in other microservice.... we need a new scheduler because of the tid
         // could reset the tid to 0, but would need to synchronize to avoid exceptions
-        scheduler = VmsTransactionScheduler.buildNoCheckpointing(
+        scheduler = VmsComplexTransactionScheduler.buildNoCheckpointing(
                 "vmsTest", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap());
 
         schedulerThread = new Thread(scheduler);
         schedulerThread.start();
 
-        for(var res : out.resultTasks){
+        for(var res : out.resultTasks()){
             Class<?> clazz = vmsRuntimeMetadata.queueToEventMap().get( res.outputQueue() );
             InboundEvent payload_ = new InboundEvent(1,0,1, res.outputQueue(), clazz, res.output());
             vmsInternalChannels.transactionInputQueue().add(payload_);

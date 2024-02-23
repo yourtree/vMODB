@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.metadata;
 
 import dk.ku.di.dms.vms.modb.api.annotations.*;
+import dk.ku.di.dms.vms.modb.api.enums.ExecutionModeEnum;
 import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.query.parser.Parser;
@@ -235,13 +236,14 @@ public final class VmsMetadataLoader {
             if(pkFields.isEmpty()){
                 throw new NoPrimaryKeyFoundException("Table class "+tableClass.getCanonicalName()+" does not have a primary key.");
             }
-             int totalNumberOfFields = pkFields.size();
+            int totalNumberOfFields = pkFields.size();
 
             stream = Arrays.stream(tableClass.getFields());
             List<Field> foreignKeyFields = stream.filter(p-> p.getAnnotation(VmsForeignKey.class) != null).toList();
-            if(!foreignKeyFields.isEmpty()) {
-                totalNumberOfFields += foreignKeyFields.size();
-            }
+            // foreign key fields should be counted wither as pk fields or column fields
+//            if(!foreignKeyFields.isEmpty()) {
+//                totalNumberOfFields += foreignKeyFields.size();
+//            }
 
             stream = Arrays.stream(tableClass.getFields());
             List<Field> columnFields = stream.filter(p-> p.getAnnotation(Column.class) != null).toList();
@@ -272,19 +274,19 @@ public final class VmsMetadataLoader {
                 // iterating over association columns
                 for (Field field : foreignKeyFields) {
                     VmsForeignKey fk = field.getAnnotation(VmsForeignKey.class);
-                    String fkTable = vmsTableNames.get(fk.table());
+                    String fkTable = vmsTableNames.get( fk.table() );
                     // later we parse into a Vms Table and check whether the types match
-                    foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column());
+                    foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column(), i);
                     j++;
 
                     // check if field is part of PK already
                     Id id = field.getAnnotation(Id.class);
-                    if(id == null){
-                        Class<?> attributeType = field.getType();
-                        columnDataTypes.add(getColumnDataTypeFromAttributeType(attributeType));
-                        columnNames.add(field.getName());
-                        i++;
-                    } else {
+                    if(id != null){
+//                        Class<?> attributeType = field.getType();
+//                        columnDataTypes.add(getColumnDataTypeFromAttributeType(attributeType));
+//                        columnNames.add(field.getName());
+//                        i++;
+//                    } else {
                         totalNumberOfFields--;
                     }
                 }
@@ -522,7 +524,29 @@ public final class VmsMetadataLoader {
                 transactionType = ((Transactional) ann).type();
             }
 
-            vmsTransactionSignature = new VmsTransactionSignature(obj, method, transactionType, inputQueues, outputQueue);
+            // default
+            ExecutionModeEnum executionMode = ExecutionModeEnum.SINGLE_THREADED;
+
+            Optional<Annotation> optionalPartitionBy = Arrays.stream(annotations).filter(p -> p.annotationType() == PartitionBy.class ).findFirst();
+            if(optionalPartitionBy.isPresent()) {
+                executionMode = ExecutionModeEnum.PARTITIONED;
+                Class<?> inputClazz = ( (PartitionBy)optionalPartitionBy.get() ).clazz();
+                String partitionMethodStr = ( (PartitionBy)optionalPartitionBy.get() ).method();
+                try {
+                    Method partitionMethod = inputClazz.getMethod(partitionMethodStr);
+                    vmsTransactionSignature = new VmsTransactionSignature(obj, method, transactionType, executionMode, Optional.of(partitionMethod), inputQueues, outputQueue);
+
+                } catch (NoSuchMethodException e) {
+                    // leave as single threaded
+                    vmsTransactionSignature = new VmsTransactionSignature(obj, method, transactionType, executionMode, inputQueues, outputQueue);
+                }
+            } else {
+
+                Optional<Annotation> optionalParallel = Arrays.stream(annotations).filter(p -> p.annotationType() == Parallel.class).findFirst();
+                if (optionalParallel.isPresent()) executionMode = ExecutionModeEnum.PARALLEL;
+
+                vmsTransactionSignature = new VmsTransactionSignature(obj, method, transactionType, executionMode, inputQueues, outputQueue);
+            }
 
             for (int i = 0; i < inputQueues.length; i++) {
 
