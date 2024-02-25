@@ -50,6 +50,7 @@ public final class SellerService {
         List<OrderEntry> list = new ArrayList<>(invoiceIssued.getItems().size());
 
         for (OrderItem orderItem : orderItems) {
+            var totalInvoice = orderItem.total_amount + orderItem.getFreightValue();
             OrderEntry orderEntry = new OrderEntry(
                     invoiceIssued.customer.CustomerId,
                     invoiceIssued.orderId,
@@ -62,7 +63,7 @@ public final class SellerService {
                     orderItem.quantity,
                     orderItem.total_items,
                     orderItem.total_amount,
-                    orderItem.total_amount + orderItem.getFreightValue(),
+                    totalInvoice,
                     orderItem.total_incentive,
                     orderItem.freight_value,
                     null,
@@ -71,6 +72,24 @@ public final class SellerService {
                     null
             );
             list.add(orderEntry);
+
+            // view maintenance code
+            orderSellerViewMap.putIfAbsent(orderItem.seller_id, new OrderSellerView(orderItem.seller_id) );
+            orderSellerViewMap.compute(orderEntry.seller_id, (sellerId, view) -> {
+
+                view.orders.add(new OrderSellerView.OrderId(orderEntry.customer_id, orderItem.order_id));
+
+                view.count_items++;
+                view.total_amount += orderEntry.total_amount;
+                view.total_incentive += orderItem.total_incentive;
+                view.total_freight += orderItem.freight_value;
+                view.total_items += orderItem.total_items;
+                view.total_invoice += totalInvoice;
+                // this requires maintaining another map
+                view.count_orders = view.orders.size();
+                return null;
+            });
+
         }
         this.orderEntryRepository.insertAll(list);
     }
@@ -106,6 +125,10 @@ public final class SellerService {
             this.orderEntryRepository.update( orderEntry );
         }
 
+    }
+
+    public OrderSellerView queryDashboard(int sellerId){
+        return this.orderSellerViewMap.getOrDefault( sellerId, new OrderSellerView(sellerId) );
     }
 
 }

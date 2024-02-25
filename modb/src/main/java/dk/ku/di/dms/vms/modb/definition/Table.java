@@ -50,7 +50,7 @@ public final class Table {
      * It is better to have an upper class taking care of this constraint.
      * Can be made parallel.
      */
-    private final Map<PrimaryIndex, int[]> foreignKeys;
+    private final Map<PrimaryIndex, int[]> foreignKeyMap;
 
     /**
      * Other indexes from this table, hashed by the column set in order of the schema
@@ -72,7 +72,7 @@ public final class Table {
     public final List<NonUniqueSecondaryIndex> children;
 
     public Table(String name, Schema schema, PrimaryIndex primaryIndex,
-                 Map<PrimaryIndex, int[]> foreignKeys,
+                 Map<PrimaryIndex, int[]> foreignKeyMap,
                  Map<IIndexKey, NonUniqueSecondaryIndex> secondaryIndexMap,
                  Map<IIndexKey, Tuple<Integer, Object>> partialIndexMetaMap,
                  Map<IIndexKey, UniqueSecondaryIndex> partialIndexMap){
@@ -80,7 +80,7 @@ public final class Table {
         this.schema = schema;
         this.hashCode = name.hashCode();
         this.primaryIndex = primaryIndex;
-        this.foreignKeys = foreignKeys;
+        this.foreignKeyMap = foreignKeyMap;
         this.secondaryIndexMap = secondaryIndexMap;
         this.partialIndexMetaMap = partialIndexMetaMap;
         this.partialIndexMap = partialIndexMap;
@@ -92,7 +92,7 @@ public final class Table {
         this.schema = schema;
         this.hashCode = name.hashCode();
         this.primaryIndex = primaryIndex;
-        this.foreignKeys = Collections.emptyMap();
+        this.foreignKeyMap = Collections.emptyMap();
         this.secondaryIndexMap = Collections.emptyMap();
         this.partialIndexMetaMap = Collections.emptyMap();
         this.partialIndexMap = Collections.emptyMap();
@@ -126,7 +126,7 @@ public final class Table {
     }
 
     public Map<PrimaryIndex, int[]> foreignKeys(){
-        return this.foreignKeys;
+        return this.foreignKeyMap;
     }
 
 }

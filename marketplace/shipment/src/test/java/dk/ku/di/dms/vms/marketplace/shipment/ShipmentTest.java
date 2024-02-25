@@ -119,11 +119,28 @@ public final class ShipmentTest {
                 "update_shipment", String.class, String.valueOf(numPayments));
         vms.internalChannels().transactionInputQueue().add(updateShipment);
 
-        sleep(100000);
+        sleep(1000);
+
+        assert vms.lastTidFinished() == 11;
 
         // TODO add more payments
 
-        assert vms.lastTidFinished() == 11;
+        numPayments = 20;
+
+        for(int i = 12; i <= numPayments; i++) {
+            generatePaymentConfirmed(i, String.valueOf(i), i - 1, vms);
+        }
+
+        numPayments++;
+
+        updateShipment = new InboundEvent(numPayments, numPayments-1, 1,
+                "update_shipment", String.class, String.valueOf(numPayments));
+        vms.internalChannels().transactionInputQueue().add(updateShipment);
+
+        sleep(1000);
+
+        // not volatile, cant make sure
+        assert vms.lastTidFinished() == 21;
 
     }
 

@@ -316,8 +316,9 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public IKey insertAndGetKey(Object[] values){
         if(this.primaryKeyGenerator.isPresent()){
             Object key_ = this.primaryKeyGenerator.get().next();
+            // set to record
             values[this.primaryKeyIndex.columns()[0]] = key_;
-            IKey key = KeyUtils.buildRecordKey( this.primaryKeyIndex.schema().getPrimaryKeyColumns(),  key_ );
+            IKey key = KeyUtils.buildRecordKey( this.primaryKeyIndex.schema().getPrimaryKeyColumns(), new Object[]{ key_ } );
             if(this.insert( key, values )){
                 return key;
             }

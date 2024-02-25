@@ -50,7 +50,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
 
         this.triggerCheckoutWorkflow(coordinator);
 
-        sleep(BATCH_WINDOW_INTERVAL * 7);
+        sleep(BATCH_WINDOW_INTERVAL * 5);
 
         assert coordinator.getCurrentBatchOffset() == 2;
         assert coordinator.getBatchOffsetPendingCommit() == 2;

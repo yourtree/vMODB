@@ -7,6 +7,8 @@ import dk.ku.di.dms.vms.sdk.core.operational.ISchedulerCallback;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
+import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.lang.reflect.InvocationTargetException;
@@ -14,6 +16,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
@@ -64,7 +67,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     private final Collection<InboundEvent> localInputEvents;
 
     // used to receive external signals that require the scheduler to pause and run tasks, e.g., checkpointing
-    private final ITransactionalHandler handler;
+    private final ICheckpointEventHandler checkpointHandler;
+
+    private final ITransactionalHandler transactionalHandler;
 
     // used to identify in which VMS this scheduler is running
     private final String vmsIdentifier;
@@ -72,7 +77,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     public static VmsTransactionScheduler build(String vmsIdentifier,
                                                 IVmsInternalChannels vmsChannels,
                                                 Map<String, VmsTransactionMetadata> transactionMetadataMap,
-                                                ITransactionalHandler handler){
+                                                ITransactionalHandler transactionalHandler,
+                                                ICheckpointEventHandler checkpointHandler){
         // could be higher. must adjust according to the number of cores available
         return new VmsTransactionScheduler(
                 vmsIdentifier,
@@ -80,7 +86,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 Executors.newSingleThreadExecutor(),
                 vmsChannels,
                 transactionMetadataMap,
-                handler);
+                transactionalHandler,
+                checkpointHandler);
     }
 
     private VmsTransactionScheduler(String vmsIdentifier,
@@ -88,7 +95,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                                     ExecutorService singleThreadPool,
                                     IVmsInternalChannels vmsChannels,
                                     Map<String, VmsTransactionMetadata> transactionMetadataMap,
-                                    ITransactionalHandler handler){
+                                    ITransactionalHandler transactionalHandler,
+                                    ICheckpointEventHandler checkpointHandler){
         super();
 
         this.vmsIdentifier = vmsIdentifier;
@@ -107,7 +115,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         this.localInputEvents = new ArrayList<>(50);
 
-        this.handler = handler;
+        this.transactionalHandler = transactionalHandler;
+        this.checkpointHandler = checkpointHandler;
     }
 
     /**
@@ -124,8 +133,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             try{
                 this.checkForNewEvents();
                 this.executeReadyTasks();
-                if( this.handler.mustCheckpoint() ) {
-                    this.handler.checkpoint();
+                if( this.checkpointHandler.mustCheckpoint() ) {
+                    this.checkpointHandler.checkpoint();
                 }
             } catch(Exception e){
                 this.logger.warning(this.vmsIdentifier+": Error on scheduler loop: "+e.getMessage());
@@ -172,8 +181,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 }
 
             } else {
-                tasksPendingSubmission.put( outboundEventResult.tid(),
-                        outboundEventResult );
+                tasksPendingSubmission.put( outboundEventResult.tid(), outboundEventResult );
             }
 
             if(executionMode == ExecutionModeEnum.SINGLE_THREADED)
@@ -262,8 +270,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     try {
                         Object partitionKey = task.signature().partitionByMethod().invoke(task.input());
                         if (!this.partitionKeyTrackingMap.contains(partitionKey)) {
-                            this.numPartitionedTasksRunning.incrementAndGet();
                             this.partitionKeyTrackingMap.add(partitionKey);
+                            this.numPartitionedTasksRunning.incrementAndGet();
                             task.signalReady();
                             this.sharedTaskPool.submit(task);
                         } else {
@@ -297,12 +305,15 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         try {
             if(this.vmsChannels.transactionInputQueue().isEmpty()){
-                if(block) {
-                    this.localInputEvents.add(this.vmsChannels.transactionInputQueue().take());
-                    block = false;
-                } else {
+//                if(block) {
+//                    var elem = this.vmsChannels.transactionInputQueue().poll(1000, TimeUnit.MILLISECONDS);
+//                    if(elem != null) {
+//                        this.localInputEvents.add(elem);
+//                        block = false;
+//                    }
+//                } else {
                     return;
-                }
+//                }
             }
 
             this.vmsChannels.transactionInputQueue().drainTo(this.localInputEvents);
@@ -326,7 +337,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         VmsTransactionMetadata transactionMetadata = this.transactionMetadataMap.get(inboundEvent.event());
 
         this.transactionTaskMap.put( inboundEvent.tid(), new VmsTransactionTask(
-                this.handler,
+                this.transactionalHandler,
                 this.callback,
                 inboundEvent.tid(),
                 inboundEvent.lastTid(),

@@ -271,14 +271,14 @@ public final class VmsMetadataLoader {
                     VmsForeignKey fk = field.getAnnotation(VmsForeignKey.class);
                     String fkTable = vmsTableNames.get( fk.table() );
                     // later we parse into a Vms Table and check whether the types match
-                    foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column());
+                    foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column(), field.getName());
                     j++;
 
                     // a fk must be either a column or an id
                     Id id = field.getAnnotation(Id.class);
                     Column column = field.getAnnotation(Column.class);
                     if(id == null && column == null){
-                        throw new RuntimeException("Foreign key "+fk.column()+" to table "+fk.table()+"is not marked as Id or Column in "+entry.getValue());
+                        throw new RuntimeException("Foreign key "+fk.column()+" to table "+fk.table()+" is not marked as Id or Column in "+entry.getValue());
                     }
                 }
 

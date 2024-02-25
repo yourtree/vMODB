@@ -38,8 +38,21 @@ public class SchedulerTest {
         Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) NetworkRepositoryFacade.class.getConstructors()[0];
         VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example");
 
-        VmsComplexTransactionScheduler scheduler = VmsComplexTransactionScheduler.buildNoCheckpointing(
-                "test", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap());
+        /*
+        new ICheckpointHandler() {
+            @Override
+            public void checkpoint() { }
+
+            @Override
+            public boolean mustCheckpoint() {
+                return false;
+            }
+
+        });
+        */
+
+        VmsComplexTransactionScheduler scheduler = VmsComplexTransactionScheduler.build(
+                "test", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null, null);
 
         Thread schedulerThread = new Thread(scheduler);
         schedulerThread.start();
@@ -63,8 +76,8 @@ public class SchedulerTest {
 
         // tricky to simulate we have a scheduler in other microservice.... we need a new scheduler because of the tid
         // could reset the tid to 0, but would need to synchronize to avoid exceptions
-        scheduler = VmsComplexTransactionScheduler.buildNoCheckpointing(
-                "vmsTest", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap());
+        scheduler = VmsComplexTransactionScheduler.build(
+                "vmsTest", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null, null);
 
         schedulerThread = new Thread(scheduler);
         schedulerThread.start();

@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
@@ -37,7 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * in order to accommodate two or more VMSs in the same resource,
  *  it would need to make this class an instance (no static methods) and put it into modb modules
  */
-public final class TransactionManager implements OperationalAPI, TransactionalAPI {
+public final class TransactionManager implements OperationalAPI, ITransactionalHandler {
 
     private static final ThreadLocal<Set<IMultiVersionIndex>> INDEX_WRITES = ThreadLocal.withInitial( () -> {
         if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
@@ -55,12 +56,12 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
      * Operators output results
      * They are read-only operations, do not modify data
      */
-    private final Map<String, AbstractSimpleOperator> queryPlansCache;
+    private final Map<String, AbstractSimpleOperator> queryPlanCacheMap;
 
     public TransactionManager(Map<String, Table> catalog){
         this.planner = new SimplePlanner();
         this.analyzer = new Analyzer(catalog);
-        this.queryPlansCache = new ConcurrentHashMap<>();
+        this.queryPlanCacheMap = new ConcurrentHashMap<>();
     }
 
     private boolean fkConstraintViolationFree(Table table, Object[] values){
@@ -75,14 +76,14 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
     @Override
     public List<Object[]> fetch(Table table, SelectStatement selectStatement){
         String sqlAsKey = selectStatement.SQL.toString();
-        AbstractSimpleOperator scanOperator = this.queryPlansCache.getOrDefault( sqlAsKey, null );
+        AbstractSimpleOperator scanOperator = this.queryPlanCacheMap.getOrDefault( sqlAsKey, null );
         List<WherePredicate> wherePredicates;
 
         if(scanOperator == null){
             QueryTree queryTree = this.analyzer.analyze(selectStatement);
             wherePredicates = queryTree.wherePredicates;
             scanOperator = this.planner.plan(queryTree);
-            this.queryPlansCache.put(sqlAsKey, scanOperator);
+            this.queryPlanCacheMap.put(sqlAsKey, scanOperator);
         } else {
             // get only the where clause params
             wherePredicates = this.analyzer.analyzeWhere(
@@ -107,14 +108,14 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
     @Override
     public MemoryRefNode fetchMemoryReference(Table table, SelectStatement selectStatement) {
         String sqlAsKey = selectStatement.SQL.toString();
-        AbstractSimpleOperator scanOperator = this.queryPlansCache.getOrDefault( sqlAsKey, null );
+        AbstractSimpleOperator scanOperator = this.queryPlanCacheMap.getOrDefault( sqlAsKey, null );
         List<WherePredicate> wherePredicates;
 
         if(scanOperator == null){
             QueryTree queryTree = this.analyzer.analyze(selectStatement);
             wherePredicates = queryTree.wherePredicates;
             scanOperator = this.planner.plan(queryTree);
-            this.queryPlansCache.put(sqlAsKey, scanOperator);
+            this.queryPlanCacheMap.put(sqlAsKey, scanOperator);
         } else {
             // get only the where clause params
             wherePredicates = this.analyzer.analyzeWhere(
@@ -246,7 +247,7 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
             }
         }
         this.undoTransactionWrites();
-        throw new RuntimeException("Constraint violation.");
+        throw new RuntimeException("Constraint violation in table "+table.getName());
     }
 
     public Object[] insertAndGet(Table table, Object[] values){
@@ -346,16 +347,23 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
      * Only log those data versions until the corresponding batch.
      * TIDs are not necessarily a sequence.
      */
+    @Override
     public void checkpoint(){
         // make state durable
         // get buffered writes in transaction facade and merge in memory
     }
 
+    @Override
     public void commit(){
         var indexes = INDEX_WRITES.get();
         for(var index : indexes){
             index.installWrites();
         }
+    }
+
+    @Override
+    public void beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) {
+        TransactionMetadata.registerTransactionStart(tid, identifier, lastTid, readOnly);
     }
 
 }

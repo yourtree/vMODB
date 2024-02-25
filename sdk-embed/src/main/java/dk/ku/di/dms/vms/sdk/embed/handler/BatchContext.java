@@ -11,6 +11,8 @@ public final class BatchContext {
 
     public final long lastTid;
 
+    // if an external thread (i.e., scheduler) modifies
+    // this attribute, it needs to change to volatile
     private int status;
 
     // whether this vms is a terminal for this batch

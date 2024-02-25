@@ -6,17 +6,24 @@ public class ForeignKeyReference {
 
     private final String parentColumnName;
 
-    public ForeignKeyReference(String parentTableName, String parentColumnName) {
+    private final String localColumnName;
+
+    public ForeignKeyReference(String parentTableName, String parentColumnName, String localColumnName) {
         this.parentTableName = parentTableName;
         this.parentColumnName = parentColumnName;
+        this.localColumnName = localColumnName;
     }
 
-    public String vmsTableName(){
+    public String parentTableName(){
         return this.parentTableName;
     }
 
-    public String columnName(){
+    public String parentColumnName(){
         return this.parentColumnName;
+    }
+
+    public String localColumnName(){
+        return this.localColumnName;
     }
 
 }

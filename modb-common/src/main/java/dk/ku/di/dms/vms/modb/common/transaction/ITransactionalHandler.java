@@ -1,13 +1,11 @@
-package dk.ku.di.dms.vms.sdk.core.scheduler;
+package dk.ku.di.dms.vms.modb.common.transaction;
 
+/**
+ * Interface to which client classes (i.e., event handler) can request a checkpoint of the state
+ */
 public interface ITransactionalHandler {
 
-    /**
-     * Ideally should run in a caller's thread
-     */
     void checkpoint();
-
-    boolean mustCheckpoint();
 
     void commit();
 

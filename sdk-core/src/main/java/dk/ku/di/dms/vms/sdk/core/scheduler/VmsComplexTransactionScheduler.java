@@ -4,6 +4,8 @@ import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
 import dk.ku.di.dms.vms.sdk.core.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.*;
+import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
 import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.ComplexVmsTransactionTrackingContext;
 import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.IVmsTransactionTrackingContext;
 import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.SimpleVmsTransactionTrackingContext;
@@ -73,8 +75,10 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
     // reuse same collection to avoid many allocations
     private final Collection<InboundEvent> inputEvents;
 
+    private final ITransactionalHandler transactionalHandler;
+
     // used to receive external signals that require the scheduler to pause and run tasks, e.g., checkpointing
-    private final ITransactionalHandler handler;
+    private final ICheckpointEventHandler checkpointHandler;
 
     // used to identify in which VMS scheduler a possible problem has happened
     private final String vmsIdentifier;
@@ -83,33 +87,12 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
                                                        IVmsInternalChannels vmsChannels,
                                                        // (input) queue to transactions map
                                                        Map<String, VmsTransactionMetadata> transactionMetadataMap,
-                                                       ITransactionalHandler handler){
+                                                       ITransactionalHandler transactionalHandler,
+                                                       ICheckpointEventHandler checkpointHandler){
         // could be higher. must adjust according to the number of cores available
         return new VmsComplexTransactionScheduler( vmsIdentifier,
                Executors.newSingleThreadExecutor(), Executors.newSingleThreadExecutor(),
-               vmsChannels, transactionMetadataMap, handler );
-    }
-
-    public static VmsComplexTransactionScheduler buildNoCheckpointing(String vmsIdentifier,
-                                                                      IVmsInternalChannels vmsChannels,
-                                                                      // (input) queue to transactions map
-                                                                      Map<String, VmsTransactionMetadata> transactionMetadataMap){
-        return new VmsComplexTransactionScheduler(vmsIdentifier, Executors.newSingleThreadExecutor(), Executors.newSingleThreadExecutor(), vmsChannels, transactionMetadataMap, new ITransactionalHandler() {
-            @Override
-            public void checkpoint() { }
-
-            @Override
-            public boolean mustCheckpoint() {
-                return false;
-            }
-
-            @Override
-            public void commit() { }
-
-            @Override
-            public void beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) { }
-
-        });
+               vmsChannels, transactionMetadataMap, transactionalHandler, checkpointHandler );
     }
 
     private VmsComplexTransactionScheduler(String vmsIdentifier,
@@ -118,7 +101,8 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
                                            IVmsInternalChannels vmsChannels,
                                            // (input) queue to transactions map
                                            Map<String, VmsTransactionMetadata> transactionMetadataMap,
-                                           ITransactionalHandler handler){
+                                           ITransactionalHandler transactionalHandler,
+                                           ICheckpointEventHandler checkpointHandler){
         super();
 
         this.vmsIdentifier = vmsIdentifier;
@@ -138,7 +122,8 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
 
         this.inputEvents = new ArrayList<>(50);
 
-        this.handler = handler;
+        this.transactionalHandler = transactionalHandler;
+        this.checkpointHandler = checkpointHandler;
     }
 
     /**
@@ -180,9 +165,9 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
                 this.processTaskResult();
                 this.moveOffsetPointerIfNecessary();
                 // let's wait for now. in the future may add more semantics (e.g., no wait)
-                if( this.handler.mustCheckpoint() ) {
+                if( this.checkpointHandler.mustCheckpoint() ) {
                     // run in the same thread although impl is in another class
-                    this.handler.checkpoint();
+                    this.checkpointHandler.checkpoint();
                 }
             } catch(Exception e){
                 this.logger.warning(this.vmsIdentifier+": Error on scheduler loop: "+e.getMessage());
@@ -375,7 +360,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
 
             VmsTransactionSignature signature = node.object();
             task = new VmsComplexTransactionTask(
-                    this.handler,
+                    this.transactionalHandler,
                     inboundEvent.tid(),
                     inboundEvent.lastTid(),
                     inboundEvent.batch(),

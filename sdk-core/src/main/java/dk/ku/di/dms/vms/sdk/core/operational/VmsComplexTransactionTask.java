@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
 import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
-import dk.ku.di.dms.vms.sdk.core.scheduler.ITransactionalHandler;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
 
 import java.util.concurrent.Callable;
 

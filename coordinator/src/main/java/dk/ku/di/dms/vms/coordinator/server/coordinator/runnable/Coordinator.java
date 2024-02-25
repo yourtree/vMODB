@@ -482,11 +482,11 @@ public final class Coordinator extends SignalingStoppableRunnable {
         BatchContext previousBatch = this.batchContextMap.get( this.currentBatchOffset - 1 );
         // have we processed any input event since the start of this coordinator thread?
         if(previousBatch.lastTid == this.tid - 1){
-            logger.config("No new transaction since last batch generation. Current batch "+this.currentBatchOffset+" won't be spawned this time.");
+            logger.config("Leader: No new transaction since last batch generation. Current batch "+this.currentBatchOffset+" won't be spawned this time.");
             return;
         }
 
-        logger.info("Batch commit task is starting...");
+        logger.info("Leader: Batch commit task is starting...");
 
         // why do I need to replicate vmsTidMap? to restart from this point if the leader fails
         final long generateBatch = this.currentBatchOffset;
@@ -511,7 +511,7 @@ public final class Coordinator extends SignalingStoppableRunnable {
         BatchContext newBatchContext = new BatchContext(this.currentBatchOffset);
         this.batchContextMap.put( this.currentBatchOffset, newBatchContext );
 
-        this.logger.info("Current batch offset is "+generateBatch+" and new batch offset is "+this.currentBatchOffset);
+        this.logger.info("Leader: Current batch offset is "+generateBatch+" and new batch offset is "+this.currentBatchOffset);
 
         // new TIDs will be emitted with the new batch in the transaction manager
         boolean isTerminal;
@@ -731,9 +731,9 @@ public final class Coordinator extends SignalingStoppableRunnable {
                 // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
 
                 if(!event.targetVms.equalsIgnoreCase(vms.node().vmsIdentifier)){
-                    logger.severe("The event was going to be queued to the incorrect VMS worker!");
+                    logger.severe("Leader: The event was going to be queued to the incorrect VMS worker!");
                 }
-                logger.info("Adding event "+event.name+" to "+vms.node().vmsIdentifier+" worker");
+                logger.info("Leader: Adding event "+event.name+" to "+vms.node().vmsIdentifier+" worker");
                 vms.worker().transactionEventsPerBatch(this.currentBatchOffset).add(txEvent);
 
             }

@@ -17,9 +17,11 @@ public final class OrderHistory implements IEntity<Integer> {
     @GeneratedValue
     public int id;
 
+    @Column
     @VmsForeignKey( table = Order.class, column = "customer_id")
     public int customer_id;
 
+    @Column
     @VmsForeignKey( table = Order.class, column = "order_id")
     public int order_id;
 

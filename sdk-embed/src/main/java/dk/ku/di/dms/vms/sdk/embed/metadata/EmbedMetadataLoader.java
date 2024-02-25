@@ -183,7 +183,7 @@ public class EmbedMetadataLoader {
     private record SchemaMapping(
             Schema schema,
             // key: table name value: columns
-            Map<String, int[]> secondaryIndexMap,
+            Map<String, Tuple<int[],int[]>> secondaryIndexMap,
             // value: column, value
             List<PartialIndexMetadata> partialIndexMetadataList){}
 
@@ -226,10 +226,10 @@ public class EmbedMetadataLoader {
             if(vmsDataModel.foreignKeyReferences != null && vmsDataModel.foreignKeyReferences.length > 0){
                 // build
                 Map<String, List<ForeignKeyReference>> fksPerTable = Stream.of( vmsDataModel.foreignKeyReferences )
-                                .collect( Collectors.groupingBy(ForeignKeyReference::vmsTableName ) );
+                                .collect( Collectors.groupingBy(ForeignKeyReference::parentTableName) );
 
                 // table name, fields
-                Map<String, int[]> secondaryIndexMap = buildSchemaForeignKeyMap(fksPerTable, vmsDataModelMap);
+                Map<String, Tuple<int[],int[]>> secondaryIndexMap = buildSchemaForeignKeyMap(vmsDataModel, fksPerTable, vmsDataModelMap);
                 dataSchemaToPkMap.put(vmsDataModel, new SchemaMapping(schema, secondaryIndexMap, partialIndexMetadataList));
             } else {
                 dataSchemaToPkMap.put(vmsDataModel, new SchemaMapping(schema, Map.of(), partialIndexMetadataList));
@@ -260,7 +260,7 @@ public class EmbedMetadataLoader {
             if(!entry.getValue().secondaryIndexMap().isEmpty()) {
                 // now create the secondary index (a - based on foreign keys and b - based on non-foreign keys)
                 for (var secIdx : entry.getValue().secondaryIndexMap().entrySet()) {
-                    ReadWriteIndex<IKey> nuhi = createNonUniqueIndex(schema, secIdx.getValue(), "FK_"+secIdx.getKey() );
+                    ReadWriteIndex<IKey> nuhi = createNonUniqueIndex(schema, secIdx.getValue().t1(), "FK_"+secIdx.getKey() );
                     listSecondaryIndexes.add(nuhi);
                 }
             }
@@ -285,9 +285,10 @@ public class EmbedMetadataLoader {
             PrimaryIndex primaryIndex = tableToPrimaryIndexMap.get(vmsDataSchema.tableName);
 
             // build foreign key indexes metadata
-            Map<PrimaryIndex, int[]> fks = new HashMap<>();
+            Map<PrimaryIndex, int[]> foreignKeysMap = new HashMap<>();
             for (var fk : schemaMapping.secondaryIndexMap().entrySet()) {
-                fks.put(tableToPrimaryIndexMap.get(fk.getKey()), fk.getValue());
+                // cannot send the parent table columns. must scan the own vms data model column positions
+                foreignKeysMap.put(tableToPrimaryIndexMap.get(fk.getKey()), fk.getValue().t2());
             }
 
             // build foreign key secondary indexes
@@ -303,9 +304,12 @@ public class EmbedMetadataLoader {
             }
 
             Table table = new Table(vmsDataSchema.tableName,
-                    schemaMapping.schema(), primaryIndex,
-                    fks, secondaryIndexMap,
-                    partialIndexMetaMap, partialIndexMap);
+                    schemaMapping.schema(),
+                    primaryIndex,
+                    foreignKeysMap,
+                    secondaryIndexMap,
+                    partialIndexMetaMap,
+                    partialIndexMap);
 
             catalog.put( vmsDataSchema.tableName, table );
         }
@@ -370,23 +374,28 @@ public class EmbedMetadataLoader {
         }
     }
 
-    private static Map<String, int[]> buildSchemaForeignKeyMap(Map<String, List<ForeignKeyReference>> fksPerTable,
-                                                               Map<String, VmsDataModel> dataModelMap) {
-        Map<String, int[]> res = new HashMap<>();
+    private static Map<String, Tuple<int[],int[]>> buildSchemaForeignKeyMap(VmsDataModel childDataModel,
+            Map<String, List<ForeignKeyReference>> fksPerTable, Map<String, VmsDataModel> dataModelMap) {
+        Map<String, Tuple<int[],int[]>> res = new HashMap<>();
         for( var entry : fksPerTable.entrySet() ){
-            int[] intArray = new int[ entry.getValue().size() ];
+            int[] parentColumns = new int[ entry.getValue().size() ];
+            int[] childColumns = new int[ entry.getValue().size() ];
             int i = 0;
             // get parent data schema
             VmsDataModel parentDataModel = dataModelMap.get( entry.getKey() );
             // first check if the foreign keys defined actually map to a column in parent table
-            for(var fkColumn : entry.getValue()){
-                intArray[i] = parentDataModel.findColumnPosition(fkColumn.columnName());
-                if(intArray[i] == -1) {
+            for(ForeignKeyReference fkColumn : entry.getValue()){
+                parentColumns[i] = parentDataModel.findColumnPosition(fkColumn.parentColumnName());
+                if(parentColumns[i] == -1) {
                     throw new RuntimeException("Cannot find foreign key " + fkColumn + " that refers to a PK in parent table: " + entry.getKey());
+                }
+                childColumns[i] = childDataModel.findColumnPosition(fkColumn.localColumnName());
+                if(childColumns[i] == -1) {
+                    throw new RuntimeException("Cannot find column name " + fkColumn.localColumnName() + " that refers to a column in child table: " + childDataModel.tableName);
                 }
                 i++;
             }
-            res.put( parentDataModel.tableName, intArray );
+            res.put( parentDataModel.tableName, new Tuple<>(parentColumns, childColumns) );
         }
         return res;
     }

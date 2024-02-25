@@ -42,8 +42,11 @@ public final class Main {
 
         private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
+        private final SellerService sellerService;
+
         @SuppressWarnings("unchecked")
         private SellerHttpHandler(VmsApplication vms) {
+            this.sellerService = ((SellerService) vms.getService());
             this.orderEntryRepository = (IOrderEntryRepository) vms.getRepositoryProxy("packages");
             this.sellerTable = vms.getTable("sellers");
             this.sellerRepository = (AbstractProxyRepository<Integer, Seller>) vms.getRepositoryProxy("sellers");
@@ -67,12 +70,15 @@ public final class Main {
                 return;
             }
 
-            if(exchange.getRequestURI().getPath().contentEquals("dashboard")){
-
-            }
             // TODO seller dashboard. send fetch and fetchMany directly to transaction manager?
             //  the tx manager assigns the last finished tid to thread, thus obtaining the freshest snapshot possible
-            //this.orderEntryRepository.insert();
+            if(exchange.getRequestURI().getPath().contentEquals("dashboard")){
+                // register a transaction with the last tid finished to get the freshest view
+                // not necessary. the concurrent hashmap guarantees all-or-nothing
+                // vms.lastTidFinished()
+                // sellerService.queryDashboard();
+            }
+
         }
     }
 

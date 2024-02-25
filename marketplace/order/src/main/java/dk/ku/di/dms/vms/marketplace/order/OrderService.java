@@ -82,10 +82,10 @@ public final class OrderService {
 
     }
 
+//    @PartitionBy(clazz = StockConfirmed.class, method = "getCustomerId")
     @Inbound(values = {"stock_confirmed"})
     @Outbound("invoice_issued")
     @Transactional(type=RW)
-    @PartitionBy(clazz = StockConfirmed.class, method = "getCustomerId")
     public InvoiceIssued processStockConfirmed(StockConfirmed stockConfirmed) {
         Date now = new Date();
         System.out.println("Order received a stock confirmed event with TID: "+ stockConfirmed.instanceId);

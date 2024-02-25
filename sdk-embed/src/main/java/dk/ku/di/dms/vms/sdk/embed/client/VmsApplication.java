@@ -132,6 +132,7 @@ public final class VmsApplication {
                 vmsName,
                 vmsInternalPubSubService,
                 vmsMetadata.queueToVmsTransactionMap(),
+                eventHandler.transactionalHandler(),
                 eventHandler.schedulerHandler() );
 
         return new VmsApplication( vmsMetadata, catalog, eventHandler, scheduler, vmsInternalPubSubService );
@@ -164,6 +165,10 @@ public final class VmsApplication {
 
     public long lastTidFinished() {
         return this.eventHandler.lastTidFinished();
+    }
+
+    public Object getService() {
+        return this.vmsRuntimeMetadata.loadedVmsInstances().entrySet().stream().findFirst().get();
     }
 
 }

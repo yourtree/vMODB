@@ -28,10 +28,10 @@ public final class StockService {
         this.stockRepository = stockRepository;
     }
 
+    // @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     @Inbound(values = {"product_updated"})
     @Outbound("transaction_mark")
     @Transactional(type=RW)
-    @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     public TransactionMark updateProduct(ProductUpdated updateEvent) {
         System.out.println("Stock received an update product event with version: "+updateEvent.version);
 
