@@ -4,7 +4,6 @@ import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
 import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
 import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
-import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
@@ -22,24 +21,11 @@ public final class SellerTest {
     private static final int MAX_SELLERS = 10;
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testParallelInvoiceIssued() throws Exception {
-
         VmsApplication vms = getVmsApplication();
         vms.start();
 
-        var sellerTable = vms.getTable("sellers");
-        var sellerRepository = (AbstractProxyRepository<Integer, Seller>) vms.getRepositoryProxy("sellers");
-
-        // add sellers first to avoid foreign key constraint violation
-        for(int i = 1; i <= MAX_SELLERS; i++){
-            var seller = new Seller(i, "test", "test", "test",
-                    "test", "test", "test", "test",
-                    "test", "test", "test", "test", "test");
-            Object[] obj = sellerRepository.extractFieldValuesFromEntityObject(seller);
-            IKey key = KeyUtils.buildRecordKey( sellerTable.schema().getPrimaryKeyColumns(), obj );
-            sellerTable.underlyingPrimaryKeyIndex().insert(key, obj);
-        }
+        insertSellers(vms);
 
         CustomerCheckout customerCheckout = new CustomerCheckout(
                 1, "test", "test", "test", "test","test", "test", "test",
@@ -56,8 +42,29 @@ public final class SellerTest {
             vms.internalChannels().transactionInputQueue().add(inboundEvent);
         }
 
-        sleep(1000000);
+        sleep(3000);
 
+        assert vms.lastTidFinished() == 10;
+
+    }
+
+    /**
+     *  Add sellers first to avoid foreign key constraint violation
+      */
+    @SuppressWarnings("unchecked")
+    private static void insertSellers(VmsApplication vms) {
+
+        var sellerTable = vms.getTable("sellers");
+        var sellerRepository = (AbstractProxyRepository<Integer, Seller>) vms.getRepositoryProxy("sellers");
+
+        for(int i = 1; i <= MAX_SELLERS; i++){
+            var seller = new Seller(i, "test", "test", "test",
+                    "test", "test", "test", "test",
+                    "test", "test", "test", "test", "test");
+            Object[] obj = sellerRepository.extractFieldValuesFromEntityObject(seller);
+            IKey key = KeyUtils.buildRecordKey( sellerTable.schema().getPrimaryKeyColumns(), obj );
+            sellerTable.underlyingPrimaryKeyIndex().insert(key, obj);
+        }
     }
 
     private static VmsApplication getVmsApplication() throws Exception {

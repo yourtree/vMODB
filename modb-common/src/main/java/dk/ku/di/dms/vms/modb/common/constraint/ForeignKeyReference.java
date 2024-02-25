@@ -6,12 +6,9 @@ public class ForeignKeyReference {
 
     private final String parentColumnName;
 
-    private final int columnIndex;
-
-    public ForeignKeyReference(String parentTableName, String parentColumnName, int columnIndex) {
+    public ForeignKeyReference(String parentTableName, String parentColumnName) {
         this.parentTableName = parentTableName;
         this.parentColumnName = parentColumnName;
-        this.columnIndex = columnIndex;
     }
 
     public String vmsTableName(){
@@ -20,10 +17,6 @@ public class ForeignKeyReference {
 
     public String columnName(){
         return this.parentColumnName;
-    }
-
-    public int columnIndex(){
-        return columnIndex;
     }
 
 }

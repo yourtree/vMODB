@@ -3,12 +3,13 @@ package dk.ku.di.dms.vms.modb.definition.key;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
+import dk.ku.di.dms.vms.modb.index.IIndexKey;
 
 public final class KeyUtils {
 
     private KeyUtils(){}
 
-    public static IKey buildRecordKey(int[] columns, Object... object){
+    public static IKey buildRecordKey(int[] columns, Object[] object){
 
         if(columns.length == 1){
             return SimpleKey.of( object[columns[0]] );
@@ -25,10 +26,6 @@ public final class KeyUtils {
 
         return CompositeKey.of( values );
 
-    }
-
-    public static IKey buildPrimaryKey(Schema schema, long srcAddress){
-        return buildRecordKeyNoHeader(schema, schema.getPrimaryKeyColumns(), srcAddress);
     }
 
     public static IKey buildRecordKeyNoHeader(Schema schema, int[] columns, long srcAddress){
@@ -96,14 +93,14 @@ public final class KeyUtils {
         return key;
     }
 
-    public static IKey buildKey(Object[] values){
+    public static IKey buildIndexKey(Object[] values){
         if(values.length == 1) {
             return SimpleKey.of(values[0]);
         }
         return CompositeKey.of(values);
     }
 
-    public static IKey buildKey(int[] values){
+    public static IIndexKey buildIndexKey(int[] values){
         if(values.length == 1)
             return SimpleKey.of(values[0]);
         return CompositeKey.of(values);

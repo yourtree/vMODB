@@ -195,7 +195,7 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
     }
 
     public void deleteByKey(Table table, Object[] keyValues) {
-        IKey pk = KeyUtils.buildKey(keyValues);
+        IKey pk = KeyUtils.buildIndexKey(keyValues);
         this.deleteByKey(table, pk);
     }
 
@@ -210,7 +210,7 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
     }
 
     public Object[] lookupByKey(PrimaryIndex index, Object... valuesOfKey){
-        IKey pk = KeyUtils.buildKey(valuesOfKey);
+        IKey pk = KeyUtils.buildIndexKey(valuesOfKey);
         return index.lookupByKey(pk);
     }
 
@@ -301,7 +301,7 @@ public final class TransactionManager implements OperationalAPI, TransactionalAP
                 i++;
             }
         }
-        return KeyUtils.buildKey(keyList);
+        return KeyUtils.buildIndexKey(keyList);
     }
 
     public MemoryRefNode run(List<WherePredicate> wherePredicates,

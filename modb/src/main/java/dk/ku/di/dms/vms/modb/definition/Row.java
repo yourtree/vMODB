@@ -10,10 +10,16 @@ public class Row {
 
     /**
      * Constructor to facilitate row creation.
-     * @param values
      */
-    public Row(final Object... values) {
+    public Row(Object[] values) {
         this.values = values;
+    }
+
+    public Row(int[] values) {
+        this.values = new Object[values.length];
+        for(int i = 0; i < values.length; i++){
+            this.values[i] = values[i];
+        }
     }
 
     public Object get(int id) {

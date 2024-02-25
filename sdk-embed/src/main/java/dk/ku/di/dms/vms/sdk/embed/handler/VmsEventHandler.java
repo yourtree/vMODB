@@ -239,15 +239,17 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
                 // it is better to get all the results of a given transaction instead of one by one. it must be atomic anyway
 
-                // TODO poll for some time
+                VmsTransactionResult txResult = this.vmsInternalChannels.transactionOutputQueue().take();
 
-                if(!this.vmsInternalChannels.transactionOutputQueue().isEmpty()){
+                this.logger.info(this.me.vmsIdentifier+": New transaction result in event handler. TID = "+txResult.tid());
 
-                    VmsTransactionResult txResult = this.vmsInternalChannels.transactionOutputQueue().take();
+                this.lastTidFinished = txResult.tid();
 
-                    this.logger.info(this.me.vmsIdentifier+": New transaction result in event handler. TID = "+txResult.tid());
+                // just send events to appropriate targets
+                for(OutboundEventResult outputEvent : txResult.resultTasks()){
 
-                    this.lastTidFinished = txResult.tid();
+                    // it is a void method that executed, nothing to send
+                    if(outputEvent.outputQueue() == null) continue;
 
                     Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(this.lastTidFinished);
 
@@ -261,14 +263,10 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
                     String precedenceMapUpdated = this.serdesProxy.serializeMap(precedenceMap);
 
-                    // just send events to appropriate targets
-                    for(OutboundEventResult outputEvent : txResult.resultTasks()){
-                        this.processOutputEvent(outputEvent, precedenceMapUpdated);
-                    }
-
+                    this.processOutputEvent(outputEvent, precedenceMapUpdated);
                 }
 
-               this.moveBatchIfNecessary();
+                this.moveBatchIfNecessary();
 
             } catch (Exception e) {
                 this.logger.log(Level.SEVERE, this.me.vmsIdentifier+": Problem on handling event: "+e.getMessage());
@@ -406,8 +404,6 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
      * @param outputEvent the event to be sent to the respective consumer vms
      */
     private void processOutputEvent(OutboundEventResult outputEvent, String precedenceMap){
-
-        if(outputEvent.outputQueue() == null) return; // it is a void method that executed, nothing to send
 
         Class<?> clazz = this.vmsMetadata.queueToEventMap().get(outputEvent.outputQueue());
         String objStr = this.serdesProxy.serialize(outputEvent.output(), clazz);
@@ -1020,6 +1016,10 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
     public ITransactionalHandler schedulerHandler() {
         return this.schedulerHandler;
+    }
+
+    public long lastTidFinished() {
+        return this.lastTidFinished;
     }
 
 }

@@ -3,7 +3,10 @@ package dk.ku.di.dms.vms.sdk.core.scheduler;
 import dk.ku.di.dms.vms.modb.api.enums.ExecutionModeEnum;
 import dk.ku.di.dms.vms.sdk.core.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
-import dk.ku.di.dms.vms.sdk.core.operational.*;
+import dk.ku.di.dms.vms.sdk.core.operational.ISchedulerCallback;
+import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
+import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
+import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.lang.reflect.InvocationTargetException;
@@ -139,31 +142,31 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
             updateLastFinishedTid(outboundEventResult.tid());
 
-            // another way  to solve this problem is creating a special queue, that will only
-            // make event available if the precedence has been fulfilled
-
             // my previous has sent the event already?
             VmsTransactionTask task = transactionTaskMap.get(outboundEventResult.tid());
             var lastTid = task.lastTid();
             if(transactionTaskMap.get(lastTid).status().value == 5){
-                task.signalOutputSent();
-                logger.info("adding "+outboundEventResult.tid()+" to output queue...");
+                // logger.info("adding "+outboundEventResult.tid()+" to output queue...");
+
                 vmsChannels.transactionOutputQueue().add(
                         new VmsTransactionResult(outboundEventResult.tid(),
                                 List.of(outboundEventResult)) );
 
-                // do I precede a pending submission?
-                var nextTid = lastTidToTidMap.get(outboundEventResult.tid());
+                task.signalOutputSent();
 
-                while(tasksPendingSubmission.containsKey(nextTid)){
+                // do I precede a pending submission?
+                Long nextTid = lastTidToTidMap.get(outboundEventResult.tid());
+                while(nextTid != null && tasksPendingSubmission.containsKey(nextTid)){
                     // send
                     var nextTask = tasksPendingSubmission.remove(nextTid);
                     if(nextTask == null) break;
 
-                    logger.info("adding "+nextTask.tid()+" to output queue...");
+                    // logger.info("adding "+nextTask.tid()+" to output queue...");
                     vmsChannels.transactionOutputQueue().add(
                             new VmsTransactionResult(nextTask.tid(),
                                     List.of(nextTask)) );
+
+                    transactionTaskMap.get(nextTid).signalOutputSent();
 
                     nextTid = lastTidToTidMap.get(nextTid);
                 }
@@ -185,6 +188,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         @Override
         public void error(ExecutionModeEnum executionMode, long tid, Exception e) {
             // TODO handle errors
+            logger.warning("Error captured in application execution: "+e.getMessage());
             if(executionMode == ExecutionModeEnum.SINGLE_THREADED)
                 singleThreadTaskRunning.set(false);
             else if (executionMode == ExecutionModeEnum.PARALLEL) {
@@ -205,15 +209,26 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         }
     }
 
+    /**
+     * To avoid the scheduler to remain in a busy loop
+     * while no new input events arrive
+     */
+    private boolean block = false;
+
     private void executeReadyTasks() {
 
         Long nextTid = this.lastTidToTidMap.get( this.lastFinishedTid );
-        if(nextTid == null) return;
+        if(nextTid == null) {
+            block = true;
+            return;
+        }
+        // if nextTid == null then the scheduler must block until a new event arrive to progress
+
         VmsTransactionTask task = this.transactionTaskMap.get( nextTid );
 
         while(true) {
 
-            if (task == null) return;
+            // if (task == null) return;
             if(task.status().value > 1){
                 return;
             }
@@ -282,7 +297,12 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         try {
             if(this.vmsChannels.transactionInputQueue().isEmpty()){
-                return;
+                if(block) {
+                    this.localInputEvents.add(this.vmsChannels.transactionInputQueue().take());
+                    block = false;
+                } else {
+                    return;
+                }
             }
 
             this.vmsChannels.transactionInputQueue().drainTo(this.localInputEvents);
@@ -305,9 +325,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         VmsTransactionMetadata transactionMetadata = this.transactionMetadataMap.get(inboundEvent.event());
 
-        // mark the last tid, so we can get the next to execute when appropriate
-        this.lastTidToTidMap.put( inboundEvent.lastTid(), inboundEvent.tid() );
-
         this.transactionTaskMap.put( inboundEvent.tid(), new VmsTransactionTask(
                 this.handler,
                 this.callback,
@@ -317,6 +334,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 transactionMetadata.signatures.get(0).object(),
                 inboundEvent.input()
         ) );
+
+        // mark the last tid, so we can get the next to execute when appropriate
+        this.lastTidToTidMap.put( inboundEvent.lastTid(), inboundEvent.tid() );
     }
 
 }

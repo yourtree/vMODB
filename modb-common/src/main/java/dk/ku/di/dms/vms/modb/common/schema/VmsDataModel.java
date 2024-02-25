@@ -53,7 +53,6 @@ public class VmsDataModel {
         for(int i = 0; i < columnNames.length; i++){
             if(columnNames[i].contentEquals(columnName)) return i;
         }
-//        throw new RuntimeException("Cannot find column "+columnName+" in data model "+tableName+" of "+vmsName);
         return -1;
     }
 

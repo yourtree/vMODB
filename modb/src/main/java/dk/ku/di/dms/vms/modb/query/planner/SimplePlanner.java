@@ -6,7 +6,9 @@ import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
+import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
@@ -259,12 +261,7 @@ public final class SimplePlanner {
 
         final int[] columnsForIndexSelection = intStream.toArray();
 
-        final IKey indexKey;
-        if(columnsForIndexSelection.length == 1) {
-            indexKey = SimpleKey.of(columnsForIndexSelection[0]);
-        } else {
-            indexKey = CompositeKey.of(columnsForIndexSelection);
-        }
+        final IIndexKey indexKey = KeyUtils.buildIndexKey(columnsForIndexSelection);
 
         // fast path (1): all columns are part of the primary index
         if (table.underlyingPrimaryKeyIndex().key().equals(indexKey) ) {

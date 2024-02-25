@@ -229,9 +229,8 @@ public class EmbedMetadataLoader {
                                 .collect( Collectors.groupingBy(ForeignKeyReference::vmsTableName ) );
 
                 // table name, fields
-                Map<String, int[]> definitiveMap = buildSchemaForeignKeyMap(vmsDataModel, fksPerTable, vmsDataModelMap);
-
-                dataSchemaToPkMap.put(vmsDataModel, new SchemaMapping(schema, definitiveMap, partialIndexMetadataList));
+                Map<String, int[]> secondaryIndexMap = buildSchemaForeignKeyMap(fksPerTable, vmsDataModelMap);
+                dataSchemaToPkMap.put(vmsDataModel, new SchemaMapping(schema, secondaryIndexMap, partialIndexMetadataList));
             } else {
                 dataSchemaToPkMap.put(vmsDataModel, new SchemaMapping(schema, Map.of(), partialIndexMetadataList));
             }
@@ -371,8 +370,7 @@ public class EmbedMetadataLoader {
         }
     }
 
-    private static Map<String, int[]> buildSchemaForeignKeyMap(VmsDataModel dataModelToBuild,
-                                                               Map<String, List<ForeignKeyReference>> fksPerTable,
+    private static Map<String, int[]> buildSchemaForeignKeyMap(Map<String, List<ForeignKeyReference>> fksPerTable,
                                                                Map<String, VmsDataModel> dataModelMap) {
         Map<String, int[]> res = new HashMap<>();
         for( var entry : fksPerTable.entrySet() ){
@@ -382,10 +380,10 @@ public class EmbedMetadataLoader {
             VmsDataModel parentDataModel = dataModelMap.get( entry.getKey() );
             // first check if the foreign keys defined actually map to a column in parent table
             for(var fkColumn : entry.getValue()){
-                if(parentDataModel.findColumnPosition(fkColumn.columnName()) == -1) {
+                intArray[i] = parentDataModel.findColumnPosition(fkColumn.columnName());
+                if(intArray[i] == -1) {
                     throw new RuntimeException("Cannot find foreign key " + fkColumn + " that refers to a PK in parent table: " + entry.getKey());
                 }
-                intArray[i] = fkColumn.columnIndex();
                 i++;
             }
             res.put( parentDataModel.tableName, intArray );

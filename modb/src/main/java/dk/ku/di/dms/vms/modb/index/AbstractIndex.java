@@ -29,7 +29,7 @@ public abstract class AbstractIndex<K> implements ReadOnlyIndex<K> {
     public AbstractIndex(Schema schema, int[] columnsIndex) {
         this.schema = schema;
         this.columns = columnsIndex;
-        this.key = (IIndexKey) KeyUtils.buildKey(columnsIndex);
+        this.key = KeyUtils.buildIndexKey(columnsIndex);
         this.columnsHash = new HashSet<>(columns.length);
         for(int i : columnsIndex) this.columnsHash.add(i);
     }

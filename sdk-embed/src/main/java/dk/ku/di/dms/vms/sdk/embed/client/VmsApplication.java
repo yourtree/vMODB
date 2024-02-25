@@ -51,14 +51,6 @@ public final class VmsApplication {
         this.internalChannels = internalChannels;
     }
 
-    public Table getTable(String table){
-        return this.catalog.get(table);
-    }
-
-    public Object getRepositoryProxy(String table){
-        return this.vmsRuntimeMetadata.repositoryProxyMap().get(table);
-    }
-
     /**
      * This method initializes two threads:
      * (i) EventHandler, responsible for communicating with the external world
@@ -161,4 +153,17 @@ public final class VmsApplication {
     public IVmsInternalChannels internalChannels() {
         return this.internalChannels;
     }
+
+    public Table getTable(String table){
+        return this.catalog.get(table);
+    }
+
+    public Object getRepositoryProxy(String table){
+        return this.vmsRuntimeMetadata.repositoryProxyMap().get(table);
+    }
+
+    public long lastTidFinished() {
+        return this.eventHandler.lastTidFinished();
+    }
+
 }

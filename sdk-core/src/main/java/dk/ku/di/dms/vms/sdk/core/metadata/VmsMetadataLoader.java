@@ -113,8 +113,7 @@ public final class VmsMetadataLoader {
                 eventToQueueMap,
                 clazzNameToVmsNameMap,
                 loadedVmsInstances,
-                tableToRepositoryMap
-                );
+                tableToRepositoryMap);
     }
 
     private static Map<String, String> mapClazzNameToVmsName(Set<Class<?>> vmsClasses) {
@@ -240,10 +239,6 @@ public final class VmsMetadataLoader {
 
             stream = Arrays.stream(tableClass.getFields());
             List<Field> foreignKeyFields = stream.filter(p-> p.getAnnotation(VmsForeignKey.class) != null).toList();
-            // foreign key fields should be counted wither as pk fields or column fields
-//            if(!foreignKeyFields.isEmpty()) {
-//                totalNumberOfFields += foreignKeyFields.size();
-//            }
 
             stream = Arrays.stream(tableClass.getFields());
             List<Field> columnFields = stream.filter(p-> p.getAnnotation(Column.class) != null).toList();
@@ -276,18 +271,14 @@ public final class VmsMetadataLoader {
                     VmsForeignKey fk = field.getAnnotation(VmsForeignKey.class);
                     String fkTable = vmsTableNames.get( fk.table() );
                     // later we parse into a Vms Table and check whether the types match
-                    foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column(), i);
+                    foreignKeyReferences[j] = new ForeignKeyReference(fkTable, fk.column());
                     j++;
 
-                    // check if field is part of PK already
+                    // a fk must be either a column or an id
                     Id id = field.getAnnotation(Id.class);
-                    if(id != null){
-//                        Class<?> attributeType = field.getType();
-//                        columnDataTypes.add(getColumnDataTypeFromAttributeType(attributeType));
-//                        columnNames.add(field.getName());
-//                        i++;
-//                    } else {
-                        totalNumberOfFields--;
+                    Column column = field.getAnnotation(Column.class);
+                    if(id == null && column == null){
+                        throw new RuntimeException("Foreign key "+fk.column()+" to table "+fk.table()+"is not marked as Id or Column in "+entry.getValue());
                     }
                 }
 

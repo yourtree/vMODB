@@ -2,7 +2,9 @@ package dk.ku.di.dms.vms.marketplace.shipment;
 
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
+import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
+import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
 import dk.ku.di.dms.vms.marketplace.shipment.dtos.OldestSellerPackageEntry;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IPackageRepository;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
@@ -28,10 +30,11 @@ public final class ShipmentTest {
 
     private static final BiFunction<Integer, String, CustomerCheckout> customerCheckoutBiFunction = (customerId, instanceId) -> new CustomerCheckout(
             customerId, "test", "test", "test", "test","test", "test", "test",
-            "CREDIT_CARD","test","test","test", "test", "test", 1,instanceId);
+            "CREDIT_CARD","test","test","test", "test", "test", 1, instanceId);
 
-    private static final BiFunction<CustomerCheckout, Integer, PaymentConfirmed> paymentConfirmedBiFunction = (customerCheckout, sellerId) -> new PaymentConfirmed(customerCheckout, 1, 100f,
-            List.of(new OrderItem(sellerId,1,1, "name", sellerId, 1.0f, new Date(), 1.0f, 1, 1.0f, 1.0f, 0.0f) ),
+    // generates an payment with orderId == sellerId
+    private static final BiFunction<CustomerCheckout, Integer, PaymentConfirmed> paymentConfirmedBiFunction = (customerCheckout, orderId) -> new PaymentConfirmed(customerCheckout, orderId, 100f,
+            List.of(new OrderItem(orderId,1,1, "name", orderId, 1.0f, new Date(), 1.0f, 1, 1.0f, 1.0f, 0.0f) ),
             new Date(), customerCheckout.instanceId);
 
     @Test
@@ -40,12 +43,7 @@ public final class ShipmentTest {
         vms.start();
 
         for(int i = 1; i < 4; i++) {
-            CustomerCheckout customerCheckout = customerCheckoutBiFunction.apply(i, String.valueOf(i));
-            PaymentConfirmed paymentConfirmed = paymentConfirmedBiFunction.apply(customerCheckout, i);
-
-            InboundEvent inboundEvent = new InboundEvent(i, i-1, 1,
-                    "payment_confirmed", PaymentConfirmed.class, paymentConfirmed);
-            vms.internalChannels().transactionInputQueue().add(inboundEvent);
+            generatePaymentConfirmed(i, String.valueOf(i), i - 1, vms);
         }
 
         sleep(2000);
@@ -67,12 +65,7 @@ public final class ShipmentTest {
         IPackageRepository packageRepository = (IPackageRepository) vms.getRepositoryProxy("packages");
 
         for(int i = 1; i <= 10; i++) {
-            CustomerCheckout customerCheckout = customerCheckoutBiFunction.apply(i, String.valueOf(i));
-            PaymentConfirmed paymentConfirmed = paymentConfirmedBiFunction.apply(customerCheckout, i);
-
-            InboundEvent inboundEvent = new InboundEvent(i, i-1, 1,
-                    "payment_confirmed", PaymentConfirmed.class, paymentConfirmed);
-            vms.internalChannels().transactionInputQueue().add(inboundEvent);
+            generatePaymentConfirmed(i, String.valueOf(i), i - 1, vms);
         }
 
         sleep(5000);
@@ -85,19 +78,53 @@ public final class ShipmentTest {
         assert packages.size() == 10;
     }
 
+    private static void generatePaymentConfirmed(int tid, String instanceId, int previousTid, VmsApplication vms) {
+        CustomerCheckout customerCheckout = customerCheckoutBiFunction.apply(tid, instanceId);
+        PaymentConfirmed paymentConfirmed = paymentConfirmedBiFunction.apply(customerCheckout, tid);
+
+        InboundEvent inboundEvent = new InboundEvent(tid, previousTid, 1,
+                "payment_confirmed", PaymentConfirmed.class, paymentConfirmed);
+        vms.internalChannels().transactionInputQueue().add(inboundEvent);
+    }
+
     @Test
     public void test() throws Exception {
         VmsApplication vms = getVmsApplication();
         vms.start();
 
-        CustomerCheckout customerCheckout = customerCheckoutBiFunction.apply(1,"1");
-        PaymentConfirmed paymentConfirmed = paymentConfirmedBiFunction.apply(customerCheckout, 1);
-
-        InboundEvent inboundEvent = new InboundEvent( 1, 0, 1,
-                "payment_confirmed", PaymentConfirmed.class, paymentConfirmed );
-        vms.internalChannels().transactionInputQueue().add( inboundEvent );
+        generatePaymentConfirmed(1, "1", 0, vms);
 
         sleep(100000);
+    }
+
+    /**
+     * TODO add a single thread at the half, and end of batch to test correctness
+     */
+    @Test
+    public void testMixedParallelSingleThreadTasks() throws Exception {
+        VmsApplication vms = getVmsApplication();
+        vms.start();
+
+        int numPayments = 10;
+
+        for(int i = 1; i <= numPayments; i++) {
+            generatePaymentConfirmed(i, String.valueOf(i), i - 1, vms);
+        }
+
+        numPayments++;
+
+        sleep(1000);
+
+        InboundEvent updateShipment = new InboundEvent(numPayments, numPayments-1, 1,
+                "update_shipment", String.class, String.valueOf(numPayments));
+        vms.internalChannels().transactionInputQueue().add(updateShipment);
+
+        sleep(100000);
+
+        // TODO add more payments
+
+        assert vms.lastTidFinished() == 11;
+
     }
 
 }
