@@ -15,6 +15,7 @@ import java.util.function.Function;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 
 @Microservice("stock")
@@ -28,10 +29,10 @@ public final class StockService {
         this.stockRepository = stockRepository;
     }
 
-    // @PartitionBy(clazz = ProductUpdated.class, method = "getId")
-    @Inbound(values = {"product_updated"})
+    @Inbound(values = {PRODUCT_UPDATED})
     @Outbound("transaction_mark")
     @Transactional(type=RW)
+    @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     public TransactionMark updateProduct(ProductUpdated updateEvent) {
         System.out.println("Stock received an update product event with version: "+updateEvent.version);
 
@@ -46,8 +47,8 @@ public final class StockService {
                 updateEvent.sellerId, TransactionMark.MarkStatus.SUCCESS, "stock");
     }
 
-    @Inbound(values = {"reserve_stock"})
-    @Outbound("stock_confirmed")
+    @Inbound(values = {RESERVE_STOCK})
+    @Outbound(STOCK_CONFIRMED)
     @Transactional(type=RW)
     public StockConfirmed reserveStock(ReserveStock reserveStock){
 

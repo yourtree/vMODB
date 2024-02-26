@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
 import dk.ku.di.dms.vms.modb.api.enums.ExecutionModeEnum;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
 import dk.ku.di.dms.vms.sdk.core.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.ISchedulerCallback;
@@ -8,15 +9,12 @@ import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
-import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
-import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
@@ -189,7 +187,12 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             else if (executionMode == ExecutionModeEnum.PARALLEL) {
                 numParallelTasksRunning.decrementAndGet();
             } else {
-                numPartitionedTasksRunning.decrementAndGet();
+                if(task.partitionId().isPresent()){
+                    partitionKeyTrackingMap.remove(task.partitionId().get());
+                    numPartitionedTasksRunning.decrementAndGet();
+                } else {
+                    singleThreadTaskRunning.set(false);
+                }
             }
         }
 
@@ -202,7 +205,14 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             else if (executionMode == ExecutionModeEnum.PARALLEL) {
                 numParallelTasksRunning.decrementAndGet();
             } else {
-                numPartitionedTasksRunning.decrementAndGet();
+                VmsTransactionTask task = transactionTaskMap.get(tid);
+                if(task.partitionId().isPresent()){
+                    partitionKeyTrackingMap.remove(task.partitionId().get());
+                    numPartitionedTasksRunning.decrementAndGet();
+                } else {
+                    singleThreadTaskRunning.set(false);
+                }
+
             }
         }
     }
@@ -226,11 +236,11 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     private void executeReadyTasks() {
 
         Long nextTid = this.lastTidToTidMap.get( this.lastFinishedTid );
+        // if nextTid == null then the scheduler must block until a new event arrive to progress
         if(nextTid == null) {
             block = true;
             return;
         }
-        // if nextTid == null then the scheduler must block until a new event arrive to progress
 
         VmsTransactionTask task = this.transactionTaskMap.get( nextTid );
 
@@ -267,18 +277,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     if (singleThreadTaskRunning.get() || numParallelTasksRunning.get() > 0) {
                         return;
                     }
-                    try {
-                        Object partitionKey = task.signature().partitionByMethod().invoke(task.input());
-                        if (!this.partitionKeyTrackingMap.contains(partitionKey)) {
-                            this.partitionKeyTrackingMap.add(partitionKey);
-                            this.numPartitionedTasksRunning.incrementAndGet();
-                            task.signalReady();
-                            this.sharedTaskPool.submit(task);
-                        } else {
-                            return;
-                        }
-                    } catch (IllegalAccessException | InvocationTargetException e) {
-                        this.logger.warning(this.vmsIdentifier + ": Failed to obtain partition key. task will run as single-threaded");
+
+                    if(task.partitionId().isEmpty()){
+                        // this.logger.warning(this.vmsIdentifier + ": Task "+task.tid()+" will run as single-threaded even though it is marked as partitioned");
                         if (this.numParallelTasksRunning.get() == 0 && numPartitionedTasksRunning.get() == 0) {
                             singleThreadTaskRunning.set(true);
                             task.signalReady();
@@ -288,9 +289,18 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                             return;
                         }
                     }
+
+                    if (!this.partitionKeyTrackingMap.contains(task.partitionId().get())) {
+                        this.partitionKeyTrackingMap.add(task.partitionId().get());
+                        this.numPartitionedTasksRunning.incrementAndGet();
+                        task.signalReady();
+                        this.sharedTaskPool.submit(task);
+                    } else {
+                        return;
+                    }
+
                 }
             }
-
 
             // bypass the single-thread execution if possible
             if(!singleThreadTask && this.lastTidToTidMap.get( task.tid() ) != null ){
@@ -301,30 +311,25 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     }
 
-    private void checkForNewEvents() {
+    private void checkForNewEvents() throws InterruptedException {
 
-        try {
-            if(this.vmsChannels.transactionInputQueue().isEmpty()){
-//                if(block) {
-//                    var elem = this.vmsChannels.transactionInputQueue().poll(1000, TimeUnit.MILLISECONDS);
-//                    if(elem != null) {
-//                        this.localInputEvents.add(elem);
-//                        block = false;
-//                    }
-//                } else {
-                    return;
-//                }
+        if(this.vmsChannels.transactionInputQueue().isEmpty()){
+            if(block) {
+                this.localInputEvents.add(this.vmsChannels.transactionInputQueue().take());
+                block = false;
+            } else {
+                return;
             }
+        }
 
-            this.vmsChannels.transactionInputQueue().drainTo(this.localInputEvents);
+        this.vmsChannels.transactionInputQueue().drainTo(this.localInputEvents);
 
-            for (InboundEvent input : this.localInputEvents) {
-                this.processNewEvent(input);
-            }
+        for (InboundEvent input : this.localInputEvents) {
+            this.processNewEvent(input);
+        }
 
-            // clear previous round
-            this.localInputEvents.clear();
-        } catch (Exception ignored){}
+        // clear previous round
+        this.localInputEvents.clear();
 
     }
 
@@ -334,17 +339,17 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             return;
         }
 
-        VmsTransactionMetadata transactionMetadata = this.transactionMetadataMap.get(inboundEvent.event());
-
-        this.transactionTaskMap.put( inboundEvent.tid(), new VmsTransactionTask(
+        this.transactionTaskMap.put(inboundEvent.tid(), new VmsTransactionTask(
                 this.transactionalHandler,
                 this.callback,
                 inboundEvent.tid(),
                 inboundEvent.lastTid(),
                 inboundEvent.batch(),
-                transactionMetadata.signatures.get(0).object(),
+                this.transactionMetadataMap
+                        .get(inboundEvent.event())
+                        .signatures.get(0).object(),
                 inboundEvent.input()
-        ) );
+        ));
 
         // mark the last tid, so we can get the next to execute when appropriate
         this.lastTidToTidMap.put( inboundEvent.lastTid(), inboundEvent.tid() );

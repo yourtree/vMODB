@@ -1,11 +1,16 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
+import dk.ku.di.dms.vms.modb.api.enums.ExecutionModeEnum;
 import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
 
+import java.lang.reflect.InvocationTargetException;
+import java.util.Optional;
+import java.util.logging.Logger;
+
 public final class VmsTransactionTask implements Runnable {
 
-//    private static final Logger LOGGER = Logger.getLogger(VmsTransactionTask.class.getSimpleName());
+    private static final Logger logger = Logger.getLogger(VmsTransactionTask.class.getSimpleName());
 
     private final long tid;
 
@@ -24,11 +29,14 @@ public final class VmsTransactionTask implements Runnable {
 
     private volatile Status status;
 
+    private final Optional<Object> partitionId;
+
     public VmsTransactionTask(ITransactionalHandler transactionalHandler,
                               ISchedulerCallback schedulerCallback,
                               long tid, long lastTid, long batch,
                               VmsTransactionSignature signature,
-                              Object input){
+                              Object input) {
+
         this.transactionalHandler = transactionalHandler;
         this.schedulerCallback = schedulerCallback;
         this.tid = tid;
@@ -37,6 +45,20 @@ public final class VmsTransactionTask implements Runnable {
         this.signature = signature;
         this.input = input;
         this.status = Status.NEW;
+
+        Optional<Object> partitionIdAux;
+        try {
+            if (signature.executionMode() == ExecutionModeEnum.PARTITIONED) {
+                partitionIdAux = Optional.of(signature.partitionByMethod().invoke(input()));
+            } else {
+                partitionIdAux = Optional.empty();
+            }
+        } catch (InvocationTargetException | IllegalAccessException e){
+
+            logger.warning("Failed to obtain partition key from method "+signature.partitionByMethod().getName());
+            partitionIdAux = Optional.empty();
+        }
+        this.partitionId = partitionIdAux;
     }
 
     public VmsTransactionTask(long tid){
@@ -48,6 +70,7 @@ public final class VmsTransactionTask implements Runnable {
         this.signature = null;
         this.input = null;
         this.status = Status.OUTPUT_SENT;
+        this.partitionId = Optional.empty();
     }
 
     public enum Status {
@@ -116,6 +139,10 @@ public final class VmsTransactionTask implements Runnable {
 
     public void signalOutputSent(){
         this.status = Status.OUTPUT_SENT;
+    }
+
+    public Optional<Object> partitionId() {
+        return partitionId;
     }
 
 }

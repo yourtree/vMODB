@@ -11,7 +11,10 @@ import dk.ku.di.dms.vms.marketplace.order.repositories.ICustomerOrderRepository;
 import dk.ku.di.dms.vms.marketplace.order.repositories.IOrderHistoryRepository;
 import dk.ku.di.dms.vms.marketplace.order.repositories.IOrderItemRepository;
 import dk.ku.di.dms.vms.marketplace.order.repositories.IOrderRepository;
-import dk.ku.di.dms.vms.modb.api.annotations.*;
+import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;

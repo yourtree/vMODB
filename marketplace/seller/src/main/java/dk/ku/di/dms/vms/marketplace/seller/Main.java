@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.marketplace.seller;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
 import dk.ku.di.dms.vms.marketplace.seller.repositories.IOrderEntryRepository;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -20,7 +21,7 @@ import java.net.InetSocketAddress;
 public final class Main {
 
     public static void main(String[] args) throws Exception {
-        VmsApplication vms = VmsApplication.build("localhost", 8087, new String[]{
+        VmsApplication vms = VmsApplication.build("localhost", Constants.SELLER_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.seller",
                 "dk.ku.di.dms.vms.marketplace.common"
         });

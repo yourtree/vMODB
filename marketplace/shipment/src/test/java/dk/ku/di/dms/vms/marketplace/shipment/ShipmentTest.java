@@ -2,9 +2,7 @@ package dk.ku.di.dms.vms.marketplace.shipment;
 
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
-import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
-import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
 import dk.ku.di.dms.vms.marketplace.shipment.dtos.OldestSellerPackageEntry;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IPackageRepository;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
@@ -87,18 +85,8 @@ public final class ShipmentTest {
         vms.internalChannels().transactionInputQueue().add(inboundEvent);
     }
 
-    @Test
-    public void test() throws Exception {
-        VmsApplication vms = getVmsApplication();
-        vms.start();
-
-        generatePaymentConfirmed(1, "1", 0, vms);
-
-        sleep(100000);
-    }
-
     /**
-     * TODO add a single thread at the half, and end of batch to test correctness
+     * A single thread at the half, and end of batch to test correctness
      */
     @Test
     public void testMixedParallelSingleThreadTasks() throws Exception {
@@ -122,8 +110,6 @@ public final class ShipmentTest {
         sleep(1000);
 
         assert vms.lastTidFinished() == 11;
-
-        // TODO add more payments
 
         numPayments = 20;
 

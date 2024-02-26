@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingDeque;
 
 /**
  * Identification of a VMS that is ought to receive any sort of events
@@ -17,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ConsumerVms extends NetworkAddress {
 
-    public transient final Map<Long, BlockingDeque<TransactionEvent.Payload>> transactionEventsPerBatch;
+    protected transient final Map<Long, BlockingDeque<TransactionEvent.Payload>> transactionEventsPerBatch;
 
     /**
      * Timer for writing to each VMS connection
@@ -35,6 +36,10 @@ public class ConsumerVms extends NetworkAddress {
         super(address.host, address.port);
         this.timer = timer;
         this.transactionEventsPerBatch = new ConcurrentHashMap<>();
+    }
+
+    public void addEventToBatch(long batchId, TransactionEvent.Payload eventPayload){
+        this.transactionEventsPerBatch.computeIfAbsent(batchId, (x) -> new LinkedBlockingDeque<>()).add(eventPayload);
     }
 
 }

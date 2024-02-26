@@ -53,7 +53,6 @@ public final class SellerTest {
       */
     @SuppressWarnings("unchecked")
     private static void insertSellers(VmsApplication vms) {
-
         var sellerTable = vms.getTable("sellers");
         var sellerRepository = (AbstractProxyRepository<Integer, Seller>) vms.getRepositoryProxy("sellers");
 

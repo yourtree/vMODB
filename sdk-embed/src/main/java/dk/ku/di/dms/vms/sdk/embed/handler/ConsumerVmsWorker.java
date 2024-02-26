@@ -66,6 +66,7 @@ final class ConsumerVmsWorker extends TimerTask {
 
         // find the smallest batch. to avoid synchronizing with main thread
         // TODO maybe a skiplistmap is more helpful?
+        //  on add (on event handler), can make a test and save the smallest batch id
         long batchToSend = Long.MAX_VALUE;
         for(long batchId : this.consumerVms.transactionEventsPerBatch.keySet()){
             if(batchId < batchToSend) batchToSend = batchId;

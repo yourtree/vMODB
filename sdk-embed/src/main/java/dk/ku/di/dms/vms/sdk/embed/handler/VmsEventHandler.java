@@ -17,8 +17,8 @@ import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
-import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
+import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
@@ -410,16 +410,13 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
         Deque<ConsumerVms> consumerVMSs = this.eventToConsumersMap.get(outputEvent.outputQueue());
         if(consumerVMSs == null || consumerVMSs.isEmpty()){
-            this.logger.warning(
-                    me.vmsIdentifier+": An output event (queue: "+outputEvent.outputQueue()+") has no target virtual microservices.");
+            this.logger.warning(me.vmsIdentifier+": An output event (queue: "+outputEvent.outputQueue()+") has no target virtual microservices.");
             return;
         }
 
         for(ConsumerVms consumerVms : consumerVMSs) {
             this.logger.info(me.vmsIdentifier+": An output event (queue: " + outputEvent.outputQueue() + ") will be queued to vms: " + consumerVms);
-
-            // concurrency issue if add to a list
-            consumerVms.transactionEventsPerBatch.computeIfAbsent(outputEvent.batch(), (x) -> new LinkedBlockingDeque<>()).add(payload);
+            consumerVms.addEventToBatch(outputEvent.batch(), payload);
         }
     }
 
@@ -541,7 +538,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
     /**
      * The leader will let each VMS aware of their dependencies,
      * to which VMSs they have to connect to
-     */
+     *
 //    private void connectToConsumerVMSs(List<String> outputEvents, List<NetworkAddress> consumerSet) {
 //        for(NetworkAddress vms : consumerSet) {
 //            // process only the new ones
@@ -552,7 +549,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 //            this.connectToConsumerVms(outputEvents, vms);
 //        }
 //    }
-
+     */
     private void connectToConsumerVms(List<String> outputEvents, NetworkAddress vms) {
         try {
             AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);

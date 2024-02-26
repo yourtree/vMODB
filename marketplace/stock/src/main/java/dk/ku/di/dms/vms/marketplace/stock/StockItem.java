@@ -96,4 +96,5 @@ public class StockItem implements IEntity<StockItem.StockId> {
                 + ", \"data\":\"" + data + "\""
                 + ", \"version\":\"" + version + "\"}";
     }
+
 }

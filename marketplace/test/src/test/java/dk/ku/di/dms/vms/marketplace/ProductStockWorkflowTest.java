@@ -37,10 +37,15 @@ public class ProductStockWorkflowTest extends AbstractWorkflowTest {
         coordinatorThread.start();
 
         Map<String, VmsIdentifier> connectedVMSs;
-        do{
+        int maxSleep = 3;
+        do {
             sleep(5000);
             connectedVMSs = coordinator.getConnectedVMSs();
-        } while (connectedVMSs.size() < 2);
+            if(connectedVMSs.size() == 2) break;
+            maxSleep--;
+        } while (maxSleep > 0);
+
+        if(coordinator.getConnectedVMSs().size() < 2) throw new RuntimeException("VMSs did not connect to coordinator on time");
 
         Thread thread = new Thread(new Producer());
         thread.start();

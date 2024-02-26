@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.marketplace.product;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
@@ -20,7 +21,7 @@ public final class Main {
     public static void main(String[] args) throws Exception {
 
         // initialize threads
-        VmsApplication vms = VmsApplication.build("localhost", 8081, new String[]{
+        VmsApplication vms = VmsApplication.build("localhost", Constants.PRODUCT_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.product",
                 "dk.ku.di.dms.vms.marketplace.common"
                         });
