@@ -20,8 +20,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 /**
- * A transaction scheduler aware of the new concepts of partitioned and parallel.
- * Besides, for simplicity, it only consider transactions that spawn a single task
+ * A transaction scheduler aware of partitioned and parallel tasks.
+ * Besides, for simplicity, it only considers transactions (i.e., event inputs) that spawn a single task
  * in each VMS (in opposite of possible many tasks as found in {@link VmsComplexTransactionScheduler}).
  */
 public final class VmsTransactionScheduler extends StoppableRunnable {
@@ -238,7 +238,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         Long nextTid = this.lastTidToTidMap.get( this.lastFinishedTid );
         // if nextTid == null then the scheduler must block until a new event arrive to progress
         if(nextTid == null) {
-            block = true;
+            this.block = true;
             return;
         }
 
@@ -248,24 +248,21 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
             // if (task == null) return;
             if(task.status().value > 1){
+                // System.out.println(task.tid()+" have not finished yet!");
                 return;
             }
 
-            boolean singleThreadTask = false;
-
             switch (task.signature().executionMode()) {
                 case SINGLE_THREADED -> {
-                    if (this.numParallelTasksRunning.get() == 0 && numPartitionedTasksRunning.get() == 0) {
-                        singleThreadTaskRunning.set(true);
-                        task.signalReady();
-                        this.singleThreadPool.submit(task);
-                        singleThreadTask = true;
+                    if (this.canSingleThreadTaskRun()) {
+                        System.out.println("Scheduling single-thread task "+task.tid()+" for execution...");
+                        this.submitSingleThreadTaskForExecution(task);
                     } else {
                         return;
                     }
                 }
                 case PARALLEL -> {
-                    if (!singleThreadTaskRunning.get() && numPartitionedTasksRunning.get() == 0) {
+                    if (!this.singleThreadTaskRunning.get() && this.numPartitionedTasksRunning.get() == 0) {
                         this.numParallelTasksRunning.incrementAndGet();
                         task.signalReady();
                         this.sharedTaskPool.submit(task);
@@ -274,17 +271,14 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     }
                 }
                 case PARTITIONED -> {
-                    if (singleThreadTaskRunning.get() || numParallelTasksRunning.get() > 0) {
+                    if (this.singleThreadTaskRunning.get() || this.numParallelTasksRunning.get() > 0) {
                         return;
                     }
 
                     if(task.partitionId().isEmpty()){
                         // this.logger.warning(this.vmsIdentifier + ": Task "+task.tid()+" will run as single-threaded even though it is marked as partitioned");
-                        if (this.numParallelTasksRunning.get() == 0 && numPartitionedTasksRunning.get() == 0) {
-                            singleThreadTaskRunning.set(true);
-                            task.signalReady();
-                            this.singleThreadPool.submit(task);
-                            singleThreadTask = true;
+                        if (this.canSingleThreadTaskRun()) {
+                            this.submitSingleThreadTaskForExecution(task);
                         } else {
                             return;
                         }
@@ -294,6 +288,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                         this.partitionKeyTrackingMap.add(task.partitionId().get());
                         this.numPartitionedTasksRunning.incrementAndGet();
                         task.signalReady();
+                        System.out.println("Scheduling partitioned task "+task.tid()+" for execution...");
                         this.sharedTaskPool.submit(task);
                     } else {
                         return;
@@ -303,12 +298,22 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             }
 
             // bypass the single-thread execution if possible
-            if(!singleThreadTask && this.lastTidToTidMap.get( task.tid() ) != null ){
+            if(!this.singleThreadTaskRunning.get() && this.lastTidToTidMap.get( task.tid() ) != null ){
                 task = this.transactionTaskMap.get( this.lastTidToTidMap.get( task.tid() ) );
             }
 
         }
 
+    }
+
+    private void submitSingleThreadTaskForExecution(VmsTransactionTask task) {
+        singleThreadTaskRunning.set(true);
+        task.signalReady();
+        this.singleThreadPool.submit(task);
+    }
+
+    private boolean canSingleThreadTaskRun() {
+        return this.numParallelTasksRunning.get() == 0 && numPartitionedTasksRunning.get() == 0;
     }
 
     private void checkForNewEvents() throws InterruptedException {

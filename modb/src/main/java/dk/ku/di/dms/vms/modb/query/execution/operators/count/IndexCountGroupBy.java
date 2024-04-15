@@ -58,7 +58,7 @@ public class IndexCountGroupBy extends AbstractCount {
 
     private void compute(IKey key, Map<Integer,Integer> countMap) {
 
-        Object record = this.index.record( key );
+        Object[] record = this.index.record( key );
 
         // hash the group by columns
         int groupKey = KeyUtils.buildRecordKey( this.indexColumns, record ).hashCode();

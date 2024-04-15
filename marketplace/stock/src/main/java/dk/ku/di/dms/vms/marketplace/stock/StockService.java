@@ -34,7 +34,7 @@ public final class StockService {
     @Transactional(type=RW)
     @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     public TransactionMark updateProduct(ProductUpdated updateEvent) {
-        System.out.println("Stock received an update product event with version: "+updateEvent.version);
+        System.out.println("Stock received an update product event with TID: "+updateEvent.version);
 
         // can use issue statement for faster update
         StockItem stock = this.stockRepository.lookupByKey(new StockItem.StockId(updateEvent.sellerId, updateEvent.productId));
@@ -47,6 +47,10 @@ public final class StockService {
                 updateEvent.sellerId, TransactionMark.MarkStatus.SUCCESS, "stock");
     }
 
+    /**
+     * This case can be optimized by locking the items prior to starting the transaction
+     * The task is only submitted to run if all locks have been acquired. This prevents possible conflicts.
+     */
     @Inbound(values = {RESERVE_STOCK})
     @Outbound(STOCK_CONFIRMED)
     @Transactional(type=RW)
