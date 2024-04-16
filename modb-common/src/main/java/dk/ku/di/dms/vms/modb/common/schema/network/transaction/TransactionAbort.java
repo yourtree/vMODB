@@ -27,8 +27,8 @@ public class TransactionAbort {
         buffer.put(Constants.TX_ABORT);
         buffer.putLong(batch);
         buffer.putLong(tid);
-        buffer.putInt( vmsIdentifier.vmsIdentifier.length() );
-        buffer.put( vmsIdentifier.vmsIdentifier.getBytes(StandardCharsets.UTF_8) );
+        buffer.putInt( vmsIdentifier.identifier.length() );
+        buffer.put( vmsIdentifier.identifier.getBytes(StandardCharsets.UTF_8) );
     }
 
     public static Payload read(ByteBuffer buffer){

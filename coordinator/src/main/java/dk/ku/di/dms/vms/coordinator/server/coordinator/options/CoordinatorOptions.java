@@ -50,8 +50,9 @@ public class CoordinatorOptions {
         return this.groupThreadPoolSize;
     }
 
-    public void withGroupThreadPoolSize(int groupThreadPoolSize) {
+    public CoordinatorOptions withGroupThreadPoolSize(int groupThreadPoolSize) {
         this.groupThreadPoolSize = groupThreadPoolSize;
+        return this;
     }
 
     public BatchReplicationStrategy getBatchReplicationStrategy() {

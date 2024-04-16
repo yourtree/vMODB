@@ -16,21 +16,28 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.PRODUCT_HTTP_PORT;
+
 public final class Main {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
 
         // initialize threads
-        VmsApplication vms = VmsApplication.build("localhost", Constants.PRODUCT_PORT, new String[]{
-                "dk.ku.di.dms.vms.marketplace.product",
-                "dk.ku.di.dms.vms.marketplace.common"
-                        });
-        vms.start();
+        try {
+            VmsApplication vms = VmsApplication.build("localhost", Constants.PRODUCT_VMS_PORT, new String[]{
+                    "dk.ku.di.dms.vms.marketplace.product",
+                    "dk.ku.di.dms.vms.marketplace.common"
+            });
+            vms.start();
 
-        // initialize HTTP server for data ingestion
-        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", 8001), 0);
-        httpServer.createContext("/product", new ProductHttpHandler(vms));
-        httpServer.start();
+            // initialize HTTP server for data ingestion
+            HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", PRODUCT_HTTP_PORT), 0);
+            httpServer.createContext("/product", new ProductHttpHandler(vms));
+            httpServer.start();
+        } catch (Exception e){
+            throw new RuntimeException(e);
+        }
+
     }
 
     private static class ProductHttpHandler implements HttpHandler {

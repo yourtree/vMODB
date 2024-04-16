@@ -3,10 +3,7 @@ package dk.ku.di.dms.vms.marketplace.product;
 import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdated;
 import dk.ku.di.dms.vms.marketplace.common.events.TransactionMark;
 import dk.ku.di.dms.vms.marketplace.common.events.UpdatePrice;
-import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
-import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.annotations.*;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
@@ -22,6 +19,7 @@ public final class ProductService {
     @Inbound(values = {"update_product"})
     @Outbound("product_updated")
     @Transactional(type=W)
+    @PartitionBy(clazz = UpdateProductEvent.class, method = "getId")
     public ProductUpdated updateProduct(UpdateProductEvent updateEvent) {
         System.out.println("Product received an product update event with version: "+updateEvent.version);
 
@@ -37,6 +35,7 @@ public final class ProductService {
     @Inbound(values = {"update_price"})
     @Outbound("transaction_mark")
     @Transactional(type=W)
+    @PartitionBy(clazz = UpdatePrice.class, method = "getId")
     public TransactionMark updateProductPrice(UpdatePrice updatePriceEvent) {
         System.out.println("Stock received an update price event with TID: "+updatePriceEvent.instanceId);
 

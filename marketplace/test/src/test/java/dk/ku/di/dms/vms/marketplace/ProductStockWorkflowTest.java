@@ -7,8 +7,8 @@ import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.product.UpdateProductEvent;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import org.junit.Test;
@@ -19,7 +19,7 @@ import java.util.Map;
 
 import static java.lang.Thread.sleep;
 
-public class ProductStockWorkflowTest extends AbstractWorkflowTest {
+public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
 
     @Test
     public void testLargeBatchWithTwoVMSs() throws Exception {
@@ -58,9 +58,9 @@ public class ProductStockWorkflowTest extends AbstractWorkflowTest {
     }
 
     private Coordinator loadCoordinator() throws IOException {
-        ServerIdentifier serverIdentifier = new ServerIdentifier( "localhost", 8080 );
+        ServerNode serverIdentifier = new ServerNode( "localhost", 8080 );
 
-        Map<Integer, ServerIdentifier> serverMap = new HashMap<>(2);
+        Map<Integer, ServerNode> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
         TransactionDAG updatePriceDag =  TransactionBootstrap.name("update_price")
@@ -79,10 +79,10 @@ public class ProductStockWorkflowTest extends AbstractWorkflowTest {
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
-        NetworkAddress productAddress = new NetworkAddress("localhost", 8081);
-        NetworkAddress stockAddress = new NetworkAddress("localhost", 8082);
+        IdentifiableNode productAddress = new IdentifiableNode("product", "localhost", 8081);
+        IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", 8082);
 
-        Map<Integer, NetworkAddress> VMSs = new HashMap<>(2);
+        Map<Integer, IdentifiableNode> VMSs = new HashMap<>(2);
         VMSs.put(productAddress.hashCode(), productAddress);
         VMSs.put(stockAddress.hashCode(), stockAddress);
 

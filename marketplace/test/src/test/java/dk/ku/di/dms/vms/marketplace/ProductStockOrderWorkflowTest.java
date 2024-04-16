@@ -10,8 +10,8 @@ import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
 import dk.ku.di.dms.vms.marketplace.product.UpdateProductEvent;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import org.junit.Test;
@@ -30,7 +30,7 @@ import static java.lang.Thread.sleep;
  * Different transactions in stock VMS interleave
  * Some come from product (update product), others come from the coordinator (reserve stock)
  */
-public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
+public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
 
     private final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
@@ -108,9 +108,9 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
     }
 
     private Coordinator loadCoordinator() throws IOException {
-        ServerIdentifier serverIdentifier = new ServerIdentifier( "localhost", 8080 );
+        ServerNode serverIdentifier = new ServerNode( "localhost", 8080 );
 
-        Map<Integer, ServerIdentifier> serverMap = new HashMap<>(2);
+        Map<Integer, ServerNode> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
         TransactionDAG updatePriceDag =  TransactionBootstrap.name("update_price")
@@ -135,12 +135,12 @@ public class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
-        Map<Integer, NetworkAddress> VMSs = new HashMap<>(3);
-        NetworkAddress productAddress = new NetworkAddress("localhost", 8081);
+        Map<Integer, IdentifiableNode> VMSs = new HashMap<>(3);
+        IdentifiableNode productAddress = new IdentifiableNode("product", "localhost", 8081);
         VMSs.put(productAddress.hashCode(), productAddress);
-        NetworkAddress stockAddress = new NetworkAddress("localhost", 8082);
+        IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", 8082);
         VMSs.put(stockAddress.hashCode(), stockAddress);
-        NetworkAddress orderAddress = new NetworkAddress("localhost", 8083);
+        IdentifiableNode orderAddress = new IdentifiableNode("order", "localhost", 8083);
         VMSs.put(orderAddress.hashCode(), orderAddress);
 
         return Coordinator.build(

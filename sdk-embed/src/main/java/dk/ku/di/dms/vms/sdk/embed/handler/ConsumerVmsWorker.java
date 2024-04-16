@@ -90,7 +90,7 @@ final class ConsumerVmsWorker extends TimerTask {
                 writeBuffer = this.retrieveByteBuffer();
                 remaining = BatchUtils.assembleBatchPayload(remaining, events, writeBuffer);
 
-                this.logger.info(me.vmsIdentifier+ ": Submitting "+(count - remaining)+" events from batch "+batchToSend+" to "+consumerVms);
+                this.logger.info(me.identifier+ ": Submitting "+(count - remaining)+" events from batch "+batchToSend+" to "+consumerVms.identifier);
                 count = remaining;
 
                 writeBuffer.flip();
@@ -102,10 +102,10 @@ final class ConsumerVmsWorker extends TimerTask {
                 sleep_();
 
             } catch (Exception e) {
-                this.logger.severe(me.vmsIdentifier+ ": Error submitting events from batch "+batchToSend+" to "+consumerVms);
+                this.logger.severe(me.identifier+ ": Error submitting events from batch "+batchToSend+" to "+consumerVms.identifier);
                 // return non-processed events to original location or what?
                 if (!this.connectionMetadata.channel.isOpen()) {
-                    this.logger.warning("The "+consumerVms+" VMS is offline");
+                    this.logger.warning("The "+consumerVms.identifier+" VMS is offline");
                 }
                 // return events to the deque
                 for (TransactionEvent.Payload event : events) {
@@ -136,14 +136,14 @@ final class ConsumerVmsWorker extends TimerTask {
     private class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
         @Override
         public void completed(Integer result, ByteBuffer attachment) {
-            logger.info(me.vmsIdentifier+ ": Batch with size "+result+" has been sent to: "+consumerVms);
+            logger.info(me.identifier+ ": Batch with size "+result+" has been sent to: "+consumerVms);
             WRITE_SYNCHRONIZER.add(DUMB);
             attachment.clear();
             writeBufferPool.addLast( attachment );
         }
         @Override
         public void failed(Throwable exc, ByteBuffer attachment) {
-            logger.severe(me.vmsIdentifier+": ERROR on writing batch of events to: "+consumerVms);
+            logger.severe(me.identifier+": ERROR on writing batch of events to: "+consumerVms);
             WRITE_SYNCHRONIZER.add(DUMB);
             attachment.clear();
             writeBufferPool.addLast( attachment );

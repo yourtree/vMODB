@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
@@ -101,14 +102,14 @@ final class DefaultVmsSerdes implements IVmsSerdesProxy {
     }
 
     @Override
-    public String serializeConsumerSet(Map<String, List<NetworkAddress>> map) {
+    public String serializeConsumerSet(Map<String, List<IdentifiableNode>> map) {
         return this.gson.toJson( map );
     }
 
-    private static final Type typeConsMap = new TypeToken<Map<String, List<NetworkAddress>>>(){}.getType();
+    private static final Type typeConsMap = new TypeToken<Map<String, List<IdentifiableNode>>>(){}.getType();
 
     @Override
-    public Map<String, List<NetworkAddress>> deserializeConsumerSet(String mapStr) {
+    public Map<String, List<IdentifiableNode>> deserializeConsumerSet(String mapStr) {
         return this.gson.fromJson(mapStr, typeConsMap);
     }
 

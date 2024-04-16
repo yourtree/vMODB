@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
 import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
 import dk.ku.di.dms.vms.coordinator.election.schema.VoteResponse;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
@@ -57,14 +57,14 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
     private final ExecutorService taskExecutor;
 
     // the identification of this server
-    private final ServerIdentifier me;
+    private final ServerNode me;
 
     // can be == me
     // only one thread modifying it, no need for atomic reference
-    private volatile ServerIdentifier leader;
+    private volatile ServerNode leader;
 
     // even though we can start with a known number of servers, their payload may have changed after a crash
-    private final Map<Integer, ServerIdentifier> servers;
+    private final Map<Integer, ServerNode> servers;
 
     private final Map<Integer, LockConnectionMetadata> connectionMetadataMap;
 
@@ -93,17 +93,17 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
     private static class VoteMessageContext {
         byte type; // vote or response
-        ServerIdentifier source;
-        ServerIdentifier target;
+        ServerNode source;
+        ServerNode target;
         boolean response;
 
-        public VoteMessageContext(byte type, ServerIdentifier target, boolean response) {
+        public VoteMessageContext(byte type, ServerNode target, boolean response) {
             this.type = type;
             this.target = target;
             this.response = response;
         }
 
-        public VoteMessageContext(ServerIdentifier source, ServerIdentifier target) {
+        public VoteMessageContext(ServerNode source, ServerNode target) {
             this.type = VOTE_REQUEST;
             this.source = source;
             this.target = target;
@@ -113,8 +113,8 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
     public ElectionWorker(AsynchronousServerSocketChannel serverSocket,
                           AsynchronousChannelGroup group,
                           ExecutorService taskExecutor,
-                          ServerIdentifier me,
-                          Map<Integer, ServerIdentifier> servers,
+                          ServerNode me,
+                          Map<Integer, ServerNode> servers,
                           ElectionOptions options){
         super();
         this.state = NEW;
@@ -224,7 +224,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
     }
 
-    private LockConnectionMetadata connectToServer(ServerIdentifier server){
+    private LockConnectionMetadata connectToServer(ServerNode server){
 
         LockConnectionMetadata connectionMetadata = null;
 
@@ -346,7 +346,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
                     // new server added dynamically
 
-                    ServerIdentifier newServer = new ServerIdentifier( host, port);
+                    ServerNode newServer = new ServerNode( host, port);
                     servers.put(key, newServer);
 
                     opN.addAndGet(1);
@@ -435,7 +435,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
                     logger.info("Vote request received. I am " + me.host + ":" + me.port);
 
-                    ServerIdentifier serverRequestingVote = VoteRequest.read(readBuffer);
+                    ServerNode serverRequestingVote = VoteRequest.read(readBuffer);
 
                     if (voted.get()) {
                         // taskExecutor.submit(new Broadcaster(VOTE_RESPONSE, serverRequestingVote, false));
@@ -553,7 +553,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                     // now send the request
                     if (messageType == VOTE_REQUEST) {
 
-                        for (ServerIdentifier server : servers.values()) {
+                        for (ServerNode server : servers.values()) {
 
                             LockConnectionMetadata connMeta = getConnection(server);
 
@@ -568,7 +568,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
                     } else if (messageType == LEADER_REQUEST) {
 
-                        for (ServerIdentifier server : servers.values()) {
+                        for (ServerNode server : servers.values()) {
 
                             LockConnectionMetadata connMeta = getConnection(server);
                             if (connMeta != null) {
@@ -597,7 +597,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
     /**
      * Get connection. Connect if there is not previous established connection
      */
-    private LockConnectionMetadata getConnection(ServerIdentifier server){
+    private LockConnectionMetadata getConnection(ServerNode server){
         LockConnectionMetadata connMeta = connectionMetadataMap.get( server.hashCode() );
         if(connMeta == null){
             return connectToServer(server);
@@ -649,7 +649,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
         return state;
     }
 
-    public ServerIdentifier getLeader(){
+    public ServerNode getLeader(){
         return this.leader;
     }
 

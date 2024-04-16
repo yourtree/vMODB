@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.coordinator.store;
 
 import dk.ku.di.dms.vms.coordinator.store.metadata.ServerMetadata;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import sun.misc.Unsafe;
 
@@ -95,7 +95,7 @@ public class MemoryMappingFactory {
      * Leader host: string size in bytes [host size] + string in bytes [host] + int [port]
      * @return
      */
-    public ServerIdentifier loadLeader(){
+    public ServerNode loadLeader(){
 
         ByteBuffer buffer = loadMemoryMappedFile(DEFAULT_DIR_PATH, LEADER_FILE);
 
@@ -108,10 +108,10 @@ public class MemoryMappingFactory {
 
         lastPositionIndex.put( LEADER_FILE, (Integer.BYTES * 2) + size );
 
-        return new ServerIdentifier( hostStr, port );
+        return new ServerNode( hostStr, port );
     }
 
-    public Map<Integer, ServerIdentifier> loadServers(){
+    public Map<Integer, ServerNode> loadServers(){
 
         ByteBuffer buffer = loadMemoryMappedFile(DEFAULT_DIR_PATH, SERVERS_FILE);
 
@@ -119,7 +119,7 @@ public class MemoryMappingFactory {
 
         int N = buffer.getInt();
 
-        Map<Integer, ServerIdentifier> serverMap = new ConcurrentHashMap<>(N);
+        Map<Integer, ServerNode> serverMap = new ConcurrentHashMap<>(N);
 
         for(int i = 0; i < N; i++){
             int port = buffer.getInt();
@@ -130,7 +130,7 @@ public class MemoryMappingFactory {
             int currPos = buffer.position();
             buffer.position( currPos + size + 1 );
 
-            ServerIdentifier server = new ServerIdentifier( hostStr, port );
+            ServerNode server = new ServerNode( hostStr, port );
 
             serverMap.put( server.hashCode(), server );
         }

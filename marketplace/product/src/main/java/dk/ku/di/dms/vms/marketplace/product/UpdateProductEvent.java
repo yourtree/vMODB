@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.product;
 
+import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdated;
 import dk.ku.di.dms.vms.modb.api.annotations.Event;
 
 @Event
@@ -38,5 +39,11 @@ public final class UpdateProductEvent {
         this.status = status;
         this.version = version;
     }
+
+    public ProductId getId(){
+        return new ProductId(this.seller_id, this.product_id);
+    }
+
+    public record ProductId( int sellerId, int productId){}
 
 }

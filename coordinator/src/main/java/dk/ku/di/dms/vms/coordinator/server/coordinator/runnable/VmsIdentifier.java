@@ -16,7 +16,7 @@ public record VmsIdentifier (VmsNode node, IVmsWorker worker) {
     }
 
     public String getIdentifier(){
-        return this.node.vmsIdentifier;
+        return this.node.identifier;
     }
 
 }

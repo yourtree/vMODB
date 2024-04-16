@@ -20,7 +20,7 @@ public final class Main {
 
     public static void main(String[] args) throws Exception {
 
-        VmsApplication vms = VmsApplication.build("localhost", Constants.CUSTOMER_PORT, new String[]{
+        VmsApplication vms = VmsApplication.build("localhost", Constants.CUSTOMER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.customer",
                 "dk.ku.di.dms.vms.marketplace.common"
         });

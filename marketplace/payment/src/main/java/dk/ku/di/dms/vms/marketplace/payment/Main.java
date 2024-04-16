@@ -7,7 +7,7 @@ public final class Main {
 
     public static void main(String[] args) throws Exception {
 
-        VmsApplication vms = VmsApplication.build("localhost", Constants.PAYMENT_PORT, new String[]{
+        VmsApplication vms = VmsApplication.build("localhost", Constants.PAYMENT_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.payment",
                 "dk.ku.di.dms.vms.marketplace.common"
         });

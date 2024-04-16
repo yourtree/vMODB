@@ -5,8 +5,8 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import org.junit.Test;
@@ -30,9 +30,9 @@ public class SellerDashboardTest extends AbstractWorkflowTest {
     }
 
     private Coordinator loadCoordinator() throws IOException {
-        ServerIdentifier serverIdentifier = new ServerIdentifier( "localhost", 8080 );
+        ServerNode serverIdentifier = new ServerNode( "localhost", 8080 );
 
-        Map<Integer, ServerIdentifier> serverMap = new HashMap<>(2);
+        Map<Integer, ServerNode> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
         TransactionDAG simpleDAG =  TransactionBootstrap.name("update_shipment")
@@ -45,8 +45,8 @@ public class SellerDashboardTest extends AbstractWorkflowTest {
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        Map<Integer, NetworkAddress> starterVMSs = new HashMap<>(3);
-        NetworkAddress sellerAddress = new NetworkAddress("localhost", 8087);
+        Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(3);
+        IdentifiableNode sellerAddress = new IdentifiableNode("seller", "localhost", 8087);
         starterVMSs.put(sellerAddress.hashCode(), sellerAddress);
 
         return Coordinator.build(

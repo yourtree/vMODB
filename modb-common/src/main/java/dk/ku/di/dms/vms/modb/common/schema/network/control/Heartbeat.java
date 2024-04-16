@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.control;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -14,7 +14,7 @@ public final class Heartbeat {
     // type | port | size | <host address is variable>
     private static final int headerSize = Byte.BYTES + Integer.BYTES + Integer.BYTES;
 
-    public static void write(ByteBuffer buffer, ServerIdentifier serverIdentifier){
+    public static void write(ByteBuffer buffer, ServerNode serverIdentifier){
         byte[] hostBytes = serverIdentifier.host.getBytes();
         buffer.put( Constants.HEARTBEAT );
         buffer.putInt(serverIdentifier.port );

@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
@@ -58,7 +58,7 @@ public final class Presentation {
 
     // for server consumption
     public static void writeServer(ByteBuffer buffer,
-                                   ServerIdentifier serverIdentifier){
+                                   ServerNode serverIdentifier){
         buffer.put( Constants.PRESENTATION );
         buffer.put( SERVER_TYPE );
 
@@ -72,7 +72,7 @@ public final class Presentation {
 
     // for VMS consumption
     public static void writeServer(ByteBuffer buffer,
-                                   ServerIdentifier serverIdentifier,
+                                   ServerNode serverIdentifier,
                                    boolean includeMetadataOnAck){
         buffer.put( Constants.PRESENTATION );
         buffer.put( SERVER_TYPE );
@@ -88,7 +88,7 @@ public final class Presentation {
         buffer.put( host );
     }
 
-    public static ServerIdentifier readServer(ByteBuffer buffer){
+    public static ServerNode readServer(ByteBuffer buffer){
 
         long offset = buffer.getLong();
 
@@ -107,7 +107,7 @@ public final class Presentation {
             host = new String(buffer.array(), serverHeader, hostSize, StandardCharsets.UTF_8);
         }
 
-        return new ServerIdentifier( host, port, offset );
+        return new ServerNode( host, port, offset );
 
     }
 

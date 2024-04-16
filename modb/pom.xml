@@ -4,46 +4,30 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>dk.ku.di.dms.vms</groupId>
-        <artifactId>vms-runtime-java</artifactId>
-        <version>1.0-SNAPSHOT</version>
-    </parent>
-
-    <groupId>dk.ku.di.dms.vms.modb</groupId>
-    <artifactId>modb</artifactId>
+  <parent>
+    <groupId>dk.ku.di.dms.vms</groupId>
+    <artifactId>vms-runtime-java</artifactId>
     <version>1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>modb</artifactId>
+  <version>1.0-SNAPSHOT</version>
 
   <name>modb</name>
-  <url>http://rnlaigner.github.io</url>
-
-  <properties>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.source>18</maven.compiler.source>
-    <maven.compiler.target>18</maven.compiler.target>
-  </properties>
 
   <dependencies>
 
       <dependency>
-          <groupId>dk.ku.di.dms.vms.modb</groupId>
+          <groupId>dk.ku.di.dms.vms</groupId>
           <artifactId>modb-common</artifactId>
           <version>1.0-SNAPSHOT</version>
-          <scope>compile</scope>
       </dependency>
 
       <dependency>
-          <groupId>dk.ku.di.dms.vms.modb</groupId>
+          <groupId>dk.ku.di.dms.vms</groupId>
           <artifactId>modb-api</artifactId>
           <version>1.0-SNAPSHOT</version>
-          <scope>compile</scope>
       </dependency>
-
-<!--      <dependency>-->
-<!--          <groupId>io.projectreactor</groupId>-->
-<!--          <artifactId>reactor-core</artifactId>-->
-<!--          <version>3.4.15</version>-->
-<!--      </dependency>-->
 
   </dependencies>
 

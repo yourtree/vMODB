@@ -18,7 +18,7 @@ import java.net.InetSocketAddress;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        VmsApplication vms = VmsApplication.build("localhost", Constants.STOCK_PORT, new String[]{
+        VmsApplication vms = VmsApplication.build("localhost", Constants.STOCK_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.stock",
                 "dk.ku.di.dms.vms.marketplace.common"
         });

@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.sdk.embed.handler;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
@@ -30,7 +30,7 @@ final class LeaderWorker extends StoppableRunnable {
 
     private final Logger logger;
 
-    private final ServerIdentifier leader;
+    private final ServerNode leader;
 
     private final LockConnectionMetadata leaderConnectionMetadata;
 
@@ -67,7 +67,7 @@ final class LeaderWorker extends StoppableRunnable {
     }
 
     public LeaderWorker(VmsNode vmsNode,
-                        ServerIdentifier leader,
+                        ServerNode leader,
                         LockConnectionMetadata leaderConnectionMetadata,
                         BlockingDeque<TransactionEvent.Payload> eventsToSendToLeader,
                         BlockingQueue<Message> leaderWorkerQueue){
@@ -94,7 +94,7 @@ final class LeaderWorker extends StoppableRunnable {
                 while(true) {
                     Message msg = this.leaderWorkerQueue.poll(DEFAULT_DELAY_FOR_BATCH_SEND, TimeUnit.MILLISECONDS);
                     if (msg == null) break;
-                    logger.info(vmsNode.vmsIdentifier+": Leader worker will send message type: "+ msg.type());
+                    logger.info(vmsNode.identifier+": Leader worker will send message type: "+ msg.type());
                     switch (msg.type()) {
                         case SEND_BATCH_COMPLETE -> this.sendBatchComplete(msg.asBatchComplete());
                         case SEND_BATCH_COMMIT_ACK -> this.sendBatchCommitAck(msg.asBatchCommitAck());
@@ -103,7 +103,7 @@ final class LeaderWorker extends StoppableRunnable {
                 }
 
             } catch (Exception e) { // (InterruptedException e) {
-                logger.warning(vmsNode.vmsIdentifier+": Error on taking message from worker queue: "+e.getMessage());
+                logger.warning(vmsNode.identifier+": Error on taking message from worker queue: "+e.getMessage());
             }
         }
     }
@@ -140,7 +140,7 @@ final class LeaderWorker extends StoppableRunnable {
 
         while(remaining > 0){
 
-            logger.info(vmsNode.vmsIdentifier+": Leader worker will send a batch of events to leader");
+            logger.info(vmsNode.identifier+": Leader worker will send a batch of events to leader");
 
             remaining = BatchUtils.assembleBatchPayload( remaining, this.events, this.leaderConnectionMetadata.writeBuffer);
             try {

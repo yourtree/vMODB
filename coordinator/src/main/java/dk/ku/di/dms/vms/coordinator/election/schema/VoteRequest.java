@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.coordinator.election.schema;
 
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -15,7 +15,7 @@ public class VoteRequest {
                                         // type |     offset |       port |      timestamp |      size | <host address is variable>
     private static final int fixedSize = Byte.BYTES + Long.BYTES + Integer.BYTES + Integer.BYTES;
 
-    public static void write(ByteBuffer buffer, ServerIdentifier serverIdentifier){
+    public static void write(ByteBuffer buffer, ServerNode serverIdentifier){
 
         byte[] hostBytes = serverIdentifier.host.getBytes();
 
@@ -27,7 +27,7 @@ public class VoteRequest {
 
     }
 
-    public static ServerIdentifier read(ByteBuffer buffer){
+    public static ServerNode read(ByteBuffer buffer){
 
         long offset = buffer.getLong();
 
@@ -48,7 +48,7 @@ public class VoteRequest {
             host = new String(buffer.array(), fixedSize, size, StandardCharsets.UTF_8);
         }
 
-        return new ServerIdentifier(  host, port, offset );
+        return new ServerNode(  host, port, offset );
 
     }
 

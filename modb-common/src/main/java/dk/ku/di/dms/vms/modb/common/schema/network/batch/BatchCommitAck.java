@@ -18,7 +18,7 @@ public final class BatchCommitAck {
     public static void write(ByteBuffer buffer, long batch, VmsNode vmsIdentifier){
         buffer.put(Constants.BATCH_COMMIT_ACK);
         buffer.putLong( batch );
-        byte[] nameBytes = vmsIdentifier.vmsIdentifier.getBytes(StandardCharsets.UTF_8);
+        byte[] nameBytes = vmsIdentifier.identifier.getBytes(StandardCharsets.UTF_8);
         buffer.putInt( nameBytes.length );
         buffer.put( nameBytes );
     }

@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.coordinator.election;
 
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
 import org.junit.Test;
 
@@ -52,15 +52,15 @@ public class LeaderElectionTest
         AsynchronousServerSocketChannel serverSocket2 = AsynchronousServerSocketChannel.open();
         serverSocket2.bind( new InetSocketAddress(8081) );
 
-        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 8080 );
-        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 8081 );
-        ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 8082 );
+        ServerNode serverEm1 = new ServerNode( "localhost", 8080 );
+        ServerNode serverEm2 = new ServerNode( "localhost", 8081 );
+        ServerNode serverEm3 = new ServerNode( "localhost", 8082 );
 
-        Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
+        Map<Integer, ServerNode> servers1 = new HashMap<>();
         servers1.put( serverEm2.hashCode(), serverEm2 );
         servers1.put( serverEm3.hashCode(), serverEm3 );
 
-        Map<Integer, ServerIdentifier> servers2 = new HashMap<>();
+        Map<Integer, ServerNode> servers2 = new HashMap<>();
         servers2.put( serverEm1.hashCode(), serverEm1 );
         servers2.put( serverEm3.hashCode(), serverEm3 );
 
@@ -90,15 +90,15 @@ public class LeaderElectionTest
         AsynchronousServerSocketChannel serverSocket1 = AsynchronousServerSocketChannel.open();
         serverSocket1.bind( new InetSocketAddress(8083) );
 
-        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 8083 );
-        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 8084 );
-        ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 8085 );
+        ServerNode serverEm1 = new ServerNode( "localhost", 8083 );
+        ServerNode serverEm2 = new ServerNode( "localhost", 8084 );
+        ServerNode serverEm3 = new ServerNode( "localhost", 8085 );
 
-        Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
+        Map<Integer, ServerNode> servers1 = new HashMap<>();
         servers1.put( serverEm2.hashCode(), serverEm2 );
         servers1.put( serverEm3.hashCode(), serverEm3 );
 
-        Map<Integer,ServerIdentifier> servers2 = new HashMap<>();
+        Map<Integer, ServerNode> servers2 = new HashMap<>();
         servers2.put( serverEm1.hashCode(), serverEm1 );
         servers2.put( serverEm3.hashCode(), serverEm3 );
 
@@ -159,11 +159,11 @@ public class LeaderElectionTest
         AsynchronousServerSocketChannel serverSocket1 = AsynchronousServerSocketChannel.open(group);
         serverSocket1.bind( new InetSocketAddress(8086) );
 
-        ServerIdentifier serverEm1 = new ServerIdentifier( "localhost", 8086 );
-        ServerIdentifier serverEm2 = new ServerIdentifier( "localhost", 8087 );
-        ServerIdentifier serverEm3 = new ServerIdentifier( "localhost", 8088 );
+        ServerNode serverEm1 = new ServerNode( "localhost", 8086 );
+        ServerNode serverEm2 = new ServerNode( "localhost", 8087 );
+        ServerNode serverEm3 = new ServerNode( "localhost", 8088 );
 
-        Map<Integer,ServerIdentifier> servers1 = new HashMap<>();
+        Map<Integer, ServerNode> servers1 = new HashMap<>();
         servers1.put( serverEm2.hashCode(), serverEm2 );
         servers1.put( serverEm3.hashCode(), serverEm3 );
 

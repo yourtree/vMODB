@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
 import java.util.Map;
@@ -16,26 +16,21 @@ import java.util.concurrent.LinkedBlockingDeque;
  * make it easier to manage metadata about each. I.e., metadata that
  * must be shared across threads (e.g., transactionEventsPerBatch)
  */
-public class ConsumerVms extends NetworkAddress {
+public final class ConsumerVms extends IdentifiableNode {
 
-    protected transient final Map<Long, BlockingDeque<TransactionEvent.Payload>> transactionEventsPerBatch;
+    transient final Map<Long, BlockingDeque<TransactionEvent.Payload>> transactionEventsPerBatch;
 
     /**
      * Timer for writing to each VMS connection
      * Read happens asynchronously anyway, so no need to set up timer for that
      * Only used by event handler {e.g., EmbedVmsEventHandler} to spawn periodical send of batch of events
       */
-    public transient Timer timer;
+    public final transient Timer timer;
 
-    public ConsumerVms(String host, int port) {
-        super(host, port);
+    public ConsumerVms(String identifier, String host, int port, Timer timer) {
+        super(identifier, host, port);
         this.transactionEventsPerBatch = new ConcurrentHashMap<>();
-    }
-
-    public ConsumerVms(NetworkAddress address, Timer timer) {
-        super(address.host, address.port);
         this.timer = timer;
-        this.transactionEventsPerBatch = new ConcurrentHashMap<>();
     }
 
     public void addEventToBatch(long batchId, TransactionEvent.Payload eventPayload){

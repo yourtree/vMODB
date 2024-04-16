@@ -16,7 +16,6 @@ import org.junit.Test;
 import java.util.Date;
 import java.util.List;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.PRODUCT_UPDATED;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.RESERVE_STOCK;
@@ -25,7 +24,7 @@ import static java.lang.Thread.sleep;
 public class StockTest {
 
     private static VmsApplication getVmsApplication() throws Exception {
-        return VmsApplication.build("localhost", Constants.STOCK_PORT, new String[]{
+        return VmsApplication.build("localhost", Constants.STOCK_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.stock",
                 "dk.ku.di.dms.vms.marketplace.common"
         });

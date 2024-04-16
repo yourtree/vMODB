@@ -25,4 +25,10 @@ public final class UpdatePrice {
         this.instanceId = instanceId;
     }
 
+    public ProductId getId(){
+        return new ProductId(this.sellerId, this.productId);
+    }
+
+    public record ProductId( int sellerId, int productId){}
+
 }

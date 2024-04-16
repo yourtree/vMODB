@@ -9,8 +9,8 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
-import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import org.junit.Test;
@@ -115,9 +115,9 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
          .build();
      */
     private Coordinator loadCoordinator() throws IOException {
-        ServerIdentifier serverIdentifier = new ServerIdentifier( "localhost", 8080 );
+        ServerNode serverIdentifier = new ServerNode( "localhost", 8080 );
 
-        Map<Integer, ServerIdentifier> serverMap = new HashMap<>(2);
+        Map<Integer, ServerNode> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
         TransactionDAG checkoutDag =  TransactionBootstrap.name("customer_checkout")
@@ -133,16 +133,16 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        Map<Integer, NetworkAddress> starterVMSs = new HashMap<>(3);
-        NetworkAddress stockAddress = new NetworkAddress("localhost", 8082);
+        Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(10);
+        IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", 8082);
         starterVMSs.put(stockAddress.hashCode(), stockAddress);
-        NetworkAddress orderAddress = new NetworkAddress("localhost", 8083);
+        IdentifiableNode orderAddress = new IdentifiableNode("order", "localhost", 8083);
         starterVMSs.put(orderAddress.hashCode(), orderAddress);
-        NetworkAddress paymentAddress = new NetworkAddress("localhost", 8084);
+        IdentifiableNode paymentAddress = new IdentifiableNode("payment", "localhost", 8084);
         starterVMSs.put(paymentAddress.hashCode(), paymentAddress);
-        NetworkAddress shipmentAddress = new NetworkAddress("localhost", 8085);
+        IdentifiableNode shipmentAddress = new IdentifiableNode("shipment", "localhost", 8085);
         starterVMSs.put(shipmentAddress.hashCode(), shipmentAddress);
-        NetworkAddress customerAddress = new NetworkAddress("localhost", 8086);
+        IdentifiableNode customerAddress = new IdentifiableNode("customer", "localhost", 8086);
         starterVMSs.put(customerAddress.hashCode(), customerAddress);
 
         return Coordinator.build(

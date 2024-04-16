@@ -5,21 +5,23 @@ public class Constants {
     /**
      * PORTS
      */
-    public static final int CART_PORT = 8080;
+    public static final int CART_HTTP_PORT = 8000;
+    public static final int CART_VMS_PORT = 8080;
 
-    public static final int PRODUCT_PORT = 8081;
+    public static final int PRODUCT_HTTP_PORT = 8001;
+    public static final int PRODUCT_VMS_PORT = 8081;
 
-    public static final int STOCK_PORT = 8082;
+    public static final int STOCK_VMS_PORT = 8082;
 
-    public static final int ORDER_PORT = 8083;
+    public static final int ORDER_VMS_PORT = 8083;
 
-    public static final int PAYMENT_PORT = 8084;
+    public static final int PAYMENT_VMS_PORT = 8084;
 
-    public static final int SHIPMENT_PORT = 8085;
+    public static final int SHIPMENT_VMS_PORT = 8085;
 
-    public static final int CUSTOMER_PORT = 8086;
+    public static final int CUSTOMER_VMS_PORT = 8086;
 
-    public static final int SELLER_PORT = 8087;
+    public static final int SELLER_VMS_PORT = 8087;
 
     /**
      * EVENTS

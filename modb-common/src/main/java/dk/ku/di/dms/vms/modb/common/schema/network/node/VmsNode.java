@@ -14,10 +14,7 @@ import java.util.Map;
  * producers and consumers and then form and send the consumer set
  * to each virtual microservice
  */
-public class VmsNode extends NetworkNode {
-
-    // identifier is the vms name
-    public final String vmsIdentifier;
+public final class VmsNode extends IdentifiableNode {
 
     /**
      * The batch offset, monotonically increasing.
@@ -50,8 +47,7 @@ public class VmsNode extends NetworkNode {
                    Map<String, VmsDataModel> dataSchema,
                    Map<String, VmsEventSchema> inputEventSchema,
                    Map<String, VmsEventSchema> outputEventSchema) {
-        super(host, port);
-        this.vmsIdentifier = vmsIdentifier;
+        super(vmsIdentifier, host, port);
         this.batch = batch;
         this.lastTidOfBatch = lastTidOfBatch;
         this.previousBatch = previousBatch;
@@ -65,7 +61,7 @@ public class VmsNode extends NetworkNode {
         return "{" +
                 "host='" + host + '\'' +
                 ", port=" + port +
-                ", identifier='" + vmsIdentifier + '\'' +
+                ", identifier='" + identifier + '\'' +
                 ", batch=" + batch +
                 ", lastTidOfBatch=" + lastTidOfBatch +
                 ", previousBatch=" + previousBatch +

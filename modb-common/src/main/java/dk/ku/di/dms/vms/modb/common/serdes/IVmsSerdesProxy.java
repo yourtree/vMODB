@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 
 import java.util.List;
 import java.util.Map;
@@ -34,8 +35,8 @@ public interface IVmsSerdesProxy {
     <V> String serializeSet(Set<V> map);
     <V> Set<V> deserializeSet(String setStr);
 
-    String serializeConsumerSet(Map<String, List<NetworkAddress>> map);
-    Map<String, List<NetworkAddress>> deserializeConsumerSet(String mapStr);
+    String serializeConsumerSet(Map<String, List<IdentifiableNode>> map);
+    Map<String, List<IdentifiableNode>> deserializeConsumerSet(String mapStr);
 
     Map<String, Long> deserializeDependenceMap(String dependenceMapStr);
 

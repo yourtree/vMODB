@@ -8,7 +8,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplicationAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerIdentifier;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
@@ -42,13 +42,13 @@ public final class Follower extends SignalingStoppableRunnable {
     private final ExecutorService taskExecutor;
 
     // required in order to send votes if new election process starts
-    private final Map<Integer, ServerIdentifier> servers;
+    private final Map<Integer, ServerNode> servers;
 
     // private final ConnectionMetadata serverConnectionMetadata;
 
-    private final ServerIdentifier me;
+    private final ServerNode me;
 
-    private final ServerIdentifier leader;
+    private final ServerNode leader;
 
     private LockConnectionMetadata leaderConnectionMetadata;
 
@@ -70,9 +70,9 @@ public final class Follower extends SignalingStoppableRunnable {
                     AsynchronousChannelGroup group,
                     ExecutorService taskExecutor,
                     FollowerOptions options,
-                    Map<Integer, ServerIdentifier> servers,
-                    ServerIdentifier me,
-                    ServerIdentifier leader,
+                    Map<Integer, ServerNode> servers,
+                    ServerNode me,
+                    ServerNode leader,
                     Gson gson) {
 
         // network and executor
