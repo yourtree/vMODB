@@ -18,15 +18,21 @@ import dk.ku.di.dms.vms.modb.api.annotations.Parallel;
 import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("seller")
 public final class SellerService {
+
+    // support isolation for seller dashboard retrieval
+    private final Map<Integer, ReadWriteLock> sellerLockMap;
 
     // necessary to force vms loader to load this repository
     private final ISellerRepository sellerRepository;
@@ -39,12 +45,16 @@ public final class SellerService {
         this.sellerRepository = sellerRepository;
         this.orderEntryRepository = orderEntryRepository;
         this.orderSellerViewMap = new ConcurrentHashMap<>(10000);
+        this.sellerLockMap = new ConcurrentHashMap<>(10000);
     }
 
     @Inbound(values = "invoice_issued")
     @Transactional(type=W)
     @Parallel
     public void processInvoiceIssued(InvoiceIssued invoiceIssued){
+
+        Map<Integer,ReadWriteLock> locksAcquired = new HashMap<>();
+
         System.out.println("Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
         List<OrderItem> orderItems = invoiceIssued.getItems();
         List<OrderEntry> list = new ArrayList<>(invoiceIssued.getItems().size());
@@ -56,7 +66,7 @@ public final class SellerService {
                     invoiceIssued.orderId,
                     orderItem.product_id,
                     orderItem.seller_id,
-                    -1,
+                    -1, // unknown at this point
                     orderItem.product_name,
                     "",
                     orderItem.unit_price,
@@ -73,12 +83,16 @@ public final class SellerService {
             );
             list.add(orderEntry);
 
+            if(!locksAcquired.containsKey(orderItem.seller_id)) {
+                ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(orderItem.seller_id, (x) -> new ReentrantReadWriteLock());
+                sellerLock.readLock().lock();
+                locksAcquired.put(orderEntry.seller_id, sellerLock);
+            }
+
             // view maintenance code
             orderSellerViewMap.putIfAbsent(orderItem.seller_id, new OrderSellerView(orderItem.seller_id) );
             orderSellerViewMap.compute(orderEntry.seller_id, (sellerId, view) -> {
-
                 view.orders.add(new OrderSellerView.OrderId(orderEntry.customer_id, orderItem.order_id));
-
                 view.count_items++;
                 view.total_amount += orderEntry.total_amount;
                 view.total_incentive += orderItem.total_incentive;
@@ -91,6 +105,12 @@ public final class SellerService {
             });
 
         }
+
+        // unlock all
+        for(var lock : locksAcquired.entrySet()){
+            lock.getValue().readLock().unlock();
+        }
+
         this.orderEntryRepository.insertAll(list);
     }
 
@@ -128,7 +148,11 @@ public final class SellerService {
     }
 
     public OrderSellerView queryDashboard(int sellerId){
-        return this.orderSellerViewMap.getOrDefault( sellerId, new OrderSellerView(sellerId) );
+        ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(sellerId, (x) -> new ReentrantReadWriteLock());
+        sellerLock.writeLock().lock();
+        var res = this.orderSellerViewMap.getOrDefault( sellerId, new OrderSellerView(sellerId) );
+        sellerLock.writeLock().unlock();
+        return  res;
     }
 
 }
