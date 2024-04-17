@@ -129,11 +129,9 @@ public class EventHandlerTest {
                 vmsMetadata.dataModel(),
                 vmsMetadata.inputEventSchema(), vmsMetadata.outputEventSchema());
 
-        ExecutorService socketPool = Executors.newFixedThreadPool(2);
-
         VmsEventHandler eventHandler = VmsEventHandler.build(
                 vmsIdentifier, new DumbCheckpointAPI(),
-                vmsInternalPubSubService,  vmsMetadata, serdes, socketPool );
+                vmsInternalPubSubService,  vmsMetadata, serdes, 2, 3000 );
 
         if(eventHandlerActive) {
             Thread eventHandlerThread = new Thread(eventHandler);

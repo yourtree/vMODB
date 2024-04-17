@@ -1,12 +1,11 @@
 package dk.ku.di.dms.vms.modb.storage.record;
 
-import jdk.incubator.foreign.MemorySegment;
-
+import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 
 /**
  * This class maintains important information
- * regarding the managed {@link jdk.incubator.foreign.MemorySegment}.
+ * regarding the managed {@link MemorySegment}.
  * -
  * It provides the contextual information about
  * the segment of memory being used, like
@@ -41,7 +40,7 @@ public class RecordBufferContext {
 
     public RecordBufferContext(MemorySegment memorySegment, int capacity) {
         this.memorySegment = memorySegment;
-        this.address = this.memorySegment.address().toRawLongValue();
+        this.address = this.memorySegment.address();
         this.capacity = capacity;
     }
 

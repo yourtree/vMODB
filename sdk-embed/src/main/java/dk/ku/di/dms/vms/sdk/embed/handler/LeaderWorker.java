@@ -18,8 +18,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
-import static dk.ku.di.dms.vms.sdk.embed.handler.VmsEventHandler.DEFAULT_DELAY_FOR_BATCH_SEND;
-
 /**
  * This class is responsible for all writes to the leader.
  * For now the methods are not inserting the same message again in the queue because
@@ -27,6 +25,8 @@ import static dk.ku.di.dms.vms.sdk.embed.handler.VmsEventHandler.DEFAULT_DELAY_F
  * If so, may need to reinsert to continue the protocol from the same point
  */
 final class LeaderWorker extends StoppableRunnable {
+
+    static final int DEFAULT_DELAY_FOR_BATCH_SEND = 3000;
 
     private final Logger logger;
 

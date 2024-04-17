@@ -85,6 +85,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                                     // the group for the socket channel
                                     AsynchronousChannelGroup group,
                                     IVmsSerdesProxy serdesProxy) {
+        // passing null is clearly not a good option. when it comes the time (to support VMS node crashes), it is time to rethink this design
         return new VmsWorker(me, consumerVms, coordinatorQueue, null, group,
                 MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE), serdesProxy);
     }
@@ -120,7 +121,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         // shared by many vms workers
         this.coordinatorQueue = coordinatorQueue;
 
-        // this.vmsMetadata = vmsMetadata;
         this.channel = channel;
         this.group = group;
 
@@ -160,7 +160,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             try {
                 this.channel.connect(this.consumerVms.asInetSocketAddress()).get();
             } catch (Exception e){
-                logger.severe("Leader: Error on connecting to "+consumerVms+": "+e.getMessage());
+                logger.severe("Leader: Error on connecting to "+consumerVms.identifier+": "+e.getMessage());
                 return;
             }
             this.state = CONNECTION_ESTABLISHED;

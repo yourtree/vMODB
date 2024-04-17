@@ -47,7 +47,7 @@ final class ConsumerVmsWorker extends TimerTask {
         this.me = me;
         this.consumerVms = consumerVms;
         this.connectionMetadata = connectionMetadata;
-        this.logger = Logger.getLogger("vms-worker-"+consumerVms.hashCode());
+        this.logger = Logger.getLogger("consumer-vms-worker-"+consumerVms.identifier);
         this.logger.setUseParentHandlers(true);
         this.writeBufferPool = new ConcurrentLinkedDeque<>();
         this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE) );
@@ -136,14 +136,14 @@ final class ConsumerVmsWorker extends TimerTask {
     private class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
         @Override
         public void completed(Integer result, ByteBuffer attachment) {
-            logger.info(me.identifier+ ": Batch with size "+result+" has been sent to: "+consumerVms);
+            logger.info(me.identifier+ ": Batch with size "+result+" has been sent to: "+consumerVms.identifier);
             WRITE_SYNCHRONIZER.add(DUMB);
             attachment.clear();
             writeBufferPool.addLast( attachment );
         }
         @Override
         public void failed(Throwable exc, ByteBuffer attachment) {
-            logger.severe(me.identifier+": ERROR on writing batch of events to: "+consumerVms);
+            logger.severe(me.identifier+": ERROR on writing batch of events to: "+consumerVms.identifier);
             WRITE_SYNCHRONIZER.add(DUMB);
             attachment.clear();
             writeBufferPool.addLast( attachment );

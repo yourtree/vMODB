@@ -56,7 +56,7 @@ public final class VmsApplication {
      * (i) EventHandler, responsible for communicating with the external world
      * (ii) Scheduler, responsible for scheduling transactions and returning resulting events
      */
-    public static VmsApplication build(String host, int port, String[] packages) throws Exception {
+    public static VmsApplication build(VmsApplicationOptions options) throws Exception {
 
         // check first whether we are in decoupled or embed mode
         Optional<Package> optional = Arrays.stream(Package.getPackages()).filter(p ->
@@ -76,7 +76,7 @@ public final class VmsApplication {
 
         VmsEmbeddedInternalChannels vmsInternalPubSubService = new VmsEmbeddedInternalChannels();
 
-        Reflections reflections = VmsMetadataLoader.configureReflections( packages );
+        Reflections reflections = VmsMetadataLoader.configureReflections(options.packages() );
 
         Set<Class<?>> vmsClasses = reflections.getTypesAnnotatedWith(Microservice.class);
         if(vmsClasses.isEmpty()) throw new IllegalStateException("No classes annotated with @Microservice in this application.");
@@ -110,17 +110,14 @@ public final class VmsApplication {
 
         // ideally lastTid and lastBatch must be read from the storage
         VmsNode vmsIdentifier = new VmsNode(
-                host, port, vmsName,
+                options.host(), options.port(), vmsName,
                 0, 0,0,
                 vmsMetadata.dataModel(),
                 vmsMetadata.inputEventSchema(),
                 vmsMetadata.outputEventSchema());
 
-        // at least two, one for acceptor and one for new events
-        ExecutorService socketPool = Executors.newFixedThreadPool(2);
-
         VmsEventHandler eventHandler = VmsEventHandler.build(
-                vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, serdes, socketPool );
+                vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, serdes, options.networkThreadPoolSize(), options.consumerSendRate() );
 
 //        VmsComplexTransactionScheduler scheduler =
 //                VmsComplexTransactionScheduler.build(

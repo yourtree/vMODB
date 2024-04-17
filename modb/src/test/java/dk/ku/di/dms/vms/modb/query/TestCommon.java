@@ -1,17 +1,6 @@
 package dk.ku.di.dms.vms.modb.query;
 
 import dk.ku.di.dms.vms.modb.ExecutorTest;
-import dk.ku.di.dms.vms.modb.common.type.DataType;
-import dk.ku.di.dms.vms.modb.definition.Schema;
-import dk.ku.di.dms.vms.modb.definition.Table;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
-import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
-import jdk.incubator.foreign.MemorySegment;
-import jdk.incubator.foreign.ResourceScope;
-
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Common set of methods for two or more tests (e.g., {@link PlannerTest} and {@link ExecutorTest}
@@ -64,33 +53,33 @@ public final class TestCommon {
 //
 //    }
 
-    public static Map<String, Table> getDefaultCatalog(){
-
-        // item
-        String[] itemColumns = { "i_id", "i_price", "i_name", "i_data" };
-        DataType[] itemDataTypes = { DataType.INT, DataType.FLOAT, DataType.STRING, DataType.STRING };
-        Schema itemSchema = new Schema(itemColumns, itemDataTypes, new int[]{0}, null, false );
-
-        ResourceScope scope = ResourceScope.newSharedScope();
-        MemorySegment segment = MemorySegment.allocateNative(itemSchema.getRecordSize() * 10L, scope);
-        RecordBufferContext rbc = new RecordBufferContext(segment, 10);
-        UniqueHashBufferIndex index = new UniqueHashBufferIndex(rbc, itemSchema, itemSchema.getPrimaryKeyColumns());
-        PrimaryIndex consistentIndex = new PrimaryIndex(index);
-        Table itemTable = new Table("item", itemSchema, consistentIndex);
-
-        // customer
-//        String[] customerColumns = { "c_id", "c_d_id", "c_w_id", "c_discount", "c_last", "c_credit", "c_balance", "c_ytd_payment" };
-//        DataType[] customerDataTypes = { DataType.LONG, DataType.INT, DataType.INT,
-//                DataType.FLOAT, DataType.STRING, DataType.STRING, DataType.FLOAT, DataType.FLOAT };
-//        Schema customerSchema = new Schema(customerColumns, customerDataTypes, new int[]{0,1,2}, null );
-//        Table customerTable = new Table("customer", customerSchema);
+//    public static Map<String, Table> getDefaultCatalog(){
 //
-        Map<String, Table> map = new HashMap<>();
-        map.put("item", itemTable);
-
-        return map;
-
-    }
+//        // item
+//        String[] itemColumns = { "i_id", "i_price", "i_name", "i_data" };
+//        DataType[] itemDataTypes = { DataType.INT, DataType.FLOAT, DataType.STRING, DataType.STRING };
+//        Schema itemSchema = new Schema(itemColumns, itemDataTypes, new int[]{0}, null, false );
+//
+//        ResourceScope scope = ResourceScope.newSharedScope();
+//        MemorySegment segment = MemorySegment.allocateNative(itemSchema.getRecordSize() * 10L, scope);
+//        RecordBufferContext rbc = new RecordBufferContext(segment, 10);
+//        UniqueHashBufferIndex index = new UniqueHashBufferIndex(rbc, itemSchema, itemSchema.getPrimaryKeyColumns());
+//        PrimaryIndex consistentIndex = new PrimaryIndex(index);
+//        Table itemTable = new Table("item", itemSchema, consistentIndex);
+//
+//        // customer
+////        String[] customerColumns = { "c_id", "c_d_id", "c_w_id", "c_discount", "c_last", "c_credit", "c_balance", "c_ytd_payment" };
+////        DataType[] customerDataTypes = { DataType.LONG, DataType.INT, DataType.INT,
+////                DataType.FLOAT, DataType.STRING, DataType.STRING, DataType.FLOAT, DataType.FLOAT };
+////        Schema customerSchema = new Schema(customerColumns, customerDataTypes, new int[]{0,1,2}, null );
+////        Table customerTable = new Table("customer", customerSchema);
+////
+//        Map<String, Table> map = new HashMap<>();
+//        map.put("item", itemTable);
+//
+//        return map;
+//
+//    }
 
 //    public static QueryTree getSimpleQueryTree() throws AnalyzerException {
 //

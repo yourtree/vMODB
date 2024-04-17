@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
+import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 import org.junit.Test;
 
@@ -24,10 +25,13 @@ import static java.lang.Thread.sleep;
 public class StockTest {
 
     private static VmsApplication getVmsApplication() throws Exception {
-        return VmsApplication.build("localhost", Constants.STOCK_VMS_PORT, new String[]{
+
+        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.STOCK_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.stock",
                 "dk.ku.di.dms.vms.marketplace.common"
-        });
+        }, 2, 1000);
+
+        return VmsApplication.build(options);
     }
 
     /**

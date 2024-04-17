@@ -4,17 +4,20 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
+import dk.ku.di.dms.vms.marketplace.common.Utils;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
+import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.util.Properties;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.PRODUCT_HTTP_PORT;
 
@@ -22,12 +25,19 @@ public final class Main {
 
     public static void main(String[] args) {
 
+        // load non-fixed properties
+        Properties properties = Utils.loadProperties();
+        int networkThreadPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
+        long consumerSendRate = Long.parseLong( properties.getProperty("consumer_send_rate") );
+
+        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.PRODUCT_VMS_PORT, new String[]{
+                "dk.ku.di.dms.vms.marketplace.product",
+                "dk.ku.di.dms.vms.marketplace.common"
+        }, networkThreadPoolSize, consumerSendRate);
+
         // initialize threads
         try {
-            VmsApplication vms = VmsApplication.build("localhost", Constants.PRODUCT_VMS_PORT, new String[]{
-                    "dk.ku.di.dms.vms.marketplace.product",
-                    "dk.ku.di.dms.vms.marketplace.common"
-            });
+            VmsApplication vms = VmsApplication.build(options);
             vms.start();
 
             // initialize HTTP server for data ingestion

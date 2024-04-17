@@ -191,8 +191,13 @@ public final class Coordinator extends SignalingStoppableRunnable {
         // used to complete handshake protocol
         this.taskExecutor = Executors.newFixedThreadPool(options.getTaskThreadPoolSize());
 
-        this.group = AsynchronousChannelGroup.withThreadPool(Executors.newWorkStealingPool(options.getGroupThreadPoolSize()));
-        this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+        if(options.getGroupThreadPoolSize() > 0) {
+            this.group = AsynchronousChannelGroup.withThreadPool(Executors.newWorkStealingPool(options.getGroupThreadPoolSize()));
+            this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+        } else {
+            this.group = null;
+            this.serverSocket = AsynchronousServerSocketChannel.open();
+        }
 
         // network and executor
         if(options.isNetworkEnabled()) {

@@ -25,8 +25,6 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.UniqueSecondaryIndex;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
-import jdk.incubator.foreign.MemorySegment;
-import jdk.incubator.foreign.ResourceScope;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
@@ -38,9 +36,10 @@ import net.bytebuddy.matcher.ElementMatchers;
 import javax.persistence.GeneratedValue;
 import java.io.File;
 import java.io.IOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.lang.ref.Cleaner;
 import java.lang.reflect.*;
-import java.nio.channels.FileChannel;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -90,28 +89,14 @@ public class EmbedMetadataLoader {
                         .subclass(generic, ConstructorStrategy.Default.IMITATE_SUPER_CLASS)
                         .implement(repositoryType)
                          .method(ElementMatchers.isAnnotatedWith(Query.class) )
-                        //.intercept(MethodCall.invoke( ElementMatchers.named("intercept")))
                         .intercept(
-//                                ElementMatchers.definedMethod( Meth "intercept" )
                                 MethodDelegation.to(AbstractProxyRepository.Interceptor.class)
-//                                MethodCall.invoke( AbstractProxyRepository.class.getMethod(
-//                                        "intercept", Object[].class ) ).withAllArguments()
-////                                SuperMethodCall.INSTANCE.andThen(
-////                                        MethodCall.invoke(
-////                                                AbstractProxyRepository.class.getMethod( "intercept", Object[].class ) ) )
                         )
                         .name(repositoryType.getSimpleName().replaceFirst("I","") + "Impl")
                         .make()) {
                     type = dynamicType
                             .load(ClassLoader.getSystemClassLoader(), ClassLoadingStrategy.Default.INJECTION)
                             .getLoaded();
-
-//                    type = byteBuddy.redefine(type)
-//                            .method(ElementMatchers.isAnnotatedWith(Query.class) )
-//                            .intercept( MethodCall.invoke(
-//                                    AbstractProxyRepository.class.getMethod( "intercept" , Object[].class))
-//                                    .onDefault()
-//                                    .withAllArguments() );
                 }
 
                 Method[] queryMethods = repositoryType.getDeclaredMethods();
@@ -339,15 +324,16 @@ public class EmbedMetadataLoader {
         long sizeInBytes = (long) numBuckets * bucketSize;
 
         Cleaner cleaner = Cleaner.create();
-        ResourceScope scope = ResourceScope.newSharedScope(cleaner);
         MemorySegment segment;
         try {
             segment = mapFileIntoMemorySegment(sizeInBytes, fileName);
         } catch (Exception e){
-            segment = MemorySegment.allocateNative(sizeInBytes, scope);
+            try (Arena arena = Arena.ofShared()) {
+                segment = arena.allocate(sizeInBytes);
+            }
         }
 
-        long address = segment.address().toRawLongValue();
+        long address = segment.address();
 
         OrderedRecordBuffer[] buffers = new OrderedRecordBuffer[numBuckets];
 
@@ -406,16 +392,16 @@ public class EmbedMetadataLoader {
     }
 
     private static RecordBufferContext loadRecordBuffer(int maxNumberOfRecords, int recordSize, String append){
-        Cleaner cleaner = Cleaner.create();
-        ResourceScope scope = ResourceScope.newSharedScope(cleaner);
         long sizeInBytes = (long) maxNumberOfRecords * recordSize;
         try {
             MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, append);
             return new RecordBufferContext(segment, maxNumberOfRecords);
         } catch (Exception e){
             logger.warning("Could not map file. Resorting to direct memory allocation attempt: "+e.getMessage());
-            MemorySegment segment = MemorySegment.allocateNative(sizeInBytes, scope);
-            return new RecordBufferContext(segment, maxNumberOfRecords);
+            try (Arena arena = Arena.ofShared()) {
+                return new RecordBufferContext(arena.allocate(sizeInBytes), maxNumberOfRecords);
+            }
+
         }
     }
 
@@ -449,12 +435,9 @@ public class EmbedMetadataLoader {
 
             if(file.createNewFile()) {
                 logger.info("Attempt to create new file in directory: "+filePath+" completed successfully.");
-                return MemorySegment.mapFile(
-                        file.toPath(),
-                        0,
-                        bytes,
-                        FileChannel.MapMode.READ_WRITE,
-                        ResourceScope.newSharedScope());
+                try (Arena arena = Arena.ofShared()) {
+                    return arena.allocate(bytes);
+                }
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

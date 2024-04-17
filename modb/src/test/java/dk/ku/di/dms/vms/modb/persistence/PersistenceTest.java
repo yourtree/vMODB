@@ -1,15 +1,14 @@
 package dk.ku.di.dms.vms.modb.persistence;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
-import jdk.incubator.foreign.MemorySegment;
-import jdk.incubator.foreign.ResourceScope;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -58,15 +57,10 @@ public class PersistenceTest {
 
         long lostBytes = numberBuckets * 8;
 
-//        MemorySession session = MemorySession.openShared();
-//        MemorySegment segment = FileChannel.open(Path.of(filePath), StandardOpenOption.TRUNCATE_EXISTING).map( FileChannel.MapMode.READ_WRITE, 0, TEN_GB - lostBytes, session);
-        MemorySegment segment =
-                MemorySegment.mapFile(
-                file.toPath(),
-                0,
-                TEN_GB - lostBytes,
-                FileChannel.MapMode.READ_WRITE,
-                ResourceScope.newSharedScope());
+        MemorySegment segment;
+        try (Arena arena = Arena.ofShared()) {
+            segment = arena.allocate(TEN_GB - lostBytes);
+        }
 
         long nextOffset = 0;
         // long offsetEnd = divFactor - 1;
@@ -115,7 +109,7 @@ public class PersistenceTest {
         mappedBuffer.putInt(10);
 
         // https://github.com/apache/flink/blob/master/flink-core/src/main/java/org/apache/flink/core/memory/MemoryUtils.java
-        unsafe.copyMemory( segment.address().toRawLongValue(), segment.address().toRawLongValue() + offsetToTest, Integer.BYTES );
+        unsafe.copyMemory( segment.address(), segment.address() + offsetToTest, Integer.BYTES );
 
         assert (buffers.get(2).getInt() == 10);
 

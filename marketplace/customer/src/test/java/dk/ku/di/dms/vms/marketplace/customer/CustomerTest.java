@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.customer;
 
+import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
 import dk.ku.di.dms.vms.marketplace.common.enums.PackageStatus;
@@ -8,6 +9,7 @@ import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
+import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import org.junit.Test;
 
 import java.util.Date;
@@ -20,10 +22,12 @@ public class CustomerTest {
     @Test
     public void paymentTest() throws Exception {
 
-        VmsApplication vms = VmsApplication.build("localhost", 8086, new String[]{
+        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CUSTOMER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.customer",
                 "dk.ku.di.dms.vms.marketplace.common"
-        });
+        }, 2, 1000);
+
+        VmsApplication vms = VmsApplication.build(options);
         vms.start();
 
         CustomerCheckout customerCheckout = new CustomerCheckout(
@@ -46,10 +50,12 @@ public class CustomerTest {
     @Test
     public void shipmentTest() throws Exception {
 
-        VmsApplication vms = VmsApplication.build("localhost", 8086, new String[]{
+        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CUSTOMER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.customer",
                 "dk.ku.di.dms.vms.marketplace.common"
-        });
+        }, 2, 1000);
+
+        VmsApplication vms = VmsApplication.build(options);
         vms.start();
 
         ShipmentUpdated shipmentUpdated = new ShipmentUpdated(

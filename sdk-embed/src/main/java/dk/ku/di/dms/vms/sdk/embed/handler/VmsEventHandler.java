@@ -50,8 +50,6 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  */
 public final class VmsEventHandler extends SignalingStoppableRunnable {
 
-    static final int DEFAULT_DELAY_FOR_BATCH_SEND = 3000;
-
     /** SERVER SOCKET **/
     // other VMSs may want to connect in order to send events
     private final AsynchronousServerSocketChannel serverSocket;
@@ -79,6 +77,9 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
     /** SERIALIZATION & DESERIALIZATION **/
     private final IVmsSerdesProxy serdesProxy;
+
+    // rate on which consumer vms worker is triggered to send events to a consumer VMS
+    private final long consumerSendRate;
 
     /** COORDINATOR **/
     private ServerNode leader;
@@ -139,10 +140,11 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
                                         // serialization/deserialization of objects
                                         IVmsSerdesProxy serdesProxy,
                                         // for recurrent and continuous tasks
-                                        ExecutorService socketPool){
+                                        int networkThreadPoolSize,
+                                        long consumerSendRate){
         try {
             return new VmsEventHandler(me, vmsMetadata, new ConcurrentHashMap<>(),
-                    transactionalHandler, vmsInternalChannels, serdesProxy, socketPool);
+                    transactionalHandler, vmsInternalChannels, serdesProxy, networkThreadPoolSize, consumerSendRate);
         } catch (IOException e){
             throw new RuntimeException("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
@@ -154,12 +156,20 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
                             ITransactionalHandler transactionalHandler,
                             VmsEmbeddedInternalChannels vmsInternalChannels,
                             IVmsSerdesProxy serdesProxy,
-                            ExecutorService socketPool) throws IOException {
+                            int networkThreadPoolSize,
+                            long consumerSendRate) throws IOException {
         super();
 
         // network and executor
-        this.group = AsynchronousChannelGroup.withThreadPool(socketPool);
-        this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+        if(networkThreadPoolSize > 0){
+            // at least two, one for acceptor and one for new events
+            ExecutorService socketPool = Executors.newFixedThreadPool( networkThreadPoolSize );
+            this.group = AsynchronousChannelGroup.withThreadPool(socketPool);
+            this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+        } else {
+            this.group = null;
+            this.serverSocket = AsynchronousServerSocketChannel.open();
+        }
         this.serverSocket.bind(me.asInetSocketAddress());
 
         this.vmsInternalChannels = vmsInternalChannels;
@@ -182,13 +192,15 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         this.transactionalHandler = transactionalHandler;
         this.checkpointEventHandler = new CheckpointEventHandlerImpl();
 
-        // set leader off
+        // set leader off at the start
         this.leader = new ServerNode("localhost",0);
         this.leader.off();
 
         this.leaderWorkerQueue = new LinkedBlockingDeque<>();
         this.queuesLeaderSubscribesTo = Set.of();
         this.eventsToSendToLeader = new LinkedBlockingDeque<>();
+
+        this.consumerSendRate = consumerSendRate;
     }
 
     /**
@@ -485,7 +497,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
                             eventToConsumersMap.get(outputEvent).add(consumerVms);
                         }
                         // set up event sender timer task
-                        consumerVms.timer.scheduleAtFixedRate(new ConsumerVmsWorker(me, consumerVms, connMetadata), DEFAULT_DELAY_FOR_BATCH_SEND, DEFAULT_DELAY_FOR_BATCH_SEND);
+                        consumerVms.timer.scheduleAtFixedRate(new ConsumerVmsWorker(me, consumerVms, connMetadata), consumerSendRate, consumerSendRate);
                         // set up read from consumer vms
                         attachment.channel.read(attachment.buffer, connMetadata, new VmsReadCompletionHandler(node));
                     }
@@ -528,7 +540,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
      */
     private void connectToConsumerVms(List<String> outputEvents, IdentifiableNode vmsNode) {
         try {
-            AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
+            AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(this.group);
             channel.setOption(TCP_NODELAY, true);
             channel.setOption(SO_KEEPALIVE, true);
             ConnectToConsumerVmsProtocol protocol = new ConnectToConsumerVmsProtocol(channel, outputEvents, vmsNode);

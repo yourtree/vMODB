@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.shipment;
 
+import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
@@ -8,6 +9,7 @@ import dk.ku.di.dms.vms.marketplace.shipment.repositories.IPackageRepository;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
+import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import org.junit.Test;
 
 import java.util.Date;
@@ -20,10 +22,13 @@ import static java.lang.Thread.sleep;
 public final class ShipmentTest {
 
     private static VmsApplication getVmsApplication() throws Exception {
-        return VmsApplication.build("localhost", 8084, new String[]{
+
+        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.SHIPMENT_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.shipment",
                 "dk.ku.di.dms.vms.marketplace.common"
-        });
+        }, 2, 1000);
+
+        return VmsApplication.build(options);
     }
 
     private static final BiFunction<Integer, String, CustomerCheckout> customerCheckoutBiFunction = (customerId, instanceId) -> new CustomerCheckout(
@@ -36,7 +41,7 @@ public final class ShipmentTest {
             new Date(), customerCheckout.instanceId);
 
     @Test
-    public void testPackageQueryMultiversionVisibility() throws Exception {
+    public void testPackageQueryMultiVersionVisibility() throws Exception {
         VmsApplication vms = getVmsApplication();
         vms.start();
 
