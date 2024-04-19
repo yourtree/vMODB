@@ -199,7 +199,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         @Override
         public void error(ExecutionModeEnum executionMode, long tid, Exception e) {
             // TODO handle errors
-            logger.warning("Error captured in application execution: "+e.getMessage());
+            logger.warning("Error captured in application execution: \n");
+            e.printStackTrace();
             if(executionMode == ExecutionModeEnum.SINGLE_THREADED)
                 singleThreadTaskRunning.set(false);
             else if (executionMode == ExecutionModeEnum.PARALLEL) {

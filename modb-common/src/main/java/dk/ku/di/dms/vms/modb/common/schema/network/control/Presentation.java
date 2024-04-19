@@ -61,10 +61,8 @@ public final class Presentation {
                                    ServerNode serverIdentifier){
         buffer.put( Constants.PRESENTATION );
         buffer.put( SERVER_TYPE );
-
         buffer.putLong( serverIdentifier.lastOffset );
         buffer.putInt( serverIdentifier.port );
-
         byte[] host = serverIdentifier.host.getBytes(StandardCharsets.UTF_8);
         buffer.putInt( host.length );
         buffer.put( host );
@@ -76,26 +74,18 @@ public final class Presentation {
                                    boolean includeMetadataOnAck){
         buffer.put( Constants.PRESENTATION );
         buffer.put( SERVER_TYPE );
-
         buffer.put( includeMetadataOnAck ? YES : NO );
-
         buffer.putLong( serverIdentifier.lastOffset );
-
         buffer.putInt( serverIdentifier.port );
-
         byte[] host = serverIdentifier.host.getBytes(StandardCharsets.UTF_8);
         buffer.putInt( host.length );
         buffer.put( host );
     }
 
     public static ServerNode readServer(ByteBuffer buffer){
-
         long offset = buffer.getLong();
-
         int port = buffer.getInt();
-
         int hostSize = buffer.getInt();
-
         String host;
         if(buffer.isDirect()){
             byte[] byteArray = new byte[hostSize];
@@ -106,9 +96,7 @@ public final class Presentation {
         } else {
             host = new String(buffer.array(), serverHeader, hostSize, StandardCharsets.UTF_8);
         }
-
         return new ServerNode( host, port, offset );
-
     }
 
     public static void writeVms(ByteBuffer buffer,

@@ -5,7 +5,6 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
@@ -19,6 +18,10 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -31,19 +34,18 @@ import static java.lang.Thread.sleep;
  * The proxy builds on top of the coordinator module.
  * Via the proxy, we configure the transactional DAGs and
  * other important configuration properties of the system.
- * TODO list:
- *  (i) Stream transaction marks via websocket
- *  (ii) Transaction marks must be sent to coordinator
  */
 public final class Main {
 
     private static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] ignoredArgs) throws IOException, InterruptedException {
         // read properties
         Properties properties = Utils.loadProperties();
 
         Coordinator coordinator = loadCoordinator(properties);
+
+        String driverUrl = properties.getProperty("driver_url");
 
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
@@ -55,11 +57,9 @@ public final class Main {
             maxSleep--;
         } while (maxSleep > 0);
 
-        if(coordinator.getConnectedVMSs().size() < 1) throw new RuntimeException("VMSs did not connect to coordinator on time");
+        if(coordinator.getConnectedVMSs().size() < 1) throw new RuntimeException("Proxy: VMSs did not connect to coordinator on time");
 
-        System.out.println("All starter VMS has connected to the coordinator");
-
-        System.out.println("Initializing now the HTTP Server for receiving transaction inputs");
+        System.out.println("Proxy: All starter VMS has connected to the coordinator \nProxy: Initializing now the HTTP Server for receiving transaction inputs");
 
         int http_port = Integer.parseInt( properties.getProperty("http_port") );
 
@@ -67,6 +67,25 @@ public final class Main {
         httpServer.createContext("/", new ProxyHttpHandler());
         httpServer.start();
 
+        var signalQueue = coordinator.getBatchSignalQueue();
+        try (HttpClient httpClient = HttpClient.newHttpClient()) {
+            System.out.println("Proxy: Polling for new batch completion signal started");
+            for(;;) {
+                var lastTid = signalQueue.take();
+                // upon a batch completion, send result to driver
+                try {
+                    HttpRequest httpReq = HttpRequest.newBuilder()
+                            .uri(URI.create(driverUrl))
+                            .header("Content-Type", "application/text")
+                            .version(HttpClient.Version.HTTP_2)
+                            .POST(HttpRequest.BodyPublishers.ofString(lastTid.toString()))
+                            .build();
+                    // httpClient.send(httpReq, HttpResponse.BodyHandlers.discarding());
+                } catch (Exception e) {
+                    System.out.println("Proxy: Error while sending HTTP request: " + e.getMessage());
+                }
+            }
+        }
     }
 
     private static Coordinator loadCoordinator(Properties properties) throws IOException {
@@ -99,6 +118,7 @@ public final class Main {
         Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(10);
         starterVMSs.put(productAddress.hashCode(), productAddress);
 
+        int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         long batchSendRate = Long.parseLong( properties.getProperty("batch_send_rate") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
 
@@ -107,7 +127,10 @@ public final class Main {
                 starterVMSs,
                 transactionMap,
                 serverIdentifier,
-                new CoordinatorOptions().withBatchWindow(batchSendRate).withGroupThreadPoolSize(groupPoolSize),
+                new CoordinatorOptions()
+                        .withBatchWindow(batchSendRate)
+                        .withGroupThreadPoolSize(groupPoolSize)
+                        .withNetworkBufferSize(networkBufferSize),
                 1,
                 1,
                 parsedTransactionRequests,
@@ -121,14 +144,48 @@ public final class Main {
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            String str = new String( exchange.getRequestBody().readAllBytes() );
+            String payload = new String( exchange.getRequestBody().readAllBytes() );
 
-            // TODO paths for cart (checkout), product (update product and price update), shipment (delivery)
+            // TODO paths for cart (checkout), shipment (delivery)
+            String[] uriSplit = exchange.getRequestURI().toString().split("/");
 
-            // response
+            switch(uriSplit[1]){
+                case "cart": {
+                    break;
+                }
+                case "product" : {
+                    switch (exchange.getRequestMethod()) {
+                        // price update
+                        case "PATCH": {
+                            TransactionInput.Event eventPayload = new TransactionInput.Event("update_price", payload);
+                            TransactionInput txInput = new TransactionInput("update_price", eventPayload);
+                            parsedTransactionRequests.add(txInput);
+                            break;
+                        }
+                        // product update
+                        case "PUT": {
+                            TransactionInput.Event eventPayload = new TransactionInput.Event("update_product", payload);
+                            TransactionInput txInput = new TransactionInput("update_product", eventPayload);
+                            parsedTransactionRequests.add(txInput);
+                            break;
+                        }
+                    }
+                }
+                case "shipment" : {
+                    break;
+                }
+                default: {
+                    OutputStream outputStream = exchange.getResponseBody();
+                    exchange.sendResponseHeaders(500, 0);
+                    // outputStream.flush();
+                    outputStream.close();
+                    return;
+                }
+            }
+
             OutputStream outputStream = exchange.getResponseBody();
             exchange.sendResponseHeaders(200, 0);
-            outputStream.flush();
+            // outputStream.flush();
             outputStream.close();
         }
 

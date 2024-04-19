@@ -20,9 +20,8 @@ import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
-import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
+import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -33,8 +32,6 @@ import java.util.logging.Level;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.*;
-import static dk.ku.di.dms.vms.web_common.meta.Issue.Category.CANNOT_CONNECT_TO_NODE;
-import static dk.ku.di.dms.vms.web_common.meta.NetworkConfigConstants.DEFAULT_BUFFER_SIZE;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -48,7 +45,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * Could also try to adapt to JNI:
  * <a href="https://nachtimwald.com/2017/06/17/calling-java-from-c/">...</a>
  */
-public final class VmsEventHandler extends SignalingStoppableRunnable {
+public final class VmsEventHandler extends StoppableRunnable {
 
     /** SERVER SOCKET **/
     // other VMSs may want to connect in order to send events
@@ -77,6 +74,8 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
     /** SERIALIZATION & DESERIALIZATION **/
     private final IVmsSerdesProxy serdesProxy;
+
+    private final int networkBufferSize;
 
     // rate on which consumer vms worker is triggered to send events to a consumer VMS
     private final long consumerSendRate;
@@ -139,12 +138,13 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
                                         VmsRuntimeMetadata vmsMetadata,
                                         // serialization/deserialization of objects
                                         IVmsSerdesProxy serdesProxy,
-                                        // for recurrent and continuous tasks
+                                        // network
+                                        int networkBufferSize,
                                         int networkThreadPoolSize,
                                         long consumerSendRate){
         try {
             return new VmsEventHandler(me, vmsMetadata, new ConcurrentHashMap<>(),
-                    transactionalHandler, vmsInternalChannels, serdesProxy, networkThreadPoolSize, consumerSendRate);
+                    transactionalHandler, vmsInternalChannels, serdesProxy, networkBufferSize, networkThreadPoolSize, consumerSendRate);
         } catch (IOException e){
             throw new RuntimeException("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
@@ -156,6 +156,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
                             ITransactionalHandler transactionalHandler,
                             VmsEmbeddedInternalChannels vmsInternalChannels,
                             IVmsSerdesProxy serdesProxy,
+                            int networkBufferSize,
                             int networkThreadPoolSize,
                             long consumerSendRate) throws IOException {
         super();
@@ -200,6 +201,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         this.queuesLeaderSubscribesTo = Set.of();
         this.eventsToSendToLeader = new LinkedBlockingDeque<>();
 
+        this.networkBufferSize = networkBufferSize;
         this.consumerSendRate = consumerSendRate;
     }
 
@@ -280,7 +282,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
             // build an indirect map
             for(Map.Entry<String,Deque<ConsumerVms>> entry : this.eventToConsumersMap.entrySet()) {
                 for(ConsumerVms consumer : entry.getValue()){
-                    consumerToEventsMap.computeIfAbsent(consumer, x -> new ArrayList<>()).add(entry.getKey());
+                    consumerToEventsMap.computeIfAbsent(consumer, _ -> new ArrayList<>()).add(entry.getKey());
                 }
             }
             for( var consumerEntry : consumerToEventsMap.entrySet() ) {
@@ -294,7 +296,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         // build an indirect map
         for(Map.Entry<String,List<IdentifiableNode>> entry : receivedConsumerVms.entrySet()) {
             for(IdentifiableNode consumer : entry.getValue()){
-                consumerToEventsMap.computeIfAbsent(consumer, x -> new ArrayList<>()).add(entry.getKey());
+                consumerToEventsMap.computeIfAbsent(consumer, _ -> new ArrayList<>()).add(entry.getKey());
             }
         }
         for( Map.Entry<IdentifiableNode,List<String>> consumerEntry : consumerToEventsMap.entrySet() ) {
@@ -395,6 +397,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         String objStr = this.serdesProxy.serialize(outputEvent.output(), clazz);
 
         // right now just including the original precedence map. ideally we must reduce the size by removing this vms
+        // however, modifying the map incurs deserialization and serialization costs
         TransactionEvent.Payload payload = TransactionEvent.of(
                 outputEvent.tid(), outputEvent.batch(), outputEvent.outputQueue(), objStr, precedenceMap );
 
@@ -434,7 +437,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
             this.state = State.NEW;
             this.channel = channel;
             this.completionHandler = new ConnectToConsumerVmsCompletionHandler();
-            this.buffer = MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE);
+            this.buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
             this.outputEvents = outputEvents;
             this.node = node;
         }
@@ -492,12 +495,12 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
                         // add to tracked VMSs...
                         for (String outputEvent : outputEvents) {
-                            logger.info(me.identifier+ " adding "+outputEvent+" to consumers map with "+consumerVms);
-                            eventToConsumersMap.computeIfAbsent(outputEvent, (x) -> new ConcurrentLinkedDeque<>());
+                            logger.info(me.identifier+ " adding "+outputEvent+" to consumers map with "+consumerVms.identifier);
+                            eventToConsumersMap.computeIfAbsent(outputEvent, (_) -> new ConcurrentLinkedDeque<>());
                             eventToConsumersMap.get(outputEvent).add(consumerVms);
                         }
                         // set up event sender timer task
-                        consumerVms.timer.scheduleAtFixedRate(new ConsumerVmsWorker(me, consumerVms, connMetadata), consumerSendRate, consumerSendRate);
+                        consumerVms.timer.scheduleAtFixedRate(new ConsumerVmsWorker(me, consumerVms, connMetadata, networkBufferSize), consumerSendRate, consumerSendRate);
                         // set up read from consumer vms
                         attachment.channel.read(attachment.buffer, connMetadata, new VmsReadCompletionHandler(node));
                     }
@@ -506,7 +509,8 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
                     public void failed(Throwable exc, ConnectToConsumerVmsProtocol attachment) {
                         // check if connection is still online. if so, try again
                         // otherwise, retry connection in a few minutes
-                        issueQueue.add(new Issue(CANNOT_CONNECT_TO_NODE, attachment.node.hashCode()));
+                        //issueQueue.add(new Issue(CANNOT_CONNECT_TO_NODE, attachment.node.hashCode()));
+                        logger.severe(me.identifier+ "caught an error while trying to connect to consumer VMS: "+node.identifier);
                         attachment.buffer.clear();
                     }
                 });
@@ -517,7 +521,8 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
             public void failed(Throwable exc, ConnectToConsumerVmsProtocol attachment) {
                 // queue for later attempt
                 // perhaps can use scheduled task
-                issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, attachment.node.hashCode()) );
+                //issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, attachment.node.hashCode()) );
+                logger.severe(me.identifier+ "caught an error while trying to connect to consumer VMS: "+node.identifier);
                 // node.off(); no need it is already off
             }
         }
@@ -546,7 +551,8 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
             ConnectToConsumerVmsProtocol protocol = new ConnectToConsumerVmsProtocol(channel, outputEvents, vmsNode);
             channel.connect(vmsNode.asInetSocketAddress(), protocol, protocol.completionHandler);
         } catch (IOException ignored) {
-            this.issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, vmsNode.hashCode()) );
+            //this.issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, vmsNode.hashCode()) );
+            logger.severe(me.identifier+" caught an error while trying to connect to "+vmsNode.identifier);
         }
     }
 
@@ -708,19 +714,19 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
             logger.info(me.identifier+": An unknown host has started a connection attempt.");
-            final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE);
+            final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
             try {
                 // logger.info("Remote address: "+channel.getRemoteAddress().toString());
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, true);
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 channel.read( buffer, null, new UnknownNodeReadCompletionHandler(channel, buffer) );
-                logger.info(me.identifier+": Read handler has been setup: "+channel.getLocalAddress());
+                // logger.info(me.identifier+": Read handler has been setup: "+channel.getLocalAddress());
             } catch(Exception e){
                 logger.info("Accept handler caught exception: "+e.getMessage());
                 MemoryManager.releaseTemporaryDirectBuffer(buffer);
             } finally {
-                logger.info(me.identifier+": Accept handler set up again for listening");
+                logger.info(me.identifier+": Accept handler set up again for listening to new connections");
                 // continue listening
                 serverSocket.accept(null, this);
             }
@@ -746,7 +752,6 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
                 logger.warning("Socket is not open anymore. Cannot set up accept again");
             }
         }
-
     }
 
     private final class ConnectionFromLeaderProtocol {
@@ -775,6 +780,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
             @Override
             public void completed(Integer result, Void attachment) {
+                logger.info(me.identifier+": Presentation sent to Leader successfully");
                 state = State.PRESENTATION_SENT;
                 // set up leader worker
                 leaderWorker = new LeaderWorker(me, leader, leaderConnectionMetadata, eventsToSendToLeader, leaderWorkerQueue);
@@ -786,6 +792,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
             @Override
             public void failed(Throwable exc, Void attachment) {
+                logger.info(me.identifier+": Failed to send presentation to Leader");
                 buffer.clear();
                 if(!channel.isOpen()) {
                     leader.off();
@@ -795,6 +802,8 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
         }
 
         public void processLeaderPresentation() {
+
+            logger.info(me.identifier+": Start processing the Leader presentation");
 
             boolean includeMetadata = this.buffer.get() == YES;
 
@@ -842,7 +851,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
             this.buffer.flip();
             this.state = State.PRESENTATION_PROCESSED;
-            logger.info(me.identifier+": Leader presentation processed");
+            logger.info(me.identifier+": Writing presentation to leader");
             this.channel.write( this.buffer, null, this.writeCompletionHandler );
 
         }
@@ -868,6 +877,11 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
 
         @Override
         public void completed(Integer result, LockConnectionMetadata connectionMetadata) {
+
+            if(result == -1){
+                logger.info(me.identifier+": Leader has disconnected");
+                return;
+            }
 
             connectionMetadata.readBuffer.position(0);
             byte messageType = connectionMetadata.readBuffer.get();
@@ -945,7 +959,7 @@ public final class VmsEventHandler extends SignalingStoppableRunnable {
                         connectToReceivedConsumerSet(receivedConsumerVms);
                     }
                 }
-                case (PRESENTATION) -> logger.warning(me.identifier+": Presentation being sent again by the producer!?");
+                case (PRESENTATION) -> logger.warning(me.identifier+": Presentation being sent again by the leader!?");
                 default -> logger.severe(me.identifier+": Message type sent by the leader cannot be identified: "+messageType);
             }
 

@@ -206,7 +206,7 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         this.operationalAPI.deleteAll( this.table, parsedEntities );
     }
 
-    private T parseObjectIntoEntity(Object[] object){
+    public final T parseObjectIntoEntity(Object[] object){
         // all entities must have default constructor
         try {
             T entity = this.entityConstructor.newInstance();

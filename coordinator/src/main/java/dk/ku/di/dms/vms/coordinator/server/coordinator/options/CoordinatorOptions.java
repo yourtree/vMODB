@@ -1,5 +1,7 @@
 package dk.ku.di.dms.vms.coordinator.server.coordinator.options;
 
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
+
 /**
  * Rules that govern how a coordinator must behave.
  * Values initialized with default parameters.
@@ -17,8 +19,8 @@ public class CoordinatorOptions {
     // before the timeout is reached
     private int heartbeatSlack = 1000;
 
-    // the batch window
-    private long batchWindow = 60000; // a minute
+    // the batch window. a minute by default
+    private long batchWindow = 60000;
 
     // timeout to keep track when to send heartbeats to followers
     private long heartbeatTimeout = 20000;
@@ -28,6 +30,8 @@ public class CoordinatorOptions {
 
     // thread pool to execute tasks, e.g., batch replication to replicas
     private int taskThreadPoolSize = 2;
+
+    private int networkBufferSize = MemoryUtils.DEFAULT_PAGE_SIZE;
 
     /**
      * thread pool for handling network events.
@@ -54,6 +58,16 @@ public class CoordinatorOptions {
         this.groupThreadPoolSize = groupThreadPoolSize;
         return this;
     }
+
+    public CoordinatorOptions withNetworkBufferSize(int networkBufferSize) {
+        this.networkBufferSize = networkBufferSize;
+        return this;
+    }
+
+    public int getNetworkBufferSize(){
+        return this.networkBufferSize;
+    }
+
 
     public BatchReplicationStrategy getBatchReplicationStrategy() {
         return this.batchReplicationStrategy;

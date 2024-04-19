@@ -147,6 +147,12 @@ public final class SellerService {
 
     }
 
+    /**
+     * It would be better to set a "fake" tid for this transaction, so it could read from the multi version entries
+     * However, the view is not being maintained via the MODB =(
+     * @param sellerId the seller identifier
+     * @return seller dashboard
+     */
     public OrderSellerView queryDashboard(int sellerId){
         ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(sellerId, (x) -> new ReentrantReadWriteLock());
         sellerLock.writeLock().lock();

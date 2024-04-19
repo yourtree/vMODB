@@ -109,7 +109,7 @@ public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
 
             while(val < 10) {
                 UpdateProductEvent updateProductEvent = new UpdateProductEvent(
-                        1,1,"test","test","test","test",10.0F,10.0F,"test",String.valueOf(val)
+                        1,1,"test","test","test","test",10.0F,10.0F,"test", String.valueOf(val)
                 );
 
                 String payload = serdes.serialize(updateProductEvent, UpdateProductEvent.class);

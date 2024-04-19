@@ -14,7 +14,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.logging.Logger;
 
-import static dk.ku.di.dms.vms.web_common.meta.NetworkConfigConstants.DEFAULT_BUFFER_SIZE;
 import static java.lang.Thread.sleep;
 
 /**
@@ -43,18 +42,22 @@ final class ConsumerVmsWorker extends TimerTask {
 
     private static final Byte DUMB = 1;
 
-    public ConsumerVmsWorker(VmsNode me, ConsumerVms consumerVms, ConnectionMetadata connectionMetadata){
+    private final int networkBufferSize;
+
+    public ConsumerVmsWorker(VmsNode me, ConsumerVms consumerVms, ConnectionMetadata connectionMetadata, int networkBufferSize){
         this.me = me;
         this.consumerVms = consumerVms;
         this.connectionMetadata = connectionMetadata;
         this.logger = Logger.getLogger("consumer-vms-worker-"+consumerVms.identifier);
         this.logger.setUseParentHandlers(true);
         this.writeBufferPool = new ConcurrentLinkedDeque<>();
-        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE) );
-        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE) );
+        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(networkBufferSize) );
+        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(networkBufferSize) );
 
         // to allow the first thread to write
         this.WRITE_SYNCHRONIZER.add(DUMB);
+
+        this.networkBufferSize = networkBufferSize;
     }
 
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
@@ -130,7 +133,7 @@ final class ConsumerVmsWorker extends TimerTask {
     private ByteBuffer retrieveByteBuffer(){
         ByteBuffer bb = this.writeBufferPool.poll();
         if(bb != null) return bb;
-        return MemoryManager.getTemporaryDirectBuffer(DEFAULT_BUFFER_SIZE);
+        return MemoryManager.getTemporaryDirectBuffer(this.networkBufferSize);
     }
 
     private class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {

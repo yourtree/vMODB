@@ -25,7 +25,7 @@ public class CustomerTest {
         VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CUSTOMER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.customer",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, 2, 1000);
+        }, 4096, 2, 1000);
 
         VmsApplication vms = VmsApplication.build(options);
         vms.start();
@@ -53,7 +53,7 @@ public class CustomerTest {
         VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CUSTOMER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.customer",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, 2, 1000);
+        }, 4096, 2, 1000);
 
         VmsApplication vms = VmsApplication.build(options);
         vms.start();

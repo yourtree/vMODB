@@ -12,7 +12,6 @@ import java.util.logging.Logger;
  */
 public abstract class SignalingStoppableRunnable extends StoppableRunnable {
 
-    protected final Logger logger;
     /**
      * Protocol result. Now also any result from a thread...
      */
@@ -33,7 +32,7 @@ public abstract class SignalingStoppableRunnable extends StoppableRunnable {
         this.exceptionHandler = new CustomUncaughtExceptionHandler();
         this.issueQueue = new LinkedBlockingQueue<>();
 
-        this.logger = Logger.getLogger(getClass().getSimpleName());
+
 //        this.logger.setLevel(Level.ALL);
         this.logger.setUseParentHandlers(true);
     }

@@ -33,6 +33,10 @@ public final class MemoryUtils {
 
     public static int DEFAULT_NUM_BUCKETS;
 
+    /**
+     * <a href="https://stackoverflow.com/questions/19047584/getting-virtual-memory-page-size-by-java-code">link</a>
+     * @return page size
+     */
     private static int getPageSize(){
         return UNSAFE.pageSize();
     }
