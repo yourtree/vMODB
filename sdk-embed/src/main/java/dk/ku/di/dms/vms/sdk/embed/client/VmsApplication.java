@@ -18,12 +18,10 @@ import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 import org.reflections.Reflections;
 
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
 /**
- * Starting point for initializing the VMS runtime
+ * Starting point for initializing the VMS application runtime
  */
 public final class VmsApplication {
 

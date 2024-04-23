@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.common;
 
-public class Constants {
+public final class Constants {
 
     /**
      * PORTS
@@ -11,6 +11,7 @@ public class Constants {
     public static final int PRODUCT_HTTP_PORT = 8001;
     public static final int PRODUCT_VMS_PORT = 8081;
 
+    public static final int STOCK_HTTP_PORT = 8002;
     public static final int STOCK_VMS_PORT = 8082;
 
     public static final int ORDER_VMS_PORT = 8083;

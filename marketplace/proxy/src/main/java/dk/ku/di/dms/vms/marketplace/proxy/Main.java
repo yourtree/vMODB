@@ -37,7 +37,10 @@ import static java.lang.Thread.sleep;
  */
 public final class Main {
 
-    private static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
+    private static final int STARTING_TID = 1;
+    private static final int STARTING_BATCH_ID = 1;
+
+    private static final BlockingQueue<TransactionInput> TRANSACTION_INPUTS = new LinkedBlockingDeque<>();
 
     public static void main(String[] ignoredArgs) throws IOException, InterruptedException {
         // read properties
@@ -57,7 +60,7 @@ public final class Main {
             maxSleep--;
         } while (maxSleep > 0);
 
-        if(coordinator.getConnectedVMSs().size() < 1) throw new RuntimeException("Proxy: VMSs did not connect to coordinator on time");
+        if(coordinator.getConnectedVMSs().size() < 2) throw new RuntimeException("Proxy: VMSs did not connect to coordinator on time");
 
         System.out.println("Proxy: All starter VMS has connected to the coordinator \nProxy: Initializing now the HTTP Server for receiving transaction inputs");
 
@@ -68,19 +71,21 @@ public final class Main {
         httpServer.start();
 
         var signalQueue = coordinator.getBatchSignalQueue();
+        long initTid = STARTING_TID;
         try (HttpClient httpClient = HttpClient.newHttpClient()) {
             System.out.println("Proxy: Polling for new batch completion signal started");
             for(;;) {
-                var lastTid = signalQueue.take();
+                long lastTid = signalQueue.take();
                 // upon a batch completion, send result to driver
                 try {
                     HttpRequest httpReq = HttpRequest.newBuilder()
                             .uri(URI.create(driverUrl))
                             .header("Content-Type", "application/text")
                             .version(HttpClient.Version.HTTP_2)
-                            .POST(HttpRequest.BodyPublishers.ofString(lastTid.toString()))
+                            .POST(HttpRequest.BodyPublishers.ofString(initTid+"-"+lastTid))
                             .build();
-                    // httpClient.send(httpReq, HttpResponse.BodyHandlers.discarding());
+                    httpClient.send(httpReq, HttpResponse.BodyHandlers.discarding());
+                    initTid = lastTid + 1;
                 } catch (Exception e) {
                     System.out.println("Proxy: Error while sending HTTP request: " + e.getMessage());
                 }
@@ -103,7 +108,7 @@ public final class Main {
 
         TransactionDAG updateProductDag =  TransactionBootstrap.name("update_product")
                 .input( "a", "product", "update_product" )
-                .terminal("b", "product", "a")
+                .terminal("b", "stock", "a")
                 .build();
 
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
@@ -113,10 +118,13 @@ public final class Main {
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         String productHost = properties.getProperty("product_host");
+        String stockHost = properties.getProperty("stock_host");
         IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
+        IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, Constants.STOCK_VMS_PORT);
 
         Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(10);
         starterVMSs.put(productAddress.hashCode(), productAddress);
+        starterVMSs.put(stockAddress.hashCode(), stockAddress);
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         long batchSendRate = Long.parseLong( properties.getProperty("batch_send_rate") );
@@ -131,9 +139,9 @@ public final class Main {
                         .withBatchWindow(batchSendRate)
                         .withGroupThreadPoolSize(groupPoolSize)
                         .withNetworkBufferSize(networkBufferSize),
-                1,
-                1,
-                parsedTransactionRequests,
+                STARTING_BATCH_ID,
+                STARTING_TID,
+                TRANSACTION_INPUTS,
                 serdes
         );
     }
@@ -159,14 +167,14 @@ public final class Main {
                         case "PATCH": {
                             TransactionInput.Event eventPayload = new TransactionInput.Event("update_price", payload);
                             TransactionInput txInput = new TransactionInput("update_price", eventPayload);
-                            parsedTransactionRequests.add(txInput);
+                            TRANSACTION_INPUTS.add(txInput);
                             break;
                         }
                         // product update
                         case "PUT": {
                             TransactionInput.Event eventPayload = new TransactionInput.Event("update_product", payload);
                             TransactionInput txInput = new TransactionInput("update_product", eventPayload);
-                            parsedTransactionRequests.add(txInput);
+                            TRANSACTION_INPUTS.add(txInput);
                             break;
                         }
                     }

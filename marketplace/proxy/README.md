@@ -31,7 +31,7 @@ In particular, the <i>Product Management</i> guide requires that at least the <i
 #### Adding a product 
 Let's start adding a <b>product</b> to the <i>Product</i> microservice
 ```
-curl -X PUT -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "name" : "productTest", "sku" : "skuTest", "category" : "categoryTest", "status" : "AVAILABLE", "description": "descriptionTest", "price" : 10, "freight_value" : 0, "version": "1"}' localhost:8001/product
+curl -X PUT -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "name" : "productTest", "sku" : "skuTest", "category" : "categoryTest", "status" : "approved", "description": "descriptionTest", "price" : 10, "freight_value" : 0, "version": "1"}' localhost:8001/product
 ```
 
 Let's send a GET request to verify whether the function have successfully stored the state
@@ -42,7 +42,7 @@ curl -X GET localhost:8001/product/1/1
 If everything worked, you should see the following output:
 
 ```
-{"seller_id":"1", "product_id":"1", "name":"productTest", "sku":"skuTest", "category":"categoryTest", "description":"descriptionTest", "price":"10.0", "freight_value":"0.0", "status":"AVAILABLE", "version":"1"}
+{"seller_id":"1", "product_id":"1", "name":"productTest", "sku":"skuTest", "category":"categoryTest", "description":"descriptionTest", "price":"10.0", "freight_value":"0.0", "status":"approved", "version":"1"}
 ```
 
 #### Modifying a product
@@ -54,7 +54,7 @@ To submit a <b>price update</b>, a user must send the following request:
 curl -X PATCH -H "Content-Type: application/json" -d '{ "sellerId" : 1, "productId" : 1, "price" : 100, "instanceId" : "1" }' localhost:8090/product/1/1
 ```
 
-After an epoch completion, configurable via  .... Querying the product again, we can see the updated price
+After an epoch completion, by querying the product again, we will be able to see the updated price, like below:
 
 ```
 {product_id=1, seller_id=1, name='productTest', sku='sku', category='categoryTest', description='descriptionTest', price=100.0, freight_value=0.0, status='approved', version='0', createdAt=2023-10-25T14:45:22.388, updatedAt=2023-10-25T14:45:40.637}
@@ -63,6 +63,6 @@ After an epoch completion, configurable via  .... Querying the product again, we
 To substitute the product and trigger referential integrity enforcement in stock, we use another HTTP method and content:
 
 ```
-curl -X PUT -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "name" : "productTest", "sku" : "skuTest", "category" : "categoryTest", "status" : "AVAILABLE", "description": "descriptionTest", "price" : 10, "freight_value" : 0, "version": "2"}' localhost:8090/product/1/1
+curl -X PUT -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "name" : "productTest", "sku" : "skuTest", "category" : "categoryTest", "status" : "approved", "description": "descriptionTest", "price" : 10, "freight_value" : 0, "version": "2"}' localhost:8090/product/1/1
 ```
 

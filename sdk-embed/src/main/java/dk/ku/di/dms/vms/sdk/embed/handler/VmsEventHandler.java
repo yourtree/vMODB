@@ -571,6 +571,11 @@ public final class VmsEventHandler extends StoppableRunnable {
         @Override
         public void completed(Integer result, LockConnectionMetadata connectionMetadata) {
 
+            if(result == -1){
+                logger.info(me.identifier+": VMS "+node.identifier+" has disconnected");
+                return;
+            }
+
             byte messageType = connectionMetadata.readBuffer.get(0);
 
             switch (messageType) {
@@ -745,11 +750,11 @@ public final class VmsEventHandler extends StoppableRunnable {
                 }
             }
 
-            logger.warning("Error on accepting connection: "+ message);
+            logger.warning(me.identifier+": Error on accepting connection: "+ message);
             if (serverSocket.isOpen()){
                 serverSocket.accept(null, this);
             } else {
-                logger.warning("Socket is not open anymore. Cannot set up accept again");
+                logger.warning(me.identifier+": Socket is not open anymore. Cannot set up accept again");
             }
         }
     }

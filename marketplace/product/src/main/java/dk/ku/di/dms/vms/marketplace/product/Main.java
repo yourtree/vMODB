@@ -70,7 +70,6 @@ public final class Main {
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-
             switch (exchange.getRequestMethod()) {
                 case "GET": {
                     String[] split = exchange.getRequestURI().toString().split("/");
@@ -102,9 +101,8 @@ public final class Main {
                         outputStream.flush();
                         outputStream.close();
                     }
-
                 }
-                case "PUT": {
+                case "POST": {
                     String str = new String( exchange.getRequestBody().readAllBytes() );
                     Product product = serdes.deserialize(str, Product.class);
 
@@ -119,7 +117,7 @@ public final class Main {
                     outputStream.close();
                 }
                 default : {
-                    // response
+                    // failed response
                     OutputStream outputStream = exchange.getResponseBody();
                     exchange.sendResponseHeaders(404, 0);
                     outputStream.flush();

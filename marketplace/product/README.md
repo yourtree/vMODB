@@ -1,4 +1,4 @@
-# OnlineMarketplace Product Microservice
+# Online Marketplace Product Microservice
 
 ## How to compile the project
 

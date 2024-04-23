@@ -190,6 +190,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 if(task.partitionId().isPresent()){
                     partitionKeyTrackingMap.remove(task.partitionId().get());
                     numPartitionedTasksRunning.decrementAndGet();
+                    System.out.println("Partitioned task "+task.tid()+" finished execution.");
                 } else {
                     singleThreadTaskRunning.set(false);
                 }
@@ -199,8 +200,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         @Override
         public void error(ExecutionModeEnum executionMode, long tid, Exception e) {
             // TODO handle errors
-            logger.warning("Error captured in application execution: \n");
-            e.printStackTrace();
+            logger.warning("Error captured in application execution: \n"+e.getStackTrace()[0]);
             if(executionMode == ExecutionModeEnum.SINGLE_THREADED)
                 singleThreadTaskRunning.set(false);
             else if (executionMode == ExecutionModeEnum.PARALLEL) {
