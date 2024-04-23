@@ -18,23 +18,15 @@ import java.util.concurrent.LinkedBlockingDeque;
  */
 public final class ConsumerVms extends IdentifiableNode {
 
-    transient final Map<Long, BlockingDeque<TransactionEvent.Payload>> transactionEventsPerBatch;
+    transient final BlockingDeque<TransactionEvent.Payload> transactionEvents;
 
-    /**
-     * Timer for writing to each VMS connection
-     * Read happens asynchronously anyway, so no need to set up timer for that
-     * Only used by event handler {e.g., EmbedVmsEventHandler} to spawn periodical send of batch of events
-      */
-    public final transient Timer timer;
-
-    public ConsumerVms(String identifier, String host, int port, Timer timer) {
+    public ConsumerVms(String identifier, String host, int port) {
         super(identifier, host, port);
-        this.transactionEventsPerBatch = new ConcurrentHashMap<>();
-        this.timer = timer;
+        this.transactionEvents = new LinkedBlockingDeque<>();
     }
 
-    public void addEventToBatch(long batchId, TransactionEvent.Payload eventPayload){
-        this.transactionEventsPerBatch.computeIfAbsent(batchId, (x) -> new LinkedBlockingDeque<>()).add(eventPayload);
+    public void addEventToBatch(TransactionEvent.Payload eventPayload){
+        this.transactionEvents.add(eventPayload);
     }
 
 }

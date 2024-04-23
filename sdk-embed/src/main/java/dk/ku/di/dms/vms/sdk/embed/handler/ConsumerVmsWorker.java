@@ -5,6 +5,8 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
+import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
@@ -28,8 +30,9 @@ import static java.lang.Thread.sleep;
  *  in the batch to resend or return to the original location. let the
  *  main loop schedule the timer again. set the network node to off
  */
-final class ConsumerVmsWorker extends TimerTask {
+final class ConsumerVmsWorker extends StoppableRunnable {
 
+    private static final org.slf4j.Logger log = LoggerFactory.getLogger(ConsumerVmsWorker.class);
     private final VmsNode me;
 
     private final Logger logger;
@@ -65,56 +68,51 @@ final class ConsumerVmsWorker extends TimerTask {
     @Override
     public void run() {
 
-        // this.logger.info("VMS worker scheduled at: "+System.currentTimeMillis());
+        logger.info("Starting consumer vms worker for VMS: "+me.identifier);
 
-        // find the smallest batch. to avoid synchronizing with main thread
-        // TODO maybe a skiplistmap is more helpful?
-        //  on add (on event handler), can make a test and save the smallest batch id
-        long batchToSend = Long.MAX_VALUE;
-        for(long batchId : this.consumerVms.transactionEventsPerBatch.keySet()){
-            if(batchId < batchToSend) batchToSend = batchId;
-        }
+        List<TransactionEvent.Payload> events = new ArrayList<>(1000);
+        while(this.isRunning()){
 
-        if(batchToSend == Long.MAX_VALUE){
-            return;
-        }
-
-        // there will always be a batch if this point of code is run
-        // transient list due to concurrent threads.
-        // if we have a fixed list, concurrent threads will contend for it
-        // a temp list for each "run" can be discarded by the GC later without affecting concurrency
-        List<TransactionEvent.Payload> events = new ArrayList<>(this.consumerVms.transactionEventsPerBatch.get(batchToSend).size());
-        this.consumerVms.transactionEventsPerBatch.get(batchToSend).drainTo(events);
-        int remaining = events.size();
-        int count = remaining;
-        ByteBuffer writeBuffer;
-        while(remaining > 0){
             try {
-                writeBuffer = this.retrieveByteBuffer();
-                remaining = BatchUtils.assembleBatchPayload(remaining, events, writeBuffer);
+                events.add(this.consumerVms.transactionEvents.take());
+            } catch (InterruptedException ignored) {
+                continue;
+            }
 
-                this.logger.info(me.identifier+ ": Submitting "+(count - remaining)+" events from batch "+batchToSend+" to "+consumerVms.identifier);
-                count = remaining;
+            this.consumerVms.transactionEvents.drainTo(events);
+            int remaining = events.size();
+            int count = remaining;
+            ByteBuffer writeBuffer;
+            while(remaining > 0){
+                try {
+                    writeBuffer = this.retrieveByteBuffer();
+                    remaining = BatchUtils.assembleBatchPayload(remaining, events, writeBuffer);
 
-                writeBuffer.flip();
+                    this.logger.info(me.identifier+ ": Submitting "+(count - remaining)+" events to "+consumerVms.identifier);
+                    count = remaining;
 
-                this.WRITE_SYNCHRONIZER.take();
-                this.connectionMetadata.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
+                    writeBuffer.flip();
 
-                // prevent from error in consumer
-                sleep_();
+                    this.WRITE_SYNCHRONIZER.take();
+                    this.connectionMetadata.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
 
-            } catch (Exception e) {
-                this.logger.severe(me.identifier+ ": Error submitting events from batch "+batchToSend+" to "+consumerVms.identifier);
-                // return non-processed events to original location or what?
-                if (!this.connectionMetadata.channel.isOpen()) {
-                    this.logger.warning("The "+consumerVms.identifier+" VMS is offline");
-                }
-                // return events to the deque
-                for (TransactionEvent.Payload event : events) {
-                    this.consumerVms.transactionEventsPerBatch.get(batchToSend).offerFirst(event);
+                    // prevent from error in consumer
+                    if(remaining > 0) sleep_();
+                } catch (Exception e) {
+                    this.logger.severe(me.identifier+ ": Error submitting events to "+consumerVms.identifier);
+                    // return non-processed events to original location or what?
+                    if (!this.connectionMetadata.channel.isOpen()) {
+                        this.logger.warning("The "+consumerVms.identifier+" VMS is offline");
+                    }
+                    // return events to the deque
+                    for (TransactionEvent.Payload event : events) {
+                        this.consumerVms.transactionEvents.offerFirst(event);
+                    }
                 }
             }
+
+            events.clear();
+
         }
 
     }

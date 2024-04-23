@@ -76,18 +76,20 @@ public final class Main {
             System.out.println("Proxy: Polling for new batch completion signal started");
             for(;;) {
                 long lastTid = signalQueue.take();
+                System.out.println("Proxy: New batch completion signal received. Last TID executed: "+lastTid);
                 // upon a batch completion, send result to driver
                 try {
                     HttpRequest httpReq = HttpRequest.newBuilder()
                             .uri(URI.create(driverUrl))
                             .header("Content-Type", "application/text")
                             .version(HttpClient.Version.HTTP_2)
+                            .header("keep-alive", "true")
                             .POST(HttpRequest.BodyPublishers.ofString(initTid+"-"+lastTid))
                             .build();
-                    httpClient.send(httpReq, HttpResponse.BodyHandlers.discarding());
+                    httpClient.sendAsync(httpReq, HttpResponse.BodyHandlers.discarding());
                     initTid = lastTid + 1;
                 } catch (Exception e) {
-                    System.out.println("Proxy: Error while sending HTTP request: " + e.getMessage());
+                    System.out.println("Proxy: Error while sending HTTP request: \n" + e.getStackTrace()[0]);
                 }
             }
         }

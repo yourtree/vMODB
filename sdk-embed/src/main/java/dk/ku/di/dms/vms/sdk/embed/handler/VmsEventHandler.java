@@ -321,14 +321,14 @@ public final class VmsEventHandler extends StoppableRunnable {
         // have we processed all the TIDs of this batch?
         if(this.currentBatch.isOpen() && this.currentBatch.lastTid <= this.lastTidFinished){
 
-            this.logger.info(this.me.identifier+": The last TID for the current batch has arrived");
+            this.logger.info(this.me.identifier+": The last TID for the current batch ("+this.currentBatch.lastTid+") has arrived");
 
             // many outputs from the same transaction may arrive here, but can only send the batch commit once
             this.currentBatch.setStatus(BatchContext.Status.BATCH_COMPLETED);
 
             // if terminal, must send batch complete
             if(this.currentBatch.terminal) {
-                logger.info(this.me.identifier+": Time to inform the coordinator about the current batch completion since I am a terminal node");
+                logger.info(this.me.identifier+": Time to inform the coordinator about the current batch ("+this.currentBatch.batch+") completion since I am a terminal node");
                 // must be queued in case leader is off and comes back online
                 this.leaderWorkerQueue.add(new LeaderWorker.Message(LeaderWorker.Command.SEND_BATCH_COMPLETE,
                         BatchComplete.of(this.currentBatch.batch, this.me.identifier)));
@@ -415,7 +415,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         for(ConsumerVms consumerVms : consumerVMSs) {
             this.logger.info(me.identifier+": An output event (queue: " + outputEvent.outputQueue() + ") will be queued to vms: " + consumerVms.identifier);
-            consumerVms.addEventToBatch(outputEvent.batch(), payload);
+            consumerVms.addEventToBatch(payload);
         }
     }
 
@@ -490,8 +490,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                         ConsumerVms consumerVms = new ConsumerVms(
                                 node.identifier,
                                 node.host,
-                                node.port,
-                                new Timer("vms-"+node.identifier+"-timer", true));
+                                node.port);
 
                         // add to tracked VMSs...
                         for (String outputEvent : outputEvents) {
@@ -499,8 +498,9 @@ public final class VmsEventHandler extends StoppableRunnable {
                             eventToConsumersMap.computeIfAbsent(outputEvent, (_) -> new ConcurrentLinkedDeque<>());
                             eventToConsumersMap.get(outputEvent).add(consumerVms);
                         }
-                        // set up event sender timer task
-                        consumerVms.timer.scheduleAtFixedRate(new ConsumerVmsWorker(me, consumerVms, connMetadata, networkBufferSize), consumerSendRate, consumerSendRate);
+                        // set up consumer vms worker
+                        Thread.startVirtualThread(new ConsumerVmsWorker(me, consumerVms, connMetadata, networkBufferSize));
+
                         // set up read from consumer vms
                         attachment.channel.read(attachment.buffer, connMetadata, new VmsReadCompletionHandler(node));
                     }
