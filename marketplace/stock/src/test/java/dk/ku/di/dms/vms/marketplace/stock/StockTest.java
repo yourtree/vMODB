@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.marketplace.stock;
 
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
-import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
+import dk.ku.di.dms.vms.marketplace.common.events.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdated;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
 import dk.ku.di.dms.vms.modb.definition.Table;

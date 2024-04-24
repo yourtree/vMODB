@@ -1,9 +1,11 @@
 package dk.ku.di.dms.vms.marketplace.common.events;
 
 import dk.ku.di.dms.vms.marketplace.common.enums.PackageStatus;
+import dk.ku.di.dms.vms.modb.api.annotations.Event;
 
 import java.util.Date;
 
+@Event
 public final class DeliveryNotification {
 
     public int customerId;

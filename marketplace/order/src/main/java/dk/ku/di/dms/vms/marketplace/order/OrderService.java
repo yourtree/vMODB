@@ -212,10 +212,9 @@ public final class OrderService {
 
     public static String buildInvoiceNumber(int customerId, Date timestamp, int orderId)
     {
-        return new StringBuilder()
-                .append(customerId).append('-')
-                .append(df.format(timestamp)).append('-')
-                .append(orderId).toString();
+        return String.valueOf(customerId) + '-' +
+                df.format(timestamp) + '-' +
+                orderId;
     }
 
 }

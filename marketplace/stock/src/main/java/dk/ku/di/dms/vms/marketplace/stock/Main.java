@@ -82,6 +82,7 @@ public final class Main {
                         outputStream.flush();
                         outputStream.close();
                     }
+                    break;
                 }
                 case "POST": {
                     String str = new String( exchange.getRequestBody().readAllBytes() );
@@ -95,6 +96,7 @@ public final class Main {
                     exchange.sendResponseHeaders(200, 0);
                     outputStream.flush();
                     outputStream.close();
+                    break;
                 }
                 default: {
                     // failed response

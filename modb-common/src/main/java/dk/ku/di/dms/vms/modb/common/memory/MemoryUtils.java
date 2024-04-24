@@ -53,16 +53,15 @@ public final class MemoryUtils {
     }
 
     private static jdk.internal.misc.Unsafe getUnsafe() {
-        Field unsafeField = null;
+        Field unsafeField;
         try {
             unsafeField = Unsafe.class.getDeclaredField("theInternalUnsafe");
             unsafeField.setAccessible(true);
             return (jdk.internal.misc.Unsafe) unsafeField.get(null);
         }
         catch (NoSuchFieldException | IllegalAccessException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
-        return null;
     }
 
     // if the byte buffer is not direct this class will throw error...

@@ -1,5 +1,8 @@
-package dk.ku.di.dms.vms.marketplace.common.entities;
+package dk.ku.di.dms.vms.marketplace.common.events;
 
+import dk.ku.di.dms.vms.modb.api.annotations.Event;
+
+@Event
 public final class CustomerCheckout {
 
     public int CustomerId;
@@ -57,6 +60,10 @@ public final class CustomerCheckout {
         CardBrand = cardBrand;
         Installments = installments;
         this.instanceId = instanceId;
+    }
+
+    public int getId(){
+        return this.CustomerId;
     }
 
 }

@@ -60,7 +60,7 @@ public final class Main {
             maxSleep--;
         } while (maxSleep > 0);
 
-        if(coordinator.getConnectedVMSs().size() < 2) throw new RuntimeException("Proxy: VMSs did not connect to coordinator on time");
+        if(coordinator.getConnectedVMSs().size() < 3) throw new RuntimeException("Proxy: VMSs did not connect to coordinator on time");
 
         System.out.println("Proxy: All starter VMS has connected to the coordinator \nProxy: Initializing now the HTTP Server for receiving transaction inputs");
 
@@ -113,20 +113,29 @@ public final class Main {
                 .terminal("b", "stock", "a")
                 .build();
 
+        TransactionDAG checkoutDag =  TransactionBootstrap.name("customer_checkout")
+                .input( "a", "stock", "reserve_stock" )
+                .terminal("b", "order", "a")
+                .build();
+
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
         transactionMap.put(updatePriceDag.name, updatePriceDag);
         transactionMap.put(updateProductDag.name, updateProductDag);
+        transactionMap.put(checkoutDag.name, checkoutDag);
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         String productHost = properties.getProperty("product_host");
         String stockHost = properties.getProperty("stock_host");
+        String orderHost = properties.getProperty("order_host");
         IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, Constants.STOCK_VMS_PORT);
+        IdentifiableNode orderAddress = new IdentifiableNode("order", orderHost, Constants.ORDER_VMS_PORT);
 
         Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(10);
         starterVMSs.put(productAddress.hashCode(), productAddress);
         starterVMSs.put(stockAddress.hashCode(), stockAddress);
+        starterVMSs.put(orderAddress.hashCode(), orderAddress);
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         long batchSendRate = Long.parseLong( properties.getProperty("batch_send_rate") );
@@ -161,6 +170,13 @@ public final class Main {
 
             switch(uriSplit[1]){
                 case "cart": {
+                    if(exchange.getRequestMethod().equalsIgnoreCase("POST")){
+                        TransactionInput.Event eventPayload = new TransactionInput.Event("customer_checkout", payload);
+                        TransactionInput txInput = new TransactionInput("customer_checkout", eventPayload);
+                        TRANSACTION_INPUTS.add(txInput);
+                    } else {
+                        System.out.println("Proxy: Unsupported cart HTTP method: " + exchange.getRequestMethod());
+                    }
                     break;
                 }
                 case "product" : {
@@ -187,7 +203,7 @@ public final class Main {
                 default: {
                     OutputStream outputStream = exchange.getResponseBody();
                     exchange.sendResponseHeaders(500, 0);
-                    // outputStream.flush();
+                    outputStream.flush();
                     outputStream.close();
                     return;
                 }
@@ -195,7 +211,7 @@ public final class Main {
 
             OutputStream outputStream = exchange.getResponseBody();
             exchange.sendResponseHeaders(200, 0);
-            // outputStream.flush();
+            outputStream.flush();
             outputStream.close();
         }
 

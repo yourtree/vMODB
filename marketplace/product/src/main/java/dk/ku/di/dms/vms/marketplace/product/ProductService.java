@@ -5,6 +5,8 @@ import dk.ku.di.dms.vms.marketplace.common.events.TransactionMark;
 import dk.ku.di.dms.vms.marketplace.common.events.UpdatePrice;
 import dk.ku.di.dms.vms.modb.api.annotations.*;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.PRODUCT_UPDATED;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.UPDATE_PRICE;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("product")
@@ -17,7 +19,7 @@ public final class ProductService {
     }
 
     @Inbound(values = {"update_product"})
-    @Outbound("product_updated")
+    @Outbound(PRODUCT_UPDATED)
     @Transactional(type=W)
     @PartitionBy(clazz = UpdateProductEvent.class, method = "getId")
     public ProductUpdated updateProduct(UpdateProductEvent updateEvent) {
@@ -32,7 +34,7 @@ public final class ProductService {
         return new ProductUpdated( updateEvent.seller_id, updateEvent.product_id, updateEvent.version);
     }
 
-    @Inbound(values = {"update_price"})
+    @Inbound(values = {UPDATE_PRICE})
     @Outbound("transaction_mark")
     @Transactional(type=W)
     @PartitionBy(clazz = UpdatePrice.class, method = "getId")

@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.marketplace.common.events;
 
-import dk.ku.di.dms.vms.marketplace.common.entities.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
 import dk.ku.di.dms.vms.modb.api.annotations.Event;
 

@@ -27,7 +27,11 @@ public final class Constants {
     /**
      * EVENTS
      */
+    public static final String CUSTOMER_CHECKOUT = "customer_checkout";
+
     public static final String PRODUCT_UPDATED = "product_updated";
+
+    public static final String UPDATE_PRICE = "update_price";
 
     public static final String RESERVE_STOCK = "reserve_stock";
 

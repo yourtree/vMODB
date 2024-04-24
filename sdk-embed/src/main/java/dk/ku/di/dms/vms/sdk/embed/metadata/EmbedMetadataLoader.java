@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.sdk.embed.metadata;
 
 import dk.ku.di.dms.vms.modb.api.annotations.Query;
+import dk.ku.di.dms.vms.modb.api.annotations.VmsIndex;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsPartialIndex;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
@@ -163,12 +164,14 @@ public class EmbedMetadataLoader {
         return ((ParameterizedType) repositoryClazz.getGenericInterfaces()[0]).getActualTypeArguments();
     }
 
+    private record IndexMetadata(Integer columnPos, String indexName){}
     private record PartialIndexMetadata(Integer columnPos, String indexName, Object value){}
 
     private record SchemaMapping(
             Schema schema,
             // key: table name value: columns
             Map<String, Tuple<int[],int[]>> secondaryIndexMap,
+            List<IndexMetadata> indexMetadataList,
             // value: column, value
             List<PartialIndexMetadata> partialIndexMetadataList){}
 
@@ -198,6 +201,15 @@ public class EmbedMetadataLoader {
             final Schema schema = new Schema(vmsDataModel.columnNames, vmsDataModel.columnDataTypes,
                     vmsDataModel.primaryKeyColumns, vmsDataModel.constraintReferences, generated);
 
+            // indexes
+            final List<Field> indexList = Arrays.stream(entityClazz.getFields()).filter(f->f.getAnnotation(VmsIndex.class)!=null).toList();
+            List<IndexMetadata> indexMetadataList = new ArrayList<>();
+            for(Field field : indexList){
+                var ann = field.getAnnotation(VmsIndex.class);
+                Integer pos = vmsDataModel.findColumnPosition(field.getName());
+                indexMetadataList.add( new IndexMetadata(pos, ann.name()) );
+            }
+
             // partial indexes
             final List<Field> partialIndexList = Arrays.stream(entityClazz.getFields()).filter(f->f.getAnnotation(VmsPartialIndex.class)!=null).toList();
             List<PartialIndexMetadata> partialIndexMetadataList = new ArrayList<>();
@@ -215,9 +227,9 @@ public class EmbedMetadataLoader {
 
                 // table name, fields
                 Map<String, Tuple<int[],int[]>> secondaryIndexMap = buildSchemaForeignKeyMap(vmsDataModel, fksPerTable, vmsDataModelMap);
-                dataSchemaToPkMap.put(vmsDataModel, new SchemaMapping(schema, secondaryIndexMap, partialIndexMetadataList));
+                dataSchemaToPkMap.put(vmsDataModel, new SchemaMapping(schema, secondaryIndexMap, indexMetadataList, partialIndexMetadataList));
             } else {
-                dataSchemaToPkMap.put(vmsDataModel, new SchemaMapping(schema, Map.of(), partialIndexMetadataList));
+                dataSchemaToPkMap.put(vmsDataModel, new SchemaMapping(schema, Map.of(), indexMetadataList, partialIndexMetadataList));
             }
         }
 
@@ -235,6 +247,7 @@ public class EmbedMetadataLoader {
             PrimaryIndex consistentIndex = createPrimaryIndex(entry.getKey().tableName, schema);
             tableToPrimaryIndexMap.put(entry.getKey().tableName, consistentIndex);
 
+            // normal indexes (i.e., non partial) and foreign key indexes go here?
             List<ReadWriteIndex<IKey>> listSecondaryIndexes = new ArrayList<>();
             tableToSecondaryIndexMap.put(entry.getKey().tableName, listSecondaryIndexes);
 
@@ -250,9 +263,17 @@ public class EmbedMetadataLoader {
                 }
             }
 
+            if(!entry.getValue().indexMetadataList().isEmpty()) {
+                for (var index : entry.getValue().indexMetadataList()) {
+                    ReadWriteIndex<IKey> nuhi = createNonUniqueIndex(schema, new int[]{ index.columnPos() }, index.indexName() );
+                    listSecondaryIndexes.add(nuhi);
+                }
+            }
+
             // secondary indexes based on annotation
             if(!entry.getValue().partialIndexMetadataList().isEmpty()) {
-                for (var partialIdx : entry.getValue().partialIndexMetadataList()) {
+                for (PartialIndexMetadata partialIdx : entry.getValue().partialIndexMetadataList()) {
+                    // not all partial indexes are unique.... how is it working?
                     ReadWriteIndex<IKey> uniquePartialIndex = createUniqueIndex(schema, new int[]{ partialIdx.columnPos() }, partialIdx.indexName() );
                     partialIndexMetaMap.put( uniquePartialIndex.key(), new Tuple<>(partialIdx.columnPos(), partialIdx.value() ) );
                     listPartialIndexes.add(uniquePartialIndex);

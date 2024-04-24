@@ -14,6 +14,7 @@
 
     <packaging>pom</packaging>
     <modules>
+        <module>cart</module>
         <module>product</module>
         <module>stock</module>
         <module>order</module>

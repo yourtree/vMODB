@@ -6,7 +6,7 @@ import java.lang.annotation.Target;
 
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
-@Target({ElementType.TYPE})
+@Target({ElementType.FIELD})
 @Retention(RUNTIME)
 public @interface VmsIndex {
 
@@ -15,13 +15,6 @@ public @interface VmsIndex {
      * (Required) The name of the index; defaults to a provider-generated name.
      */
     String name();
-
-    /**
-     * Inspired by {@link javax.persistence.Index}
-     * (Required) The names of the columns to be included in the index,
-     * in order.
-     */
-    String columnList();
 
     /**
      * Inspired by {@link javax.persistence.Index}

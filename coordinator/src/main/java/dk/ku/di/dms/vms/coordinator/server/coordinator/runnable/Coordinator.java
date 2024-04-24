@@ -543,8 +543,7 @@ public final class Coordinator extends StoppableRunnable {
             // remove the nodes who have no event, unless it is a terminal
             // in this case, it must receive at least the batch commit info
             // to know when to send the batch complete message
-            if(vms.worker().transactionEventsPerBatch(generateBatch).isEmpty()
-                    && !isTerminal){
+            if(!isTerminal && vms.worker().transactionEventsPerBatch(generateBatch).isEmpty()){
                 continue;
             }
 
