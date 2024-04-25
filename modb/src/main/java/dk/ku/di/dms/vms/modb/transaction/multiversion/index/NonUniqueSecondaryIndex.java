@@ -50,7 +50,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     @Override
     public boolean insert(IKey primaryKey, Object[] record){
         IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
-        Set<IKey> set = this.keyMap.computeIfAbsent(secKey, (x)-> new HashSet<>());
+        Set<IKey> set = this.keyMap.computeIfAbsent(secKey, (_)-> new HashSet<>());
         if(!set.contains(primaryKey)) {
             KEY_WRITES.get().put(primaryKey, new Tuple<>(record, WriteType.INSERT));
             set.add(primaryKey);
@@ -143,26 +143,23 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
             this.primaryIndex = primaryIndex;
             this.idx = 0;
             this.keys = keys;
-            this.currentIterator = keyMap.get(keys[this.idx]).iterator();
+            this.currentIterator = keyMap.computeIfAbsent(keys[this.idx], (_) -> new HashSet<>()).iterator();
             this.keyMap = keyMap;
         }
 
         @Override
         public boolean hasNext() {
-            return currentIterator.hasNext() || idx < keys.length - 1;
+            return this.currentIterator.hasNext() || this.idx < this.keys.length - 1;
         }
 
         @Override
         public Object[] next() {
-            if(!currentIterator.hasNext()){
-                idx++;
-                currentIterator = keyMap.get(keys[this.idx]).iterator();
+            if(!this.currentIterator.hasNext()){
+                this.idx++;
+                this.currentIterator = this.keyMap.computeIfAbsent(this.keys[this.idx], (_) -> new HashSet<>()).iterator();
             }
-            IKey key = currentIterator.next();
-            SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> entry = primaryIndex.getFloorEntry(key);
-            if (entry != null)
-                return entry.val().record;
-            return null;
+            IKey key = this.currentIterator.next();
+            return this.primaryIndex.getRecord(key);
         }
 
     }

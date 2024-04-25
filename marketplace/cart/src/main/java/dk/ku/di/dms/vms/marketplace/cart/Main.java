@@ -13,6 +13,7 @@ import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
@@ -57,11 +58,13 @@ public final class Main {
         private final Table table;
         private final AbstractProxyRepository<CartItem.CartItemId, CartItem> repository;
         private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+        private final NonUniqueSecondaryIndex customerIdx;
 
         @SuppressWarnings("unchecked")
         public CartHttpHandler(VmsApplication vms){
             this.table = vms.getTable("cart_items");
             this.repository = (AbstractProxyRepository<CartItem.CartItemId, CartItem>) vms.getRepositoryProxy("cart_items");
+            this.customerIdx = table.secondaryIndexMap.get( KeyUtils.buildIndexKey( new int[]{2} ) );
         }
 
         @Override
@@ -135,6 +138,9 @@ public final class Main {
 
                     IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), obj );
                     this.table.underlyingPrimaryKeyIndex().insert(key, obj);
+
+                    // add to customer idx for fast lookup on checkout
+                    this.customerIdx.insert( key, obj );
 
                     // response
                     OutputStream outputStream = exchange.getResponseBody();

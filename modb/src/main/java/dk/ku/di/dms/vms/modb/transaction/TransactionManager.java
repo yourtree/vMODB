@@ -150,7 +150,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
                 List<WherePredicate> wherePredicates = this.analyzer.analyzeWhere(
                         table, statement.asUpdateStatement().whereClause);
 
-                this.planner.getOptimalIndex(table, wherePredicates);
+                // this.planner.getOptimalIndex(table, wherePredicates);
 
                 // TODO plan update and delete in planner. only need to send where predicates and not a query tree like a select
                 // UpdateOperator.run(statement.asUpdateStatement(), table.primaryKeyIndex() );
@@ -205,8 +205,24 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
      * @param pk The primary key
      */
     private void deleteByKey(Table table, IKey pk){
-        if(table.primaryKeyIndex().remove(pk)){
+        var opt = table.primaryKeyIndex().removeOpt(pk);
+        if(opt.isPresent()){
             INDEX_WRITES.get().add(table.primaryKeyIndex());
+
+            for (NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()) {
+                INDEX_WRITES.get().add(secIndex);
+                secIndex.remove(pk, opt.get());
+            }
+
+            for(var entry : table.partialIndexMap.entrySet()){
+                // does the record "fits" the partial index?
+                Tuple<Integer, Object> check = table.partialIndexMetaMap.get( entry.getKey() );
+                if (table.primaryKeyIndex().meetPartialIndex(opt.get(), check.t1(), check.t2() )){
+                    INDEX_WRITES.get().add(entry.getValue());
+                    entry.getValue().remove( pk );
+                }
+            }
+
         }
     }
 

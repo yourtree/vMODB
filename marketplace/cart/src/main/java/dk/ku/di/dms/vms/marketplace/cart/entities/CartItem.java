@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.marketplace.cart.entities;
 
-import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsIndex;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
@@ -29,11 +28,9 @@ public final class CartItem implements IEntity<CartItem.CartItemId> {
     }
 
     @Id
-    @VmsForeignKey(table = ProductReplica.class, column = "seller_id")
     public int seller_id;
 
     @Id
-    @VmsForeignKey(table = ProductReplica.class, column = "product_id")
     public int product_id;
 
     // another way to create index on customer:

@@ -25,6 +25,7 @@ import dk.ku.di.dms.vms.modb.query.execution.operators.sum.IndexSum;
 import dk.ku.di.dms.vms.modb.query.execution.operators.sum.Sum;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.IntStream;
 
@@ -88,7 +89,7 @@ public final class SimplePlanner {
     private AbstractSimpleOperator planSimpleJoin(QueryTree queryTree) {
 
         // define left deep
-        JoinPredicate joinPredicate = queryTree.joinPredicates.get(0);
+        JoinPredicate joinPredicate = queryTree.joinPredicates.getFirst();
 
         // the index with most columns applying to the probe is the deepest
         IndexSelectionVerdict indexForTable1 = this.getOptimalIndex(joinPredicate.getLeftTable(), queryTree.wherePredicates);
@@ -139,11 +140,11 @@ public final class SimplePlanner {
 
     private AbstractSimpleOperator planSimpleAggregate(QueryTree queryTree) {
         // then just one since it is simple
-        switch (queryTree.groupByProjections.get(0).groupByOperation()){
+        switch (queryTree.groupByProjections.getFirst().groupByOperation()){
             case MIN -> {
-                Table tb = queryTree.groupByProjections.get(0).columnReference().table;
+                Table tb = queryTree.groupByProjections.getFirst().columnReference().table;
                 IMultiVersionIndex indexSelected = this.getOptimalIndex(
-                        queryTree.groupByProjections.get(0).columnReference().table,
+                        queryTree.groupByProjections.getFirst().columnReference().table,
                         queryTree.wherePredicates
                 ).index();
                 int[] indexColumns = queryTree.groupByColumns.stream()
@@ -168,28 +169,28 @@ public final class SimplePlanner {
             }
             case SUM -> {
                 // is there any index that applies?
-                Table tb = queryTree.groupByProjections.get(0).columnReference().table;
+                // Table tb = queryTree.groupByProjections.getFirst().columnReference().table;
                 IMultiVersionIndex indexSelected = this.getOptimalIndex(
-                        queryTree.groupByProjections.get(0).columnReference().table,
+                        queryTree.groupByProjections.getFirst().columnReference().table,
                         queryTree.wherePredicates
                         ).index();
                 if(indexSelected == null){
                     return new Sum(
-                            queryTree.groupByProjections.get(0).columnReference().dataType,
-                            queryTree.groupByProjections.get(0).columnReference().columnPosition,
-                            queryTree.groupByProjections.get(0).columnReference().table.underlyingPrimaryKeyIndex());
+                            queryTree.groupByProjections.getFirst().columnReference().dataType,
+                            queryTree.groupByProjections.getFirst().columnReference().columnPosition,
+                            queryTree.groupByProjections.getFirst().columnReference().table.underlyingPrimaryKeyIndex());
                 }
                 return new IndexSum(
-                        queryTree.groupByProjections.get(0).columnReference().dataType,
-                        queryTree.groupByProjections.get(0).columnReference().columnPosition,
+                        queryTree.groupByProjections.getFirst().columnReference().dataType,
+                        queryTree.groupByProjections.getFirst().columnReference().columnPosition,
                         // indexSelected
-                        queryTree.groupByProjections.get(0).columnReference().table.underlyingPrimaryKeyIndex()
+                        queryTree.groupByProjections.getFirst().columnReference().table.underlyingPrimaryKeyIndex()
                 );
             }
             case COUNT -> {
-                Table tb = queryTree.groupByProjections.get(0).columnReference().table;
+                Table tb = queryTree.groupByProjections.getFirst().columnReference().table;
                 IMultiVersionIndex indexSelected = this.getOptimalIndex(
-                        queryTree.groupByProjections.get(0).columnReference().table,
+                        queryTree.groupByProjections.getFirst().columnReference().table,
                         queryTree.wherePredicates
                         ).index();
                 if(queryTree.groupByColumns.isEmpty()){
@@ -219,16 +220,20 @@ public final class SimplePlanner {
 
         // given it is simple, pick the table from one of the columns
         // must always have at least one projected column
-        Table tb = queryTree.projections.get(0).table;
+        Table tb = queryTree.projections.getFirst().table;
 
         // avoid one of the columns to have expression different from EQUALS
-        // to be picked by unique and non unique index
+        // to be picked by unique and non-unique index
         IMultiVersionIndex indexSelected = this.getOptimalIndex(tb, queryTree.wherePredicates).index();
 
         // build projection
-
-        // compute before creating this. compute in startup
         int[] projectionColumns = new int[queryTree.projections.size()];
+        int idxCol = 0;
+        for(var column : queryTree.projections){
+            projectionColumns[idxCol] = column.getColumnPosition();
+            idxCol++;
+        }
+        
         int entrySize = calculateQueryResultEntrySize(tb.schema(), queryTree.projections.size(), projectionColumns);
 
         if(indexSelected != null) {
@@ -250,7 +255,7 @@ public final class SimplePlanner {
         return entrySize;
     }
 
-    public IndexSelectionVerdict getOptimalIndex(final Table table, List<WherePredicate> wherePredicates) {
+    private IndexSelectionVerdict getOptimalIndex(final Table table, List<WherePredicate> wherePredicates) {
 
         final IntStream intStream = wherePredicates.stream()
                 .filter( wherePredicate ->
@@ -292,11 +297,11 @@ public final class SimplePlanner {
         }
 
         // columns not in the index, but require filtering
-        final IntStream filteredStream = intStream.filter( w -> !indexSelected.containsColumn( w ) );
+        final IntStream filteredStream = Arrays.stream(columnsForIndexSelection).filter( w -> !indexSelected.containsColumn( w ) );
         final int[] filterColumns = filteredStream.toArray();
 
         // any column of the index is in the filter? if so, index is not used.
-        boolean indexColumnInFilter = filteredStream.anyMatch(indexSelected::containsColumn);
+        boolean indexColumnInFilter = Arrays.stream(filterColumns).anyMatch(indexSelected::containsColumn);
 
         return new IndexSelectionVerdict(indexColumnInFilter, table.primaryKeyIndex(), filterColumns);
     }

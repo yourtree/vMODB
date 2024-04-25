@@ -8,7 +8,7 @@ import java.util.List;
 
 public interface ICartItemRepository extends IRepository<CartItem.CartItemId, CartItem> {
 
-    @Query("select * from carts where customer_id = :customerId")
+    @Query("select * from cart_items where customer_id = :customerId")
     List<CartItem> getCartItemsByCustomerId(int customerId);
 
 }

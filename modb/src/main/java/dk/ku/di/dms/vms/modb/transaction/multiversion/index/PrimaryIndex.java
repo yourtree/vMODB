@@ -246,7 +246,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     /**
-     * TODO if cached value is not null, then extract the updated columns to make constraint violation check faster
+     * possible optimization: if cached value is not null, then extract the updated columns to make constraint violation check faster
      * @return whether it is allowed to proceed with the operation
      */
     public boolean insert(IKey key, Object[] values) {
@@ -332,21 +332,25 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     @Override
-    public boolean remove(IKey key) {
+    public boolean remove(IKey key){
+        return this.removeOpt(key).isPresent();
+    }
+
+    public Optional<Object[]> removeOpt(IKey key) {
         // O(1)
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
 
-        if ( operationSet != null ){
-            if(operationSet.lastWriteType != WriteType.DELETE){
-                TransactionWrite entry = new TransactionWrite(WriteType.DELETE, null);
-                // amortized O(1)
-                operationSet.updateHistoryMap.put(TransactionMetadata.TRANSACTION_CONTEXT.get().tid, entry);
-                operationSet.lastWriteType = WriteType.DELETE;
-                KEY_WRITES.get().add(key);
-                return true;
-            }
+        if ( operationSet != null && operationSet.lastWriteType != WriteType.DELETE){
+            TransactionWrite entry = new TransactionWrite(WriteType.DELETE, null);
+            // amortized O(1)
+            operationSet.updateHistoryMap.put(TransactionMetadata.TRANSACTION_CONTEXT.get().tid, entry);
+            operationSet.lastWriteType = WriteType.DELETE;
+            KEY_WRITES.get().add(key);
+            return Optional.of( operationSet.lastVersion );
             // does this key even exist? if not, don't even need to save it on transaction metadata
-        } else if(this.primaryKeyIndex.exists(key)) {
+        }
+        Object[] obj = this.primaryKeyIndex.lookupByKey(key);
+        if(obj != null) {
             // that means we haven't had any previous transaction performing writes to this key
             operationSet = new OperationSetOfKey();
             this.updatesPerKeyMap.put( key, operationSet );
@@ -357,9 +361,9 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             operationSet.lastWriteType = WriteType.DELETE;
 
             KEY_WRITES.get().add(key);
-            return true;
+            return Optional.of( obj );
         }
-        return false;
+        return Optional.empty();
     }
 
     @Override
@@ -388,7 +392,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         writesOfTid.clear();
         // TODO perhaps don't need to return it, since the same thread will be running logic again....
         WRITE_SET_BUFFER.add(writesOfTid);
-        KEY_WRITES.set(null);
+        KEY_WRITES.remove();
     }
 
     public void installWrites(){
@@ -470,6 +474,14 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             }
         }
         return freshSet;
+    }
+
+    public Object[] getRecord(IKey key){
+        OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
+        if(operation != null){
+            return operation.updateHistoryMap.floorEntry(TransactionMetadata.TRANSACTION_CONTEXT.get().lastTid).val().record;
+        }
+        return this.primaryKeyIndex.lookupByKey(key);
     }
 
     public SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> getFloorEntry(IKey key){

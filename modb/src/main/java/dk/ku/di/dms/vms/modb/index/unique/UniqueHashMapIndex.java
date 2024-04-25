@@ -50,7 +50,7 @@ public final class UniqueHashMapIndex extends ReadWriteIndex<IKey> {
 
     @Override
     public Object[] lookupByKey(IKey key) {
-        return this.store.get(key);
+        return this.store.getOrDefault(key, null);
     }
 
     @Override
