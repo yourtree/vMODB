@@ -25,16 +25,28 @@ public final class Constants {
     public static final int SELLER_VMS_PORT = 8087;
 
     /**
-     * EVENTS
+     * INPUTS
      */
+    public static final String UPDATE_PRODUCT = "update_product";
+
+    // in modb, we cannot schedule an input event to hit more than a single microservice.
+    // that would prevent the product to create an additional event just to synchronize stock and cart
+    // only terminal and terminal nodes can receive the same event
+    public static final String UPDATE_PRICE = "update_price";
+
     public static final String CUSTOMER_CHECKOUT = "customer_checkout";
 
+    /**
+     * EVENTS
+     */
     public static final String PRODUCT_UPDATED = "product_updated";
 
-    public static final String UPDATE_PRICE = "update_price";
+    public static final String  PRICE_UPDATED = "price_updated";
 
     public static final String RESERVE_STOCK = "reserve_stock";
 
     public static final String STOCK_CONFIRMED = "stock_confirmed";
+
+    public static final String INVOICE_ISSUED = "invoice_issued";
 
 }

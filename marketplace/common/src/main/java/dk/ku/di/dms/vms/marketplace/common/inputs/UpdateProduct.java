@@ -1,11 +1,12 @@
-package dk.ku.di.dms.vms.marketplace.product;
+package dk.ku.di.dms.vms.marketplace.common.inputs;
 
 import dk.ku.di.dms.vms.modb.api.annotations.Event;
 
 @Event
-public final class UpdateProductEvent {
+public final class UpdateProduct {
 
     public int seller_id;
+
     public int product_id;
 
     public String name;
@@ -24,9 +25,9 @@ public final class UpdateProductEvent {
 
     public String version;
 
-    public UpdateProductEvent(){}
+    public UpdateProduct(){}
 
-    public UpdateProductEvent(int seller_id, int product_id, String name, String sku, String category, String description, float price, float freight_value, String status, String version) {
+    public UpdateProduct(int seller_id, int product_id, String name, String sku, String category, String description, float price, float freight_value, String status, String version) {
         this.seller_id = seller_id;
         this.product_id = product_id;
         this.name = name;

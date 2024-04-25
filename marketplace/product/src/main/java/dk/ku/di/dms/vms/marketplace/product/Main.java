@@ -32,7 +32,7 @@ public final class Main {
         Properties properties = Utils.loadProperties();
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         int networkThreadPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
-        long consumerSendRate = Long.parseLong( properties.getProperty("consumer_send_rate") );
+        long consumerSendRate = Long.parseLong( properties.getProperty("consumer_send_rate") == null ? "0" : properties.getProperty("consumer_send_rate") );
 
         VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.PRODUCT_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.product",

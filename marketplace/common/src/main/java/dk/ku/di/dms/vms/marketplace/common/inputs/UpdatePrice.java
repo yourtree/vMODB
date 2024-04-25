@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.marketplace.common.events;
+package dk.ku.di.dms.vms.marketplace.common.inputs;
 
 import dk.ku.di.dms.vms.modb.api.annotations.Event;
 

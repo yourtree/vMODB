@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.common.events;
 
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
+import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.modb.api.annotations.Event;
 
 import java.util.Date;

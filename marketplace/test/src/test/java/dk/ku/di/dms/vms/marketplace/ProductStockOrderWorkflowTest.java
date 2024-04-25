@@ -7,9 +7,9 @@ import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
-import dk.ku.di.dms.vms.marketplace.common.events.CustomerCheckout;
+import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
-import dk.ku.di.dms.vms.marketplace.product.UpdateProductEvent;
+import dk.ku.di.dms.vms.marketplace.common.inputs.UpdateProduct;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -80,10 +80,10 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
             int val = 1;
             while(val <= 10) {
                 // update product
-                UpdateProductEvent updateProductEvent = new UpdateProductEvent(
+                UpdateProduct updateProduct = new UpdateProduct(
                         1,1,"test","test","test","test",10.0F,10.0F,"test", String.valueOf(val)
                 );
-                String payload = serdes.serialize(updateProductEvent, UpdateProductEvent.class);
+                String payload = serdes.serialize(updateProduct, UpdateProduct.class);
                 TransactionInput.Event eventPayload = new TransactionInput.Event("update_product", payload);
                 TransactionInput txInput = new TransactionInput("update_product", eventPayload);
                 logger.info("[InputProducer] New product version: "+val);

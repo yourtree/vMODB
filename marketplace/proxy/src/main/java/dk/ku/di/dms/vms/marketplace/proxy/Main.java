@@ -28,6 +28,7 @@ import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static java.lang.Thread.sleep;
 
 /**
@@ -104,18 +105,20 @@ public final class Main {
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
         TransactionDAG updatePriceDag =  TransactionBootstrap.name("update_price")
-                .input( "a", "product", "update_price" )
-                .terminal("b", "product", "a")
+                .input( "a", "product", UPDATE_PRICE )
+                .input("b", "cart", UPDATE_PRICE )
+                .terminal("c", "product", "a")
+                .terminal("d", "cart", "b")
                 .build();
 
         TransactionDAG updateProductDag =  TransactionBootstrap.name("update_product")
-                .input( "a", "product", "update_product" )
+                .input( "a", "product", UPDATE_PRODUCT )
                 .terminal("b", "stock", "a")
                 .build();
 
         TransactionDAG checkoutDag =  TransactionBootstrap.name("customer_checkout")
-                .input( "a", "cart", "customer_checkout" )
-                .input( "b", "stock", "reserve_stock" )
+                .input( "a", "cart", CUSTOMER_CHECKOUT)
+                .input( "b", "stock", RESERVE_STOCK )
                 .terminal("c", "order", "a")
                 .build();
 

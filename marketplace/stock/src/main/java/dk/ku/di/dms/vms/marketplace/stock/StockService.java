@@ -37,14 +37,14 @@ public final class StockService {
         System.out.println("Stock received an update product event with TID: "+updateEvent.version);
 
         // can use issue statement for faster update
-        StockItem stock = this.stockRepository.lookupByKey(new StockItem.StockId(updateEvent.sellerId, updateEvent.productId));
+        StockItem stock = this.stockRepository.lookupByKey(new StockItem.StockId(updateEvent.seller_id, updateEvent.product_id));
 
         stock.version = updateEvent.version;
 
         this.stockRepository.update(stock);
 
         return new TransactionMark( updateEvent.version, TransactionMark.TransactionType.UPDATE_PRODUCT,
-                updateEvent.sellerId, TransactionMark.MarkStatus.SUCCESS, "stock");
+                updateEvent.seller_id, TransactionMark.MarkStatus.SUCCESS, "stock");
     }
 
     /**

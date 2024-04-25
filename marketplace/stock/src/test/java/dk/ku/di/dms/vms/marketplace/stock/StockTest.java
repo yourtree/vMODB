@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.marketplace.stock;
 
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
-import dk.ku.di.dms.vms.marketplace.common.events.CustomerCheckout;
+import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdated;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
 import dk.ku.di.dms.vms.modb.definition.Table;
@@ -60,7 +60,10 @@ public class StockTest {
     }
 
     private static void generateProductUpdated(VmsApplication vms, int sellerId, int productId, int tid, int previousTid) {
-        ProductUpdated productUpdated = new ProductUpdated(sellerId, productId, String.valueOf(tid));
+        ProductUpdated productUpdated = new ProductUpdated(
+                sellerId, productId,
+                "test","test","test","test",1,1,"test",
+                String.valueOf(tid));
         InboundEvent inboundEvent = new InboundEvent(tid, previousTid, 1,
                 PRODUCT_UPDATED, ProductUpdated.class, productUpdated);
         vms.internalChannels().transactionInputQueue().add(inboundEvent);

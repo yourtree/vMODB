@@ -4,9 +4,10 @@ import dk.ku.di.dms.vms.marketplace.cart.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.cart.entities.ProductReplica;
 import dk.ku.di.dms.vms.marketplace.cart.repositories.ICartItemRepository;
 import dk.ku.di.dms.vms.marketplace.cart.repositories.IProductReplicaRepository;
-import dk.ku.di.dms.vms.marketplace.common.events.CustomerCheckout;
-import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
-import dk.ku.di.dms.vms.marketplace.common.events.UpdatePrice;
+import dk.ku.di.dms.vms.marketplace.common.events.*;
+import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
+import dk.ku.di.dms.vms.marketplace.common.inputs.UpdatePrice;
+import dk.ku.di.dms.vms.marketplace.common.inputs.UpdateProduct;
 import dk.ku.di.dms.vms.modb.api.annotations.*;
 
 import java.util.Date;
@@ -14,6 +15,7 @@ import java.util.List;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
+import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("cart")
 public final class CartService {
@@ -54,7 +56,7 @@ public final class CartService {
         return cartItems.stream().map(f-> new dk.ku.di.dms.vms.marketplace.common.entities.CartItem( f.seller_id, f.product_id, f.product_name, f.unit_price, f.freight_value, f.quantity, f.voucher, f.version)).toList();
     }
 
-    @Inbound(values = {UPDATE_PRICE})
+    @Inbound(values = {PRICE_UPDATED})
     @Transactional(type=RW)
     @PartitionBy(clazz = UpdatePrice.class, method = "getId")
     public void updateProductPrice(UpdatePrice updatePriceEvent) {
@@ -64,8 +66,28 @@ public final class CartService {
         ProductReplica product = this.productReplicaRepository.lookupByKey(
                 new ProductReplica.ProductId(updatePriceEvent.sellerId, updatePriceEvent.productId));
 
-        product.version = updatePriceEvent.instanceId;
-        product.price = updatePriceEvent.price;
+        if(product == null){
+            System.out.println("Cart has no product replica with seller ID "+updatePriceEvent.sellerId+" : product ID "+updatePriceEvent.productId);
+            return;
+        }
+
+        if(product.version.contentEquals(updatePriceEvent.instanceId)){
+            product.price = updatePriceEvent.price;
+        }
+
+        // update all carts?
+
+        this.productReplicaRepository.update(product);
+    }
+
+    @Inbound(values = {PRODUCT_UPDATED})
+    @Transactional(type=W)
+    @PartitionBy(clazz = ProductUpdated.class, method = "getId")
+    public void processProductUpdate(ProductUpdated productUpdated) {
+        System.out.println("Cart received a product update event with TID: "+productUpdated.version);
+
+        var product = new ProductReplica(productUpdated.seller_id, productUpdated.product_id, productUpdated.name, productUpdated.sku, productUpdated.category,
+                productUpdated.description, productUpdated.price, productUpdated.freight_value, productUpdated.status, productUpdated.version);
 
         this.productReplicaRepository.update(product);
     }

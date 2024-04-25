@@ -6,7 +6,8 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.marketplace.common.inputs.UpdateProduct;
+import dk.ku.di.dms.vms.marketplace.common.Utils;
+import dk.ku.di.dms.vms.marketplace.common.inputs.UpdatePrice;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -16,22 +17,24 @@ import org.junit.Test;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static java.lang.Thread.sleep;
 
-public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
+public final class CartProductWorkflowTest extends AbstractWorkflowTest {
 
     @Test
-    public void testLargeBatchWithTwoVMSs() throws Exception {
+    public void testBasicCartProductWorkflow() throws Exception {
 
         dk.ku.di.dms.vms.marketplace.product.Main.main(null);
-        dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
+        dk.ku.di.dms.vms.marketplace.cart.Main.main(null);
 
         this.ingestDataIntoProductVms();
-        this.insertItemsInStockVms();
 
         // initialize coordinator
-        Coordinator coordinator = loadCoordinator();
+        Properties properties = Utils.loadProperties();
+        Coordinator coordinator = loadCoordinator(properties);
 
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
@@ -52,46 +55,49 @@ public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
 
         sleep(BATCH_WINDOW_INTERVAL * 3);
 
-        assert coordinator.getBatchOffsetPendingCommit() == 2;
-        assert coordinator.getTid() == 10;
-        assert coordinator.getCurrentBatchOffset() == 2;
+        assert coordinator.getTid() == 11;
     }
 
-    private Coordinator loadCoordinator() throws IOException {
-        ServerNode serverIdentifier = new ServerNode( "localhost", 8080 );
+    private Coordinator loadCoordinator(Properties properties) throws IOException {
+        int tcpPort = Integer.parseInt( properties.getProperty("tcp_port") );
+        ServerNode serverIdentifier = new ServerNode( "localhost", tcpPort );
 
         Map<Integer, ServerNode> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
-        TransactionDAG updatePriceDag =  TransactionBootstrap.name("update_price")
-                .input( "a", "product", "update_price" )
-                .terminal("b", "product", "a")
-                .build();
-
-        TransactionDAG updateProductDag =  TransactionBootstrap.name("update_product")
-                .input( "a", "product", "update_product" )
-                .terminal("b", "stock", "a")
+        TransactionDAG updatePriceDag =  TransactionBootstrap.name(UPDATE_PRICE)
+                .input( "a", "product", UPDATE_PRICE )
+                .terminal("b", "cart", "a")
                 .build();
 
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
         transactionMap.put(updatePriceDag.name, updatePriceDag);
-        transactionMap.put(updateProductDag.name, updateProductDag);
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
-        IdentifiableNode productAddress = new IdentifiableNode("product", "localhost", 8081);
-        IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", 8082);
+        String productHost = properties.getProperty("product_host");
+        String cartHost = properties.getProperty("cart_host");
+
+        IdentifiableNode productAddress = new IdentifiableNode("product", productHost, PRODUCT_VMS_PORT);
+        IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, CART_VMS_PORT);
 
         Map<Integer, IdentifiableNode> VMSs = new HashMap<>(2);
         VMSs.put(productAddress.hashCode(), productAddress);
-        VMSs.put(stockAddress.hashCode(), stockAddress);
+        VMSs.put(cartAddress.hashCode(), cartAddress);
+
+        int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
+        long batchSendRate = Long.parseLong( properties.getProperty("batch_send_rate") );
+        int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
 
         return Coordinator.build(
                 serverMap,
                 VMSs,
                 transactionMap,
                 serverIdentifier,
-                new CoordinatorOptions().withBatchWindow(BATCH_WINDOW_INTERVAL),
+                new CoordinatorOptions()
+                        .withBatchWindow(batchSendRate)
+                        .withGroupThreadPoolSize(groupPoolSize)
+                        .withNetworkBufferSize(networkBufferSize),
                 1,
                 1,
                 parsedTransactionRequests,
@@ -108,15 +114,15 @@ public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
             int val = 1;
 
             while(val < 10) {
-                UpdateProduct updateProduct = new UpdateProduct(
-                        1,1,"test","test","test","test",10.0F,10.0F,"test", String.valueOf(val)
+                UpdatePrice priceUpdate = new UpdatePrice(
+                        1,1,10.0F, String.valueOf(val)
                 );
 
-                String payload = serdes.serialize(updateProduct, UpdateProduct.class);
+                String payload = serdes.serialize(priceUpdate, UpdatePrice.class);
 
-                TransactionInput.Event eventPayload = new TransactionInput.Event("update_product", payload);
+                TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRICE, payload);
 
-                TransactionInput txInput = new TransactionInput("update_product", eventPayload);
+                TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);
 
                 logger.info("[Producer] Adding "+val);
 

@@ -28,7 +28,7 @@ public class AbstractWorkflowTest {
 
     protected static final Logger logger = Logger.getLogger(AbstractWorkflowTest.class.getCanonicalName());
 
-    protected final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
+    protected static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
     protected static final Function<String, HttpRequest> httpRequestProductSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8001/product" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
@@ -49,35 +49,38 @@ public class AbstractWorkflowTest {
             .build();
 
     protected void ingestDataIntoProductVms() throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newHttpClient();
-        String str;
-        for(int i = 1; i <= MAX_ITEMS; i++){
-            str = new Product( i, 1, "test", "test", "test", "test", 1.0f, 1.0f,  "test", "1" ).toString();
-            HttpRequest prodReq = httpRequestProductSupplier.apply(str);
-            client.send(prodReq, HttpResponse.BodyHandlers.ofString());
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            String str;
+            for (int i = 1; i <= MAX_ITEMS; i++) {
+                str = new Product(i, 1, "test", "test", "test", "test", 1.0f, 1.0f, "test", "1").toString();
+                HttpRequest prodReq = httpRequestProductSupplier.apply(str);
+                client.send(prodReq, HttpResponse.BodyHandlers.ofString());
+            }
         }
     }
 
     protected void insertItemsInStockVms() throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newHttpClient();
-        String str;
-        for(int i = 1; i <= MAX_ITEMS; i++){
-            str = new StockItem( i, 1, 100, 0, 0, 0,  "test", "1" ).toString();
-            HttpRequest stockReq = httpRequestStockSupplier.apply(str);
-            client.send(stockReq, HttpResponse.BodyHandlers.ofString());
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            String str;
+            for (int i = 1; i <= MAX_ITEMS; i++) {
+                str = new StockItem(i, 1, 100, 0, 0, 0, "test", "1").toString();
+                HttpRequest stockReq = httpRequestStockSupplier.apply(str);
+                client.send(stockReq, HttpResponse.BodyHandlers.ofString());
+            }
         }
     }
 
     protected void insertCustomersInCustomerVms() throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newHttpClient();
-        String str;
-        for(int i = 1; i <= MAX_CUSTOMERS; i++){
-            str = new Customer( i, "test", "test", "test", "test",
-                    "test", "test", "test", "test", "test",
-                    "test", "test", "test", "CREDIT_CARD",
-                    0, 0, 0, "test" ).toString();
-            HttpRequest stockReq = httpRequestCustomerSupplier.apply(str);
-            client.send(stockReq, HttpResponse.BodyHandlers.ofString());
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            String str;
+            for (int i = 1; i <= MAX_CUSTOMERS; i++) {
+                str = new Customer(i, "test", "test", "test", "test",
+                        "test", "test", "test", "test", "test",
+                        "test", "test", "test", "CREDIT_CARD",
+                        0, 0, 0, "test").toString();
+                HttpRequest stockReq = httpRequestCustomerSupplier.apply(str);
+                client.send(stockReq, HttpResponse.BodyHandlers.ofString());
+            }
         }
     }
 

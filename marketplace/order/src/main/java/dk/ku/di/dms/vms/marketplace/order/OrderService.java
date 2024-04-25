@@ -11,15 +11,14 @@ import dk.ku.di.dms.vms.marketplace.order.repositories.ICustomerOrderRepository;
 import dk.ku.di.dms.vms.marketplace.order.repositories.IOrderHistoryRepository;
 import dk.ku.di.dms.vms.marketplace.order.repositories.IOrderItemRepository;
 import dk.ku.di.dms.vms.marketplace.order.repositories.IOrderRepository;
-import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
-import dk.ku.di.dms.vms.modb.api.annotations.Outbound;
-import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
+import dk.ku.di.dms.vms.modb.api.annotations.*;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.INVOICE_ISSUED;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.STOCK_CONFIRMED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 
 @Microservice("order")
@@ -85,10 +84,10 @@ public final class OrderService {
 
     }
 
-//    @PartitionBy(clazz = StockConfirmed.class, method = "getCustomerId")
-    @Inbound(values = {"stock_confirmed"})
-    @Outbound("invoice_issued")
+    @Inbound(values = {STOCK_CONFIRMED})
+    @Outbound(INVOICE_ISSUED)
     @Transactional(type=RW)
+    @PartitionBy(clazz = StockConfirmed.class, method = "getCustomerId")
     public InvoiceIssued processStockConfirmed(StockConfirmed stockConfirmed) {
         Date now = new Date();
         System.out.println("Order received a stock confirmed event with TID: "+ stockConfirmed.instanceId);
