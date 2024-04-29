@@ -163,7 +163,7 @@ public final class VmsApplication {
     }
 
     public Object getService() {
-        return this.vmsRuntimeMetadata.loadedVmsInstances().entrySet().stream().findFirst().get();
+        return this.vmsRuntimeMetadata.loadedVmsInstances().entrySet().stream().findFirst().get().getValue();
     }
 
 }

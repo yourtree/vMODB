@@ -2,8 +2,12 @@ package dk.ku.di.dms.vms.marketplace;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
+import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
+import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
+import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
@@ -17,16 +21,55 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-public class SellerDashboardTest extends AbstractWorkflowTest {
+import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
+import static java.lang.Thread.sleep;
+
+public final class SellerDashboardTest extends AbstractWorkflowTest {
 
     @Test
     public void test() throws Exception {
-         dk.ku.di.dms.vms.marketplace.seller.Main.main(null);
 
+        dk.ku.di.dms.vms.marketplace.seller.Main.main(null);
+        this.insertSellersInSellerVms();
+
+        Coordinator coordinator = this.loadCoordinator();
+        Thread coordinatorThread = new Thread(coordinator);
+        coordinatorThread.start();
+
+        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+
+        for(int i = 1; i <= MAX_SELLERS; i++) {
+            CustomerCheckout customerCheckout = customerCheckoutFunction.apply(1);
+            InvoiceIssued invoiceIssued = new InvoiceIssued( customerCheckout, i,  "test", new Date(), 100,
+                    List.of(new OrderItem(i,1,1, "name",
+                            i, 1.0f, new Date(), 1.0f, 1, 1.0f, 1.0f, 0.0f) )
+                    , String.valueOf(i));
+
+            String payload_ = serdes.serialize(invoiceIssued, InvoiceIssued.class);
+            TransactionInput.Event eventPayload_ = new TransactionInput.Event(INVOICE_ISSUED, payload_);
+
+            // TODO refactor to avoid one more object creation... just use event directly ...
+            TransactionInput txInput_ = new TransactionInput(UPDATE_SHIPMENT, eventPayload_);
+
+            TRANSACTION_INPUTS.add(txInput_);
+        }
+
+        // wait for commit
+        sleep(BATCH_WINDOW_INTERVAL * 3);
+
+        try (HttpClient client = HttpClient.newHttpClient()) {
+
+            var request = httpRequestDashboardSupplier.apply(1);
+            var response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            assert response.statusCode() == 200;
+        }
     }
 
     private Coordinator loadCoordinator() throws IOException {
@@ -35,8 +78,8 @@ public class SellerDashboardTest extends AbstractWorkflowTest {
         Map<Integer, ServerNode> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
-        TransactionDAG simpleDAG =  TransactionBootstrap.name("update_shipment")
-                .input( "a", "seller", "invoice_issued" )
+        TransactionDAG simpleDAG =  TransactionBootstrap.name(UPDATE_SHIPMENT)
+                .input( "a", "seller", INVOICE_ISSUED)
                 .terminal("b", "seller", "a")
                 .build();
 
@@ -46,7 +89,7 @@ public class SellerDashboardTest extends AbstractWorkflowTest {
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(3);
-        IdentifiableNode sellerAddress = new IdentifiableNode("seller", "localhost", 8087);
+        IdentifiableNode sellerAddress = new IdentifiableNode("seller", "localhost", SELLER_VMS_PORT);
         starterVMSs.put(sellerAddress.hashCode(), sellerAddress);
 
         return Coordinator.build(
@@ -57,27 +100,35 @@ public class SellerDashboardTest extends AbstractWorkflowTest {
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
                 1,
-                parsedTransactionRequests,
+                TRANSACTION_INPUTS,
                 serdes
         );
     }
 
-    protected static final Function<String, HttpRequest> httpRequestSellerSupplier = str -> HttpRequest.newBuilder(
+    private static final Function<Integer, HttpRequest> httpRequestDashboardSupplier = sellerId -> HttpRequest.newBuilder(
+                    URI.create( "http://localhost:8007/seller/dashboard/"+sellerId ) )
+            .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
+            .version(HttpClient.Version.HTTP_2)
+            .GET()
+            .build();
+
+    private static final Function<String, HttpRequest> httpRequestSellerSupplier = str -> HttpRequest.newBuilder(
                     URI.create( "http://localhost:8007/seller" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HttpClient.Version.HTTP_2)
             .POST(HttpRequest.BodyPublishers.ofString( str ))
             .build();
 
-    protected void insertSellersInSellerVms() throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newHttpClient();
-        String str;
-        for(int i = 1; i <= MAX_SELLERS; i++){
-            str = new Seller(i, "test", "test", "test",
-                    "test", "test", "test", "test",
-                    "test", "test", "test", "test", "test").toString();
-            HttpRequest sellerReq = httpRequestSellerSupplier.apply(str);
-            client.send(sellerReq, HttpResponse.BodyHandlers.ofString());
+    private void insertSellersInSellerVms() throws IOException, InterruptedException {
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            String str;
+            for (int i = 1; i <= MAX_SELLERS; i++) {
+                str = new Seller(i, "test", "test", "test",
+                        "test", "test", "test", "test",
+                        "test", "test", "test", "test", "test").toString();
+                HttpRequest sellerReq = httpRequestSellerSupplier.apply(str);
+                client.send(sellerReq, HttpResponse.BodyHandlers.ofString());
+            }
         }
     }
 

@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.INVOICE_ISSUED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
@@ -48,14 +49,13 @@ public final class SellerService {
         this.sellerLockMap = new ConcurrentHashMap<>(10000);
     }
 
-    @Inbound(values = "invoice_issued")
+    @Inbound(values = INVOICE_ISSUED)
     @Transactional(type=W)
     @Parallel
     public void processInvoiceIssued(InvoiceIssued invoiceIssued){
+        System.out.println("Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
 
         Map<Integer,ReadWriteLock> locksAcquired = new HashMap<>();
-
-        System.out.println("Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
         List<OrderItem> orderItems = invoiceIssued.getItems();
         List<OrderEntry> list = new ArrayList<>(invoiceIssued.getItems().size());
 
@@ -84,26 +84,30 @@ public final class SellerService {
             list.add(orderEntry);
 
             if(!locksAcquired.containsKey(orderItem.seller_id)) {
-                ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(orderItem.seller_id, (x) -> new ReentrantReadWriteLock());
+                ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(orderItem.seller_id, (_) -> new ReentrantReadWriteLock());
                 sellerLock.readLock().lock();
                 locksAcquired.put(orderEntry.seller_id, sellerLock);
             }
 
             // view maintenance code
-            orderSellerViewMap.putIfAbsent(orderItem.seller_id, new OrderSellerView(orderItem.seller_id) );
-            orderSellerViewMap.compute(orderEntry.seller_id, (sellerId, view) -> {
-                view.orders.add(new OrderSellerView.OrderId(orderEntry.customer_id, orderItem.order_id));
-                view.count_items++;
-                view.total_amount += orderEntry.total_amount;
-                view.total_incentive += orderItem.total_incentive;
-                view.total_freight += orderItem.freight_value;
-                view.total_items += orderItem.total_items;
-                view.total_invoice += totalInvoice;
-                // this requires maintaining another map
-                view.count_orders = view.orders.size();
-                return null;
-            });
+            // orderSellerViewMap.putIfAbsent(orderItem.seller_id, new OrderSellerView(orderItem.seller_id) );
+            OrderSellerView view;
+            if(this.orderSellerViewMap.containsKey(orderItem.seller_id)){
+                view = this.orderSellerViewMap.get(orderItem.seller_id);
+            } else {
+                view = new OrderSellerView(orderItem.seller_id);
+                this.orderSellerViewMap.put(orderItem.seller_id, view);
+            }
 
+            view.orders.add(new OrderSellerView.OrderId(orderEntry.customer_id, orderItem.order_id));
+            view.count_items++;
+            view.total_amount += orderEntry.total_amount;
+            view.total_incentive += orderItem.total_incentive;
+            view.total_freight += orderItem.freight_value;
+            view.total_items += orderItem.total_items;
+            view.total_invoice += totalInvoice;
+            // this requires maintaining another map
+            view.count_orders = view.orders.size();
         }
 
         // unlock all
@@ -130,6 +134,7 @@ public final class SellerService {
                     entry.order_status = OrderStatus.IN_TRANSIT;
                     entry.delivery_status = PackageStatus.shipped;
                 } else if (shipmentNotification.status == ShipmentStatus.CONCLUDED) {
+                    // TODO remove entry from view
                     entry.order_status = OrderStatus.DELIVERED;
                 }
                 this.orderEntryRepository.update( entry );
@@ -158,7 +163,7 @@ public final class SellerService {
         sellerLock.writeLock().lock();
         var res = this.orderSellerViewMap.getOrDefault( sellerId, new OrderSellerView(sellerId) );
         sellerLock.writeLock().unlock();
-        return  res;
+        return res;
     }
 
 }

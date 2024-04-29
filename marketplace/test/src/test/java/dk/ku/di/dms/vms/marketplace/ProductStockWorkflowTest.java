@@ -94,7 +94,7 @@ public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
                 new CoordinatorOptions().withBatchWindow(BATCH_WINDOW_INTERVAL),
                 1,
                 1,
-                parsedTransactionRequests,
+                TRANSACTION_INPUTS,
                 serdes
         );
     }
@@ -120,7 +120,7 @@ public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
 
                 logger.info("[Producer] Adding "+val);
 
-                parsedTransactionRequests.add(txInput);
+                TRANSACTION_INPUTS.add(txInput);
 
                 val++;
             }

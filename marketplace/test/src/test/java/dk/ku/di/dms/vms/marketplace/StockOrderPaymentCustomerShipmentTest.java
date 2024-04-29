@@ -21,19 +21,16 @@ import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static java.lang.Thread.sleep;
 
 /**
- * This class tests the full checkout workflow
- * That is, all VMSs and events part of checkout
+ * This class tests a subset of the checkout workflow
  */
-public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits UpdateShipmentWorkflowTest {
+public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest {
 
     private void initVMSs() throws Exception {
-        dk.ku.di.dms.vms.marketplace.cart.Main.main(null);
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
         dk.ku.di.dms.vms.marketplace.order.Main.main(null);
         dk.ku.di.dms.vms.marketplace.payment.Main.main(null);
         dk.ku.di.dms.vms.marketplace.shipment.Main.main(null);
         dk.ku.di.dms.vms.marketplace.customer.Main.main(null);
-        dk.ku.di.dms.vms.marketplace.seller.Main.main(null);
 
         this.insertItemsInStockVms();
         this.insertCustomersInCustomerVms();
@@ -75,7 +72,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
 
         @Override
         public void run() {
-            logger.info("["+this.name+"] Starting...");
+            logger.info("["+name+"] Starting...");
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
             int val = 1;
             while(val <= 10) {
@@ -92,15 +89,27 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
                 String payload_ = serdes.serialize(reserveStockEvent, ReserveStock.class);
                 TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
                 TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
-                logger.info("["+this.name+"] New reserve stock event with version: "+val);
+                logger.info("["+name+"] New reserve stock event with version: "+val);
                 TRANSACTION_INPUTS.add(txInput_);
 
                 val++;
             }
-            logger.info("["+this.name+"] Going to bed definitely...");
+            logger.info("["+name+"] Going to bed definitely...");
         }
     }
 
+    /**  // Another way to define the DAG
+         TransactionDAG checkoutDag =  TransactionBootstrap.name("customer_checkout")
+         .input( "a", "stock", "reserve_stock" )
+         .internal("b", "order", "stock_confirmed", "a")
+         .internal("c", "seller", "invoice_issued", "b")
+         .internal("c", "payment", "invoice_issued", "b")
+         .internal("c", "seller", "payment_confirmed", "c")
+         .internal( "e", "shipment",  "c" )
+         .terminal("c", "seller", "shipment_notification", "e")
+         .terminal( "d", "customer", "c" )
+         .build();
+     */
     private Coordinator loadCoordinator() throws IOException {
         ServerNode serverIdentifier = new ServerNode( "localhost", 8080 );
 
@@ -108,13 +117,11 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
         TransactionDAG checkoutDag =  TransactionBootstrap.name(CUSTOMER_CHECKOUT)
-                .input( "a", "cart", CUSTOMER_CHECKOUT)
-                .internal( "b", "stock", RESERVE_STOCK)
-                .internal("c", "order", STOCK_CONFIRMED, "b")
-                .internal("d", "payment", INVOICE_ISSUED, "c")
-                .terminal("e", "seller", "c")
-                .terminal( "f", "customer", "d" )
-                .terminal( "g", "shipment",  "d" )
+                .input( "a", "stock", RESERVE_STOCK)
+                .internal("b", "order", STOCK_CONFIRMED, "a")
+                .internal("c", "payment", INVOICE_ISSUED, "b")
+                .terminal( "d", "customer", "c" )
+                .terminal( "e", "shipment",  "c" )
                 .build();
 
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
@@ -129,7 +136,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
                 starterVMSs,
                 transactionMap,
                 serverIdentifier,
-                new CoordinatorOptions().withBatchWindow(1000),
+                new CoordinatorOptions().withBatchWindow(3000),
                 1,
                 1,
                 TRANSACTION_INPUTS,
@@ -139,20 +146,16 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
 
     private static Map<Integer, IdentifiableNode> getStaterVMSs() {
         Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>();
-        IdentifiableNode cartAddress = new IdentifiableNode("cart", "localhost", CART_VMS_PORT);
-        starterVMSs.put(cartAddress.hashCode(), cartAddress);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", STOCK_VMS_PORT);
         starterVMSs.put(stockAddress.hashCode(), stockAddress);
         IdentifiableNode orderAddress = new IdentifiableNode("order", "localhost", ORDER_VMS_PORT);
         starterVMSs.put(orderAddress.hashCode(), orderAddress);
         IdentifiableNode paymentAddress = new IdentifiableNode("payment", "localhost", PAYMENT_VMS_PORT);
         starterVMSs.put(paymentAddress.hashCode(), paymentAddress);
-        IdentifiableNode sellerAddress = new IdentifiableNode("seller", "localhost", SELLER_VMS_PORT);
-        starterVMSs.put(sellerAddress.hashCode(), sellerAddress);
-        IdentifiableNode customerAddress = new IdentifiableNode("customer", "localhost", CUSTOMER_VMS_PORT);
-        starterVMSs.put(customerAddress.hashCode(), customerAddress);
         IdentifiableNode shipmentAddress = new IdentifiableNode("shipment", "localhost", SHIPMENT_VMS_PORT);
         starterVMSs.put(shipmentAddress.hashCode(), shipmentAddress);
+        IdentifiableNode customerAddress = new IdentifiableNode("customer", "localhost", CUSTOMER_VMS_PORT);
+        starterVMSs.put(customerAddress.hashCode(), customerAddress);
         return starterVMSs;
     }
 

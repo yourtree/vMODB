@@ -1,4 +1,4 @@
-# OnlineMarketplace Proxy
+# OnlineMarketplace Proxy - Coordinator Service
 
 ## How to compile the project
 
@@ -31,7 +31,7 @@ In particular, the <i>Product Management</i> guide requires that at least the <i
 #### Adding a product 
 Let's start adding a <b>product</b> to the <i>Product</i> microservice
 ```
-curl -X PUT -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "name" : "productTest", "sku" : "skuTest", "category" : "categoryTest", "status" : "approved", "description": "descriptionTest", "price" : 10, "freight_value" : 0, "version": "1"}' localhost:8001/product
+curl -X POST -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "name" : "productTest", "sku" : "skuTest", "category" : "categoryTest", "status" : "approved", "description": "descriptionTest", "price" : 10, "freight_value" : 0, "version": "1"}' localhost:8001/product
 ```
 
 Let's send a GET request to verify whether the function have successfully stored the state

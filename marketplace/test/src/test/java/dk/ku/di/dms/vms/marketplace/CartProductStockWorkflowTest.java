@@ -109,7 +109,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
                         .withNetworkBufferSize(networkBufferSize),
                 1,
                 1,
-                parsedTransactionRequests,
+                TRANSACTION_INPUTS,
                 serdes
         );
     }
@@ -150,7 +150,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
             TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRODUCT, payload);
             TransactionInput txInput = new TransactionInput(UPDATE_PRODUCT, eventPayload);
             logger.info("[Producer] New product version: "+ val);
-            parsedTransactionRequests.add(txInput);
+            TRANSACTION_INPUTS.add(txInput);
         }
 
         private static void producePriceUpdate(int val, IVmsSerdesProxy serdes) {
@@ -159,7 +159,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
             TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRICE, payload);
             TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);
             logger.info("[Producer] New product price: "+ val);
-            parsedTransactionRequests.add(txInput);
+            TRANSACTION_INPUTS.add(txInput);
         }
     }
 

@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.marketplace;
 
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
+import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.customer.Customer;
 import dk.ku.di.dms.vms.marketplace.product.Product;
 import dk.ku.di.dms.vms.marketplace.stock.StockItem;
@@ -28,7 +29,13 @@ public class AbstractWorkflowTest {
 
     protected static final Logger logger = Logger.getLogger(AbstractWorkflowTest.class.getCanonicalName());
 
-    protected static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
+    protected static final BlockingQueue<TransactionInput> TRANSACTION_INPUTS = new LinkedBlockingDeque<>();
+
+    protected static final Function<Integer, CustomerCheckout> customerCheckoutFunction = customerId -> new CustomerCheckout(
+            customerId, "test", "test", "test", "test","test",
+            "test", "test","test","test","test",
+            "test", "test", "test", 1,"1"
+    );
 
     protected static final Function<String, HttpRequest> httpRequestProductSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8001/product" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))

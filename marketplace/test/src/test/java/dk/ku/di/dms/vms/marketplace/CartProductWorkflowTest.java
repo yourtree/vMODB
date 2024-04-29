@@ -100,7 +100,7 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
                         .withNetworkBufferSize(networkBufferSize),
                 1,
                 1,
-                parsedTransactionRequests,
+                TRANSACTION_INPUTS,
                 serdes
         );
     }
@@ -126,7 +126,7 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
 
                 logger.info("[Producer] Adding "+val);
 
-                parsedTransactionRequests.add(txInput);
+                TRANSACTION_INPUTS.add(txInput);
 
                 val++;
             }

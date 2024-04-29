@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.marketplace.seller.dtos;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class OrderSellerView {
+public final class OrderSellerView {
 
     // mark as not serializable
     public transient Set<OrderId> orders;
@@ -30,6 +30,21 @@ public class OrderSellerView {
     public OrderSellerView(int sellerId) {
         this.seller_id = sellerId;
         this.orders = ConcurrentHashMap.newKeySet();
+    }
+
+    @Override
+    public String toString() {
+        return "{"
+                + " \"count_items\":\"" + count_items + "\""
+                + ",\"orders\":" + orders
+                + ",\"seller_id\":\"" + seller_id + "\""
+                + ",\"count_orders\":\"" + count_orders + "\""
+                + ",\"total_amount\":\"" + total_amount + "\""
+                + ",\"total_freight\":\"" + total_freight + "\""
+                + ",\"total_incentive\":\"" + total_incentive + "\""
+                + ",\"total_invoice\":\"" + total_invoice + "\""
+                + ",\"total_items\":\"" + total_items + "\""
+                + "}";
     }
 
 }

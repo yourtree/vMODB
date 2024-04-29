@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
@@ -42,8 +43,8 @@ public final class ShipmentService {
         this.packageRepository = packageRepository;
     }
 
-    @Inbound(values = {"update_shipment"})
-    @Outbound("shipment_updated")
+    @Inbound(values = {UPDATE_SHIPMENT})
+    @Outbound(SHIPMENT_UPDATED)
     @Transactional(type=RW)
     public ShipmentUpdated updateShipment(String instanceId){
         System.out.println("Shipment received an update shipment event with TID: "+ instanceId);
@@ -100,7 +101,7 @@ public final class ShipmentService {
 
     }
 
-    @Inbound(values = {"payment_confirmed"})
+    @Inbound(values = {PAYMENT_CONFIRMED})
     @Transactional(type=W)
     @Parallel
     public void processShipment(PaymentConfirmed paymentConfirmed){
@@ -125,11 +126,17 @@ public final class ShipmentService {
 
         this.shipmentRepository.insert( shipment );
 
+        List<Package> packages = getPackageList(paymentConfirmed, now);
+
+        this.packageRepository.insertAll( packages );
+    }
+
+    private static List<Package> getPackageList(PaymentConfirmed paymentConfirmed, Date now) {
         int packageId = 1;
-        List<dk.ku.di.dms.vms.marketplace.shipment.entities.Package> packages = new ArrayList<>();
+        List<Package> packages = new ArrayList<>();
         for (OrderItem orderItem : paymentConfirmed.items) {
-            dk.ku.di.dms.vms.marketplace.shipment.entities.Package pkg
-                    = new dk.ku.di.dms.vms.marketplace.shipment.entities.Package(
+            Package pkg
+                    = new Package(
                     paymentConfirmed.customerCheckout.CustomerId,
                     paymentConfirmed.orderId,
                     packageId,
@@ -145,9 +152,7 @@ public final class ShipmentService {
             packages.add(pkg);
             packageId++;
         }
-
-        this.packageRepository.insertAll( packages );
-
+        return packages;
     }
 
 }

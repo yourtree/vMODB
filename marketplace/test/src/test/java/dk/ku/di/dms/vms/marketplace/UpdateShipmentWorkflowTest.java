@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.UPDATE_SHIPMENT;
 import static java.lang.Thread.sleep;
 
 /**
@@ -25,8 +26,11 @@ import static java.lang.Thread.sleep;
  */
 public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest {
 
+    /**
+     * Overriding because this test only wants the behavior of checkout workflow, not testing it
+     */
     @Override
-    public void testCustomerCheckout() {
+    public void testCheckout() {
         assert true;
     }
 
@@ -56,7 +60,7 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
         assert coordinator.getTid() == 12;
     }
 
-    private class UpdateShipmentProducer implements Runnable {
+    private static class UpdateShipmentProducer implements Runnable {
 
         private final String name = UpdateShipmentProducer.class.getSimpleName();
 
@@ -66,13 +70,13 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
             String instanceId = "1";
 
             // event name
-            TransactionInput.Event eventPayload_ = new TransactionInput.Event("update_shipment", instanceId);
+            TransactionInput.Event eventPayload_ = new TransactionInput.Event(UPDATE_SHIPMENT, instanceId);
 
             // transaction name
-            TransactionInput txInput_ = new TransactionInput("update_shipment", eventPayload_);
+            TransactionInput txInput_ = new TransactionInput(UPDATE_SHIPMENT, eventPayload_);
 
             logger.info("["+name+"] New update shipment event with version: "+instanceId);
-            parsedTransactionRequests.add(txInput_);
+            TRANSACTION_INPUTS.add(txInput_);
 
             logger.info("["+name+"] Going to bed definitely... ");
         }
@@ -139,7 +143,7 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
                 1,
-                parsedTransactionRequests,
+                TRANSACTION_INPUTS,
                 serdes
         );
     }

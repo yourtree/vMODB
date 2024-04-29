@@ -1,21 +1,21 @@
 package dk.ku.di.dms.vms.coordinator.server.schema;
 
-import java.util.Collections;
-import java.util.List;
-
 /**
  * This is purely for parsing transaction requests coming from HTTP clients
+ * The name of the event is not always the name of the transaction
+ * An internal VMs, for example, is subject to these phenomena
+ * (e.g., update shipment transaction and the invoice issued event)
  */
 public class TransactionInput {
 
     //name of the transaction
     public String name;
 
-    public List<Event> events;
+    public Event event;
 
     public TransactionInput(String name, Event event) {
         this.name = name;
-        this.events = Collections.singletonList(event);
+        this.event = event;
     }
 
     public static class Event {

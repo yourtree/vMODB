@@ -675,7 +675,7 @@ public final class Coordinator extends StoppableRunnable {
      * Local list of requests to be processed
      * Must be cleaned after use
      */
-    private final Collection<TransactionInput> transactionRequests = new ArrayList<>(100);
+    private final Collection<TransactionInput> transactionRequests = new ArrayList<>(10000);
 
     /**
      * Should read in a proportion that matches the batch and heartbeat window, otherwise
@@ -718,55 +718,55 @@ public final class Coordinator extends StoppableRunnable {
 
             // for each input event, send the event to the proper vms
             // assuming the input is correct, i.e., all events are present
-            for (TransactionInput.Event inputEvent : transactionInput.events) {
+            //for (TransactionInput.Event inputEvent : transactionInput.events) {
                 // look for the event in the topology
-                EventIdentifier event = transactionDAG.inputEvents.get(inputEvent.name);
+            EventIdentifier event = transactionDAG.inputEvents.get(transactionInput.event.name);
 
-                // get the vms
-                VmsIdentifier vms = this.vmsMetadataMap.get(event.targetVms);
+            // get the vms
+            VmsIdentifier vms = this.vmsMetadataMap.get(event.targetVms);
 
-                // a vms, although receiving an event from a "next" batch, cannot yet commit, since
-                // there may have additional events to arrive from the current batch
-                // so the batch request must contain the last tid of the given vms
+            // a vms, although receiving an event from a "next" batch, cannot yet commit, since
+            // there may have additional events to arrive from the current batch
+            // so the batch request must contain the last tid of the given vms
 
-                // if an internal/terminal vms do not receive an input event in this batch, it won't be able to
-                // progress since the precedence info will never arrive
-                // this way, we need to send in this event the precedence info for all downstream VMSs of this event
-                // having this info avoids having to contact all internal/terminal nodes to inform the precedence of events
-                Map<String, Long> precedenceMap = BatchAlgo.buildPrecedenceMap(event, transactionDAG, this.vmsMetadataMap);
-                String precedenceMapStr = this.serdesProxy.serializeMap(precedenceMap);
+            // if an internal/terminal vms do not receive an input event in this batch, it won't be able to
+            // progress since the precedence info will never arrive
+            // this way, we need to send in this event the precedence info for all downstream VMSs of this event
+            // having this info avoids having to contact all internal/terminal nodes to inform the precedence of events
+            Map<String, Long> precedenceMap = BatchAlgo.buildPrecedenceMap(event, transactionDAG, this.vmsMetadataMap);
+            String precedenceMapStr = this.serdesProxy.serializeMap(precedenceMap);
 
-                /*
-                 * update for next transaction. this is basically to ensure VMS do not wait for a tid that will never come. TIDs processed by a vms may not be sequential
-                 */
-                vms.node().lastTidOfBatch = tid_;
-                this.updateVmsBatchAndPrecedenceIfNecessary(vms.node());
+            /*
+             * update for next transaction. this is basically to ensure VMS do not wait for a tid that will never come. TIDs processed by a vms may not be sequential
+             */
+            vms.node().lastTidOfBatch = tid_;
+            this.updateVmsBatchAndPrecedenceIfNecessary(vms.node());
 
-                // write. think about failures/atomicity later
-                TransactionEvent.Payload txEvent = TransactionEvent.of(tid_, this.currentBatchOffset, inputEvent.name, inputEvent.payload, precedenceMapStr);
+            // write. think about failures/atomicity later
+            TransactionEvent.Payload txEvent = TransactionEvent.of(tid_, this.currentBatchOffset, transactionInput.event.name, transactionInput.event.payload, precedenceMapStr);
 
-                // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
+            // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
 
-                if(!event.targetVms.equalsIgnoreCase(vms.node().identifier)){
-                    logger.severe("Leader: The event was going to be queued to the incorrect VMS worker!");
-                }
-                logger.config("Leader: Adding event "+event.name+" to "+vms.node().identifier+" worker");
-                vms.worker().transactionEventsPerBatch(this.currentBatchOffset).add(txEvent);
+            if(!event.targetVms.equalsIgnoreCase(vms.node().identifier)){
+                logger.severe("Leader: The event was going to be queued to the incorrect VMS worker!");
             }
+            logger.config("Leader: Adding event "+event.name+" to "+vms.node().identifier+" worker");
+            vms.worker().transactionEventsPerBatch(this.currentBatchOffset).add(txEvent);
+            //}
 
             // update the last tid of the terminals
             for(String vmsIdentifier : transactionDAG.terminalNodes){
-                VmsIdentifier vms = this.vmsMetadataMap.get(vmsIdentifier);
-                vms.node().lastTidOfBatch = tid_;
-                this.updateVmsBatchAndPrecedenceIfNecessary(vms.node());
+                VmsIdentifier terminalVms = this.vmsMetadataMap.get(vmsIdentifier);
+                terminalVms.node().lastTidOfBatch = tid_;
+                this.updateVmsBatchAndPrecedenceIfNecessary(terminalVms.node());
             }
 
             // also update the last tid of the internal VMSs
             // to make sure they receive the batch commit command with the appropriate lastTid
             for(String vmsIdentifier : transactionDAG.internalNodes){
-                VmsIdentifier vms = this.vmsMetadataMap.get(vmsIdentifier);
-                vms.node().lastTidOfBatch = tid_;
-                this.updateVmsBatchAndPrecedenceIfNecessary(vms.node());
+                VmsIdentifier internalVms = this.vmsMetadataMap.get(vmsIdentifier);
+                internalVms.node().lastTidOfBatch = tid_;
+                this.updateVmsBatchAndPrecedenceIfNecessary(internalVms.node());
             }
 
             // add terminal to the set... so cannot be immutable when the batch context is created...

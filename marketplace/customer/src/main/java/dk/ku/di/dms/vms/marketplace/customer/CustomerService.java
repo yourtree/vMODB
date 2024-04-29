@@ -10,6 +10,8 @@ import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 import java.util.Date;
 import java.util.logging.Logger;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.PAYMENT_CONFIRMED;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.SHIPMENT_UPDATED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
@@ -24,7 +26,7 @@ public final class CustomerService {
         this.customerRepository = customerRepository;
     }
 
-    @Inbound(values = {"payment_confirmed"})
+    @Inbound(values = {PAYMENT_CONFIRMED})
     @Transactional(type=RW)
     public void processPaymentConfirmed(PaymentConfirmed paymentConfirmed){
         System.out.println("Customer received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
@@ -42,7 +44,7 @@ public final class CustomerService {
         this.customerRepository.update(customer);
     }
 
-    @Inbound(values = {"shipment_updated"})
+    @Inbound(values = {SHIPMENT_UPDATED})
     @Transactional(type=W)
     public void processDeliveryNotification(ShipmentUpdated shipmentUpdated){
         System.out.println("Customer received a shipment updated event with TID: "+ shipmentUpdated.instanceId);
