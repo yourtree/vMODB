@@ -15,7 +15,10 @@ import java.util.List;
  * classes perform to the {@link TransactionManager}.
  */
 public sealed interface OperationalAPI permits TransactionManager {
+
     void deleteByKey(Table table, Object[] valuesOfKey);
+
+    boolean exists(PrimaryIndex primaryKeyIndex, Object[] valuesOfKey);
 
     Object[] lookupByKey(PrimaryIndex primaryKeyIndex, Object[] valuesOfKey);
 

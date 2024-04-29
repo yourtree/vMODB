@@ -77,9 +77,6 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     private final int networkBufferSize;
 
-    // rate on which consumer vms worker is triggered to send events to a consumer VMS
-    private final long consumerSendRate;
-
     /** COORDINATOR **/
     private ServerNode leader;
     private LockConnectionMetadata leaderConnectionMetadata;
@@ -140,11 +137,10 @@ public final class VmsEventHandler extends StoppableRunnable {
                                         IVmsSerdesProxy serdesProxy,
                                         // network
                                         int networkBufferSize,
-                                        int networkThreadPoolSize,
-                                        long consumerSendRate){
+                                        int networkThreadPoolSize){
         try {
             return new VmsEventHandler(me, vmsMetadata, new ConcurrentHashMap<>(),
-                    transactionalHandler, vmsInternalChannels, serdesProxy, networkBufferSize, networkThreadPoolSize, consumerSendRate);
+                    transactionalHandler, vmsInternalChannels, serdesProxy, networkBufferSize, networkThreadPoolSize);
         } catch (IOException e){
             throw new RuntimeException("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
@@ -157,8 +153,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                             VmsEmbeddedInternalChannels vmsInternalChannels,
                             IVmsSerdesProxy serdesProxy,
                             int networkBufferSize,
-                            int networkThreadPoolSize,
-                            long consumerSendRate) throws IOException {
+                            int networkThreadPoolSize) throws IOException {
         super();
 
         // network and executor
@@ -202,7 +197,6 @@ public final class VmsEventHandler extends StoppableRunnable {
         this.eventsToSendToLeader = new LinkedBlockingDeque<>();
 
         this.networkBufferSize = networkBufferSize;
-        this.consumerSendRate = consumerSendRate;
     }
 
     /**
@@ -291,7 +285,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
     }
 
-    private void connectToReceivedConsumerSet( Map<String, List<IdentifiableNode>> receivedConsumerVms ) {
+    private void connectToReceivedConsumerSet(Map<String, List<IdentifiableNode>> receivedConsumerVms) {
         Map<IdentifiableNode, List<String>> consumerToEventsMap = new HashMap<>();
         // build an indirect map
         for(Map.Entry<String,List<IdentifiableNode>> entry : receivedConsumerVms.entrySet()) {
@@ -486,7 +480,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                             return;
                         }
 
-                        logger.info(me.identifier+ " setting up worker for consumer VMS: "+node.identifier);
+                        logger.info(me.identifier+ " setting up worker to send transactions to consumer VMS: "+node.identifier);
                         ConsumerVms consumerVms = new ConsumerVms(
                                 node.identifier,
                                 node.host,

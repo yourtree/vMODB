@@ -27,6 +27,7 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
     void deleteByKey(PK key);
     void deleteAllByKey(List<PK> keys);
 
+    boolean exists(PK key);
     T lookupByKey(PK key);
     List<T> lookupByKeys(Collection<PK> keys);
 

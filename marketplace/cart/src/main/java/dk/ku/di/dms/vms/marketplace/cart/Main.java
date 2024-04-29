@@ -35,7 +35,7 @@ public final class Main {
                 "dk.ku.di.dms.vms.marketplace.cart",
                 "dk.ku.di.dms.vms.marketplace.common"
         }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
-                networkThreadPoolSize, 0);
+                networkThreadPoolSize);
 
         try
         {

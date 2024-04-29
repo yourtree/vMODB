@@ -24,6 +24,10 @@ public final class ProductReplica implements IEntity<ProductReplica.ProductId> {
         }
     }
 
+    public ProductId getProductId() {
+        return new ProductId( this.seller_id, this.product_id );
+    }
+
     @Id
     public int seller_id;
 

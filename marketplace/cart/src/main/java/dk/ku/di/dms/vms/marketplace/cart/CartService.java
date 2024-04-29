@@ -58,21 +58,21 @@ public final class CartService {
 
     @Inbound(values = {PRICE_UPDATED})
     @Transactional(type=RW)
-    @PartitionBy(clazz = UpdatePrice.class, method = "getId")
-    public void updateProductPrice(UpdatePrice updatePriceEvent) {
-        System.out.println("Cart received an update price event with TID: "+updatePriceEvent.instanceId);
+    @PartitionBy(clazz = PriceUpdated.class, method = "getId")
+    public void updateProductPrice(PriceUpdated priceUpdated) {
+        System.out.println("Cart received an update price event with version: "+priceUpdated.instanceId);
 
         // could use issue statement for faster update
         ProductReplica product = this.productReplicaRepository.lookupByKey(
-                new ProductReplica.ProductId(updatePriceEvent.sellerId, updatePriceEvent.productId));
+                new ProductReplica.ProductId(priceUpdated.sellerId, priceUpdated.productId));
 
         if(product == null){
-            System.out.println("Cart has no product replica with seller ID "+updatePriceEvent.sellerId+" : product ID "+updatePriceEvent.productId);
+            System.out.println("Cart has no product replica with seller ID "+priceUpdated.sellerId+" : product ID "+priceUpdated.productId);
             return;
         }
 
-        if(product.version.contentEquals(updatePriceEvent.instanceId)){
-            product.price = updatePriceEvent.price;
+        if(product.version.contentEquals(priceUpdated.instanceId)){
+            product.price = priceUpdated.price;
         }
 
         // update all carts?
@@ -81,15 +81,21 @@ public final class CartService {
     }
 
     @Inbound(values = {PRODUCT_UPDATED})
-    @Transactional(type=W)
+    @Transactional(type=RW)
     @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     public void processProductUpdate(ProductUpdated productUpdated) {
-        System.out.println("Cart received a product update event with TID: "+productUpdated.version);
+        System.out.println("Cart received a product update event with version: "+productUpdated.version);
 
         var product = new ProductReplica(productUpdated.seller_id, productUpdated.product_id, productUpdated.name, productUpdated.sku, productUpdated.category,
                 productUpdated.description, productUpdated.price, productUpdated.freight_value, productUpdated.status, productUpdated.version);
 
-        this.productReplicaRepository.update(product);
+        // an upsert would be nice. semantics line if present, update. otherwise, insert
+        if(this.productReplicaRepository.exists(product.getProductId())){
+            this.productReplicaRepository.update(product);
+        } else {
+            this.productReplicaRepository.insert(product);
+        }
+
     }
 
 }

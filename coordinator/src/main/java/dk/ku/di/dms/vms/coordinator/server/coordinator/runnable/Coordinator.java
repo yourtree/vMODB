@@ -750,7 +750,7 @@ public final class Coordinator extends StoppableRunnable {
                 if(!event.targetVms.equalsIgnoreCase(vms.node().identifier)){
                     logger.severe("Leader: The event was going to be queued to the incorrect VMS worker!");
                 }
-                logger.info("Leader: Adding event "+event.name+" to "+vms.node().identifier+" worker");
+                logger.config("Leader: Adding event "+event.name+" to "+vms.node().identifier+" worker");
                 vms.worker().transactionEventsPerBatch(this.currentBatchOffset).add(txEvent);
             }
 

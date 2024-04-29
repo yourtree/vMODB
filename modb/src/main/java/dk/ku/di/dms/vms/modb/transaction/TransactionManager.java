@@ -226,7 +226,12 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
         }
     }
 
-    public Object[] lookupByKey(PrimaryIndex index, Object... valuesOfKey){
+    public boolean exists(PrimaryIndex primaryKeyIndex, Object[] valuesOfKey){
+        IKey pk = KeyUtils.buildIndexKey(valuesOfKey);
+        return primaryKeyIndex.exists(pk);
+    }
+
+    public Object[] lookupByKey(PrimaryIndex index, Object[] valuesOfKey){
         IKey pk = KeyUtils.buildIndexKey(valuesOfKey);
         return index.lookupByKey(pk);
     }

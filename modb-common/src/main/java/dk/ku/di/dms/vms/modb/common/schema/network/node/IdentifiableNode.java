@@ -19,4 +19,10 @@ public class IdentifiableNode extends NetworkNode {
                 '}';
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof IdentifiableNode that)) return false;
+        return this.identifier.contentEquals(that.identifier) && super.equals(that);
+    }
+
 }

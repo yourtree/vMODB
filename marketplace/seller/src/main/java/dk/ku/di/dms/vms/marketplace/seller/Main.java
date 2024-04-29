@@ -26,7 +26,7 @@ public final class Main {
         VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.SELLER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.seller",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, 4096, 2, 1000);
+        }, 4096, 2);
 
         VmsApplication vms = VmsApplication.build(options);
         vms.start();

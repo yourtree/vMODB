@@ -25,6 +25,8 @@ import static java.lang.Thread.sleep;
 
 public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
 
+    private static final int WAIT_TIME = 5000;
+
     @Test
     public void testBasicCartProductStockWorkflow() throws Exception {
 
@@ -45,20 +47,22 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
         Map<String, VmsIdentifier> connectedVMSs;
         int maxSleep = 3;
         do {
-            sleep(5000);
+            sleep(WAIT_TIME);
             connectedVMSs = coordinator.getConnectedVMSs();
             if(connectedVMSs.size() == 3) break;
             maxSleep--;
         } while (maxSleep > 0);
 
-        if(coordinator.getConnectedVMSs().size() < 23) throw new RuntimeException("VMSs did not connect to coordinator on time");
+        if(coordinator.getConnectedVMSs().size() < 3) throw new RuntimeException("VMSs did not connect to coordinator on time");
 
         Thread thread = new Thread(new Producer());
         thread.start();
 
-        sleep(BATCH_WINDOW_INTERVAL * 3);
+        sleep(BATCH_WINDOW_INTERVAL * 2);
 
         assert coordinator.getTid() == 21;
+//        coordinator.getCurrentBatchOffset() == 3;
+        assert coordinator.getBatchOffsetPendingCommit() == 2;
     }
 
     private Coordinator loadCoordinator(Properties properties) throws IOException {
@@ -69,7 +73,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
         TransactionDAG updatePriceDag =  TransactionBootstrap.name(UPDATE_PRICE)
-                .input( "a", "product", UPDATE_PRICE )
+                .input("a", "product", UPDATE_PRICE)
                 .terminal("b", "cart", "a")
                 .build();
 
@@ -116,7 +120,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
         IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, CART_VMS_PORT);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, STOCK_VMS_PORT);
 
-        Map<Integer, IdentifiableNode> VMSs = new HashMap<>(2);
+        Map<Integer, IdentifiableNode> VMSs = new HashMap<>();
         VMSs.put(productAddress.hashCode(), productAddress);
         VMSs.put(cartAddress.hashCode(), cartAddress);
         VMSs.put(stockAddress.hashCode(), stockAddress);
@@ -131,7 +135,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
 
             int val = 1;
 
-            while(val < 10) {
+            while(val <= 10) {
                 produceProductUpdate(val, serdes);
                 producePriceUpdate(val, serdes);
                 val++;

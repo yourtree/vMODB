@@ -26,7 +26,7 @@ public final class ShipmentTest {
         VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.SHIPMENT_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.shipment",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, 4096, 2, 1000);
+        }, 4096, 2);
 
         return VmsApplication.build(options);
     }

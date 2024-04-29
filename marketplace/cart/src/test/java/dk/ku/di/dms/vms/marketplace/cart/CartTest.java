@@ -32,9 +32,7 @@ public final class CartTest {
         VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CART_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.cart",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
-                networkThreadPoolSize, 0);
-
+        }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize, networkThreadPoolSize);
 
         VmsApplication vms = VmsApplication.build(options);
         vms.start();

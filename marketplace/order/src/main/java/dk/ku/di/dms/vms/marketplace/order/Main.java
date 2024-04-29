@@ -20,7 +20,7 @@ public final class Main {
                 "dk.ku.di.dms.vms.marketplace.order",
                 "dk.ku.di.dms.vms.marketplace.common"
         }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
-                networkThreadPoolSize, consumerSendRate);
+                networkThreadPoolSize);
 
         VmsApplication vms = VmsApplication.build(options);
         vms.start();

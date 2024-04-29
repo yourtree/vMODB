@@ -68,7 +68,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     @Override
     public void run() {
 
-        logger.info("Starting consumer vms worker for VMS: "+me.identifier);
+        logger.info(this.me.identifier+ ": Starting consumer vms worker for VMS: "+me.identifier);
 
         List<TransactionEvent.Payload> events = new ArrayList<>(1000);
         while(this.isRunning()){
@@ -88,7 +88,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                     writeBuffer = this.retrieveByteBuffer();
                     remaining = BatchUtils.assembleBatchPayload(remaining, events, writeBuffer);
 
-                    this.logger.info(me.identifier+ ": Submitting "+(count - remaining)+" events to "+consumerVms.identifier);
+                    this.logger.info(this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
                     count = remaining;
 
                     writeBuffer.flip();
@@ -99,10 +99,10 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                     // prevent from error in consumer
                     if(remaining > 0) sleep_();
                 } catch (Exception e) {
-                    this.logger.severe(me.identifier+ ": Error submitting events to "+consumerVms.identifier);
+                    this.logger.severe(this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier);
                     // return non-processed events to original location or what?
                     if (!this.connectionMetadata.channel.isOpen()) {
-                        this.logger.warning("The "+consumerVms.identifier+" VMS is offline");
+                        this.logger.warning("The "+this.consumerVms.identifier+" VMS is offline");
                     }
                     // return events to the deque
                     for (TransactionEvent.Payload event : events) {

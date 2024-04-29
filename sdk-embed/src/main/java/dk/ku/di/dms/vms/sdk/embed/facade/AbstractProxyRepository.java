@@ -59,7 +59,6 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
 
     private final Map<String, SelectStatement> repositoryQueriesMap;
 
-    @SuppressWarnings("unchecked")
     public AbstractProxyRepository(Class<PK> pkClazz,
                                   Class<T> entityClazz,
                                   Table table,
@@ -111,6 +110,11 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         }
 
         return result;
+    }
+
+    public final boolean exists(PK key){
+        Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(key);
+        return this.operationalAPI.exists(this.table.primaryKeyIndex(), valuesOfKey);
     }
 
     @Override

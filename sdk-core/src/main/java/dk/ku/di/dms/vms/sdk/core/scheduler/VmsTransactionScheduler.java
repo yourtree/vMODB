@@ -190,7 +190,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 if(task.partitionId().isPresent()){
                     partitionKeyTrackingMap.remove(task.partitionId().get());
                     numPartitionedTasksRunning.decrementAndGet();
-                    System.out.println("Partitioned task "+task.tid()+" finished execution.");
+                    logger.info(vmsIdentifier+": Partitioned task "+task.tid()+" finished execution.");
                 } else {
                     singleThreadTaskRunning.set(false);
                 }
@@ -200,7 +200,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         @Override
         public void error(ExecutionModeEnum executionMode, long tid, Exception e) {
             // TODO handle errors
-            logger.warning("Error captured in application execution: \n"+e.getStackTrace()[0]);
+            logger.severe("Error captured in application execution: \n"+e.getMessage());
             if(executionMode == ExecutionModeEnum.SINGLE_THREADED)
                 singleThreadTaskRunning.set(false);
             else if (executionMode == ExecutionModeEnum.PARALLEL) {
@@ -256,7 +256,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             switch (task.signature().executionMode()) {
                 case SINGLE_THREADED -> {
                     if (this.canSingleThreadTaskRun()) {
-                        System.out.println("Scheduling single-thread task "+task.tid()+" for execution...");
+                        logger.info(this.vmsIdentifier+": Scheduling single-thread task "+task.tid()+" for execution...");
                         this.submitSingleThreadTaskForExecution(task);
                     } else {
                         return;
@@ -289,7 +289,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                         this.partitionKeyTrackingMap.add(task.partitionId().get());
                         this.numPartitionedTasksRunning.incrementAndGet();
                         task.signalReady();
-                        System.out.println("Scheduling partitioned task "+task.tid()+" for execution...");
+                        logger.info(this.vmsIdentifier+": Scheduling partitioned task "+task.tid()+" for execution...");
                         this.sharedTaskPool.submit(task);
                     } else {
                         return;
@@ -353,7 +353,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 inboundEvent.batch(),
                 this.transactionMetadataMap
                         .get(inboundEvent.event())
-                        .signatures.get(0).object(),
+                        .signatures.getFirst().object(),
                 inboundEvent.input()
         ));
 

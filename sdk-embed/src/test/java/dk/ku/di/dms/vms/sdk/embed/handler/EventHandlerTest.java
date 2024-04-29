@@ -131,7 +131,7 @@ public class EventHandlerTest {
 
         VmsEventHandler eventHandler = VmsEventHandler.build(
                 vmsIdentifier, new DumbCheckpointAPI(),
-                vmsInternalPubSubService,  vmsMetadata, serdes, 4096,2, 3000 );
+                vmsInternalPubSubService,  vmsMetadata, serdes, 4096,2 );
 
         if(eventHandlerActive) {
             Thread eventHandlerThread = new Thread(eventHandler);
