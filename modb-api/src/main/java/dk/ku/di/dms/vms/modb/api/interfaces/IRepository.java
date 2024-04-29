@@ -19,6 +19,7 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
     void insertAll(List<T> entities);
     List<T> insertAllAndGet(List<T> entities);
 
+    void upsert(T object);
     void update(T object);
     void updateAll(List<T> entities);
 

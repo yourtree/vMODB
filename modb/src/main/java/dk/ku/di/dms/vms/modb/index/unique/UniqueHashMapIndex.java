@@ -35,7 +35,7 @@ public final class UniqueHashMapIndex extends ReadWriteIndex<IKey> {
 
     @Override
     public void insert(IKey key, Object[] record) {
-        this.store.putIfAbsent(key, record);
+        this.store.put(key, record);
     }
 
     @Override

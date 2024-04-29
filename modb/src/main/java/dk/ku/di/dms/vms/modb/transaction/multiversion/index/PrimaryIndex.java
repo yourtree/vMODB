@@ -199,11 +199,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      * Having the second parameter is necessary to avoid casting.
      */
     private static class NumberTypeConstraintHelper {
-
         public static <T> boolean eval(T v1, T v2, Comparator<T> comparator, ConstraintEnum constraint){
-
             switch (constraint) {
-
                 case POSITIVE_OR_ZERO, MIN -> {
                     return comparator.compare(v1, v2) >= 0;
                 }
@@ -219,9 +216,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 default ->
                         throw new IllegalStateException("Cannot compare the constraint "+constraint+" for number type.");
             }
-
         }
-
     }
 
     @Override
@@ -265,12 +260,16 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             return false;
         }
 
+        return this.doInsert(key, values, operationSet);
+    }
+
+    private boolean doInsert(IKey key, Object[] values, OperationSetOfKey operationSet) {
         // create a new insert
         TransactionWrite entry = new TransactionWrite(WriteType.INSERT, values);
 
         if(operationSet == null){
             operationSet = new OperationSetOfKey();
-            this.updatesPerKeyMap.put( key, operationSet );
+            this.updatesPerKeyMap.put(key, operationSet);
         }
 
         operationSet.updateHistoryMap.put(TransactionMetadata.TRANSACTION_CONTEXT.get().tid, entry);
@@ -278,8 +277,27 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         operationSet.lastVersion = values;
 
         KEY_WRITES.get().add(key);
-
         return true;
+    }
+
+    public boolean upsert(IKey key, Object[] values) {
+        if(this.nonPkConstraintViolation(values)) {
+            return false;
+        }
+
+        OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
+        boolean exists;
+        if (operationSet != null){
+            exists = operationSet.lastWriteType != WriteType.DELETE;
+        } else {
+            exists = this.primaryKeyIndex.exists(key);
+        }
+
+        if(exists) {
+            return this.doUpdate(key, values, operationSet);
+        } else {
+            return this.doInsert(key, values, operationSet);
+        }
     }
 
     @Override
@@ -297,12 +315,16 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             return false;
         }
 
+        return this.doUpdate(key, values, operationSet);
+    }
+
+    private boolean doUpdate(IKey key, Object[] values, OperationSetOfKey operationSet) {
         // create a new update
         TransactionWrite entry = new TransactionWrite(WriteType.UPDATE, values);
 
         if(operationSet == null){
             operationSet = new OperationSetOfKey();
-            this.updatesPerKeyMap.put( key, operationSet );
+            this.updatesPerKeyMap.put(key, operationSet);
         }
 
         operationSet.updateHistoryMap.put( TransactionMetadata.TRANSACTION_CONTEXT.get().tid, entry);

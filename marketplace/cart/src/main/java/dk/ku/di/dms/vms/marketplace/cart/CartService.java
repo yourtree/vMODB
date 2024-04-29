@@ -6,8 +6,6 @@ import dk.ku.di.dms.vms.marketplace.cart.repositories.ICartItemRepository;
 import dk.ku.di.dms.vms.marketplace.cart.repositories.IProductReplicaRepository;
 import dk.ku.di.dms.vms.marketplace.common.events.*;
 import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
-import dk.ku.di.dms.vms.marketplace.common.inputs.UpdatePrice;
-import dk.ku.di.dms.vms.marketplace.common.inputs.UpdateProduct;
 import dk.ku.di.dms.vms.modb.api.annotations.*;
 
 import java.util.Date;
@@ -15,7 +13,6 @@ import java.util.List;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
-import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("cart")
 public final class CartService {
@@ -89,13 +86,7 @@ public final class CartService {
         var product = new ProductReplica(productUpdated.seller_id, productUpdated.product_id, productUpdated.name, productUpdated.sku, productUpdated.category,
                 productUpdated.description, productUpdated.price, productUpdated.freight_value, productUpdated.status, productUpdated.version);
 
-        // an upsert would be nice. semantics line if present, update. otherwise, insert
-        if(this.productReplicaRepository.exists(product.getProductId())){
-            this.productReplicaRepository.update(product);
-        } else {
-            this.productReplicaRepository.insert(product);
-        }
-
+        this.productReplicaRepository.upsert(product);
     }
 
 }

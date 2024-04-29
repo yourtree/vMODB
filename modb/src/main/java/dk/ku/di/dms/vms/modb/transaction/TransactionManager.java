@@ -275,6 +275,17 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
         return this.doInsert(table, values);
     }
 
+    public void upsert(Table table, Object[] values){
+        PrimaryIndex index = table.primaryKeyIndex();
+        IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), values);
+        if(index.upsert(pk, values)) {
+            INDEX_WRITES.get().add(index);
+            return;
+        }
+        this.undoTransactionWrites();
+        throw new RuntimeException("Constraint violation.");
+    }
+
     /**
      * Iterate over all indexes, get the corresponding writes of this tid and remove them
      *      this method can be called in parallel by transaction facade without risk

@@ -173,6 +173,12 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     }
 
     @Override
+    public final void upsert(T entity) {
+        Object[] values = this.extractFieldValuesFromEntityObject(entity);
+        this.operationalAPI.upsert(this.table, values);
+    }
+
+    @Override
     public final void update(T entity) {
         Object[] values = this.extractFieldValuesFromEntityObject(entity);
         this.operationalAPI.update(this.table, values);

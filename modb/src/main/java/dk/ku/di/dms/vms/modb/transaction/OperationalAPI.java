@@ -24,6 +24,8 @@ public sealed interface OperationalAPI permits TransactionManager {
 
     void delete(Table table, Object[] values);
 
+    void upsert(Table table, Object[] values);
+
     void update(Table table, Object[] values);
 
     void insert(Table table, Object[] values);
