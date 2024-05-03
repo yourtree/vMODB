@@ -13,7 +13,6 @@ import java.util.logging.Logger;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.PAYMENT_CONFIRMED;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.SHIPMENT_UPDATED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
-import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("customer")
 public final class CustomerService {
@@ -45,7 +44,7 @@ public final class CustomerService {
     }
 
     @Inbound(values = {SHIPMENT_UPDATED})
-    @Transactional(type=W)
+    @Transactional(type=RW)
     public void processDeliveryNotification(ShipmentUpdated shipmentUpdated){
         System.out.println("Customer received a shipment updated event with TID: "+ shipmentUpdated.instanceId);
 

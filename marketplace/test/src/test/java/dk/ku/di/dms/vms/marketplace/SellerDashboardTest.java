@@ -54,7 +54,6 @@ public final class SellerDashboardTest extends AbstractWorkflowTest {
             String payload_ = serdes.serialize(invoiceIssued, InvoiceIssued.class);
             TransactionInput.Event eventPayload_ = new TransactionInput.Event(INVOICE_ISSUED, payload_);
 
-            // TODO refactor to avoid one more object creation... just use event directly ...
             TransactionInput txInput_ = new TransactionInput(UPDATE_SHIPMENT, eventPayload_);
 
             TRANSACTION_INPUTS.add(txInput_);

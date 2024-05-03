@@ -56,7 +56,7 @@ public final class ShipmentService {
         List<ShipmentNotification> shipmentNotifications = new ArrayList<>();
         List<DeliveryNotification> deliveryNotifications = new ArrayList<>();
 
-        for (var entry : packages) {
+        for (OldestSellerPackageEntry entry : packages) {
 
             List<Package> orderPackages = this.packageRepository.getPackagesByCustomerIdAndOrderId( entry.getCustomerId(), entry.getOrderId() );
 
@@ -97,8 +97,7 @@ public final class ShipmentService {
 
         }
 
-        return new ShipmentUpdated(deliveryNotifications, shipmentNotifications, instanceId );
-
+        return new ShipmentUpdated(deliveryNotifications, shipmentNotifications, instanceId);
     }
 
     @Inbound(values = {PAYMENT_CONFIRMED})

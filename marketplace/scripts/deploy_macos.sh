@@ -25,6 +25,19 @@ then
   exit 1
 fi
 
+if `echo "$*" | grep -q cart`; then
+    s=`ps | grep -c cart`
+    if [ $s = $var1 ]
+    then
+        echo "cart already running"
+    else
+        echo "initializing cart..."
+        osascript -e 'tell app "Terminal"
+            do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/cart/target/cart-1.0-SNAPSHOT-jar-with-dependencies.jar"
+        end tell'
+    fi
+fi
+
 if `echo "$*" | grep -q product`; then
     p=`ps | grep -c product`
     if [ $p = $var1 ]
@@ -51,8 +64,73 @@ if `echo "$*" | grep -q stock`; then
     fi
 fi
 
-echo "Wait for microservices before setting up the proxy (coordinator)"
-sleep 2
+if `echo "$*" | grep -q order`; then
+    s=`ps | grep -c order`
+    if [ $s = $var1 ]
+    then
+        echo "order already running"
+    else
+        echo "initializing order..."
+        osascript -e 'tell app "Terminal"
+            do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/order/target/order-1.0-SNAPSHOT-jar-with-dependencies.jar"
+        end tell'
+    fi
+fi
+
+if `echo "$*" | grep -q payment`; then
+    s=`ps | grep -c payment`
+    if [ $s = $var1 ]
+    then
+        echo "payment already running"
+    else
+        echo "initializing payment..."
+        osascript -e 'tell app "Terminal"
+            do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/payment/target/payment-1.0-SNAPSHOT-jar-with-dependencies.jar"
+        end tell'
+    fi
+fi
+
+if `echo "$*" | grep -q shipment`; then
+    s=`ps | grep -c shipment`
+    if [ $s = $var1 ]
+    then
+        echo "shipment already running"
+    else
+        echo "initializing shipment..."
+        osascript -e 'tell app "Terminal"
+            do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/shipment/target/shipment-1.0-SNAPSHOT-jar-with-dependencies.jar"
+        end tell'
+    fi
+fi
+
+if `echo "$*" | grep -q seller`; then
+    s=`ps | grep -c seller`
+    if [ $s = $var1 ]
+    then
+        echo "seller already running"
+    else
+        echo "initializing seller..."
+        osascript -e 'tell app "Terminal"
+            do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/seller/target/seller-1.0-SNAPSHOT-jar-with-dependencies.jar"
+        end tell'
+    fi
+fi
+
+if `echo "$*" | grep -q customer`; then
+    s=`ps | grep -c customer`
+    if [ $s = $var1 ]
+    then
+        echo "customer already running"
+    else
+        echo "initializing seller..."
+        osascript -e 'tell app "Terminal"
+            do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/customer/target/customer-1.0-SNAPSHOT-jar-with-dependencies.jar"
+        end tell'
+    fi
+fi
+
+echo "Waiting for microservices before setting up the proxy (coordinator)..."
+sleep 5
 
 if `echo "$*" | grep -q proxy`; then
     p=`ps | grep -c proxy`

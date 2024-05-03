@@ -26,6 +26,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.INVOICE_ISSUED;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.SHIPMENT_UPDATED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
@@ -61,7 +62,7 @@ public final class SellerService {
 
         for (OrderItem orderItem : orderItems) {
             var totalInvoice = orderItem.total_amount + orderItem.getFreightValue();
-            OrderEntry orderEntry = new OrderEntry(
+            OrderEntry entry = new OrderEntry(
                     invoiceIssued.customer.CustomerId,
                     invoiceIssued.orderId,
                     orderItem.product_id,
@@ -81,12 +82,12 @@ public final class SellerService {
                     OrderStatus.INVOICED,
                     null
             );
-            list.add(orderEntry);
+            list.add(entry);
 
             if(!locksAcquired.containsKey(orderItem.seller_id)) {
                 ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(orderItem.seller_id, (_) -> new ReentrantReadWriteLock());
                 sellerLock.readLock().lock();
-                locksAcquired.put(orderEntry.seller_id, sellerLock);
+                locksAcquired.put(entry.seller_id, sellerLock);
             }
 
             // view maintenance code
@@ -99,9 +100,9 @@ public final class SellerService {
                 this.orderSellerViewMap.put(orderItem.seller_id, view);
             }
 
-            view.orders.add(new OrderSellerView.OrderId(orderEntry.customer_id, orderItem.order_id));
-            view.count_items++;
-            view.total_amount += orderEntry.total_amount;
+            view.orders.add(new OrderSellerView.OrderId(entry.customer_id, orderItem.order_id));
+            view.count_items += entry.quantity;
+            view.total_amount += entry.total_amount;
             view.total_incentive += orderItem.total_incentive;
             view.total_freight += orderItem.freight_value;
             view.total_items += orderItem.total_items;
@@ -118,7 +119,7 @@ public final class SellerService {
         this.orderEntryRepository.insertAll(list);
     }
 
-    @Inbound(values = "shipment_updated")
+    @Inbound(values = SHIPMENT_UPDATED)
     @Transactional(type=RW)
     public void processShipmentUpdate(ShipmentUpdated shipmentUpdated){
         System.out.println("Seller received a shipment update event with TID: "+ shipmentUpdated.instanceId);
@@ -126,24 +127,46 @@ public final class SellerService {
             List<OrderEntry> orderEntries = this.orderEntryRepository.getOrderEntriesByCustomerIdAndOrderId(
                     shipmentNotification.customerId, shipmentNotification.orderId );
             for(OrderEntry entry : orderEntries){
-                if (shipmentNotification.status == ShipmentStatus.APPROVED) {
-                    entry.order_status = OrderStatus.READY_FOR_SHIPMENT;
-                    entry.shipment_date = shipmentNotification.eventDate;
-                    entry.delivery_status = PackageStatus.ready_to_ship;
-                } else if (shipmentNotification.status == ShipmentStatus.DELIVERY_IN_PROGRESS) {
-                    entry.order_status = OrderStatus.IN_TRANSIT;
-                    entry.delivery_status = PackageStatus.shipped;
-                } else if (shipmentNotification.status == ShipmentStatus.CONCLUDED) {
-                    // TODO remove entry from view
-                    entry.order_status = OrderStatus.DELIVERED;
+
+                if(entry.delivery_status == PackageStatus.delivered) continue;
+
+                switch (shipmentNotification.status) {
+                    case ShipmentStatus.APPROVED -> {
+                        entry.order_status = OrderStatus.READY_FOR_SHIPMENT;
+                        entry.shipment_date = shipmentNotification.eventDate;
+                        entry.delivery_status = PackageStatus.ready_to_ship;
+                    }
+                    case ShipmentStatus.DELIVERY_IN_PROGRESS -> {
+                        entry.order_status = OrderStatus.IN_TRANSIT;
+                        entry.delivery_status = PackageStatus.shipped;
+                    }
+                    case ShipmentStatus.CONCLUDED -> {
+                        // remove entry from view
+                        entry.order_status = OrderStatus.DELIVERED;
+                        OrderSellerView view = this.orderSellerViewMap.get(entry.seller_id);
+                        view.orders.remove(new OrderSellerView.OrderId(entry.customer_id, entry.order_id));
+                        view.count_items -= entry.quantity;
+                        view.total_amount -= entry.total_amount;
+                        view.total_incentive -= entry.total_incentive;
+                        view.total_freight -= entry.freight_value;
+                        view.total_items -= entry.total_items;
+                        view.total_invoice -= entry.total_invoice;
+                        // this requires maintaining another map
+                        view.count_orders = view.orders.size();
+                    }
+                    default -> throw new IllegalStateException("Unexpected value: " + shipmentNotification.status);
                 }
                 this.orderEntryRepository.update( entry );
             }
         }
 
+
         for(DeliveryNotification delivery : shipmentUpdated.deliveryNotifications) {
             OrderEntry orderEntry = this.orderEntryRepository.lookupByKey(
                     new OrderEntry.OrderEntryId( delivery.customerId, delivery.orderId, delivery.productId ) );
+
+            if(orderEntry.delivery_status == PackageStatus.delivered) continue;
+
             orderEntry.delivery_status = delivery.packageStatus;
             orderEntry.delivery_date = delivery.deliveryDate;
             orderEntry.package_id = delivery.packageId;
@@ -159,7 +182,7 @@ public final class SellerService {
      * @return seller dashboard
      */
     public OrderSellerView queryDashboard(int sellerId){
-        ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(sellerId, (x) -> new ReentrantReadWriteLock());
+        ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(sellerId, (_) -> new ReentrantReadWriteLock());
         sellerLock.writeLock().lock();
         var res = this.orderSellerViewMap.getOrDefault( sellerId, new OrderSellerView(sellerId) );
         sellerLock.writeLock().unlock();

@@ -231,7 +231,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
                 VmsTransactionResult txResult = this.vmsInternalChannels.transactionOutputQueue().take();
 
-                this.logger.info(this.me.identifier+": New transaction result in event handler. TID = "+txResult.tid());
+                this.logger.config(this.me.identifier+": New transaction result in event handler. TID = "+txResult.tid());
 
                 this.lastTidFinished = txResult.tid();
 
