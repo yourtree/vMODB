@@ -309,6 +309,7 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
 //    }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <DTO> List<DTO> query(SelectStatement statement, Class<DTO> clazz){
         List<Object[]> objects = this.operationalAPI.fetch(this.table, statement);
         Constructor<?> constructor = clazz.getDeclaredConstructors()[0];

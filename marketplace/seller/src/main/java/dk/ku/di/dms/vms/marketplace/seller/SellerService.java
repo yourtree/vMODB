@@ -61,7 +61,7 @@ public final class SellerService {
         List<OrderEntry> list = new ArrayList<>(invoiceIssued.getItems().size());
 
         for (OrderItem orderItem : orderItems) {
-            var totalInvoice = orderItem.total_amount + orderItem.getFreightValue();
+            float totalInvoice = orderItem.total_amount + orderItem.getFreightValue();
             OrderEntry entry = new OrderEntry(
                     invoiceIssued.customer.CustomerId,
                     invoiceIssued.orderId,
@@ -85,7 +85,7 @@ public final class SellerService {
             list.add(entry);
 
             if(!locksAcquired.containsKey(orderItem.seller_id)) {
-                ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(orderItem.seller_id, (_) -> new ReentrantReadWriteLock());
+                ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(orderItem.seller_id, (ignored) -> new ReentrantReadWriteLock());
                 sellerLock.readLock().lock();
                 locksAcquired.put(entry.seller_id, sellerLock);
             }
@@ -112,7 +112,7 @@ public final class SellerService {
         }
 
         // unlock all
-        for(var lock : locksAcquired.entrySet()){
+        for(Map.Entry<Integer, ReadWriteLock> lock : locksAcquired.entrySet()){
             lock.getValue().readLock().unlock();
         }
 
@@ -182,9 +182,9 @@ public final class SellerService {
      * @return seller dashboard
      */
     public OrderSellerView queryDashboard(int sellerId){
-        ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(sellerId, (_) -> new ReentrantReadWriteLock());
+        ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(sellerId, (ignored) -> new ReentrantReadWriteLock());
         sellerLock.writeLock().lock();
-        var res = this.orderSellerViewMap.getOrDefault( sellerId, new OrderSellerView(sellerId) );
+        OrderSellerView res = this.orderSellerViewMap.getOrDefault( sellerId, new OrderSellerView(sellerId) );
         sellerLock.writeLock().unlock();
         return res;
     }

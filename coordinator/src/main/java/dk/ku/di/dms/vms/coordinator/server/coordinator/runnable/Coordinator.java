@@ -628,7 +628,7 @@ public final class Coordinator extends StoppableRunnable {
 
                 // these threads need to block to wait for server response
 
-            }, taskExecutor).exceptionallyAsync((_) -> {
+            }, taskExecutor).exceptionallyAsync((ignored) -> {
                 // defaultLogError(UNREACHABLE_NODE, server.hashCode());
                 return null;
             }, taskExecutor);

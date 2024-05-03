@@ -1,9 +1,9 @@
 package dk.ku.di.dms.vms.marketplace.seller;
 
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
 import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
+import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;

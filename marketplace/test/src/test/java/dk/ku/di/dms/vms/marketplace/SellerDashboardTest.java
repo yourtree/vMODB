@@ -54,7 +54,7 @@ public final class SellerDashboardTest extends AbstractWorkflowTest {
             String payload_ = serdes.serialize(invoiceIssued, InvoiceIssued.class);
             TransactionInput.Event eventPayload_ = new TransactionInput.Event(INVOICE_ISSUED, payload_);
 
-            TransactionInput txInput_ = new TransactionInput(UPDATE_SHIPMENT, eventPayload_);
+            TransactionInput txInput_ = new TransactionInput(UPDATE_DELIVERY, eventPayload_);
 
             TRANSACTION_INPUTS.add(txInput_);
         }
@@ -77,7 +77,7 @@ public final class SellerDashboardTest extends AbstractWorkflowTest {
         Map<Integer, ServerNode> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
-        TransactionDAG simpleDAG =  TransactionBootstrap.name(UPDATE_SHIPMENT)
+        TransactionDAG simpleDAG =  TransactionBootstrap.name(UPDATE_DELIVERY)
                 .input( "a", "seller", INVOICE_ISSUED)
                 .terminal("b", "seller", "a")
                 .build();

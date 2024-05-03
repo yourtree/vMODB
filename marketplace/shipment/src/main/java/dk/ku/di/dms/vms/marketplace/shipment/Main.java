@@ -14,7 +14,7 @@ public final class Main {
         Properties properties = Utils.loadProperties();
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         int networkThreadPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
-        String[] packages = String.valueOf( properties.getProperty("packages") ).split(",");
+        String[] packages = new String[]{ "dk.ku.di.dms.vms.marketplace.shipment", "dk.ku.di.dms.vms.marketplace.common" };
 
         VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.SHIPMENT_VMS_PORT, packages, networkBufferSize, networkThreadPoolSize);
 

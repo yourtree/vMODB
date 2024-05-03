@@ -4,7 +4,9 @@ import dk.ku.di.dms.vms.marketplace.cart.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.cart.entities.ProductReplica;
 import dk.ku.di.dms.vms.marketplace.cart.repositories.ICartItemRepository;
 import dk.ku.di.dms.vms.marketplace.cart.repositories.IProductReplicaRepository;
-import dk.ku.di.dms.vms.marketplace.common.events.*;
+import dk.ku.di.dms.vms.marketplace.common.events.PriceUpdated;
+import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdated;
+import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
 import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.modb.api.annotations.*;
 

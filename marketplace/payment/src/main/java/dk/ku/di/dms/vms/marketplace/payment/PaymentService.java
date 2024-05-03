@@ -31,23 +31,21 @@ public final class PaymentService {
     private static final IExternalProvider externalProvider;
 
     static {
-        boolean provider_aux;
+        boolean provider_aux = false;
         IExternalProvider ext_provider_aux = null;
         InputStream input = PaymentService.class.getClassLoader().getResourceAsStream("app.properties");
         Properties prop = new Properties();
         try {
             prop.load(input);
             String str = prop.getProperty("provider");
-            provider_aux = !str.contentEquals("false");
-
-            if(provider_aux){
-                ext_provider_aux = null;
+            if (str != null) {
+                provider_aux = str.contentEquals("true");
+                // if(provider_aux){
+                    // setup external provider
+                    // ext_provider_aux = null;
+                // }
             }
-
-        } catch (IOException e) {
-            provider_aux = false;
-
-        }
+        } catch (IOException ignored) { }
         provider = provider_aux;
         externalProvider = ext_provider_aux;
     }

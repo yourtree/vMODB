@@ -18,14 +18,11 @@ import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 import org.reflections.Reflections;
 
 import java.util.*;
-import java.util.logging.Logger;
 
 /**
  * Starting point for initializing the VMS application runtime
  */
 public final class VmsApplication {
-
-    private static final Logger logger = Logger.getLogger("VmsApplication");
 
     private final VmsRuntimeMetadata vmsRuntimeMetadata;
 

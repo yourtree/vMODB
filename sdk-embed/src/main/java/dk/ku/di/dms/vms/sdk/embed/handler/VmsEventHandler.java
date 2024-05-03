@@ -231,7 +231,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
                 VmsTransactionResult txResult = this.vmsInternalChannels.transactionOutputQueue().take();
 
-                this.logger.config(this.me.identifier+": New transaction result in event handler. TID = "+txResult.tid());
+                this.logger.info(this.me.identifier+": New transaction result in event handler. TID = "+txResult.tid());
 
                 this.lastTidFinished = txResult.tid();
 
@@ -276,7 +276,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             // build an indirect map
             for(Map.Entry<String,Deque<ConsumerVms>> entry : this.eventToConsumersMap.entrySet()) {
                 for(ConsumerVms consumer : entry.getValue()){
-                    consumerToEventsMap.computeIfAbsent(consumer, _ -> new ArrayList<>()).add(entry.getKey());
+                    consumerToEventsMap.computeIfAbsent(consumer, (ignored) -> new ArrayList<>()).add(entry.getKey());
                 }
             }
             for( var consumerEntry : consumerToEventsMap.entrySet() ) {
@@ -290,7 +290,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         // build an indirect map
         for(Map.Entry<String,List<IdentifiableNode>> entry : receivedConsumerVms.entrySet()) {
             for(IdentifiableNode consumer : entry.getValue()){
-                consumerToEventsMap.computeIfAbsent(consumer, _ -> new ArrayList<>()).add(entry.getKey());
+                consumerToEventsMap.computeIfAbsent(consumer, (ignored) -> new ArrayList<>()).add(entry.getKey());
             }
         }
         for( Map.Entry<IdentifiableNode,List<String>> consumerEntry : consumerToEventsMap.entrySet() ) {
@@ -489,7 +489,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                         // add to tracked VMSs...
                         for (String outputEvent : outputEvents) {
                             logger.info(me.identifier+ " adding "+outputEvent+" to consumers map with "+consumerVms.identifier);
-                            eventToConsumersMap.computeIfAbsent(outputEvent, (_) -> new ConcurrentLinkedDeque<>());
+                            eventToConsumersMap.computeIfAbsent(outputEvent, (ignored) -> new ConcurrentLinkedDeque<>());
                             eventToConsumersMap.get(outputEvent).add(consumerVms);
                         }
                         // set up consumer vms worker

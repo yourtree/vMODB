@@ -43,7 +43,7 @@ public final class ShipmentService {
         this.packageRepository = packageRepository;
     }
 
-    @Inbound(values = {UPDATE_SHIPMENT})
+    @Inbound(values = {UPDATE_DELIVERY})
     @Outbound(SHIPMENT_UPDATED)
     @Transactional(type=RW)
     public ShipmentUpdated updateShipment(String instanceId){

@@ -1,12 +1,12 @@
 package dk.ku.di.dms.vms.marketplace.customer;
 
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
 import dk.ku.di.dms.vms.marketplace.common.enums.PackageStatus;
 import dk.ku.di.dms.vms.marketplace.common.events.DeliveryNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
+import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;

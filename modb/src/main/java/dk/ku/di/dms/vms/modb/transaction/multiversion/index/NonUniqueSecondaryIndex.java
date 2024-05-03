@@ -4,8 +4,6 @@ import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
-import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIFO;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
 import java.util.*;
@@ -16,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
-    private final ThreadLocal<Map<IKey, Tuple<Object[], WriteType>>> KEY_WRITES = ThreadLocal.withInitial(HashMap::new);
+    private final ThreadLocal<Map<IKey, Tuple<Object[], WriteType>>> WRITE_SET = ThreadLocal.withInitial(HashMap::new);
 
     // pointer to primary index
     // necessary because of concurrency control
@@ -50,9 +48,9 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     @Override
     public boolean insert(IKey primaryKey, Object[] record){
         IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
-        Set<IKey> set = this.keyMap.computeIfAbsent(secKey, (_)-> new HashSet<>());
+        Set<IKey> set = this.keyMap.computeIfAbsent(secKey, (ignored)-> new HashSet<>());
         if(!set.contains(primaryKey)) {
-            KEY_WRITES.get().put(primaryKey, new Tuple<>(record, WriteType.INSERT));
+            WRITE_SET.get().put(primaryKey, new Tuple<>(record, WriteType.INSERT));
             set.add(primaryKey);
         }
         return true;
@@ -60,23 +58,26 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
     @Override
     public void undoTransactionWrites(){
-        var writes = KEY_WRITES.get().entrySet().stream().filter(p->p.getValue().t2()==WriteType.INSERT).toList();
+        var writes = WRITE_SET.get().entrySet().stream().filter(p->p.getValue().t2()==WriteType.INSERT).toList();
         for(var entry : writes){
             IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), entry.getValue().t1() );
             Set<IKey> set = this.keyMap.get(secKey);
             set.remove(entry.getKey());
         }
+        WRITE_SET.get().clear();
     }
 
     @Override
     public void installWrites() {
         // just remove the delete TODO separate INSERT and DELETE into different maps
-        var deletes = KEY_WRITES.get().entrySet().stream().filter(p->p.getValue().t2()==WriteType.DELETE).toList();
-        for(var entry : deletes){
+        var writeSet = WRITE_SET.get();
+        for(var entry : writeSet.entrySet()){
+            if(entry.getValue().t2() != WriteType.DELETE) continue;
             IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), entry.getValue().t1() );
             Set<IKey> set = this.keyMap.get(secKey);
             set.remove(entry.getKey());
         }
+        writeSet.clear();
     }
 
     @Override
@@ -93,7 +94,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     }
 
     public boolean remove(IKey key, Object[] record){
-        KEY_WRITES.get().put(key, new Tuple<>(record, WriteType.DELETE));
+        WRITE_SET.get().put(key, new Tuple<>(record, WriteType.DELETE));
         return true;
     }
 
@@ -143,7 +144,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
             this.primaryIndex = primaryIndex;
             this.idx = 0;
             this.keys = keys;
-            this.currentIterator = keyMap.computeIfAbsent(keys[this.idx], (_) -> new HashSet<>()).iterator();
+            this.currentIterator = keyMap.computeIfAbsent(keys[this.idx], (ignored) -> new HashSet<>()).iterator();
             this.keyMap = keyMap;
         }
 
@@ -156,7 +157,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
         public Object[] next() {
             if(!this.currentIterator.hasNext()){
                 this.idx++;
-                this.currentIterator = this.keyMap.computeIfAbsent(this.keys[this.idx], (_) -> new HashSet<>()).iterator();
+                this.currentIterator = this.keyMap.computeIfAbsent(this.keys[this.idx], (ignored) -> new HashSet<>()).iterator();
             }
             IKey key = this.currentIterator.next();
             return this.primaryIndex.getRecord(key);

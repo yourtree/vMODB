@@ -306,7 +306,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
      * INDEX_WRITES can have primary indexes and secondary indexes...
      */
     private void undoTransactionWrites(){
-        for(var index : INDEX_WRITES.get()) {
+        for(IMultiVersionIndex index : INDEX_WRITES.get()) {
             index.undoTransactionWrites();
         }
     }
@@ -374,7 +374,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
     }
 
     /**
-     * TODO checkpoint
+     * checkpoint
      * Must log the updates in a separate file. no need for WAL, no need to store before and after
      * Only log those data versions until the corresponding batch.
      * TIDs are not necessarily a sequence.
@@ -387,10 +387,11 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
 
     @Override
     public void commit(){
-        var indexes = INDEX_WRITES.get();
+        Set<IMultiVersionIndex> indexes = INDEX_WRITES.get();
         for(var index : indexes){
             index.installWrites();
         }
+        indexes.clear();
     }
 
     @Override

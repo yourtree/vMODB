@@ -56,14 +56,15 @@ public final class Main {
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
 
+        int starterSize = starterVMSs.size();
         int maxSleep = 3;
         do {
             sleep(5000);
-            if(coordinator.getConnectedVMSs().size() == starterVMSs.size()) break;
+            if(coordinator.getConnectedVMSs().size() == starterSize) break;
             maxSleep--;
         } while (maxSleep > 0);
 
-        if(coordinator.getConnectedVMSs().size() < starterVMSs.size()) throw new RuntimeException("Proxy: VMSs did not connect to coordinator on time");
+        if(coordinator.getConnectedVMSs().size() < starterSize) throw new RuntimeException("Proxy: VMSs did not connect to coordinator on time");
 
         System.out.println("Proxy: All starter VMS has connected to the coordinator \nProxy: Initializing now the HTTP Server for receiving transaction inputs");
 
@@ -103,48 +104,58 @@ public final class Main {
         int tcpPort = Integer.parseInt( properties.getProperty("tcp_port") );
         ServerNode serverIdentifier = new ServerNode( "localhost", tcpPort );
 
-        Map<Integer, ServerNode> serverMap = new HashMap<>(10);
+        Map<Integer, ServerNode> serverMap = new HashMap<>();
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
+        Map<String, TransactionDAG> transactionMap = new HashMap<>();
+
+        /*
         TransactionDAG updatePriceDag =  TransactionBootstrap.name(UPDATE_PRICE)
                 .input( "a", "product", UPDATE_PRICE )
-                .input("b", "cart", UPDATE_PRICE )
-                .terminal("c", "product", "a")
-                .terminal("d", "cart", "b")
+                .terminal("b", "cart", "a")
                 .build();
+        transactionMap.put(updatePriceDag.name, updatePriceDag);
 
         TransactionDAG updateProductDag =  TransactionBootstrap.name(UPDATE_PRODUCT)
                 .input( "a", "product", UPDATE_PRODUCT )
                 .terminal("b", "stock", "a")
+                 .terminal("c", "cart", "a")
                 .build();
+        transactionMap.put(updateProductDag.name, updateProductDag);
+        */
 
         TransactionDAG checkoutDag =  TransactionBootstrap.name(CUSTOMER_CHECKOUT)
                 .input( "a", "cart", CUSTOMER_CHECKOUT)
-                .input( "b", "stock", RESERVE_STOCK )
-                .terminal("c", "order", "a")
+                .internal( "b", "stock", RESERVE_STOCK)
+                .internal("c", "order", STOCK_CONFIRMED, "b")
+                .internal("d", "payment", INVOICE_ISSUED, "c")
+                .terminal( "e", "shipment",  "d" )
                 .build();
-
-        Map<String, TransactionDAG> transactionMap = new HashMap<>();
-        transactionMap.put(updatePriceDag.name, updatePriceDag);
-        transactionMap.put(updateProductDag.name, updateProductDag);
         transactionMap.put(checkoutDag.name, checkoutDag);
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        String productHost = properties.getProperty("product_host");
+        String cartHost = properties.getProperty("cart_host");
+//        String productHost = properties.getProperty("product_host");
         String stockHost = properties.getProperty("stock_host");
         String orderHost = properties.getProperty("order_host");
-        String cartHost = properties.getProperty("cart_host");
-        IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
+        String paymentHost = properties.getProperty("payment_host");
+        String shipmentHost = properties.getProperty("shipment_host");
+
+        IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, Constants.CART_VMS_PORT);
+//        IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, Constants.STOCK_VMS_PORT);
         IdentifiableNode orderAddress = new IdentifiableNode("order", orderHost, Constants.ORDER_VMS_PORT);
-        IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, Constants.CART_VMS_PORT);
+        IdentifiableNode paymentAddress = new IdentifiableNode("payment", paymentHost, PAYMENT_VMS_PORT);
+        IdentifiableNode shipmentAddress = new IdentifiableNode("shipment", shipmentHost, SHIPMENT_VMS_PORT);
 
         Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(10);
-        starterVMSs.put(productAddress.hashCode(), productAddress);
+        starterVMSs.put(cartAddress.hashCode(), cartAddress);
+//        starterVMSs.put(productAddress.hashCode(), productAddress);
         starterVMSs.put(stockAddress.hashCode(), stockAddress);
         starterVMSs.put(orderAddress.hashCode(), orderAddress);
-        starterVMSs.put(cartAddress.hashCode(), cartAddress);
+        starterVMSs.put(paymentAddress.hashCode(), paymentAddress);
+        starterVMSs.put(shipmentAddress.hashCode(), shipmentAddress);
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         long batchSendRate = Long.parseLong( properties.getProperty("batch_send_rate") );
@@ -173,53 +184,55 @@ public final class Main {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             String payload = new String( exchange.getRequestBody().readAllBytes() );
-
-            // TODO paths for cart (checkout), shipment (delivery)
             String[] uriSplit = exchange.getRequestURI().toString().split("/");
-
             switch(uriSplit[1]){
                 case "cart": {
                     if(exchange.getRequestMethod().equalsIgnoreCase("POST")){
-                        TransactionInput.Event eventPayload = new TransactionInput.Event("customer_checkout", payload);
-                        TransactionInput txInput = new TransactionInput("customer_checkout", eventPayload);
+                        TransactionInput.Event eventPayload = new TransactionInput.Event(CUSTOMER_CHECKOUT, payload);
+                        TransactionInput txInput = new TransactionInput(CUSTOMER_CHECKOUT, eventPayload);
                         TRANSACTION_INPUTS.add(txInput);
-                    } else {
-                        System.out.println("Proxy: Unsupported cart HTTP method: " + exchange.getRequestMethod());
+                        break;
                     }
-                    break;
                 }
                 case "product" : {
                     switch (exchange.getRequestMethod()) {
                         // price update
                         case "PATCH": {
-                            TransactionInput.Event eventPayload = new TransactionInput.Event("update_price", payload);
-                            TransactionInput txInput = new TransactionInput("update_price", eventPayload);
+                            TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRICE, payload);
+                            TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);
                             TRANSACTION_INPUTS.add(txInput);
                             break;
                         }
                         // product update
                         case "PUT": {
-                            TransactionInput.Event eventPayload = new TransactionInput.Event("update_product", payload);
-                            TransactionInput txInput = new TransactionInput("update_product", eventPayload);
+                            TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRODUCT, payload);
+                            TransactionInput txInput = new TransactionInput(UPDATE_PRODUCT, eventPayload);
                             TRANSACTION_INPUTS.add(txInput);
                             break;
                         }
                     }
                 }
                 case "shipment" : {
-                    break;
+                    if(exchange.getRequestMethod().equalsIgnoreCase("POST")){
+                        TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_DELIVERY, payload);
+                        TransactionInput txInput = new TransactionInput(UPDATE_DELIVERY, eventPayload);
+                        TRANSACTION_INPUTS.add(txInput);
+                        break;
+                    }
                 }
-                default: {
-                    OutputStream outputStream = exchange.getResponseBody();
-                    exchange.sendResponseHeaders(500, 0);
-                    outputStream.flush();
-                    outputStream.close();
+                default : {
+                    System.out.println("Proxy: Unsupported cart HTTP method: " + exchange.getRequestMethod());
+                    endExchange(exchange, 500);
                     return;
                 }
             }
 
+            endExchange(exchange, 200);
+        }
+
+        private static void endExchange(HttpExchange exchange, int rCode) throws IOException {
             OutputStream outputStream = exchange.getResponseBody();
-            exchange.sendResponseHeaders(200, 0);
+            exchange.sendResponseHeaders(rCode, 0);
             outputStream.flush();
             outputStream.close();
         }

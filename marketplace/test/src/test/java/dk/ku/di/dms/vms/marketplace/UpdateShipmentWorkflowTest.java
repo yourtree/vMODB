@@ -15,7 +15,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static dk.ku.di.dms.vms.marketplace.common.Constants.UPDATE_SHIPMENT;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.UPDATE_DELIVERY;
 import static java.lang.Thread.sleep;
 
 /**
@@ -70,10 +70,10 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
             String instanceId = "1";
 
             // event name
-            TransactionInput.Event eventPayload_ = new TransactionInput.Event(UPDATE_SHIPMENT, instanceId);
+            TransactionInput.Event eventPayload_ = new TransactionInput.Event(UPDATE_DELIVERY, instanceId);
 
             // transaction name
-            TransactionInput txInput_ = new TransactionInput(UPDATE_SHIPMENT, eventPayload_);
+            TransactionInput txInput_ = new TransactionInput(UPDATE_DELIVERY, eventPayload_);
 
             logger.info("["+name+"] New update shipment event with version: "+instanceId);
             TRANSACTION_INPUTS.add(txInput_);

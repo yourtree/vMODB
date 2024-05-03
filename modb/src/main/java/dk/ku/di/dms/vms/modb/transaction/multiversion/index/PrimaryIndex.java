@@ -46,18 +46,14 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     private final Optional<IPrimaryKeyGenerator<?>> primaryKeyGenerator;
 
     /**
-     * Optimization is verifying whether this thread is R or RW.
-     * If R, no need to allocate a List
+     * Thread maintains the same data structure across transaction executions
+     * Thus, returning an immutable collection here may yield error
      */
-    private final ThreadLocal<Set<IKey>> KEY_WRITES = ThreadLocal.withInitial(() -> {
-        if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
-            Set<IKey> pulled = WRITE_SET_BUFFER.poll();
-            if(pulled == null)
-                return new HashSet<>();
-            return pulled;
-        }
-        // immutable, empty list for read-only transactions
-        return Collections.emptySet();
+    private final ThreadLocal<Set<IKey>> WRITE_SET = ThreadLocal.withInitial(() -> {
+        Set<IKey> pulled = WRITE_SET_BUFFER.poll();
+        if(pulled == null)
+            return new HashSet<>();
+        return pulled;
     });
 
     private static final Deque<Set<IKey>> WRITE_SET_BUFFER = new ConcurrentLinkedDeque<>();
@@ -76,7 +72,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     @Override
     public boolean equals(Object o) {
-        return this.hashCode() == o.hashCode();
+        return o instanceof PrimaryIndex && this.hashCode() == o.hashCode();
     }
 
     @Override
@@ -276,7 +272,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         operationSet.lastWriteType = WriteType.INSERT;
         operationSet.lastVersion = values;
 
-        KEY_WRITES.get().add(key);
+        WRITE_SET.get().add(key);
         return true;
     }
 
@@ -331,7 +327,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         operationSet.lastWriteType = WriteType.UPDATE;
         operationSet.lastVersion = values;
 
-        KEY_WRITES.get().add(key);
+        WRITE_SET.get().add(key);
         return true;
     }
 
@@ -367,7 +363,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             // amortized O(1)
             operationSet.updateHistoryMap.put(TransactionMetadata.TRANSACTION_CONTEXT.get().tid, entry);
             operationSet.lastWriteType = WriteType.DELETE;
-            KEY_WRITES.get().add(key);
+            WRITE_SET.get().add(key);
             return Optional.of( operationSet.lastVersion );
             // does this key even exist? if not, don't even need to save it on transaction metadata
         }
@@ -382,7 +378,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             operationSet.updateHistoryMap.put(TransactionMetadata.TRANSACTION_CONTEXT.get().tid, entry);
             operationSet.lastWriteType = WriteType.DELETE;
 
-            KEY_WRITES.get().add(key);
+            WRITE_SET.get().add(key);
             return Optional.of( obj );
         }
         return Optional.empty();
@@ -402,7 +398,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      * Called when a constraint is violated, leading to a transaction abort
      */
     public void undoTransactionWrites(){
-        Set<IKey> writesOfTid = KEY_WRITES.get();
+        Set<IKey> writesOfTid = WRITE_SET.get();
         if(writesOfTid == null) return;
 
         for(var key : writesOfTid) {
@@ -412,13 +408,11 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         }
 
         writesOfTid.clear();
-        // TODO perhaps don't need to return it, since the same thread will be running logic again....
-        WRITE_SET_BUFFER.add(writesOfTid);
-        KEY_WRITES.remove();
     }
 
     public void installWrites(){
-        for(IKey key : KEY_WRITES.get()) {
+        var writeSet = WRITE_SET.get();
+        for(IKey key : writeSet) {
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             switch (operationSetOfKey.lastWriteType){
                 case UPDATE -> this.primaryKeyIndex.update(key, operationSetOfKey.lastVersion);
@@ -427,6 +421,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             }
         }
         // cannot clear updatesPerKeyMap because read and write transactions may require older versions
+        writeSet.clear();
     }
 
     public ReadWriteIndex<IKey> underlyingIndex(){

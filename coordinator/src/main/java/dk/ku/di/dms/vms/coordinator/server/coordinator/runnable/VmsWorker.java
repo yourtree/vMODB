@@ -247,7 +247,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     @Override
     public BlockingDeque<TransactionEvent.Payload> transactionEventsPerBatch(long batch){
-        return this.transactionEventsPerBatch.computeIfAbsent(batch, (_) -> new LinkedBlockingDeque<>());
+        return this.transactionEventsPerBatch.computeIfAbsent(batch, (ignored) -> new LinkedBlockingDeque<>());
     }
 
     @Override

@@ -87,6 +87,7 @@ public final class IndexGroupByMinWithProjection extends AbstractScan {
 //        }
 //    }
 
+    @SuppressWarnings("unchecked")
     private void compute(Object[] record, Map<GroupByKey, Tuple<Comparable<?>, Object[]>> minMap) {
         if(record == null) return;
         // hash the group by columns

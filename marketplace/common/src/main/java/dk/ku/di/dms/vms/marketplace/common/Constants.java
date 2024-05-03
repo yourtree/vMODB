@@ -36,6 +36,8 @@ public final class Constants {
 
     public static final String CUSTOMER_CHECKOUT = "customer_checkout";
 
+    public static final String UPDATE_DELIVERY = "update_delivery";
+
     /**
      * EVENTS
      */
@@ -50,8 +52,6 @@ public final class Constants {
     public static final String INVOICE_ISSUED = "invoice_issued";
 
     public static final String PAYMENT_CONFIRMED = "payment_confirmed";
-
-    public static final String UPDATE_SHIPMENT = "update_shipment";
 
     public static final String SHIPMENT_UPDATED = "shipment_updated";
 
