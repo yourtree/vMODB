@@ -586,6 +586,24 @@ public final class VmsEventHandler extends StoppableRunnable {
                             vmsInternalChannels.transactionInputQueue().add(buildInboundEvent(payload));
                         }
                     }
+
+                    // 4 is int size
+                    while(connectionMetadata.readBuffer.remaining() > 8) {
+                        // is there more data?
+                        messageType = connectionMetadata.readBuffer.get();
+                        if (messageType == BATCH_OF_EVENTS) {
+                            count = connectionMetadata.readBuffer.getInt();
+                            logger.info(me.identifier + ": Additional batch of [" + count + "] events received!!!!");
+                            for (int i = 0; i < count; i++) {
+                                connectionMetadata.readBuffer.get();
+                                payload = TransactionEvent.read(connectionMetadata.readBuffer);
+                                if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
+                                    vmsInternalChannels.transactionInputQueue().add(buildInboundEvent(payload));
+                                }
+                            }
+                        }
+                    }
+
                 }
                 case (EVENT) -> {
                     // can only be event, skip reading the message type

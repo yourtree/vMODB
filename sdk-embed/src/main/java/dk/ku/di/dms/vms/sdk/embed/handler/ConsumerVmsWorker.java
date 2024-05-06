@@ -126,7 +126,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     private void sleep_(){
         // logger.info("Leader: Preparing another submission to: "+vmsNode.vmsIdentifier+" by thread "+Thread.currentThread().getId());
         // necessary to avoid buggy behavior: corrupted byte buffer. reason is unknown. maybe something related to operating system?
-        try { sleep(random.nextInt(100)); } catch (InterruptedException ignored) {}
+        try { sleep(this.random.nextInt(100)); } catch (InterruptedException ignored) {}
     }
 
     private ByteBuffer retrieveByteBuffer(){
