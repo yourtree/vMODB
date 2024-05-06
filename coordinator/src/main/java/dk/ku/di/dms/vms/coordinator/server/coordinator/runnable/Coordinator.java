@@ -212,7 +212,7 @@ public final class Coordinator extends StoppableRunnable {
         }
 
         this.starterVMSs = startersVMSs;
-        this.vmsMetadataMap = new HashMap<>(10);
+        this.vmsMetadataMap = new ConcurrentHashMap<>();
 
         // might come filled from election process
         this.servers = servers;
@@ -271,17 +271,20 @@ public final class Coordinator extends StoppableRunnable {
             this.setupStarterVMSs();
         }
 
+        Thread.startVirtualThread(this::processEventsSentByVmsWorkers);
+
         logger.config("Leader: Starter VMSs processing starting now... ");
         // process all VMS_IDENTIFIER first before submitting transactions
-        while(this.vmsMetadataMap.size() < this.starterVMSs.size()){
-            this.processEventsSentByVmsWorkers();
+        for(;;){
+            if(this.vmsMetadataMap.size() >= this.starterVMSs.size())
+                break;
         }
 
         logger.config("Leader: Transaction processing starting now... ");
         long start = System.currentTimeMillis();
-        while(isRunning()){
+        while(this.isRunning()){
             do {
-                this.processEventsSentByVmsWorkers();
+                // this.processEventsSentByVmsWorkers();
                 this.processTransactionInputEvents();
             } while(System.currentTimeMillis() - start < this.options.getBatchWindow());
             this.advanceCurrentBatchAndSpawnSendBatchOfEvents();
@@ -799,24 +802,24 @@ public final class Coordinator extends StoppableRunnable {
     private void processEventsSentByVmsWorkers() {
 
         // it is ok to keep this loop. at some point events from VMSs will stop arriving
-        while(!this.coordinatorQueue.isEmpty()){
+        while(this.isRunning()){
             try {
                 Message message = this.coordinatorQueue.take();
                 switch(message.type){
                     // receive metadata from all microservices
                     case VMS_IDENTIFIER -> {
                         VmsIdentifier vmsIdentifier_ = message.asVmsIdentifier();
-                        logger.info("Leader: Received a VMS_IDENTIFIER from: "+vmsIdentifier_.getIdentifier());
+                        this.logger.info("Leader: Received a VMS_IDENTIFIER from: "+vmsIdentifier_.getIdentifier());
                         // update metadata of this node so coordinator can reason about data dependencies
                         this.vmsMetadataMap.put( vmsIdentifier_.getIdentifier(), vmsIdentifier_ );
 
                         if(this.vmsMetadataMap.size() < this.starterVMSs.size()) {
-                            logger.info("Leader: "+(this.starterVMSs.size() - this.vmsMetadataMap.size())+" starter(s) VMSs remain to be processed.");
+                            this.logger.info("Leader: "+(this.starterVMSs.size() - this.vmsMetadataMap.size())+" starter(s) VMSs remain to be processed.");
                             continue;
                         }
                         // if all metadata, from all starter vms have arrived, then send the signal to them
 
-                        logger.info("Leader: All VMS starter have sent their VMS_IDENTIFIER");
+                        this.logger.info("Leader: All VMS starter have sent their VMS_IDENTIFIER");
 
                         // new VMS may join, requiring updating the consumer set
                         Map<String, List<IdentifiableNode>> vmsConsumerSet;
@@ -828,7 +831,7 @@ public final class Coordinator extends StoppableRunnable {
 
                             IdentifiableNode vms = this.starterVMSs.get( vmsIdentifier.node().hashCode() );
                             if(vms == null) {
-                                logger.warning("Leader: Could not identify "+vmsIdentifier.getIdentifier()+" from set of starter VMSs");
+                                this.logger.warning("Leader: Could not identify "+vmsIdentifier.getIdentifier()+" from set of starter VMSs");
                                 continue;
                             }
 
@@ -844,7 +847,7 @@ public final class Coordinator extends StoppableRunnable {
                             String mapStr = "";
                             if (!vmsConsumerSet.isEmpty()) {
                                 mapStr = this.serdesProxy.serializeConsumerSet(vmsConsumerSet);
-                                logger.info("Leader: Consumer set built for "+vmsIdentifier.getIdentifier()+": "+mapStr);
+                                this.logger.info("Leader: Consumer set built for "+vmsIdentifier.getIdentifier()+": "+mapStr);
                             }
                             vmsIdentifier.worker().queue().add( new IVmsWorker.Message( SEND_CONSUMER_SET, mapStr ));
                         }
@@ -868,12 +871,12 @@ public final class Coordinator extends StoppableRunnable {
                         // what if ACKs from VMSs take too long? or never arrive?
                         // need to deal with intersecting batches? actually just continue emitting for higher throughput
                         BatchComplete.Payload msg = message.asBatchComplete();
-                        logger.info("Leader: Received a BATCH_COMPLETE from: "+msg.vms());
+                        this.logger.info("Leader: Received a BATCH_COMPLETE from: "+msg.vms());
                         BatchContext batchContext = this.batchContextMap.get( msg.batch() );
                         // only if it is not a duplicate vote
                         batchContext.missingVotes.remove( msg.vms() );
                         if(batchContext.missingVotes.isEmpty()){
-                            logger.info("Leader: Received all missing votes of batch: "+ msg.batch());
+                            this.logger.info("Leader: Received all missing votes of batch: "+ msg.batch());
                             // making this implement order-independent, so not assuming batch commit are received in order,
                             // although they are necessarily applied in order both here and in the VMSs
                             // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes,
@@ -898,7 +901,7 @@ public final class Coordinator extends StoppableRunnable {
                     default -> logger.warning("Leader: Received an unidentified message: "+message.type);
                 }
 
-            } catch (InterruptedException e) {
+            } catch (Exception e) {
                 this.logger.warning("Leader: Exception caught while looping through coordinatorQueue: "+e.getMessage());
             }
 

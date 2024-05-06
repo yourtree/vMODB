@@ -145,7 +145,7 @@ if `echo "$*" | grep -q proxy`; then
         echo "proxy already running"
     else
         echo "Waiting for microservices before setting up the proxy (coordinator)..."
-        sleep 5
+        sleep 3
         echo "initializing proxy..."
         osascript -e 'tell app "Terminal"
             do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/proxy/target/proxy-1.0-SNAPSHOT-jar-with-dependencies.jar"

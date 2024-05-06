@@ -517,8 +517,11 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     remaining = 0; // force exit loop
                 }
             }
-
         }
+
+        // clear list
+        this.events.clear();
+
     }
 
     private final Random random = new Random();
@@ -592,6 +595,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 }
             }
         }
+
+        // clear list of events to avoid repetition
+        this.events.clear();
 
     }
 

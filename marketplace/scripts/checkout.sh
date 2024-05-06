@@ -11,7 +11,7 @@ fi
 
 echo "Adding stock item 1/1"
 
-curl -X POST -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "qty_available" : 10, "qty_reserved" : 0, "order_count" : 10, "ytd": 0, "data" : "test", "version": "0"}' localhost:8002/stock
+curl -X POST -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "qty_available" : 100000, "qty_reserved" : 0, "order_count" : 10, "ytd": 0, "data" : "test", "version": "0"}' localhost:8002/stock
 
 echo "Retrieving stock item 1/1"
 
@@ -19,18 +19,23 @@ curl -X GET localhost:8002/stock/1/1
 
 echo ""
 
-echo "Adding cart item 1/1"
+for i in `seq 1 $param1`
+do
 
-curl -X PATCH -H "Content-Type: application/json" -d '{"SellerId": "1", "ProductId": "1", "ProductName" : "test", "UnitPrice" : "10", "FreightValue" : "0", "Quantity": "3", "Voucher" : "0", "Version": "0"}' localhost:8000/cart/1
+  echo "Adding cart item $i/1/1"
 
-echo "Retrieving cart item 1/1"
+  curl -X PATCH -H "Content-Type: application/json" -d '{"SellerId": "1", "ProductId": "1", "ProductName" : "test", "UnitPrice" : "10", "FreightValue" : "0", "Quantity": "1", "Voucher" : "0", "Version": "0"}' 'localhost:8000/cart/'$i
 
-curl -X GET localhost:8000/cart/1/1/1
+  echo "Retrieving cart item $i/1/1"
 
-echo ""
+  curl -X GET "localhost:8000/cart/$i/1/1"
 
-echo "Submitting checkout request to proxy"
+  echo ""
 
-curl -X POST -H "Content-Type: application/json" -d '{ "CustomerId" : 1, "FirstName" : "test", "LastName" : "test", "Street" : "test", "Complement" : "test", "City" : "test", "State" : "test", "ZipCode" : "test", "PaymentType" : "CREDIT_CARD", "CardNumber" : "test", "CardHolderName" : "test", "CardExpiration" : "test", "CardBrand" : "test", "Installments" : "1",  "instanceId" : "1" }' localhost:8090/cart
+  echo "Submitting checkout '$i' request to proxy"
+
+  curl -X POST -H "Content-Type: application/json" -d '{ "CustomerId" : '$i', "FirstName" : "test", "LastName" : "test", "Street" : "test", "Complement" : "test", "City" : "test", "State" : "test", "ZipCode" : "test", "PaymentType" : "CREDIT_CARD", "CardNumber" : "test", "CardHolderName" : "test", "CardExpiration" : "test", "CardSecurityNumber" : "test", "CardBrand" : "test", "Installments" : "1",  "instanceId" : "'$i'" }' localhost:8090/cart
+
+done
 
 echo "Checkout script done"

@@ -315,7 +315,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         // have we processed all the TIDs of this batch?
         if(this.currentBatch.isOpen() && this.currentBatch.lastTid <= this.lastTidFinished){
 
-            this.logger.info(this.me.identifier+": The last TID for the current batch ("+this.currentBatch.lastTid+") has arrived");
+            this.logger.info(this.me.identifier+": The last TID ("+this.currentBatch.lastTid+") for the current batch ("+this.currentBatch.lastTid+") has been executed");
 
             // many outputs from the same transaction may arrive here, but can only send the batch commit once
             this.currentBatch.setStatus(BatchContext.Status.BATCH_COMPLETED);
@@ -376,9 +376,9 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         this.currentBatch.setStatus(BatchContext.Status.BATCH_COMMITTED);
 
-        // TODO this may not be necessary. the leader has already moved on at this point
-        this.leaderWorkerQueue.add( new LeaderWorker.Message( LeaderWorker.Command.SEND_BATCH_COMMIT_ACK,
-                BatchCommitAck.of(this.currentBatch.batch, this.me.identifier) ));
+        // it may not be necessary. the leader has already moved on at this point
+        // this.leaderWorkerQueue.add( new LeaderWorker.Message( LeaderWorker.Command.SEND_BATCH_COMMIT_ACK,
+        //        BatchCommitAck.of(this.currentBatch.batch, this.me.identifier) ));
     }
 
     /**
@@ -408,7 +408,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
 
         for(ConsumerVms consumerVms : consumerVMSs) {
-            this.logger.info(me.identifier+": An output event (queue: " + outputEvent.outputQueue() + ") will be queued to vms: " + consumerVms.identifier);
+            this.logger.info(me.identifier+": An output event (queue: " + outputEvent.outputQueue() + ") will be queued to VMS: " + consumerVms.identifier);
             consumerVms.addEventToBatch(payload);
         }
     }

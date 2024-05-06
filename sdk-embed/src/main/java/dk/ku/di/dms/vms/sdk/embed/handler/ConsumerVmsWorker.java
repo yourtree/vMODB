@@ -69,7 +69,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     @Override
     public void run() {
 
-        logger.info(this.me.identifier+ ": Starting consumer vms worker for VMS: "+consumerVms.identifier);
+        logger.info(this.me.identifier+ ": Starting consumer worker for VMS: "+consumerVms.identifier);
 
         List<TransactionEvent.Payload> events = new ArrayList<>(1000);
         while(this.isRunning()){
