@@ -10,7 +10,7 @@ import java.util.Properties;
 
 public final class Main {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] ignored) throws Exception {
 
         Properties properties = Utils.loadProperties();
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );

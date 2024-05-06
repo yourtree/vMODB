@@ -21,7 +21,7 @@ import java.util.Date;
 import java.util.Properties;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.INVOICE_ISSUED;
-import static dk.ku.di.dms.vms.marketplace.common.Constants.SHIPMENT_UPDATED;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.PAYMENT_CONFIRMED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 
 @Microservice("payment")
@@ -61,7 +61,7 @@ public final class PaymentService {
     }
 
     @Inbound(values = {INVOICE_ISSUED})
-    @Outbound(SHIPMENT_UPDATED)
+    @Outbound(PAYMENT_CONFIRMED)
     @Transactional(type=W)
     @Parallel
     public PaymentConfirmed processPayment(InvoiceIssued invoiceIssued) {

@@ -38,8 +38,18 @@ public final class TransactionBootstrap {
         return this;
     }
 
-    public TransactionBootstrap internal(String alias, String vms, String event, String... deps){
-        if(deps == null) throw new RuntimeException("Cannot have an internal event without a parent event");
+    public TransactionBootstrap internal(String alias, String vms, String event, String dep){
+        EventIdentifier toAdd = new EventIdentifier( alias, vms, event );
+        EventIdentifier id = this.inputEventToInternalVMSsMap.get(dep);
+        id.addChildren( toAdd );
+        this.inputEventToInternalVMSsMap.put( alias, toAdd );
+        this.internalNodes.add(vms);
+        return this;
+    }
+
+    /*
+    public TransactionBootstrap internal(String alias, String vms, String event, String[] deps){
+        if(deps.length == 0) throw new RuntimeException("Cannot have an internal event without a parent event");
         EventIdentifier toAdd = new EventIdentifier( alias, vms, event );
         for(String dep : deps){
             EventIdentifier id = this.inputEventToInternalVMSsMap.get(dep);
@@ -47,6 +57,20 @@ public final class TransactionBootstrap {
         }
         this.inputEventToInternalVMSsMap.put( alias, toAdd );
         this.internalNodes.add(vms);
+        return this;
+    }
+    */
+
+    /**
+     * Why does terminal not need event input name?
+     * Because it can be deducted from the dependence
+     * But internal events require the inputs to deduct the precedence set
+     */
+    public TransactionBootstrap terminal(String alias, String vms, String dep){
+        EventIdentifier terminal = new EventIdentifier(alias, vms);
+        this.terminalNodes.add(terminal.targetVms);
+        EventIdentifier id = this.inputEventToInternalVMSsMap.get(dep);
+        id.addChildren( terminal );
         return this;
     }
 

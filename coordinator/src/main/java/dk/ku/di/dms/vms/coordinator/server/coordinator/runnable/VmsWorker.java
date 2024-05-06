@@ -393,11 +393,11 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     coordinatorQueue.add( new Coordinator.Message( Coordinator.Type.TRANSACTION_ABORT, response));
                 }
                 case EVENT ->
-                        logger.info("New event received from VMS");
+                        logger.info("Leader: New event received from VMS");
                 case BATCH_OF_EVENTS -> //
-                        logger.info("New batch of events received from VMS");
+                        logger.info("Leader: New batch of events received from VMS");
                 default ->
-                        logger.warning("Unknown message received.");
+                        logger.warning("Leader: Unknown message received.");
 
             }
             readBuffer.clear();

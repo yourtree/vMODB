@@ -9,7 +9,7 @@ help_="--help"
 param1="$1"
 
 if [ "$param1" = "$help_" ]; then
-    echo "It is expected that the script runs in the project's root folder."
+    echo "It is expected that the script runs in the marketplace project's root folder."
     echo "You can specify the apps using the following pattern:"
     echo "<app-id1> ... <app-idn>"
     exit 1
@@ -19,9 +19,18 @@ var1=1
 current_dir=$(pwd)
 echo "Current dir is" $current_dir
 
+echo ""
+
 if [ $# -eq 0 ];
 then
-  echo "No arguments passed"
+  echo "ERROR: No arguments passed"
+  exit 1
+fi
+
+if test -d  `echo $(pwd)/proxy`; then
+  echo "Initializing deploy of microservices..."
+else
+  echo "ERROR: Run the script in the marketplace project's root folder!"
   exit 1
 fi
 
@@ -129,15 +138,14 @@ if `echo "$*" | grep -q customer`; then
     fi
 fi
 
-echo "Waiting for microservices before setting up the proxy (coordinator)..."
-sleep 5
-
 if `echo "$*" | grep -q proxy`; then
     p=`ps | grep -c proxy`
     if [ $p = $var1 ]
     then
         echo "proxy already running"
     else
+        echo "Waiting for microservices before setting up the proxy (coordinator)..."
+        sleep 5
         echo "initializing proxy..."
         osascript -e 'tell app "Terminal"
             do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/proxy/target/proxy-1.0-SNAPSHOT-jar-with-dependencies.jar"

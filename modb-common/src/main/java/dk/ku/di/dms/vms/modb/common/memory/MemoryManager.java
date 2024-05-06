@@ -115,11 +115,11 @@ public final class MemoryManager {
         return getTemporaryDirectBuffer(1024);
     }
 
-    public static void releaseTemporaryDirectBuffer(ByteBuffer buf) {
+    public static void releaseTemporaryDirectBuffer(final ByteBuffer buf) {
 
-        if(buf.position() > 0 || buf.limit() < buf.capacity())
+        if(buf.position() > 0 || buf.limit() < buf.capacity()) {
             LOGGER.warning("Buffer returned without being properly cleared!");
-
+        }
         long address = MemoryUtils.getByteBufferAddress(buf);
         assignedBuffers.remove(address);
         bufferCache.offer(buf);

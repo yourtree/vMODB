@@ -593,7 +593,7 @@ public final class Coordinator extends StoppableRunnable {
                     channel.setOption(SO_KEEPALIVE, false);
                     channel.connect(address).get();
 
-                    ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
+                    ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
                     BatchReplication.write(buffer, batchContext.batchOffset, lastTidOfBatchPerVmsJson);
                     channel.write(buffer).get();
 

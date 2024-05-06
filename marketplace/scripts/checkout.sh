@@ -9,10 +9,9 @@ else
   param1="$1"
 fi
 
-
 echo "Adding stock item 1/1"
 
-curl -X POST -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "qty_available" : 10, "qty_reserved" : 0, "order_count" : 0, "ytd": 0, "data" : "", "version": "0"}' localhost:8002/stock
+curl -X POST -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "qty_available" : 10, "qty_reserved" : 0, "order_count" : 10, "ytd": 0, "data" : "test", "version": "0"}' localhost:8002/stock
 
 echo "Retrieving stock item 1/1"
 
@@ -28,8 +27,10 @@ echo "Retrieving cart item 1/1"
 
 curl -X GET localhost:8000/cart/1/1/1
 
+echo ""
+
 echo "Submitting checkout request to proxy"
 
-curl -X POST -H "Content-Type: application/json" -d '{ "CustomerId" : 1, "FirstName" : "test", "LastName" : "test", "Street" : "test", "Complement" : "test", "City" : "test", "State" : "test", "ZipCode" : "test", "PaymentType : "CREDIT_CARD", "CardNumber" : "test", "CardHolderName" : "test", "CardExpiration" : "test", "CardBrand" : "test", "Installments" : "test",  "instanceId" : "1" }' localhost:8090/cart
+curl -X POST -H "Content-Type: application/json" -d '{ "CustomerId" : 1, "FirstName" : "test", "LastName" : "test", "Street" : "test", "Complement" : "test", "City" : "test", "State" : "test", "ZipCode" : "test", "PaymentType" : "CREDIT_CARD", "CardNumber" : "test", "CardHolderName" : "test", "CardExpiration" : "test", "CardBrand" : "test", "Installments" : "1",  "instanceId" : "1" }' localhost:8090/cart
 
 echo "Checkout script done"

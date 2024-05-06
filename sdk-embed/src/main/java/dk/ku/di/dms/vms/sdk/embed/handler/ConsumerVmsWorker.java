@@ -6,7 +6,6 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
@@ -35,7 +34,6 @@ import static java.lang.Thread.sleep;
  */
 final class ConsumerVmsWorker extends StoppableRunnable {
 
-    private static final org.slf4j.Logger log = LoggerFactory.getLogger(ConsumerVmsWorker.class);
     private final VmsNode me;
 
     private final Logger logger;
@@ -71,7 +69,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     @Override
     public void run() {
 
-        logger.info(this.me.identifier+ ": Starting consumer vms worker for VMS: "+me.identifier);
+        logger.info(this.me.identifier+ ": Starting consumer vms worker for VMS: "+consumerVms.identifier);
 
         List<TransactionEvent.Payload> events = new ArrayList<>(1000);
         while(this.isRunning()){

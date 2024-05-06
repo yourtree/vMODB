@@ -109,7 +109,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
 
         TransactionDAG checkoutDag =  TransactionBootstrap.name(CUSTOMER_CHECKOUT)
                 .input( "a", "cart", CUSTOMER_CHECKOUT)
-                .internal( "b", "stock", RESERVE_STOCK)
+                .internal( "b", "stock", RESERVE_STOCK, "a")
                 .internal("c", "order", STOCK_CONFIRMED, "b")
                 .internal("d", "payment", INVOICE_ISSUED, "c")
                 .terminal("e", "seller", "c")

@@ -21,6 +21,7 @@ public class EventIdentifier {
         this.targetVms = targetVms;
         this.name = name;
         this.terminal = false;
+        this.children = new ArrayList<>();
     }
 
     public EventIdentifier(String alias, String targetVms) {
@@ -28,11 +29,13 @@ public class EventIdentifier {
         this.targetVms = targetVms;
         this.name = null;
         this.terminal = true;
+        this.children = List.of();
     }
 
     public void addChildren(EventIdentifier event){
-        if (this.terminal) return;
-        if(this.children == null) this.children = new ArrayList<>();
+        if (this.terminal) {
+            throw new RuntimeException("Cannot add children to terminal event");
+        }
         this.children.add(event);
     }
 

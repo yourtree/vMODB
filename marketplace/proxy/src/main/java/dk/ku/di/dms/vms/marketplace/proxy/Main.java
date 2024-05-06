@@ -64,9 +64,12 @@ public final class Main {
             maxSleep--;
         } while (maxSleep > 0);
 
-        if(coordinator.getConnectedVMSs().size() < starterSize) throw new RuntimeException("Proxy: VMSs did not connect to coordinator on time");
+        if(coordinator.getConnectedVMSs().size() < starterSize) {
+            System.out.println("Proxy: VMSs did not connect to coordinator on time");
+            System.exit(0);
+        }
 
-        System.out.println("Proxy: All starter VMS has connected to the coordinator \nProxy: Initializing now the HTTP Server for receiving transaction inputs");
+        System.out.println("Proxy: All starter VMS has connected to the coordinator \nProxy: Initializing the HTTP Server for receiving transaction inputs...");
 
         int http_port = Integer.parseInt( properties.getProperty("http_port") );
 
@@ -99,14 +102,7 @@ public final class Main {
         }
     }
 
-    private static Coordinator loadCoordinator(Properties properties) throws IOException {
-
-        int tcpPort = Integer.parseInt( properties.getProperty("tcp_port") );
-        ServerNode serverIdentifier = new ServerNode( "localhost", tcpPort );
-
-        Map<Integer, ServerNode> serverMap = new HashMap<>();
-        serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
-
+    private static Map<String, TransactionDAG> buildTransactionDAGs(){
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
 
         /*
@@ -126,36 +122,28 @@ public final class Main {
 
         TransactionDAG checkoutDag =  TransactionBootstrap.name(CUSTOMER_CHECKOUT)
                 .input( "a", "cart", CUSTOMER_CHECKOUT)
-                .internal( "b", "stock", RESERVE_STOCK)
+                .internal( "b", "stock", RESERVE_STOCK, "a")
                 .internal("c", "order", STOCK_CONFIRMED, "b")
                 .internal("d", "payment", INVOICE_ISSUED, "c")
                 .terminal( "e", "shipment",  "d" )
                 .build();
         transactionMap.put(checkoutDag.name, checkoutDag);
+        return transactionMap;
+    }
+
+    private static Coordinator loadCoordinator(Properties properties) throws IOException {
+
+        int tcpPort = Integer.parseInt( properties.getProperty("tcp_port") );
+        ServerNode serverIdentifier = new ServerNode( "localhost", tcpPort );
+
+        Map<Integer, ServerNode> serverMap = new HashMap<>();
+        serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
+
+        Map<String, TransactionDAG> transactionMap = buildTransactionDAGs();
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        String cartHost = properties.getProperty("cart_host");
-//        String productHost = properties.getProperty("product_host");
-        String stockHost = properties.getProperty("stock_host");
-        String orderHost = properties.getProperty("order_host");
-        String paymentHost = properties.getProperty("payment_host");
-        String shipmentHost = properties.getProperty("shipment_host");
-
-        IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, Constants.CART_VMS_PORT);
-//        IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
-        IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, Constants.STOCK_VMS_PORT);
-        IdentifiableNode orderAddress = new IdentifiableNode("order", orderHost, Constants.ORDER_VMS_PORT);
-        IdentifiableNode paymentAddress = new IdentifiableNode("payment", paymentHost, PAYMENT_VMS_PORT);
-        IdentifiableNode shipmentAddress = new IdentifiableNode("shipment", shipmentHost, SHIPMENT_VMS_PORT);
-
-        Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(10);
-        starterVMSs.put(cartAddress.hashCode(), cartAddress);
-//        starterVMSs.put(productAddress.hashCode(), productAddress);
-        starterVMSs.put(stockAddress.hashCode(), stockAddress);
-        starterVMSs.put(orderAddress.hashCode(), orderAddress);
-        starterVMSs.put(paymentAddress.hashCode(), paymentAddress);
-        starterVMSs.put(shipmentAddress.hashCode(), shipmentAddress);
+        Map<Integer, IdentifiableNode> starterVMSs = buildStarterVMSs(properties);
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         long batchSendRate = Long.parseLong( properties.getProperty("batch_send_rate") );
@@ -175,6 +163,37 @@ public final class Main {
                 TRANSACTION_INPUTS,
                 serdes
         );
+    }
+
+    private static Map<Integer, IdentifiableNode> buildStarterVMSs(Properties properties) {
+        String cartHost = properties.getProperty("cart_host");
+//        String productHost = properties.getProperty("product_host");
+        String stockHost = properties.getProperty("stock_host");
+        String orderHost = properties.getProperty("order_host");
+        String paymentHost = properties.getProperty("payment_host");
+        String shipmentHost = properties.getProperty("shipment_host");
+
+        if(paymentHost == null) throw new RuntimeException("Payment host is null");
+        if(cartHost == null) throw new RuntimeException("Cart host is null");
+        if(orderHost == null) throw new RuntimeException("Order host is null");
+        if(shipmentHost == null) throw new RuntimeException("Shipment host is null");
+        if(stockHost == null) throw new RuntimeException("Stock host is null");
+
+        IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, Constants.CART_VMS_PORT);
+//        IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
+        IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, Constants.STOCK_VMS_PORT);
+        IdentifiableNode orderAddress = new IdentifiableNode("order", orderHost, Constants.ORDER_VMS_PORT);
+        IdentifiableNode paymentAddress = new IdentifiableNode("payment", paymentHost, PAYMENT_VMS_PORT);
+        IdentifiableNode shipmentAddress = new IdentifiableNode("shipment", shipmentHost, SHIPMENT_VMS_PORT);
+
+        Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(10);
+        starterVMSs.put(cartAddress.hashCode(), cartAddress);
+//        starterVMSs.put(productAddress.hashCode(), productAddress);
+        starterVMSs.put(stockAddress.hashCode(), stockAddress);
+        starterVMSs.put(orderAddress.hashCode(), orderAddress);
+        starterVMSs.put(paymentAddress.hashCode(), paymentAddress);
+        starterVMSs.put(shipmentAddress.hashCode(), shipmentAddress);
+        return starterVMSs;
     }
 
     private static class ProxyHttpHandler implements HttpHandler {

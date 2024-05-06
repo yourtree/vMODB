@@ -248,7 +248,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                         continue;
                     }
 
-                    // remove ourselves
+                    // remove ourselves (which also saves some bytes)
                     precedenceMap.remove(this.me.identifier);
 
                     String precedenceMapUpdated = this.serdesProxy.serializeMap(precedenceMap);
@@ -663,7 +663,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     VmsNode producerVms = Presentation.readVms(this.buffer, serdesProxy);
                     this.buffer.clear();
 
-                    ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer();
+                    ByteBuffer writeBuffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
 
                     LockConnectionMetadata connMetadata = new LockConnectionMetadata(
                             producerVms.hashCode(),
@@ -722,7 +722,8 @@ public final class VmsEventHandler extends StoppableRunnable {
                 channel.read( buffer, null, new UnknownNodeReadCompletionHandler(channel, buffer) );
                 // logger.info(me.identifier+": Read handler has been setup: "+channel.getLocalAddress());
             } catch(Exception e){
-                logger.info("Accept handler caught exception: "+e.getMessage());
+                logger.severe(me.identifier+": Accept handler caught exception: "+e.getMessage());
+                buffer.clear();
                 MemoryManager.releaseTemporaryDirectBuffer(buffer);
             } finally {
                 logger.info(me.identifier+": Accept handler set up again for listening to new connections");
@@ -823,7 +824,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                         leader.hashCode(),
                         LockConnectionMetadata.NodeType.SERVER,
                         buffer,
-                        MemoryManager.getTemporaryDirectBuffer(),
+                        MemoryManager.getTemporaryDirectBuffer(networkBufferSize),
                         channel,
                         null
                 );
