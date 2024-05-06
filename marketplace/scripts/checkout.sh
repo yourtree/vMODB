@@ -24,7 +24,7 @@ do
 
   echo "Adding cart item $i/1/1"
 
-  curl -X PATCH -H "Content-Type: application/json" -d '{"SellerId": "1", "ProductId": "1", "ProductName" : "test", "UnitPrice" : "10", "FreightValue" : "0", "Quantity": "1", "Voucher" : "0", "Version": "0"}' 'localhost:8000/cart/'$i
+  curl -X PATCH -H "Content-Type: application/json" -d '{"SellerId": "1", "ProductId": "1", "ProductName" : "test", "UnitPrice" : "10", "FreightValue" : "0", "Quantity": "1", "Voucher" : "0", "Version": "0"}' 'localhost:8000/cart/'$i'/add
 
   echo "Retrieving cart item $i/1/1"
 

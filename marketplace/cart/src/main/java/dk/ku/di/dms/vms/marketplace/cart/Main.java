@@ -84,27 +84,26 @@ public final class Main {
                     IKey key = CompositeKey.of( obj );
                     Object[] record = this.table.underlyingPrimaryKeyIndex().lookupByKey(key);
 
-                    try{
+                    try {
                         var entity = this.repository.parseObjectIntoEntity(record);
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(200, 0);
                         outputStream.write( entity.toString().getBytes(StandardCharsets.UTF_8) );
                         outputStream.close();
                     } catch(RuntimeException e) {
-                        OutputStream outputStream = exchange.getResponseBody();
-                        exchange.sendResponseHeaders(404, 0);
-                        outputStream.flush();
-                        outputStream.close();
+                        returnFailed(exchange);
                     }
                     break;
                 }
                 case "PATCH": {
                     String[] split = exchange.getRequestURI().toString().split("/");
-                    int customerId = Integer.parseInt(split[split.length - 1]);
 
-                    String str = new String( exchange.getRequestBody().readAllBytes() );
-                    dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
-                            serdes.deserialize(str, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
+                    try {
+                        int customerId = Integer.parseInt(split[split.length - 2]);
+
+                        String str = new String(exchange.getRequestBody().readAllBytes());
+                        dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
+                                serdes.deserialize(str, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
 
                     /*
                     CartItem cartItem = new CartItem(
@@ -123,40 +122,48 @@ public final class Main {
                     // put customer id on the correct position
                     obj[2] = customerId;
                     */
-                    // bypass repository. use api object directly to transform payload
-                    Object[] obj = new Object[]{
-                            cartItemAPI.SellerId,
-                            cartItemAPI.ProductId,
-                            customerId,
-                            cartItemAPI.ProductName,
-                            cartItemAPI.UnitPrice,
-                            cartItemAPI.FreightValue,
-                            cartItemAPI.Quantity,
-                            cartItemAPI.Voucher,
-                            cartItemAPI.Version
-                    };
+                        // bypass repository. use api object directly to transform payload
+                        Object[] obj = new Object[]{
+                                cartItemAPI.SellerId,
+                                cartItemAPI.ProductId,
+                                customerId,
+                                cartItemAPI.ProductName,
+                                cartItemAPI.UnitPrice,
+                                cartItemAPI.FreightValue,
+                                cartItemAPI.Quantity,
+                                cartItemAPI.Voucher,
+                                cartItemAPI.Version
+                        };
 
-                    IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), obj );
-                    this.table.underlyingPrimaryKeyIndex().insert(key, obj);
+                        IKey key = KeyUtils.buildRecordKey(table.schema().getPrimaryKeyColumns(), obj);
+                        this.table.underlyingPrimaryKeyIndex().insert(key, obj);
 
-                    // add to customer idx for fast lookup on checkout
-                    this.customerIdx.insert( key, obj );
+                        // add to customer idx for fast lookup on checkout
+                        this.customerIdx.insert(key, obj);
 
-                    // response
-                    OutputStream outputStream = exchange.getResponseBody();
-                    exchange.sendResponseHeaders(200, 0);
-                    outputStream.flush();
-                    outputStream.close();
+                        // response
+                        OutputStream outputStream = exchange.getResponseBody();
+                        exchange.sendResponseHeaders(200, 0);
+                        outputStream.flush();
+                        outputStream.close();
+
+                    } catch(Exception e){
+                        returnFailed(exchange);
+                    }
                     break;
                 }
                 default : {
-                    // failed response
-                    OutputStream outputStream = exchange.getResponseBody();
-                    exchange.sendResponseHeaders(404, 0);
-                    outputStream.flush();
-                    outputStream.close();
+                    returnFailed(exchange);
                 }
             }
+        }
+
+        private static void returnFailed(HttpExchange exchange) throws IOException {
+            // failed response
+            OutputStream outputStream = exchange.getResponseBody();
+            exchange.sendResponseHeaders(404, 0);
+            outputStream.flush();
+            outputStream.close();
         }
 
     }

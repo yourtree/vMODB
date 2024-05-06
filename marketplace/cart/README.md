@@ -22,7 +22,7 @@ java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --ad
 
 Let's start adding a <b>cart item</b> to the <i>Cart</i> microservice:
 ```
-curl -X PATCH -H "Content-Type: application/json" -d '{"SellerId": "1", "ProductId": "1", "ProductName" : "test", "UnitPrice" : "10", "FreightValue" : "0", "Quantity": "3", "Voucher" : "0", "Version": "0"}' localhost:8000/cart/1
+curl -X PATCH -H "Content-Type: application/json" -d '{"SellerId": "1", "ProductId": "1", "ProductName" : "test", "UnitPrice" : "10", "FreightValue" : "0", "Quantity": "3", "Voucher" : "0", "Version": "0"}' localhost:8000/cart/1/add
 ```
 
 Let's send a GET request to verify whether the function have successfully processed the above operation through the following command:

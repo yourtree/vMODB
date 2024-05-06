@@ -59,7 +59,7 @@ public final class Main {
         int starterSize = starterVMSs.size();
         int maxSleep = 3;
         do {
-            sleep(5000);
+            sleep(1000);
             if(coordinator.getConnectedVMSs().size() == starterSize) break;
             maxSleep--;
         } while (maxSleep > 0);
@@ -69,7 +69,7 @@ public final class Main {
             System.exit(0);
         }
 
-        System.out.println("Proxy: All starter VMS has connected to the coordinator \nProxy: Initializing the HTTP Server for receiving transaction inputs...");
+        System.out.println("Proxy: All starter VMS have connected to the coordinator \nProxy: Initializing the HTTP Server for receiving transaction inputs...");
 
         int http_port = Integer.parseInt( properties.getProperty("http_port") );
 
@@ -212,6 +212,8 @@ public final class Main {
                         TRANSACTION_INPUTS.add(txInput);
                         break;
                     }
+                    reportError("cart", exchange);
+                    return;
                 }
                 case "product" : {
                     switch (exchange.getRequestMethod()) {
@@ -230,6 +232,8 @@ public final class Main {
                             break;
                         }
                     }
+                    reportError("product", exchange);
+                    return;
                 }
                 case "shipment" : {
                     if(exchange.getRequestMethod().equalsIgnoreCase("POST")){
@@ -238,15 +242,21 @@ public final class Main {
                         TRANSACTION_INPUTS.add(txInput);
                         break;
                     }
+                    reportError("shipment", exchange);
+                    return;
                 }
                 default : {
-                    System.out.println("Proxy: Unsupported cart HTTP method: " + exchange.getRequestMethod());
-                    endExchange(exchange, 500);
+                    reportError("", exchange);
                     return;
                 }
             }
 
             endExchange(exchange, 200);
+        }
+
+        private static void reportError(String service, HttpExchange exchange) throws IOException {
+            System.out.println("Proxy: Unsupported "+service+" HTTP method: " + exchange.getRequestMethod());
+            endExchange(exchange, 500);
         }
 
         private static void endExchange(HttpExchange exchange, int rCode) throws IOException {
