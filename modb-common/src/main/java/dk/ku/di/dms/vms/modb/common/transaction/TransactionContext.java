@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.transaction;
 
-public class TransactionContext {
+public final class TransactionContext {
 
     public final long tid;
 

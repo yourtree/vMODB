@@ -59,25 +59,12 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     @Override
     public void undoTransactionWrites(){
         var writes = WRITE_SET.get().entrySet().stream().filter(p->p.getValue().t2()==WriteType.INSERT).toList();
-        for(var entry : writes){
+        for(Map.Entry<IKey, Tuple<Object[], WriteType>> entry : writes){
             IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), entry.getValue().t1() );
             Set<IKey> set = this.keyMap.get(secKey);
             set.remove(entry.getKey());
         }
         WRITE_SET.get().clear();
-    }
-
-    @Override
-    public void installWrites() {
-        // just remove the delete TODO separate INSERT and DELETE into different maps
-        var writeSet = WRITE_SET.get();
-        for(var entry : writeSet.entrySet()){
-            if(entry.getValue().t2() != WriteType.DELETE) continue;
-            IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), entry.getValue().t1() );
-            Set<IKey> set = this.keyMap.get(secKey);
-            set.remove(entry.getKey());
-        }
-        writeSet.clear();
     }
 
     @Override
@@ -94,13 +81,26 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     }
 
     public boolean remove(IKey key, Object[] record){
-        WRITE_SET.get().put(key, new Tuple<>(record, WriteType.DELETE));
+        // WRITE_SET.get().put(key, new Tuple<>(record, WriteType.DELETE));
         return true;
     }
 
     @Override
     public Object[] lookupByKey(IKey key) {
         throw new RuntimeException("Not supported");
+    }
+
+    @Override
+    public void installWrites() {
+        // just remove the delete TODO separate INSERT and DELETE into different maps
+//        Map<IKey, Tuple<Object[], WriteType>> writeSet = WRITE_SET.get();
+//        for(Map.Entry<IKey, Tuple<Object[], WriteType>> entry : writeSet.entrySet()){
+//            if(entry.getValue().t2() != WriteType.DELETE) continue;
+//            IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), entry.getValue().t1() );
+//            Set<IKey> set = this.keyMap.get(secKey);
+//            set.remove(entry.getKey());
+//        }
+//        writeSet.clear();
     }
 
     @Override
@@ -116,12 +116,12 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
         @Override
         public boolean hasNext() {
-            return false;
+            throw new RuntimeException("Not supported");
         }
 
         @Override
         public Object[] next() {
-            return new Object[0];
+            throw new RuntimeException("Not supported");
         }
     }
 

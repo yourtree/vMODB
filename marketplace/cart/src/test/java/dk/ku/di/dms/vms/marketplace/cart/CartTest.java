@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.common.Utils;
 import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
+import dk.ku.di.dms.vms.modb.common.transaction.TransactionContext;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
@@ -66,7 +67,7 @@ public final class CartTest {
         var table = vms.getTable("cart_items");
 
         IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), cartItemRow );
-        table.underlyingPrimaryKeyIndex().insert(key, cartItemRow);
+        table.primaryKeyIndex().insert(key, cartItemRow);
 
         // add to customer idx
         NonUniqueSecondaryIndex secIdx = table.secondaryIndexMap.get( KeyUtils.buildIndexKey( new int[]{2} ) );
@@ -92,6 +93,7 @@ public final class CartTest {
     public void testTwoCustomerUpdates() throws Exception {
         VmsApplication vms = loadCartVms();
 
+        // cart item for same customer id
         Object[] cartItemRow = new Object[]{
                 1,
                 1,
@@ -105,6 +107,9 @@ public final class CartTest {
         };
 
         for(int i = 1; i <= 2; i++) {
+            TransactionMetadata.TRANSACTION_CONTEXT.set( new TransactionContext(i-1,i-1,false) );
+
+            System.out.println("Adding item " + i + " to the cart");
             insertCartItem(vms, cartItemRow);
             CustomerCheckout customerCheckout = new CustomerCheckout(
                     1, "test", "test", "test", "test", "test", "test", "test",
@@ -113,10 +118,14 @@ public final class CartTest {
                     CUSTOMER_CHECKOUT, CustomerCheckout.class, customerCheckout);
             vms.internalChannels().transactionInputQueue().add(inboundEvent);
 
-            while(!(vms.lastTidFinished() < i));
+            // have to wait until the first transaction finishes in order to add
+            // the new cart item and avoid deleting them all before the second transaction starts
+            // this causes blocking the test
+            // while(vms.lastTidFinished() != i);
+            sleep(2000);
         }
 
-        sleep(200000);
+//        sleep(2000);
 
         assert vms.lastTidFinished() == 2;
 

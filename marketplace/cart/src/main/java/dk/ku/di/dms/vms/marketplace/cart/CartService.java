@@ -52,6 +52,9 @@ public final class CartService {
             }
 
             this.cartItemRepository.deleteAll(cartItems);
+
+            System.out.println("Cart finishing checkout request with TID: "+checkout.instanceId);
+
             return new ReserveStock(new Date(), checkout, convertCartItems( cartItems ), checkout.instanceId);
         } catch (Exception e) {
             System.out.println("ERROR: "+e.getMessage());

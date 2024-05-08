@@ -42,7 +42,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     private final Map<IKey, OperationSetOfKey> updatesPerKeyMap;
 
-    // for PK generation. for now, all strategies use this (auto, sequence, etc)
+    // for PK generation. for now, all strategies use sequence
     private final Optional<IPrimaryKeyGenerator<?>> primaryKeyGenerator;
 
     /**
@@ -496,7 +496,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public Object[] getRecord(IKey key){
         OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
         if(operation != null){
-            return operation.updateHistoryMap.floorEntry(TransactionMetadata.TRANSACTION_CONTEXT.get().lastTid).val().record;
+            return operation.updateHistoryMap
+                    .floorEntry(TransactionMetadata.TRANSACTION_CONTEXT.get().lastTid).val().record;
         }
         return this.primaryKeyIndex.lookupByKey(key);
     }

@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.common.Utils;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -49,13 +50,12 @@ public final class Main {
 
         Coordinator coordinator = loadCoordinator(properties);
 
-        var starterVMSs = coordinator.getStarterVMSs();
-
         String driverUrl = properties.getProperty("driver_url");
 
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
 
+        var starterVMSs = coordinator.getStarterVMSs();
         int starterSize = starterVMSs.size();
         int maxSleep = 3;
         do {
@@ -68,7 +68,6 @@ public final class Main {
             System.out.println("Proxy: VMSs did not connect to coordinator on time");
             System.exit(0);
         }
-
         System.out.println("Proxy: All starter VMS have connected to the coordinator \nProxy: Initializing the HTTP Server for receiving transaction inputs...");
 
         int http_port = Integer.parseInt( properties.getProperty("http_port") );
@@ -157,7 +156,9 @@ public final class Main {
                 new CoordinatorOptions()
                         .withBatchWindow(batchSendRate)
                         .withGroupThreadPoolSize(groupPoolSize)
-                        .withNetworkBufferSize(networkBufferSize),
+                        .withNetworkBufferSize(
+                                networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize
+                        ),
                 STARTING_BATCH_ID,
                 STARTING_TID,
                 TRANSACTION_INPUTS,

@@ -31,6 +31,7 @@ import java.util.logging.Level;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.*;
+import static java.lang.Thread.sleep;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -558,9 +559,11 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         // the VMS sending events to me
         private final IdentifiableNode node;
+        private int recursionDepth;
 
         public VmsReadCompletionHandler(IdentifiableNode node){
             this.node = node;
+            this.recursionDepth = 0;
         }
 
         @Override
@@ -580,7 +583,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 case (BATCH_OF_EVENTS) -> {
                     // connectionMetadata.readBuffer.position(1);
                     int count = connectionMetadata.readBuffer.getInt();
-                    logger.info(me.identifier+": Batch of ["+count+"] events received from: "+node.identifier);
+                    logger.info(me.identifier+": Batch of ["+count+"] events received from "+node.identifier);
                     TransactionEvent.Payload payload;
                     for(int i = 0; i < count; i++){
                         // move offset to discard message type
@@ -594,6 +597,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     if(connectionMetadata.readBuffer.position() < result){
                         logger.config("Batch: There is more data to be read. Position: "+
                                 connectionMetadata.readBuffer.position()+" Expected: "+result);
+                        this.recursionDepth++;
                         completed(result, connectionMetadata);
                     }
 
@@ -618,7 +622,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
                 }
                 case (EVENT) -> {
-                    logger.info(me.identifier+": 1 event received from: "+node.identifier);
+                    logger.info(me.identifier+": 1 event received from "+node.identifier);
                     // can only be event, skip reading the message type
                     // connectionMetadata.readBuffer.position(1);
                     // data dependence or input event
@@ -631,6 +635,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     if(connectionMetadata.readBuffer.position() < result){
                         logger.config("Event: There is more data to be read. Position: "+
                                 connectionMetadata.readBuffer.position()+" Expected: "+result);
+                        this.recursionDepth++;
                         completed(result, connectionMetadata);
                     }
                 }
@@ -638,6 +643,10 @@ public final class VmsEventHandler extends StoppableRunnable {
                     logger.warning("Unknown message type "+messageType+" received from: "+node.identifier);
             }
             connectionMetadata.readBuffer.clear();
+            if(this.recursionDepth > 0){
+                this.recursionDepth--;
+                return;
+            }
             connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
         }
 
@@ -665,6 +674,14 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         @Override
         public void completed(Integer result, Void void_) {
+
+            if(result == 0){
+                logger.warning(me.identifier+": A node is trying to connect with an empty message. Trying to read it again in 5 seconds");
+                try { sleep(5000); } catch (InterruptedException ignored) { }
+                channel.read(this.buffer, null, this);
+            } else if(result == -1){
+                logger.warning(me.identifier+": A node died before sending the presentation message");
+            }
 
             logger.info(me.identifier+": Start processing presentation message");
 

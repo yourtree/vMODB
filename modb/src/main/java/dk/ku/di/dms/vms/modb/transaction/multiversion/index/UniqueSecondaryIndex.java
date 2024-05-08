@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * The same key from PK is used to find records in this index
  * but only a portion of the data from the primary index is
- * found here. The criteria is given via annotating
+ * found here. The criterion is given via annotating
  * {@link dk.ku.di.dms.vms.modb.api.annotations.VmsPartialIndex}
  * in a column belonging to a {@link VmsTable}.
  */
@@ -37,19 +37,6 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
     public void undoTransactionWrites() {
         Map<IKey, WriteType> writesOfTid = KEY_WRITES.get();
         // nothing to do
-        writesOfTid.clear();
-    }
-
-    @Override
-    public void installWrites() {
-        Map<IKey, WriteType> writesOfTid = KEY_WRITES.get();
-        if(writesOfTid == null) return;
-        for(var entry : writesOfTid.entrySet()){
-            switch (entry.getValue()){
-                case INSERT -> this.keyMap.add(entry.getKey());
-                case DELETE -> this.keyMap.remove(entry.getKey());
-            }
-        }
         writesOfTid.clear();
     }
 
@@ -76,6 +63,19 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
     public Object[] lookupByKey(IKey key){
         // should never call it. this index does not have the record
         return null;
+    }
+
+    @Override
+    public void installWrites() {
+        Map<IKey, WriteType> writesOfTid = KEY_WRITES.get();
+        if(writesOfTid == null) return;
+        for(var entry : writesOfTid.entrySet()){
+            switch (entry.getValue()){
+                case INSERT -> this.keyMap.add(entry.getKey());
+                case DELETE -> this.keyMap.remove(entry.getKey());
+            }
+        }
+        writesOfTid.clear();
     }
 
     @Override

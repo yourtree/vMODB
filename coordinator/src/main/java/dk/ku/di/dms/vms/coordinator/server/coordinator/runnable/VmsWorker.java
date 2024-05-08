@@ -207,9 +207,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
             // important for consistency of state (if debugging, good to see the code controls the thread state)
             this.stop();
-
         }
-
     }
 
     @Override
@@ -408,9 +406,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         public void failed(Throwable exc, Object attachment) {
             if(state == LEADER_PRESENTATION_SENT){
                 state = VMS_PRESENTATION_RECEIVE_FAILED;
-                if(channel.isOpen()){
-                    logger.warning("It was not possible to receive a presentation message, although the channel is open.");
-                }
+//                if(channel.isOpen()){
+//                    logger.warning("It was not possible to receive a presentation message, although the channel is open.");
+//                }
                 logger.warning("It was not possible to receive a presentation message and the channel is not open. Check the consumer VMS: "+consumerVms);
             } else {
                 if (channel.isOpen()) {

@@ -9,6 +9,8 @@ import dk.ku.di.dms.vms.marketplace.common.Utils;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.transaction.TransactionContext;
+import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
@@ -59,9 +61,11 @@ public final class Main {
         private final AbstractProxyRepository<CartItem.CartItemId, CartItem> repository;
         private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
         private final NonUniqueSecondaryIndex customerIdx;
+        private final VmsApplication vms;
 
         @SuppressWarnings("unchecked")
         public CartHttpHandler(VmsApplication vms){
+            this.vms = vms;
             this.table = vms.getTable("cart_items");
             this.repository = (AbstractProxyRepository<CartItem.CartItemId, CartItem>) vms.getRepositoryProxy("cart_items");
             this.customerIdx = table.secondaryIndexMap.get( KeyUtils.buildIndexKey( new int[]{2} ) );
@@ -105,23 +109,6 @@ public final class Main {
                         dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
                                 serdes.deserialize(str, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
 
-                    /*
-                    CartItem cartItem = new CartItem(
-                            cartItemAPI.SellerId,
-                            cartItemAPI.ProductId,
-                            0, // customer id is given in the api
-                            cartItemAPI.ProductName,
-                            cartItemAPI.UnitPrice,
-                            cartItemAPI.FreightValue,
-                            cartItemAPI.Quantity,
-                            cartItemAPI.Voucher,
-                            cartItemAPI.Version
-                            );
-
-                    Object[] obj = this.repository.extractFieldValuesFromEntityObject(cartItem);
-                    // put customer id on the correct position
-                    obj[2] = customerId;
-                    */
                         // bypass repository. use api object directly to transform payload
                         Object[] obj = new Object[]{
                                 cartItemAPI.SellerId,
@@ -136,7 +123,12 @@ public final class Main {
                         };
 
                         IKey key = KeyUtils.buildRecordKey(table.schema().getPrimaryKeyColumns(), obj);
-                        this.table.underlyingPrimaryKeyIndex().insert(key, obj);
+
+                        // get last tid executed to bypass transaction scheduler
+                        long tid = vms.lastTidFinished();
+                        // can ask the transactional handler
+                        TransactionMetadata.TRANSACTION_CONTEXT.set( new TransactionContext(tid,tid-1,false) );
+                        this.table.primaryKeyIndex().insert(key, obj);
 
                         // add to customer idx for fast lookup on checkout
                         this.customerIdx.insert(key, obj);
