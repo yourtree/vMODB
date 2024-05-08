@@ -15,14 +15,14 @@ import java.util.concurrent.LinkedBlockingDeque;
  */
 public final class ConsumerVms extends IdentifiableNode {
 
-    transient final BlockingDeque<TransactionEvent.Payload> transactionEvents;
+    transient final BlockingDeque<TransactionEvent.PayloadRaw> transactionEvents;
 
     public ConsumerVms(String identifier, String host, int port) {
         super(identifier, host, port);
         this.transactionEvents = new LinkedBlockingDeque<>();
     }
 
-    public void addEventToBatch(TransactionEvent.Payload eventPayload){
+    public void addEventToBatch(TransactionEvent.PayloadRaw eventPayload){
         this.transactionEvents.add(eventPayload);
     }
 

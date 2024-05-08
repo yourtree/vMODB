@@ -106,7 +106,8 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
 
         List<T> result = new ArrayList<>(records.size());
         for(Object[] record : records) {
-            result.add( this.parseObjectIntoEntity(record) );
+            T ent = this.parseObjectIntoEntity(record);
+            if(ent != null) result.add( ent );
         }
 
         return result;
@@ -128,9 +129,7 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         Object[] object = this.operationalAPI.lookupByKey(this.table.primaryKeyIndex(), valuesOfKey);
 
         // parse object into entity
-        if (object != null)
-            return this.parseObjectIntoEntity(object);
-        return null;
+        return this.parseObjectIntoEntity(object);
     }
 
     @Override
@@ -139,7 +138,9 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         for(PK obj : keys){
             Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(obj);
             Object[] object = this.operationalAPI.lookupByKey(this.table.primaryKeyIndex(), valuesOfKey);
-            resultList.add(this.parseObjectIntoEntity(object));
+            T ent = this.parseObjectIntoEntity(object);
+            if(ent != null)
+                resultList.add(ent);
         }
         return resultList;
     }
@@ -218,12 +219,18 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
 
     public final T parseObjectIntoEntity(Object[] object){
         // all entities must have default constructor
+        if (object == null)
+            return null;
         try {
             T entity = this.entityConstructor.newInstance();
             int i;
             for(var entry : this.entityFieldMap.entrySet()){
                 // must get the index of the column first
                 i = this.table.underlyingPrimaryKeyIndex().schema().columnPosition(entry.getKey());
+                if(object[i] == null){
+                    System.out.println("ERROR in parsing object!");
+                    continue;
+                }
                 entry.getValue().set( entity, object[i] );
             }
             return entity;

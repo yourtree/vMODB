@@ -271,7 +271,8 @@ public final class Coordinator extends StoppableRunnable {
             this.setupStarterVMSs();
         }
 
-        Thread.startVirtualThread(this::processEventsSentByVmsWorkers);
+//        Thread.startVirtualThread(this::processEventsSentByVmsWorkers);
+        Thread.ofPlatform().factory().newThread(this::processEventsSentByVmsWorkers).start();
 
         logger.config("Leader: Starter VMSs processing starting now... ");
         // process all VMS_IDENTIFIER first before submitting transactions
@@ -746,7 +747,8 @@ public final class Coordinator extends StoppableRunnable {
             this.updateVmsBatchAndPrecedenceIfNecessary(vms.node());
 
             // write. think about failures/atomicity later
-            TransactionEvent.Payload txEvent = TransactionEvent.of(tid_, this.currentBatchOffset, transactionInput.event.name, transactionInput.event.payload, precedenceMapStr);
+            TransactionEvent.PayloadRaw txEvent =
+                    TransactionEvent.of(tid_, this.currentBatchOffset, transactionInput.event.name, transactionInput.event.payload, precedenceMapStr);
 
             // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
 

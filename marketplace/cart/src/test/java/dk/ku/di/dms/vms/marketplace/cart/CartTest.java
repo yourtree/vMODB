@@ -25,21 +25,9 @@ public final class CartTest {
 
     @Test
     public void test() throws Exception {
-        Properties properties = Utils.loadProperties();
-        int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
-        int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
+        VmsApplication vms = loadCartVms();
 
-        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CART_VMS_PORT, new String[]{
-                "dk.ku.di.dms.vms.marketplace.cart",
-                "dk.ku.di.dms.vms.marketplace.common"
-        }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize, networkThreadPoolSize);
-
-        VmsApplication vms = VmsApplication.build(options);
-        vms.start();
-
-        var table = vms.getTable("cart_items");
-
-        Object[] obj = new Object[]{
+        Object[] cartItemRow = new Object[]{
                 1,
                 1,
                 1,
@@ -51,12 +39,7 @@ public final class CartTest {
                 "0"
         };
 
-        IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), obj );
-        table.underlyingPrimaryKeyIndex().insert(key, obj);
-
-        // add to customer idx
-        NonUniqueSecondaryIndex secIdx = table.secondaryIndexMap.get( KeyUtils.buildIndexKey( new int[]{2} ) );
-        secIdx.insert( key, obj );
+        insertCartItem(vms, cartItemRow);
 
         CustomerCheckout customerCheckout = new CustomerCheckout(
                 1, "test", "test", "test", "test","test", "test", "test",
@@ -76,7 +59,75 @@ public final class CartTest {
         ICartItemRepository cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
         List<CartItem> list = cartItemRepository.getCartItemsByCustomerId(1);
 
-        assert list.size() == 0;
+        assert list.isEmpty();
+    }
+
+    private static void insertCartItem(VmsApplication vms, Object[] cartItemRow) {
+        var table = vms.getTable("cart_items");
+
+        IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), cartItemRow );
+        table.underlyingPrimaryKeyIndex().insert(key, cartItemRow);
+
+        // add to customer idx
+        NonUniqueSecondaryIndex secIdx = table.secondaryIndexMap.get( KeyUtils.buildIndexKey( new int[]{2} ) );
+        secIdx.insert( key, cartItemRow );
+    }
+
+    private static VmsApplication loadCartVms() throws Exception {
+        Properties properties = Utils.loadProperties();
+        int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
+        int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
+
+        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CART_VMS_PORT, new String[]{
+                "dk.ku.di.dms.vms.marketplace.cart",
+                "dk.ku.di.dms.vms.marketplace.common"
+        }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize, networkThreadPoolSize);
+
+        VmsApplication vms = VmsApplication.build(options);
+        vms.start();
+        return vms;
+    }
+
+    @Test
+    public void testTwoCustomerUpdates() throws Exception {
+        VmsApplication vms = loadCartVms();
+
+        Object[] cartItemRow = new Object[]{
+                1,
+                1,
+                1,
+                "test",
+                10,
+                10,
+                1,
+                0,
+                "0"
+        };
+
+        for(int i = 1; i <= 2; i++) {
+            insertCartItem(vms, cartItemRow);
+            CustomerCheckout customerCheckout = new CustomerCheckout(
+                    1, "test", "test", "test", "test", "test", "test", "test",
+                    "CREDIT_CARD", "test", "test", "test", "test", "test", 1, String.valueOf(i));
+            InboundEvent inboundEvent = new InboundEvent(i, i-1, 1,
+                    CUSTOMER_CHECKOUT, CustomerCheckout.class, customerCheckout);
+            vms.internalChannels().transactionInputQueue().add(inboundEvent);
+
+            while(!(vms.lastTidFinished() < i));
+        }
+
+        sleep(200000);
+
+        assert vms.lastTidFinished() == 2;
+
+        // register tid 2 and query the state of customer 1 cart items to see if they are deleted
+        TransactionMetadata.registerTransactionStart( 3, 0, 2, true );
+
+        ICartItemRepository cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
+        List<CartItem> list = cartItemRepository.getCartItemsByCustomerId(1);
+
+        assert list.isEmpty();
+
     }
 
 }

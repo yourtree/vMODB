@@ -321,6 +321,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         if(this.vmsChannels.transactionInputQueue().isEmpty()){
             if(block) {
+                logger.info(this.vmsIdentifier+": Transaction scheduler going to sleep until new event arrives");
                 this.localInputEvents.add(this.vmsChannels.transactionInputQueue().take());
                 block = false;
             } else {

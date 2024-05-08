@@ -63,7 +63,7 @@ public interface IVmsWorker {
         CONSUMER_EXECUTING
     }
 
-    BlockingDeque<TransactionEvent.Payload> transactionEventsPerBatch(long batch);
+    BlockingDeque<TransactionEvent.PayloadRaw> transactionEventsPerBatch(long batch);
 
     BlockingQueue<Message> queue();
 

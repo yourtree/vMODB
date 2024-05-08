@@ -34,7 +34,7 @@ final class LeaderWorker extends StoppableRunnable {
 
     private final LockConnectionMetadata leaderConnectionMetadata;
 
-    private final BlockingDeque<TransactionEvent.Payload> eventsToSendToLeader;
+    private final BlockingDeque<TransactionEvent.PayloadRaw> eventsToSendToLeader;
 
     private final BlockingQueue<Message> leaderWorkerQueue;
 
@@ -69,7 +69,7 @@ final class LeaderWorker extends StoppableRunnable {
     public LeaderWorker(VmsNode vmsNode,
                         ServerNode leader,
                         LockConnectionMetadata leaderConnectionMetadata,
-                        BlockingDeque<TransactionEvent.Payload> eventsToSendToLeader,
+                        BlockingDeque<TransactionEvent.PayloadRaw> eventsToSendToLeader,
                         BlockingQueue<Message> leaderWorkerQueue){
         this.vmsNode = vmsNode;
         this.leader = leader;
@@ -123,7 +123,7 @@ final class LeaderWorker extends StoppableRunnable {
         }
     }
 
-    private final List<TransactionEvent.Payload> events = new ArrayList<>();
+    private final List<TransactionEvent.PayloadRaw> events = new ArrayList<>();
 
     /**
      * No fault tolerance implemented. Once the events are submitted, they get lost and can
@@ -149,7 +149,7 @@ final class LeaderWorker extends StoppableRunnable {
             } catch (InterruptedException | ExecutionException e) {
 
                 // return events to the deque
-                for(TransactionEvent.Payload event : this.events) {
+                for(TransactionEvent.PayloadRaw event : this.events) {
                     this.eventsToSendToLeader.offerFirst(event);
                 }
 

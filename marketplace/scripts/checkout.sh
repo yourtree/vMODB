@@ -24,7 +24,7 @@ do
 
   echo "Adding cart item $i/1/1"
 
-  curl -X PATCH -H "Content-Type: application/json" -d '{"SellerId": "1", "ProductId": "1", "ProductName" : "test", "UnitPrice" : "10", "FreightValue" : "0", "Quantity": "1", "Voucher" : "0", "Version": "0"}' 'localhost:8000/cart/'$i'/add
+  curl -X PATCH -H "Content-Type: application/json" -d '{"SellerId": "1", "ProductId": "1", "ProductName" : "test", "UnitPrice" : "10", "FreightValue" : "0", "Quantity": "1", "Voucher" : "0", "Version": "0"}' "localhost:8000/cart/$i/add"
 
   echo "Retrieving cart item $i/1/1"
 
@@ -32,7 +32,7 @@ do
 
   echo ""
 
-  echo "Submitting checkout '$i' request to proxy"
+  echo "Submitting checkout $i request to proxy"
 
   curl -X POST -H "Content-Type: application/json" -d '{ "CustomerId" : '$i', "FirstName" : "test", "LastName" : "test", "Street" : "test", "Complement" : "test", "City" : "test", "State" : "test", "ZipCode" : "test", "PaymentType" : "CREDIT_CARD", "CardNumber" : "test", "CardHolderName" : "test", "CardExpiration" : "test", "CardSecurityNumber" : "test", "CardBrand" : "test", "Installments" : "1",  "instanceId" : "'$i'" }' localhost:8090/cart
 

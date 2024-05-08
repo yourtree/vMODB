@@ -69,9 +69,9 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     @Override
     public void run() {
 
-        logger.info(this.me.identifier+ ": Starting consumer worker for VMS: "+consumerVms.identifier);
+        this.logger.info(this.me.identifier+ ": Starting worker for consumer VMS: "+this.consumerVms.identifier);
 
-        List<TransactionEvent.Payload> events = new ArrayList<>(1000);
+        List<TransactionEvent.PayloadRaw> events = new ArrayList<>(1000);
         while(this.isRunning()){
 
             try {
@@ -81,6 +81,24 @@ final class ConsumerVmsWorker extends StoppableRunnable {
             }
 
             this.consumerVms.transactionEvents.drainTo(events);
+
+            if(events.size() == 1){
+                this.logger.info(this.me.identifier+ ": Submitting 1 event to "+this.consumerVms.identifier);
+
+                ByteBuffer writeBuffer = this.retrieveByteBuffer();
+                TransactionEvent.write( writeBuffer, events.getFirst() );
+                writeBuffer.flip();
+
+                try {
+                    this.WRITE_SYNCHRONIZER.take();
+                    this.connectionMetadata.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
+                } catch (InterruptedException ignored) {
+                    this.consumerVms.transactionEvents.offerFirst(events.getFirst());
+                }
+                events.clear();
+                continue;
+            }
+
             int remaining = events.size();
             int count = remaining;
             ByteBuffer writeBuffer;
@@ -98,7 +116,8 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                     this.connectionMetadata.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
 
                     // prevent from error in consumer
-                    if(remaining > 0) sleep_();
+//                    if(remaining > 0)
+//                        sleep_();
                 } catch (Exception e) {
                     this.logger.severe(this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier);
                     // return non-processed events to original location or what?
@@ -106,7 +125,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                         this.logger.warning("The "+this.consumerVms.identifier+" VMS is offline");
                     }
                     // return events to the deque
-                    for (TransactionEvent.Payload event : events) {
+                    for (TransactionEvent.PayloadRaw event : events) {
                         this.consumerVms.transactionEvents.offerFirst(event);
                     }
                 }
@@ -135,20 +154,23 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         return MemoryManager.getTemporaryDirectBuffer(this.networkBufferSize);
     }
 
+    private void returnByteBuffer(ByteBuffer bb) {
+        bb.clear();
+        this.writeBufferPool.add(bb);
+    }
+
     private class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
         @Override
         public void completed(Integer result, ByteBuffer attachment) {
             logger.info(me.identifier+ ": Batch with size "+result+" has been sent to: "+consumerVms.identifier);
             WRITE_SYNCHRONIZER.add(DUMB);
-            attachment.clear();
-            writeBufferPool.addLast( attachment );
+            returnByteBuffer(attachment);
         }
         @Override
         public void failed(Throwable exc, ByteBuffer attachment) {
             logger.severe(me.identifier+": ERROR on writing batch of events to: "+consumerVms.identifier);
             WRITE_SYNCHRONIZER.add(DUMB);
-            attachment.clear();
-            writeBufferPool.addLast( attachment );
+            returnByteBuffer(attachment);
         }
     }
 }

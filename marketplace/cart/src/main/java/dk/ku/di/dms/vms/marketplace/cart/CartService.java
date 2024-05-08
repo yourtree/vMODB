@@ -35,20 +35,29 @@ public final class CartService {
     public ReserveStock checkout(CustomerCheckout checkout) {
         System.out.println("Cart received a checkout request with TID: "+checkout.instanceId);
 
-        // get cart items from a customer
-        List<CartItem> cartItems = this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
+        try {
+            // get cart items from a customer
+            List<CartItem> cartItems = this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
 
-        for(var cartItem : cartItems){
-            var product = this.productReplicaRepository.lookupByKey(new ProductReplica.ProductId(cartItem.seller_id, cartItem.product_id));
-            if(product != null && cartItem.version.contentEquals(product.version) && cartItem.unit_price < product.price){
-                cartItem.voucher += (product.price - cartItem.unit_price);
-                cartItem.unit_price = product.price;
+            if(cartItems == null || cartItems.isEmpty()) {
+                throw new RuntimeException("No cart items found for TID: "+checkout.CustomerId);
             }
+
+            for (var cartItem : cartItems) {
+                var product = this.productReplicaRepository.lookupByKey(new ProductReplica.ProductId(cartItem.seller_id, cartItem.product_id));
+                if (product != null && cartItem.version.contentEquals(product.version) && cartItem.unit_price < product.price) {
+                    cartItem.voucher += (product.price - cartItem.unit_price);
+                    cartItem.unit_price = product.price;
+                }
+            }
+
+            this.cartItemRepository.deleteAll(cartItems);
+            return new ReserveStock(new Date(), checkout, convertCartItems( cartItems ), checkout.instanceId);
+        } catch (Exception e) {
+            System.out.println("ERROR: "+e.getMessage());
+            throw new RuntimeException(e);
         }
 
-        this.cartItemRepository.deleteAll(cartItems);
-
-        return new ReserveStock(new Date(), checkout, convertCartItems( cartItems ), checkout.instanceId);
     }
 
     private static List<dk.ku.di.dms.vms.marketplace.common.entities.CartItem> convertCartItems(List<CartItem> cartItems){

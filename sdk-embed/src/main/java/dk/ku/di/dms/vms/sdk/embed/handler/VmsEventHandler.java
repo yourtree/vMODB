@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
@@ -91,7 +90,7 @@ public final class VmsEventHandler extends StoppableRunnable {
     private Set<String> queuesLeaderSubscribesTo;
 
     // set of events to send to leader
-    public final BlockingDeque<TransactionEvent.Payload> eventsToSendToLeader;
+    public final BlockingDeque<TransactionEvent.PayloadRaw> eventsToSendToLeader;
 
     /** INTERNAL STATE **/
 
@@ -315,7 +314,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         // have we processed all the TIDs of this batch?
         if(this.currentBatch.isOpen() && this.currentBatch.lastTid <= this.lastTidFinished){
 
-            this.logger.info(this.me.identifier+": The last TID ("+this.currentBatch.lastTid+") for the current batch ("+this.currentBatch.lastTid+") has been executed");
+            this.logger.info(this.me.identifier+": The last TID ("+this.currentBatch.lastTid+") for the current batch ("+this.currentBatch.batch+") has been executed");
 
             // many outputs from the same transaction may arrive here, but can only send the batch commit once
             this.currentBatch.setStatus(BatchContext.Status.BATCH_COMPLETED);
@@ -392,7 +391,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         // right now just including the original precedence map. ideally we must reduce the size by removing this vms
         // however, modifying the map incurs deserialization and serialization costs
-        TransactionEvent.Payload payload = TransactionEvent.of(
+        TransactionEvent.PayloadRaw payload = TransactionEvent.of(
                 outputEvent.tid(), outputEvent.batch(), outputEvent.outputQueue(), objStr, precedenceMap );
 
         // does the leader consumes this queue?
@@ -492,8 +491,10 @@ public final class VmsEventHandler extends StoppableRunnable {
                             eventToConsumersMap.computeIfAbsent(outputEvent, (ignored) -> new ConcurrentLinkedDeque<>());
                             eventToConsumersMap.get(outputEvent).add(consumerVms);
                         }
+
                         // set up consumer vms worker
-                        Thread.startVirtualThread(new ConsumerVmsWorker(me, consumerVms, connMetadata, networkBufferSize));
+                        Thread.ofPlatform().factory().newThread(new ConsumerVmsWorker(me, consumerVms, connMetadata, networkBufferSize)).start();
+//                        Thread.startVirtualThread();
 
                         // set up read from consumer vms
                         attachment.channel.read(attachment.buffer, connMetadata, new VmsReadCompletionHandler(node));
@@ -570,11 +571,14 @@ public final class VmsEventHandler extends StoppableRunnable {
                 return;
             }
 
-            byte messageType = connectionMetadata.readBuffer.get(0);
+            if(connectionMetadata.readBuffer.position() == result){
+                connectionMetadata.readBuffer.position(0);
+            }
+            byte messageType = connectionMetadata.readBuffer.get();
 
             switch (messageType) {
                 case (BATCH_OF_EVENTS) -> {
-                    connectionMetadata.readBuffer.position(1);
+                    // connectionMetadata.readBuffer.position(1);
                     int count = connectionMetadata.readBuffer.getInt();
                     logger.info(me.identifier+": Batch of ["+count+"] events received from: "+node.identifier);
                     TransactionEvent.Payload payload;
@@ -587,6 +591,13 @@ public final class VmsEventHandler extends StoppableRunnable {
                         }
                     }
 
+                    if(connectionMetadata.readBuffer.position() < result){
+                        logger.config("Batch: There is more data to be read. Position: "+
+                                connectionMetadata.readBuffer.position()+" Expected: "+result);
+                        completed(result, connectionMetadata);
+                    }
+
+                    /*
                     // 4 is int size
                     while(connectionMetadata.readBuffer.remaining() > 8) {
                         // is there more data?
@@ -603,16 +614,24 @@ public final class VmsEventHandler extends StoppableRunnable {
                             }
                         }
                     }
+                    */
 
                 }
                 case (EVENT) -> {
+                    logger.info(me.identifier+": 1 event received from: "+node.identifier);
                     // can only be event, skip reading the message type
-                    connectionMetadata.readBuffer.position(1);
+                    // connectionMetadata.readBuffer.position(1);
                     // data dependence or input event
                     TransactionEvent.Payload payload = TransactionEvent.read(connectionMetadata.readBuffer);
                     // send to scheduler
                     if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
                         vmsInternalChannels.transactionInputQueue().add(buildInboundEvent(payload));
+                    }
+
+                    if(connectionMetadata.readBuffer.position() < result){
+                        logger.config("Event: There is more data to be read. Position: "+
+                                connectionMetadata.readBuffer.position()+" Expected: "+result);
+                        completed(result, connectionMetadata);
                     }
                 }
                 default ->
@@ -898,6 +917,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
             if(result == -1){
                 logger.info(me.identifier+": Leader has disconnected");
+                leader.off();
                 return;
             }
 

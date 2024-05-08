@@ -9,7 +9,7 @@ import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_OF_EVE
 
 public final class BatchUtils {
 
-    public static int assembleBatchPayload(int remaining, List<TransactionEvent.Payload> events, ByteBuffer writeBuffer){
+    public static int assembleBatchPayload(int remaining, List<TransactionEvent.PayloadRaw> events, ByteBuffer writeBuffer){
         int remainingBytes = writeBuffer.remaining();
 
         // no need. the client must make sure to deliver a clean buffer

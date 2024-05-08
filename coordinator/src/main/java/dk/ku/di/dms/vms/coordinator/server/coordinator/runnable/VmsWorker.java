@@ -69,7 +69,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private AsynchronousSocketChannel channel;
 
     // DTs particular to this vms worker
-    private final Map<Long, BlockingDeque<TransactionEvent.Payload>> transactionEventsPerBatch = new ConcurrentHashMap<>();
+    private final Map<Long, BlockingDeque<TransactionEvent.PayloadRaw>> transactionEventsPerBatch = new ConcurrentHashMap<>();
 
     private final BlockingQueue<Message> workerQueue = new LinkedBlockingQueue<>();
 
@@ -246,7 +246,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     }
 
     @Override
-    public BlockingDeque<TransactionEvent.Payload> transactionEventsPerBatch(long batch){
+    public BlockingDeque<TransactionEvent.PayloadRaw> transactionEventsPerBatch(long batch){
         return this.transactionEventsPerBatch.computeIfAbsent(batch, (ignored) -> new LinkedBlockingDeque<>());
     }
 
@@ -441,7 +441,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
      */
     private void sendBatchOfEvents(Message message, boolean includeCommitInfo) {
         BatchCommitInfo.Payload batchCommitInfo = message.asBatchOfEventsRequest();
-        BlockingDeque<TransactionEvent.Payload> eventsToSend = this.transactionEventsPerBatch(batchCommitInfo.batch());
+        BlockingDeque<TransactionEvent.PayloadRaw> eventsToSend = this.transactionEventsPerBatch(batchCommitInfo.batch());
         boolean thereAreEventsToSend = eventsToSend != null && !eventsToSend.isEmpty();
         if(thereAreEventsToSend){
             if(includeCommitInfo){
@@ -454,7 +454,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         }
     }
 
-    private final List<TransactionEvent.Payload> events = new ArrayList<>();
+    private final List<TransactionEvent.PayloadRaw> events = new ArrayList<>();
 
     private void sendBatchCommitInfo(BatchCommitInfo.Payload batchCommitInfo){
         // then send only the batch commit info
@@ -481,10 +481,15 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         return MemoryManager.getTemporaryDirectBuffer(this.networkBufferSize);
     }
 
+    private void returnByteBuffer(ByteBuffer bb) {
+        bb.clear();
+        this.writeBufferPool.add(bb);
+    }
+
     /**
      * While a write operation is in progress, it must wait for completion and then submit the next write.
      */
-    private void sendBatchedEvents(BlockingDeque<TransactionEvent.Payload> eventsToSendToVms){
+    private void sendBatchedEvents(BlockingDeque<TransactionEvent.PayloadRaw> eventsToSendToVms){
         eventsToSendToVms.drainTo(this.events);
         int count = this.events.size();
         int remaining = count;
@@ -507,9 +512,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 sleep_();
 
             } catch (Exception e) {
-                this.logger.severe("Leader: Error on submitting ["+count+"] events to "+vmsNode.identifier);
+                this.logger.severe("Leader: Error on submitting ["+count+"] events to "+this.vmsNode.identifier);
                 // return events to the deque
-                for(TransactionEvent.Payload event : this.events) {
+                for(TransactionEvent.PayloadRaw event : this.events) {
                     eventsToSendToVms.offerFirst(event);
                 }
                 if(!this.channel.isOpen()){
@@ -539,7 +544,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
      * If the target VMS is a terminal in the current batch,
      * then the batch commit info must be appended
      */
-    private void sendBatchedEventsWithCommitInfo(BlockingDeque<TransactionEvent.Payload> eventsToSendToVms, BatchCommitInfo.Payload batchCommitInfo){
+    private void sendBatchedEventsWithCommitInfo(BlockingDeque<TransactionEvent.PayloadRaw> eventsToSendToVms, BatchCommitInfo.Payload batchCommitInfo){
         eventsToSendToVms.drainTo(this.events);
         int remaining = this.events.size();
         ByteBuffer writeBuffer;
@@ -586,7 +591,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
             } catch (Exception e) {
                 // return events to the deque
-                for(TransactionEvent.Payload event : this.events) {
+                for(TransactionEvent.PayloadRaw event : this.events) {
                     eventsToSendToVms.offerFirst(event);
                 }
                 if(!this.channel.isOpen()){
@@ -608,15 +613,13 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         public void completed(Integer result, ByteBuffer attachment) {
             logger.info("Leader: Message with size "+result+" has been sent to: "+consumerVms.identifier+" by thread "+Thread.currentThread().threadId());
             WRITE_SYNCHRONIZER.add(DUMB);
-            attachment.clear();
-            writeBufferPool.addLast(attachment);
+            returnByteBuffer(attachment);
         }
         @Override
         public void failed(Throwable exc, ByteBuffer attachment) {
             logger.severe("Leader: ERROR on writing batch of events to: "+consumerVms.identifier);
             WRITE_SYNCHRONIZER.add(DUMB);
-            attachment.clear();
-            writeBufferPool.addLast(attachment);
+            returnByteBuffer(attachment);
         }
     }
 

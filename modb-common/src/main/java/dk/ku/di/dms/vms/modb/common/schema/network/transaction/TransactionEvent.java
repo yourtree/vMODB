@@ -11,39 +11,19 @@ import java.nio.ByteBuffer;
 public final class TransactionEvent {
 
     // this payload
-    // message type | tid | batch | size | event name | size | payload
-    private static final int fixedLength = 1 + (2 * Long.BYTES) + (3 *  Integer.BYTES);
+    // message type | tid | batch | size | event name | size | payload | size | precedence map
+    private static final int FIXED_LENGTH = 1 + (2 * Long.BYTES) + (3 *  Integer.BYTES);
 
-    public static void write(ByteBuffer buffer, Payload payload){
+    public static void write(ByteBuffer buffer, PayloadRaw payload){
         buffer.put( Constants.EVENT );
         buffer.putLong( payload.tid );
         buffer.putLong( payload.batch );
-        byte[] eventBytes = payload.event.getBytes();
-        buffer.putInt( eventBytes.length );
-        buffer.put( eventBytes );
-        byte[] payloadBytes = payload.payload.getBytes();
-        buffer.putInt( payloadBytes.length );
-        buffer.put( payloadBytes );
-        byte[] precedenceBytes = payload.precedenceMap.getBytes();
-        buffer.putInt( precedenceBytes.length );
-        buffer.put( precedenceBytes );
-    }
-
-    public static Payload write(ByteBuffer buffer, long tid, long batch, String event, String payload, String precedenceMap){
-        buffer.put( Constants.EVENT );
-        buffer.putLong( tid );
-        buffer.putLong( batch );
-        byte[] eventBytes = event.getBytes();
-        buffer.putInt( eventBytes.length );
-        buffer.put( eventBytes );
-        byte[] payloadBytes = payload.getBytes();
-        buffer.putInt( payloadBytes.length );
-        buffer.put( payloadBytes );
-        byte[] precedenceBytes = precedenceMap.getBytes();
-        buffer.putInt( precedenceBytes.length );
-        buffer.put( precedenceBytes );
-        return new Payload( tid, batch, event, payload, precedenceMap,
-                (Long.BYTES * 3) + eventBytes.length + payloadBytes.length + precedenceBytes.length );
+        buffer.putInt(  payload.event.length );
+        buffer.put( payload.event );
+        buffer.putInt( payload.payload.length );
+        buffer.put( payload.payload );
+        buffer.putInt( payload.precedenceMap.length );
+        buffer.put( payload.precedenceMap );
     }
 
     public static Payload read(ByteBuffer buffer){
@@ -64,17 +44,23 @@ public final class TransactionEvent {
      * Why total size? to know the size beforehand, before inserting into the byte buffer
      * otherwise would need further controls...
      */
+    public record PayloadRaw(
+            long tid, long batch, byte[] event, byte[] payload, byte[] precedenceMap, int totalSize
+    ){}
+
+    //
     public record Payload(
             long tid, long batch, String event, String payload, String precedenceMap, int totalSize
     ){}
 
-    public static Payload of(long tid, long batch, String event, String payload, String precedenceMap){
+    public static PayloadRaw of(long tid, long batch, String event, String payload, String precedenceMap){
         // considering UTF-8
         // https://www.quora.com/How-many-bytes-can-a-string-hold
-        int eventBytes = event.length();
-        int payloadBytes = payload.length();
-        int precedenceMapBytes = precedenceMap.length();
-        return new Payload(tid, batch, event, payload, precedenceMap, fixedLength + eventBytes + payloadBytes + precedenceMapBytes);
+        byte[] eventBytes = event.getBytes();
+        byte[] payloadBytes = payload.getBytes();
+        byte[] precedenceMapBytes = precedenceMap.getBytes();
+        return new PayloadRaw(tid, batch, eventBytes, payloadBytes, precedenceMapBytes,
+                FIXED_LENGTH + eventBytes.length + payloadBytes.length + precedenceMapBytes.length);
     }
 
 }

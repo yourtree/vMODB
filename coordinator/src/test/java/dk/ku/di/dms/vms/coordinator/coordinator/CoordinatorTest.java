@@ -167,7 +167,7 @@ public class CoordinatorTest {
         }
 
         @Override
-        public BlockingDeque<TransactionEvent.Payload> transactionEventsPerBatch(long batch) {
+        public BlockingDeque<TransactionEvent.PayloadRaw> transactionEventsPerBatch(long batch) {
             return null;
         }
 
