@@ -83,7 +83,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
             this.consumerVms.transactionEvents.drainTo(events);
 
             if(events.size() == 1){
-                this.logger.info(this.me.identifier+ ": Submitting 1 event to "+this.consumerVms.identifier);
+                this.logger.config(this.me.identifier+ ": Submitting 1 event to "+this.consumerVms.identifier);
 
                 ByteBuffer writeBuffer = this.retrieveByteBuffer();
                 TransactionEvent.write( writeBuffer, events.getFirst() );
@@ -107,7 +107,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                     writeBuffer = this.retrieveByteBuffer();
                     remaining = BatchUtils.assembleBatchPayload(remaining, events, writeBuffer);
 
-                    this.logger.info(this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
+                    this.logger.config(this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
                     count = remaining;
 
                     writeBuffer.flip();
@@ -162,7 +162,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     private class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
         @Override
         public void completed(Integer result, ByteBuffer attachment) {
-            logger.info(me.identifier+ ": Batch with size "+result+" has been sent to: "+consumerVms.identifier);
+            logger.config(me.identifier+ ": Batch with size "+result+" has been sent to: "+consumerVms.identifier);
             WRITE_SYNCHRONIZER.add(DUMB);
             returnByteBuffer(attachment);
         }

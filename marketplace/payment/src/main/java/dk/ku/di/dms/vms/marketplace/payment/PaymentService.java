@@ -65,7 +65,7 @@ public final class PaymentService {
     @Transactional(type=W)
     @Parallel
     public PaymentConfirmed processPayment(InvoiceIssued invoiceIssued) {
-        System.out.println("Payment received an invoice issued event with TID: "+ invoiceIssued.instanceId);
+        System.out.println("APP: Payment received an invoice issued event with TID: "+ invoiceIssued.instanceId);
 
         Date now = new Date();
 

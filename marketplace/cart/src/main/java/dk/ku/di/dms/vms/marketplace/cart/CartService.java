@@ -33,7 +33,7 @@ public final class CartService {
     @Transactional(type=RW)
     @PartitionBy(clazz = CustomerCheckout.class, method = "getId")
     public ReserveStock checkout(CustomerCheckout checkout) {
-        System.out.println("Cart received a checkout request with TID: "+checkout.instanceId);
+        System.out.println("APP: Cart received a checkout request with TID: "+checkout.instanceId);
 
         try {
             // get cart items from a customer
@@ -71,7 +71,7 @@ public final class CartService {
     @Transactional(type=RW)
     @PartitionBy(clazz = PriceUpdated.class, method = "getId")
     public void updateProductPrice(PriceUpdated priceUpdated) {
-        System.out.println("Cart received an update price event with version: "+priceUpdated.instanceId);
+        System.out.println("APP: Cart received an update price event with version: "+priceUpdated.instanceId);
 
         // could use issue statement for faster update
         ProductReplica product = this.productReplicaRepository.lookupByKey(
@@ -95,7 +95,7 @@ public final class CartService {
     @Transactional(type=RW)
     @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     public void processProductUpdate(ProductUpdated productUpdated) {
-        System.out.println("Cart received a product update event with version: "+productUpdated.version);
+        System.out.println("APP: Cart received a product update event with version: "+productUpdated.version);
 
         var product = new ProductReplica(productUpdated.seller_id, productUpdated.product_id, productUpdated.name, productUpdated.sku, productUpdated.category,
                 productUpdated.description, productUpdated.price, productUpdated.freight_value, productUpdated.status, productUpdated.version);

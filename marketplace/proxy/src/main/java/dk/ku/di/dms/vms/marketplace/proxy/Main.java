@@ -68,7 +68,7 @@ public final class Main {
             System.out.println("Proxy: VMSs did not connect to coordinator on time");
             System.exit(0);
         }
-        System.out.println("Proxy: All starter VMS have connected to the coordinator \nProxy: Initializing the HTTP Server for receiving transaction inputs...");
+        System.out.println("Proxy: All starter VMSs have connected to the coordinator \nProxy: Initializing the HTTP Server to receive transaction inputs...");
 
         int http_port = Integer.parseInt( properties.getProperty("http_port") );
 

@@ -90,7 +90,7 @@ public final class OrderService {
     @PartitionBy(clazz = StockConfirmed.class, method = "getCustomerId")
     public InvoiceIssued processStockConfirmed(StockConfirmed stockConfirmed) {
         Date now = new Date();
-        System.out.println("Order received a stock confirmed event with TID: "+ stockConfirmed.instanceId);
+        System.out.println("APP: Order received a stock confirmed event with TID: "+ stockConfirmed.instanceId);
 
         // calculate total freight_value
         float total_freight = 0;

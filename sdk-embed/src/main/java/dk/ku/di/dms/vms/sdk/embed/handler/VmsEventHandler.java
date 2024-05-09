@@ -231,7 +231,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
                 VmsTransactionResult txResult = this.vmsInternalChannels.transactionOutputQueue().take();
 
-                this.logger.info(this.me.identifier+": New transaction result in event handler. TID = "+txResult.tid());
+                this.logger.config(this.me.identifier+": New transaction result in event handler. TID = "+txResult.tid());
 
                 this.lastTidFinished = txResult.tid();
 
@@ -397,7 +397,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         // does the leader consumes this queue?
         if( this.queuesLeaderSubscribesTo.contains( outputEvent.outputQueue() ) ){
-            this.logger.info(me.identifier+": An output event (queue: "+outputEvent.outputQueue()+") will be queued to leader");
+            this.logger.config(me.identifier+": An output event (queue: "+outputEvent.outputQueue()+") will be queued to leader");
             this.eventsToSendToLeader.add(payload);
         }
 
@@ -408,7 +408,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
 
         for(ConsumerVms consumerVms : consumerVMSs) {
-            this.logger.info(me.identifier+": An output event (queue: " + outputEvent.outputQueue() + ") will be queued to VMS: " + consumerVms.identifier);
+            this.logger.config(me.identifier+": An output event (queue: " + outputEvent.outputQueue() + ") will be queued to VMS: " + consumerVms.identifier);
             consumerVms.addEventToBatch(payload);
         }
     }
@@ -583,14 +583,15 @@ public final class VmsEventHandler extends StoppableRunnable {
                 case (BATCH_OF_EVENTS) -> {
                     // connectionMetadata.readBuffer.position(1);
                     int count = connectionMetadata.readBuffer.getInt();
-                    logger.info(me.identifier+": Batch of ["+count+"] events received from "+node.identifier);
+                    logger.config(me.identifier+": Batch of ["+count+"] events received from "+node.identifier);
                     TransactionEvent.Payload payload;
                     for(int i = 0; i < count; i++){
                         // move offset to discard message type
                         connectionMetadata.readBuffer.get();
                         payload = TransactionEvent.read(connectionMetadata.readBuffer);
                         if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
-                            vmsInternalChannels.transactionInputQueue().add(buildInboundEvent(payload));
+                            InboundEvent inboundEvent = buildInboundEvent(payload);
+                            while(!vmsInternalChannels.transactionInputQueue().offer(inboundEvent));
                         }
                     }
 
@@ -600,36 +601,17 @@ public final class VmsEventHandler extends StoppableRunnable {
                         this.recursionDepth++;
                         completed(result, connectionMetadata);
                     }
-
-                    /*
-                    // 4 is int size
-                    while(connectionMetadata.readBuffer.remaining() > 8) {
-                        // is there more data?
-                        messageType = connectionMetadata.readBuffer.get();
-                        if (messageType == BATCH_OF_EVENTS) {
-                            count = connectionMetadata.readBuffer.getInt();
-                            logger.info(me.identifier + ": Additional batch of [" + count + "] events received!!!!");
-                            for (int i = 0; i < count; i++) {
-                                connectionMetadata.readBuffer.get();
-                                payload = TransactionEvent.read(connectionMetadata.readBuffer);
-                                if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
-                                    vmsInternalChannels.transactionInputQueue().add(buildInboundEvent(payload));
-                                }
-                            }
-                        }
-                    }
-                    */
-
                 }
                 case (EVENT) -> {
-                    logger.info(me.identifier+": 1 event received from "+node.identifier);
+                    logger.config(me.identifier+": 1 event received from "+node.identifier);
                     // can only be event, skip reading the message type
                     // connectionMetadata.readBuffer.position(1);
                     // data dependence or input event
                     TransactionEvent.Payload payload = TransactionEvent.read(connectionMetadata.readBuffer);
                     // send to scheduler
                     if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
-                        vmsInternalChannels.transactionInputQueue().add(buildInboundEvent(payload));
+                        InboundEvent inboundEvent = buildInboundEvent(payload);
+                        while(!vmsInternalChannels.transactionInputQueue().offer(inboundEvent));
                     }
 
                     if(connectionMetadata.readBuffer.position() < result){
@@ -951,7 +933,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
                     // to increase performance, one would buffer this buffer for processing and then read from another buffer
                     int count = connectionMetadata.readBuffer.getInt();
-                    logger.info(me.identifier+": Batch of ["+count+"] events received from the leader");
+                    logger.config(me.identifier+": Batch of ["+count+"] events received from the leader");
                     List<InboundEvent> payloads = new ArrayList<>(count);
                     TransactionEvent.Payload payload;
                     // extract events batched

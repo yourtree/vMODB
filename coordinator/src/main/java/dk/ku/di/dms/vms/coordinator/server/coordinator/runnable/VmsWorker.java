@@ -507,7 +507,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
                 if(remaining == 0) break;
 
-                sleep_();
+//                sleep_();
 
             } catch (Exception e) {
                 this.logger.severe("Leader: Error on submitting ["+count+"] events to "+this.vmsNode.identifier);
@@ -560,7 +560,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                         this.WRITE_SYNCHRONIZER.take();
                         this.channel.write(writeBuffer,  writeBuffer, this.writeCompletionHandler);
                         // avoid corrupted buffer in consumer...
-                        sleep_();
+//                        sleep_();
 
                         // get a new bb
                         writeBuffer = this.retrieveByteBuffer();
@@ -578,14 +578,16 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     writeBuffer.flip();
                     this.WRITE_SYNCHRONIZER.take();
                     this.channel.write(writeBuffer,  writeBuffer, this.writeCompletionHandler);
-                    sleep_();
+//                    sleep_();
+
+                    // break because there is no more events to process
                     break;
                 }
 
                 writeBuffer.flip();
                 this.WRITE_SYNCHRONIZER.take();
                 this.channel.write(writeBuffer,  writeBuffer, this.writeCompletionHandler);
-                sleep_();
+//                sleep_();
 
             } catch (Exception e) {
                 // return events to the deque

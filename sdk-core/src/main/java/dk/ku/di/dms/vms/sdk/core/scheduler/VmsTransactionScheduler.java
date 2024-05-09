@@ -165,13 +165,14 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 Long nextTid = lastTidToTidMap.get(outboundEventResult.tid());
                 while(nextTid != null && tasksPendingSubmission.containsKey(nextTid)){
                     // send
-                    var nextTask = tasksPendingSubmission.remove(nextTid);
+                    OutboundEventResult nextTask = tasksPendingSubmission.remove(nextTid);
                     if(nextTask == null) break;
 
                     // logger.info("adding "+nextTask.tid()+" to output queue...");
-                    vmsChannels.transactionOutputQueue().add(
-                            new VmsTransactionResult(nextTask.tid(),
-                                    List.of(nextTask)) );
+                    // this is the app thread executing. it must make sure the output event is pushed
+                    var outputToSend = new VmsTransactionResult(nextTask.tid(),
+                            List.of(nextTask));
+                    while(!vmsChannels.transactionOutputQueue().offer(outputToSend));
 
                     transactionTaskMap.get(nextTid).signalOutputSent();
 
@@ -190,7 +191,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 if(task.partitionId().isPresent()){
                     partitionKeyTrackingMap.remove(task.partitionId().get());
                     numPartitionedTasksRunning.decrementAndGet();
-                    logger.info(vmsIdentifier+": Partitioned task "+task.tid()+" finished execution.");
+                    logger.config(vmsIdentifier+": Partitioned task "+task.tid()+" finished execution.");
                 } else {
                     singleThreadTaskRunning.set(false);
                 }
@@ -256,7 +257,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             switch (task.signature().executionMode()) {
                 case SINGLE_THREADED -> {
                     if (this.canSingleThreadTaskRun()) {
-                        logger.info(this.vmsIdentifier+": Scheduling single-thread task "+task.tid()+" for execution...");
+                        logger.config(this.vmsIdentifier+": Scheduling single-thread task "+task.tid()+" for execution...");
                         this.submitSingleThreadTaskForExecution(task);
                     } else {
                         return;
@@ -289,7 +290,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                         this.partitionKeyTrackingMap.add(task.partitionId().get());
                         this.numPartitionedTasksRunning.incrementAndGet();
                         task.signalReady();
-                        logger.info(this.vmsIdentifier+": Scheduling partitioned task "+task.tid()+" for execution...");
+                        logger.config(this.vmsIdentifier+": Scheduling partitioned task "+task.tid()+" for execution...");
                         this.sharedTaskPool.submit(task);
                     } else {
                         return;
@@ -320,8 +321,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     private void checkForNewEvents() throws InterruptedException {
 
         if(this.vmsChannels.transactionInputQueue().isEmpty()){
-            if(block) {
-                logger.info(this.vmsIdentifier+": Transaction scheduler going to sleep until new event arrives");
+            if(this.block) {
+                logger.config(this.vmsIdentifier+": Transaction scheduler going to sleep until new event arrives");
                 this.localInputEvents.add(this.vmsChannels.transactionInputQueue().take());
                 block = false;
             } else {

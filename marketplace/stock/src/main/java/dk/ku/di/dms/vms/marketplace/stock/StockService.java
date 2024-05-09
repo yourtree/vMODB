@@ -32,7 +32,7 @@ public final class StockService {
     @Transactional(type=RW)
     @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     public void updateProduct(ProductUpdated updateEvent) {
-        System.out.println("Stock received an update product event with version: "+updateEvent.version);
+        System.out.println("APP: Stock received an update product event with version: "+updateEvent.version);
 
         // can use issue statement for faster update
         StockItem stock = this.stockRepository.lookupByKey(new StockItem.StockId(updateEvent.seller_id, updateEvent.product_id));
@@ -51,15 +51,14 @@ public final class StockService {
     @Transactional(type=RW)
     public StockConfirmed reserveStock(ReserveStock reserveStock){
 
-        System.out.println("Stock received a reserve stock event with TID: "+reserveStock.instanceId);
+        System.out.println("APP: Stock received a reserve stock event with TID: "+reserveStock.instanceId);
 
         Map<StockItem.StockId, CartItem> cartItemMap = reserveStock.items.stream().collect( Collectors.toMap( (f)-> new StockItem.StockId(f.SellerId, f.ProductId), Function.identity()) );
 
         List<StockItem> items = this.stockRepository.lookupByKeys(cartItemMap.keySet());
 
         if(items.isEmpty()) {
-            LOGGER.severe("No items found in private state");
-            return null;
+            throw new RuntimeException("No items found in private state");
         }
 
         // List<CartItem> unavailableItems = new();

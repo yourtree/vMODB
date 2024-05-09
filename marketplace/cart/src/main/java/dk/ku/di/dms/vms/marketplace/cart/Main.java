@@ -86,7 +86,11 @@ public final class Main {
                     obj[2] = customerId;
 
                     IKey key = CompositeKey.of( obj );
-                    Object[] record = this.table.underlyingPrimaryKeyIndex().lookupByKey(key);
+
+                    long tid = this.vms.lastTidFinished();
+                    TransactionMetadata.TRANSACTION_CONTEXT.set( new TransactionContext(tid, tid,true) );
+
+                    Object[] record = this.table.primaryKeyIndex().lookupByKey(key);
 
                     try {
                         var entity = this.repository.parseObjectIntoEntity(record);
@@ -125,7 +129,7 @@ public final class Main {
                         IKey key = KeyUtils.buildRecordKey(table.schema().getPrimaryKeyColumns(), obj);
 
                         // get last tid executed to bypass transaction scheduler
-                        long tid = vms.lastTidFinished();
+                        long tid = this.vms.lastTidFinished();
                         // can ask the transactional handler
                         TransactionMetadata.TRANSACTION_CONTEXT.set( new TransactionContext(tid,tid-1,false) );
                         this.table.primaryKeyIndex().insert(key, obj);

@@ -47,7 +47,7 @@ public final class ShipmentService {
     @Outbound(SHIPMENT_UPDATED)
     @Transactional(type=RW)
     public ShipmentUpdated updateShipment(String instanceId){
-        System.out.println("Shipment received an update shipment event with TID: "+ instanceId);
+        System.out.println("APP: Shipment received an update shipment event with TID: "+ instanceId);
         Date now = new Date();
 
         // can lock the packages
@@ -104,7 +104,7 @@ public final class ShipmentService {
     @Transactional(type=W)
     @Parallel
     public void processShipment(PaymentConfirmed paymentConfirmed){
-        System.out.println("Shipment received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
+        System.out.println("APP: Shipment received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
         Date now = new Date();
 
         Shipment shipment = new Shipment(
