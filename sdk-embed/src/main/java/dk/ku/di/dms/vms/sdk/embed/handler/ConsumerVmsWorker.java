@@ -12,13 +12,10 @@ import java.nio.channels.CompletionHandler;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.logging.Logger;
-
-import static java.lang.Thread.sleep;
 
 /**
  * This thread encapsulates the batch of events sending task
@@ -28,7 +25,7 @@ import static java.lang.Thread.sleep;
  * I could get the connection from the vms...
  * But in the future, one output event will no longer map to a single vms
  * So it is better to make the event sender task complete enough
- * FIXME what happens if the connection fails? then put the list of events
+ * what happens if the connection fails? then put the list of events
  *  in the batch to resend or return to the original location. let the
  *  main loop schedule the timer again. set the network node to off
  */
@@ -76,12 +73,14 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
             try {
                 events.add(this.consumerVms.transactionEvents.take());
-            } catch (InterruptedException ignored) {
+            } catch (InterruptedException e) {
+                this.logger.warning(this.me.identifier+ ": Consumer worker for "+this.consumerVms.identifier+" caught an interrupted exception : "+e.getCause().getMessage());
                 continue;
             }
 
             this.consumerVms.transactionEvents.drainTo(events);
 
+            /*
             if(events.size() == 1){
                 this.logger.config(this.me.identifier+ ": Submitting 1 event to "+this.consumerVms.identifier);
 
@@ -92,12 +91,14 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 try {
                     this.WRITE_SYNCHRONIZER.take();
                     this.connectionMetadata.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
-                } catch (InterruptedException ignored) {
+                } catch (InterruptedException e) {
+                    this.logger.warning(this.me.identifier+ ": Consumer worker for "+this.consumerVms.identifier+" caught an on writing to channel : "+e.getMessage());
                     this.consumerVms.transactionEvents.offerFirst(events.getFirst());
                 }
                 events.clear();
                 continue;
             }
+             */
 
             int remaining = events.size();
             int count = remaining;
@@ -114,10 +115,6 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
                     this.WRITE_SYNCHRONIZER.take();
                     this.connectionMetadata.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
-
-                    // prevent from error in consumer
-//                    if(remaining > 0)
-//                        sleep_();
                 } catch (Exception e) {
                     this.logger.severe(this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier);
                     // return non-processed events to original location or what?
@@ -130,22 +127,9 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                     }
                 }
             }
-
             events.clear();
-
         }
 
-    }
-
-    private final Random random = new Random();
-
-    /**
-     * For some reason without sleeping, the bytebuffer gets corrupted in the consumer
-     */
-    private void sleep_(){
-        // logger.info("Leader: Preparing another submission to: "+vmsNode.vmsIdentifier+" by thread "+Thread.currentThread().getId());
-        // necessary to avoid buggy behavior: corrupted byte buffer. reason is unknown. maybe something related to operating system?
-        try { sleep(this.random.nextInt(100)); } catch (InterruptedException ignored) {}
     }
 
     private ByteBuffer retrieveByteBuffer(){
@@ -160,17 +144,27 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     }
 
     private class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
+
         @Override
-        public void completed(Integer result, ByteBuffer attachment) {
-            logger.config(me.identifier+ ": Batch with size "+result+" has been sent to: "+consumerVms.identifier);
-            WRITE_SYNCHRONIZER.add(DUMB);
-            returnByteBuffer(attachment);
+        public void completed(Integer result, ByteBuffer byteBuffer) {
+            if(byteBuffer.hasRemaining()){
+                logger.severe(me.identifier + " on completed. Consumer worker for "+consumerVms.identifier+" found not all bytes were sent!");
+            } else {
+                logger.config(me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
+                WRITE_SYNCHRONIZER.add(DUMB);
+                returnByteBuffer(byteBuffer);
+            }
         }
+
         @Override
-        public void failed(Throwable exc, ByteBuffer attachment) {
+        public void failed(Throwable exc, ByteBuffer byteBuffer) {
+            if(byteBuffer.hasRemaining()){
+                logger.severe(me.identifier + " on failed. Consumer worker for "+consumerVms.identifier+" found not all bytes were sent!");
+            }
             logger.severe(me.identifier+": ERROR on writing batch of events to: "+consumerVms.identifier);
             WRITE_SYNCHRONIZER.add(DUMB);
-            returnByteBuffer(attachment);
+            returnByteBuffer(byteBuffer);
         }
+
     }
 }

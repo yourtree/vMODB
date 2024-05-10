@@ -15,6 +15,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
@@ -26,7 +27,7 @@ import java.util.logging.Logger;
  */
 public final class VmsTransactionScheduler extends StoppableRunnable {
 
-    private final Logger logger = Logger.getLogger(VmsTransactionScheduler.class.getSimpleName());
+    private static final Logger logger = Logger.getLogger(VmsTransactionScheduler.class.getSimpleName());
 
     private final Map<Long, VmsTransactionTask> transactionTaskMap;
 
@@ -37,11 +38,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
      * Thread pool for partitioned and parallel tasks
      */
     private final ExecutorService sharedTaskPool;
-
-    /**
-     * Thread pool for single-threaded tasks
-     */
-    private final ExecutorService singleThreadPool;
 
     private final AtomicInteger numParallelTasksRunning = new AtomicInteger(0);
 
@@ -76,12 +72,11 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                                                 IVmsInternalChannels vmsChannels,
                                                 Map<String, VmsTransactionMetadata> transactionMetadataMap,
                                                 ITransactionalHandler transactionalHandler,
-                                                ICheckpointEventHandler checkpointHandler){
-        // could be higher. must adjust according to the number of cores available
+                                                ICheckpointEventHandler checkpointHandler,
+                                                int vmsThreadPoolSize){
         return new VmsTransactionScheduler(
                 vmsIdentifier,
-                Executors.newWorkStealingPool(Runtime.getRuntime().availableProcessors() - 2),
-                Executors.newSingleThreadExecutor(),
+                Executors.newWorkStealingPool(vmsThreadPoolSize),
                 vmsChannels,
                 transactionMetadataMap,
                 transactionalHandler,
@@ -90,7 +85,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     private VmsTransactionScheduler(String vmsIdentifier,
                                     ExecutorService sharedTaskPool,
-                                    ExecutorService singleThreadPool,
                                     IVmsInternalChannels vmsChannels,
                                     Map<String, VmsTransactionMetadata> transactionMetadataMap,
                                     ITransactionalHandler transactionalHandler,
@@ -100,7 +94,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         this.vmsIdentifier = vmsIdentifier;
         // thread pools
         this.sharedTaskPool = sharedTaskPool;
-        this.singleThreadPool = singleThreadPool;
+//        this.singleThreadPool = singleThreadPool;
 
         // infra (come from external)
         this.transactionMetadataMap = transactionMetadataMap;
@@ -125,9 +119,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     @Override
     public void run() {
 
-        this.logger.info(this.vmsIdentifier+": Transaction scheduler has started");
+        logger.info(this.vmsIdentifier+": Transaction scheduler has started");
 
-        while(isRunning()) {
+        while(this.isRunning()) {
             try{
                 this.checkForNewEvents();
                 this.executeReadyTasks();
@@ -135,14 +129,18 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     this.checkpointHandler.checkpoint();
                 }
             } catch(Exception e){
-                this.logger.warning(this.vmsIdentifier+": Error on scheduler loop: "+e.getMessage());
+                logger.warning(this.vmsIdentifier+": Error on scheduler loop: "+e.getCause().getMessage());
             }
         }
     }
 
     private final SchedulerCallback callback = new SchedulerCallback();
 
-    private class SchedulerCallback implements ISchedulerCallback {
+
+
+    private class SchedulerCallback implements ISchedulerCallback, Thread.UncaughtExceptionHandler {
+
+        private final int outputSentStatus = VmsTransactionTask.Status.OUTPUT_SENT.value();
 
         @Override
         public void success(ExecutionModeEnum executionMode, OutboundEventResult outboundEventResult) {
@@ -152,7 +150,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             // my previous has sent the event already?
             VmsTransactionTask task = transactionTaskMap.get(outboundEventResult.tid());
             var lastTid = task.lastTid();
-            if(transactionTaskMap.get(lastTid).status().value == 5){
+            if(transactionTaskMap.get(lastTid).status().value() == this.outputSentStatus){
                 // logger.info("adding "+outboundEventResult.tid()+" to output queue...");
 
                 vmsChannels.transactionOutputQueue().add(
@@ -201,10 +199,10 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         @Override
         public void error(ExecutionModeEnum executionMode, long tid, Exception e) {
             // TODO handle errors
-            logger.severe("Error captured in application execution: \n"+e.getMessage());
-            if(executionMode == ExecutionModeEnum.SINGLE_THREADED)
+            logger.severe("Error captured during application execution: \n"+e.getCause().getMessage());
+            if(executionMode == ExecutionModeEnum.SINGLE_THREADED) {
                 singleThreadTaskRunning.set(false);
-            else if (executionMode == ExecutionModeEnum.PARALLEL) {
+            } else if (executionMode == ExecutionModeEnum.PARALLEL) {
                 numParallelTasksRunning.decrementAndGet();
             } else {
                 VmsTransactionTask task = transactionTaskMap.get(tid);
@@ -214,9 +212,14 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 } else {
                     singleThreadTaskRunning.set(false);
                 }
-
             }
         }
+
+        @Override
+        public void uncaughtException(Thread t, Throwable e) {
+            logger.severe("Uncaught exception captured during application execution: \n"+e.getCause().getMessage());
+        }
+
     }
 
     /**
@@ -235,6 +238,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
      */
     private boolean block = false;
 
+    private final int newStatus = VmsTransactionTask.Status.NEW.value();
+
     private void executeReadyTasks() {
 
         Long nextTid = this.lastTidToTidMap.get( this.lastFinishedTid );
@@ -249,7 +254,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         while(true) {
 
             // if (task == null) return;
-            if(task.status().value > 1){
+            if(task.status().value() > this.newStatus){
                 // System.out.println(task.tid()+" have not finished yet!");
                 return;
             }
@@ -278,7 +283,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     }
 
                     if(task.partitionId().isEmpty()){
-                        // this.logger.warning(this.vmsIdentifier + ": Task "+task.tid()+" will run as single-threaded even though it is marked as partitioned");
+                        // logger.warning(this.vmsIdentifier + ": Task "+task.tid()+" will run as single-threaded even though it is marked as partitioned");
                         if (this.canSingleThreadTaskRun()) {
                             this.submitSingleThreadTaskForExecution(task);
                         } else {
@@ -309,9 +314,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     }
 
     private void submitSingleThreadTaskForExecution(VmsTransactionTask task) {
-        singleThreadTaskRunning.set(true);
+        this.singleThreadTaskRunning.set(true);
         task.signalReady();
-        this.singleThreadPool.submit(task);
+        this.sharedTaskPool.submit(task);
     }
 
     private boolean canSingleThreadTaskRun() {
@@ -323,8 +328,30 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         if(this.vmsChannels.transactionInputQueue().isEmpty()){
             if(this.block) {
                 logger.config(this.vmsIdentifier+": Transaction scheduler going to sleep until new event arrives");
-                this.localInputEvents.add(this.vmsChannels.transactionInputQueue().take());
-                block = false;
+
+                InboundEvent e = null;
+                while(e == null) {
+                    e = this.vmsChannels.transactionInputQueue().poll(100, TimeUnit.MILLISECONDS);
+                }
+
+                this.localInputEvents.add(e);
+
+//                this.localInputEvents.add(this.vmsChannels.transactionInputQueue().take());
+
+                this.block = false;
+
+                /*
+                logger.info(this.vmsIdentifier+": Transaction scheduler woke up since new event arrived!");
+                logger.info(this.vmsIdentifier+": Last finished TID: "+this.lastFinishedTid);
+                Long nextTid = this.lastTidToTidMap.get( this.lastFinishedTid );
+                if(nextTid != null) {
+                    logger.info(this.vmsIdentifier+": Next TID: "+nextTid);
+                    VmsTransactionTask task = this.transactionTaskMap.get( nextTid );
+                    logger.info(vmsIdentifier+": next tid status: "+task.status().name());
+                } else {
+                    logger.info(this.vmsIdentifier+": Next TID is still unknown");
+                }
+                */
             } else {
                 return;
             }

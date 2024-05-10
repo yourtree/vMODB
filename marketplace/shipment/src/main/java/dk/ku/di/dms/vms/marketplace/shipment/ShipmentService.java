@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.marketplace.common.events.DeliveryNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
+import dk.ku.di.dms.vms.marketplace.common.inputs.UpdateDelivery;
 import dk.ku.di.dms.vms.marketplace.shipment.dtos.OldestSellerPackageEntry;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.Package;
 import dk.ku.di.dms.vms.marketplace.shipment.entities.Shipment;
@@ -46,11 +47,11 @@ public final class ShipmentService {
     @Inbound(values = {UPDATE_DELIVERY})
     @Outbound(SHIPMENT_UPDATED)
     @Transactional(type=RW)
-    public ShipmentUpdated updateShipment(String instanceId){
-        System.out.println("APP: Shipment received an update shipment event with TID: "+ instanceId);
+    public ShipmentUpdated updateShipment(UpdateDelivery updateDelivery){
+        System.out.println("APP: Shipment received an update delivery event with TID: "+ updateDelivery.instanceId);
         Date now = new Date();
 
-        // can lock the packages
+        // could lock the packages so to allow for parallel annotation
         List<OldestSellerPackageEntry> packages = this.packageRepository.query(OLDEST_SHIPMENT_PER_SELLER, OldestSellerPackageEntry.class);
 
         List<ShipmentNotification> shipmentNotifications = new ArrayList<>();
@@ -97,7 +98,7 @@ public final class ShipmentService {
 
         }
 
-        return new ShipmentUpdated(deliveryNotifications, shipmentNotifications, instanceId);
+        return new ShipmentUpdated(deliveryNotifications, shipmentNotifications, updateDelivery.instanceId);
     }
 
     @Inbound(values = {PAYMENT_CONFIRMED})

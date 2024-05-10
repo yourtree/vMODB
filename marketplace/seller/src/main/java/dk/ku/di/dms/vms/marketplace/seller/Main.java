@@ -45,6 +45,8 @@ public final class Main {
         HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", 8007), 0);
         httpServer.createContext("/seller", new SellerHttpHandler(vms));
         httpServer.start();
+
+        System.out.println("Seller HTTP Server initialized");
     }
 
     private static class SellerHttpHandler implements HttpHandler {
@@ -100,6 +102,7 @@ public final class Main {
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(200, 0);
                         outputStream.write( entity.toString().getBytes(StandardCharsets.UTF_8) );
+                        outputStream.flush();
                         outputStream.close();
                     }
                     return;

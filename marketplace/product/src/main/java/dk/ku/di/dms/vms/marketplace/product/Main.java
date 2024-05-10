@@ -32,11 +32,13 @@ public final class Main {
         Properties properties = Utils.loadProperties();
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         int networkThreadPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
+        int vmsThreadPoolSize = Integer.parseInt( properties.getProperty("vms_thread_pool_size") );
 
         VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.PRODUCT_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.product",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize, networkThreadPoolSize);
+        }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
+                networkThreadPoolSize, vmsThreadPoolSize);
 
         // initialize threads
         try {
@@ -48,7 +50,7 @@ public final class Main {
             httpServer.createContext("/product", new ProductHttpHandler(vms));
             httpServer.start();
 
-            System.out.println("HTTP Server initialized");
+            System.out.println("Product HTTP Server initialized");
         } catch (Exception e){
             throw new RuntimeException(e);
         }

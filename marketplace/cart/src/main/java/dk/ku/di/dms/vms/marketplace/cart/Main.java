@@ -32,27 +32,37 @@ public final class Main {
         Properties properties = Utils.loadProperties();
         int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
         int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
+        int vmsThreadPoolSize = Integer.parseInt(properties.getProperty("vms_thread_pool_size"));
 
         VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CART_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.cart",
                 "dk.ku.di.dms.vms.marketplace.common"
         }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
-                networkThreadPoolSize);
+                networkThreadPoolSize, vmsThreadPoolSize);
 
+        VmsApplication vms;
+        HttpServer httpServer;
         try
         {
-            VmsApplication vms = VmsApplication.build(options);
+            vms = VmsApplication.build(options);
             vms.start();
 
             // initialize HTTP server for data ingestion
-            HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", Constants.CART_HTTP_PORT), 0);
+            httpServer = HttpServer.create(new InetSocketAddress("localhost", Constants.CART_HTTP_PORT), 0);
             httpServer.createContext("/cart", new CartHttpHandler(vms));
             httpServer.start();
 
-            System.out.println("HTTP Server initialized");
+            System.out.println("Cart HTTP Server initialized");
         } catch(Exception e) {
             throw new RuntimeException(e);
         }
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            vms.stop();
+            httpServer.stop(0);
+            System.out.println("Cart terminating ...");
+        }));
+
     }
 
     private static class CartHttpHandler implements HttpHandler {

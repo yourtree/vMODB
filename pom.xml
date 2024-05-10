@@ -16,7 +16,6 @@
     <module>modb</module>
     <module>modb-api</module>
     <module>modb-common</module>
-    <module>modb-service</module>
 
     <!-- sdk -->
     <module>sdk-embed</module>

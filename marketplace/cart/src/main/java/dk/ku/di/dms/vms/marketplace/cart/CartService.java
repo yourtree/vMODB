@@ -35,32 +35,25 @@ public final class CartService {
     public ReserveStock checkout(CustomerCheckout checkout) {
         System.out.println("APP: Cart received a checkout request with TID: "+checkout.instanceId);
 
-        try {
-            // get cart items from a customer
-            List<CartItem> cartItems = this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
+        // get cart items from a customer
+        List<CartItem> cartItems = this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
 
-            if(cartItems == null || cartItems.isEmpty()) {
-                throw new RuntimeException("No cart items found for TID: "+checkout.CustomerId);
-            }
-
-            for (var cartItem : cartItems) {
-                var product = this.productReplicaRepository.lookupByKey(new ProductReplica.ProductId(cartItem.seller_id, cartItem.product_id));
-                if (product != null && cartItem.version.contentEquals(product.version) && cartItem.unit_price < product.price) {
-                    cartItem.voucher += (product.price - cartItem.unit_price);
-                    cartItem.unit_price = product.price;
-                }
-            }
-
-            this.cartItemRepository.deleteAll(cartItems);
-
-            System.out.println("Cart finishing checkout request with TID: "+checkout.instanceId);
-
-            return new ReserveStock(new Date(), checkout, convertCartItems( cartItems ), checkout.instanceId);
-        } catch (Exception e) {
-            System.out.println("ERROR: "+e.getMessage());
-            throw new RuntimeException(e);
+        if(cartItems == null || cartItems.isEmpty()) {
+            throw new RuntimeException("No cart items found for TID: "+checkout.CustomerId);
         }
 
+        for (var cartItem : cartItems) {
+            var product = this.productReplicaRepository.lookupByKey(new ProductReplica.ProductId(cartItem.seller_id, cartItem.product_id));
+            if (product != null && cartItem.version.contentEquals(product.version) && cartItem.unit_price < product.price) {
+                cartItem.voucher += (product.price - cartItem.unit_price);
+                cartItem.unit_price = product.price;
+            }
+        }
+
+        this.cartItemRepository.deleteAll(cartItems);
+
+//        System.out.println("APP: Cart finishing checkout request with TID: "+checkout.instanceId);
+        return new ReserveStock(new Date(), checkout, convertCartItems( cartItems ), checkout.instanceId);
     }
 
     private static List<dk.ku.di.dms.vms.marketplace.common.entities.CartItem> convertCartItems(List<CartItem> cartItems){
@@ -78,7 +71,7 @@ public final class CartService {
                 new ProductReplica.ProductId(priceUpdated.sellerId, priceUpdated.productId));
 
         if(product == null){
-            System.out.println("Cart has no product replica with seller ID "+priceUpdated.sellerId+" : product ID "+priceUpdated.productId);
+            // System.out.println("Cart has no product replica with seller ID "+priceUpdated.sellerId+" : product ID "+priceUpdated.productId);
             return;
         }
 

@@ -54,7 +54,7 @@ public final class SellerService {
     @Transactional(type=W)
     @Parallel
     public void processInvoiceIssued(InvoiceIssued invoiceIssued){
-        System.out.println("Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
+        System.out.println("APP: Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
 
         Map<Integer,ReadWriteLock> locksAcquired = new HashMap<>();
         List<OrderItem> orderItems = invoiceIssued.getItems();
@@ -86,7 +86,7 @@ public final class SellerService {
 
             if(!locksAcquired.containsKey(orderItem.seller_id)) {
                 ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(orderItem.seller_id, (ignored) -> new ReentrantReadWriteLock());
-                sellerLock.readLock().lock();
+                sellerLock.writeLock().lock();
                 locksAcquired.put(entry.seller_id, sellerLock);
             }
 
@@ -113,7 +113,7 @@ public final class SellerService {
 
         // unlock all
         for(Map.Entry<Integer, ReadWriteLock> lock : locksAcquired.entrySet()){
-            lock.getValue().readLock().unlock();
+            lock.getValue().writeLock().unlock();
         }
 
         this.orderEntryRepository.insertAll(list);
@@ -122,7 +122,10 @@ public final class SellerService {
     @Inbound(values = SHIPMENT_UPDATED)
     @Transactional(type=RW)
     public void processShipmentUpdate(ShipmentUpdated shipmentUpdated){
-        System.out.println("Seller received a shipment update event with TID: "+ shipmentUpdated.instanceId);
+        System.out.println("APP: Seller received a shipment update event with TID: "+ shipmentUpdated.instanceId);
+
+        // TODO synchronization must also be present here
+
         for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {
             List<OrderEntry> orderEntries = this.orderEntryRepository.getOrderEntriesByCustomerIdAndOrderId(
                     shipmentNotification.customerId, shipmentNotification.orderId );
@@ -183,9 +186,9 @@ public final class SellerService {
      */
     public OrderSellerView queryDashboard(int sellerId){
         ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(sellerId, (ignored) -> new ReentrantReadWriteLock());
-        sellerLock.writeLock().lock();
+        sellerLock.readLock().lock();
         OrderSellerView res = this.orderSellerViewMap.getOrDefault( sellerId, new OrderSellerView(sellerId) );
-        sellerLock.writeLock().unlock();
+        sellerLock.readLock().unlock();
         return res;
     }
 

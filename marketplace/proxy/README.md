@@ -1,5 +1,20 @@
 # OnlineMarketplace Proxy - Coordinator Service
 
+order not progressing… usually stops processing at tid 692
+-> probably some problem with scheduling/sending delivery
+-> test checkout solo
+PROBLEM is probably order is producer and consumer of shipment if both checkout and shipment are active!
+
+
+json exception in dependence map (maybe linked to below)
+
+precedence size is getting bigger than any possible packet… how is cart even streaming that?
+problem is another: the message is not being processed correctly
+
+another problem is unknown message type on recursion
+but i think this is happening in the last recursion? not sure
+even though the last event is delivered to order, the stock still has more than 400 recursions to finish...
+
 ## How to compile the project
 
 First make sure the dependencies are installed in your file system. This can be accomplished via running the following command in the root folder:

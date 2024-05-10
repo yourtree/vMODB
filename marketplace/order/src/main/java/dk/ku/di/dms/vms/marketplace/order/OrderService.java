@@ -17,8 +17,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-import static dk.ku.di.dms.vms.marketplace.common.Constants.INVOICE_ISSUED;
-import static dk.ku.di.dms.vms.marketplace.common.Constants.STOCK_CONFIRMED;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 
 @Microservice("order")
@@ -42,19 +41,19 @@ public final class OrderService {
         this.orderHistoryRepository = orderHistoryRepository;
     }
 
-    // @AllowOutOfOrderProcessing
+//    @Inbound(values = {PAYMENT_CONFIRMED})
+//    @Transactional(type=RW)
     public void processPaymentConfirmed(PaymentConfirmed paymentConfirmed){
 
     }
 
-    @Inbound(values = {"shipment_updated"})
+    @Inbound(values = {SHIPMENT_UPDATED})
     @Transactional(type=RW)
     public void processShipmentNotification(ShipmentUpdated shipmentUpdated){
-        System.out.println("Order received a shipment updated event with TID: "+ shipmentUpdated.instanceId);
+        System.out.println("APP: Order received a shipment updated event with TID: "+shipmentUpdated.instanceId);
 
         Date now = new Date();
         for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {
-
             Order order = this.orderRepository.lookupByKey( new Order.OrderId(
                     shipmentNotification.customerId, shipmentNotification.orderId
             ) );
@@ -79,9 +78,7 @@ public final class OrderService {
 
             this.orderRepository.update(order);
             this.orderHistoryRepository.insert( orderHistory );
-
         }
-
     }
 
     @Inbound(values = {STOCK_CONFIRMED})
@@ -94,14 +91,10 @@ public final class OrderService {
 
         // calculate total freight_value
         float total_freight = 0;
-        for(var item : stockConfirmed.items)
-        {
-            total_freight += item.FreightValue;
-        }
-
         float total_amount = 0;
         for(var item : stockConfirmed.items)
         {
+            total_freight += item.FreightValue;
             total_amount += (item.UnitPrice * item.Quantity);
         }
 

@@ -22,7 +22,8 @@ import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
-import java.io.IOException;
+import java.io.*;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.*;
@@ -90,9 +91,6 @@ public final class VmsEventHandler extends StoppableRunnable {
     // cannot be final, may differ across time and new leaders
     private Set<String> queuesLeaderSubscribesTo;
 
-    // set of events to send to leader
-    public final BlockingDeque<TransactionEvent.PayloadRaw> eventsToSendToLeader;
-
     /** INTERNAL STATE **/
 
     /*
@@ -159,12 +157,14 @@ public final class VmsEventHandler extends StoppableRunnable {
         // network and executor
         if(networkThreadPoolSize > 0){
             // at least two, one for acceptor and one for new events
-            ExecutorService socketPool = Executors.newFixedThreadPool( networkThreadPoolSize );
-            this.group = AsynchronousChannelGroup.withThreadPool(socketPool);
+//            ExecutorService socketPool = Executors.newWorkStealingPool(networkThreadPoolSize);
+            this.group = AsynchronousChannelGroup.withFixedThreadPool(networkThreadPoolSize, Thread.ofPlatform().factory());
             this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
         } else {
-            this.group = null;
-            this.serverSocket = AsynchronousServerSocketChannel.open();
+            // by default, server socket creates a cached thread pool. better to avoid successive creation of threads
+//            ExecutorService socketPool = Executors.newWorkStealingPool(networkThreadPoolSize);
+            this.group = AsynchronousChannelGroup.withFixedThreadPool(1, Thread.ofPlatform().factory());
+            this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
         }
         this.serverSocket.bind(me.asInetSocketAddress());
 
@@ -194,7 +194,6 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         this.leaderWorkerQueue = new LinkedBlockingDeque<>();
         this.queuesLeaderSubscribesTo = Set.of();
-        this.eventsToSendToLeader = new LinkedBlockingDeque<>();
 
         this.networkBufferSize = networkBufferSize;
     }
@@ -266,7 +265,6 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         this.failSafeClose();
         this.logger.info(this.me.identifier+": Event handler has finished execution.");
-
     }
 
     private void connectToStarterConsumers() {
@@ -315,7 +313,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         // have we processed all the TIDs of this batch?
         if(this.currentBatch.isOpen() && this.currentBatch.lastTid <= this.lastTidFinished){
 
-            this.logger.info(this.me.identifier+": The last TID ("+this.currentBatch.lastTid+") for the current batch ("+this.currentBatch.batch+") has been executed");
+            this.logger.config(this.me.identifier+": The last TID ("+this.currentBatch.lastTid+") for the current batch ("+this.currentBatch.batch+") has been executed");
 
             // many outputs from the same transaction may arrive here, but can only send the batch commit once
             this.currentBatch.setStatus(BatchContext.Status.BATCH_COMPLETED);
@@ -395,11 +393,17 @@ public final class VmsEventHandler extends StoppableRunnable {
         TransactionEvent.PayloadRaw payload = TransactionEvent.of(
                 outputEvent.tid(), outputEvent.batch(), outputEvent.outputQueue(), objStr, precedenceMap );
 
+        if(payload.precedenceMap().length > this.networkBufferSize){
+            logger.severe(me.identifier+": Precedence map is bigger than the network buffer size: \n"+precedenceMap);
+        }
+
+        /*
         // does the leader consumes this queue?
         if( this.queuesLeaderSubscribesTo.contains( outputEvent.outputQueue() ) ){
             this.logger.config(me.identifier+": An output event (queue: "+outputEvent.outputQueue()+") will be queued to leader");
-            this.eventsToSendToLeader.add(payload);
+            this.leaderWorkerQueue.add(new LeaderWorker.Message(SEND_EVENT, payload));
         }
+        */
 
         Deque<ConsumerVms> consumerVMSs = this.eventToConsumersMap.get(outputEvent.outputQueue());
         if(consumerVMSs == null || consumerVMSs.isEmpty()){
@@ -546,24 +550,60 @@ public final class VmsEventHandler extends StoppableRunnable {
             channel.setOption(SO_KEEPALIVE, true);
             ConnectToConsumerVmsProtocol protocol = new ConnectToConsumerVmsProtocol(channel, outputEvents, vmsNode);
             channel.connect(vmsNode.asInetSocketAddress(), protocol, protocol.completionHandler);
-        } catch (IOException ignored) {
+        } catch (Exception e) {
             //this.issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, vmsNode.hashCode()) );
-            logger.severe(me.identifier+" caught an error while trying to connect to "+vmsNode.identifier);
+            logger.severe(me.identifier+" caught an error while trying to connect to "+vmsNode.identifier+": "+e);
+        }
+    }
+
+    private final class CustomVmsReadCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
+
+        ByteArrayOutputStream outputStream;
+        IdentifiableNode node;
+
+        public CustomVmsReadCompletionHandler(IdentifiableNode node, ByteArrayOutputStream outputStream){
+            this.outputStream = outputStream;
+            this.node = node;
+        }
+
+        @Override
+        public void completed(Integer result, LockConnectionMetadata conn) {
+            if(result != -1) {
+                outputStream.write(conn.readBuffer.array(), 0, conn.readBuffer.array().length);
+                ByteArrayInputStream bais = new ByteArrayInputStream(outputStream.toByteArray());
+                PipedOutputStream pipedOutputStream = new PipedOutputStream();
+                // pipedOutputStream.write(conn.readBuffer.get());
+                try {
+                    PipedInputStream pipedInputStream = new PipedInputStream(pipedOutputStream);
+                    pipedOutputStream.write(conn.readBuffer.array(), 0, conn.readBuffer.array().length);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            conn.readBuffer.clear();
+            conn.channel.read(conn.readBuffer, conn, this);
+        }
+
+        @Override
+        public void failed(Throwable exc, LockConnectionMetadata conn) {
+            logger.severe(me.identifier+": Error on reading VMS message from: "+node.identifier);
         }
     }
 
     /**
-     * Should we only submit the events from the current batch?
+     * The completion handler must execute fast
      */
     private final class VmsReadCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
 
         // the VMS sending events to me
         private final IdentifiableNode node;
         private int recursionDepth;
+        private boolean compacted;
 
         public VmsReadCompletionHandler(IdentifiableNode node){
             this.node = node;
             this.recursionDepth = 0;
+            this.compacted = false;
         }
 
         @Override
@@ -574,66 +614,111 @@ public final class VmsEventHandler extends StoppableRunnable {
                 return;
             }
 
-            if(connectionMetadata.readBuffer.position() == result){
+            // position < result when in the last read there were bytes lacking in the buffer
+            // whenever recursion depth > 0, there are remaining bytes to be read in the buffer
+            if(this.recursionDepth == 0 || connectionMetadata.readBuffer.position() == result){
                 connectionMetadata.readBuffer.position(0);
             }
+            connectionMetadata.readBuffer.mark();
             byte messageType = connectionMetadata.readBuffer.get();
 
             switch (messageType) {
                 case (BATCH_OF_EVENTS) -> {
-                    // connectionMetadata.readBuffer.position(1);
-                    int count = connectionMetadata.readBuffer.getInt();
-                    logger.config(me.identifier+": Batch of ["+count+"] events received from "+node.identifier);
-                    TransactionEvent.Payload payload;
-                    for(int i = 0; i < count; i++){
-                        // move offset to discard message type
-                        connectionMetadata.readBuffer.get();
-                        payload = TransactionEvent.read(connectionMetadata.readBuffer);
-                        if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
-                            InboundEvent inboundEvent = buildInboundEvent(payload);
-                            while(!vmsInternalChannels.transactionInputQueue().offer(inboundEvent));
+                    try {
+                        List<InboundEvent> inboundEvents = new ArrayList<>();
+                        int count = connectionMetadata.readBuffer.getInt();
+                        logger.info(me.identifier + ": Batch of [" + count + "] events received from " + node.identifier);
+                        TransactionEvent.Payload payload;
+                        int i = 0;
+                        while (i < count) {
+                            // move offset to discard message type
+                            connectionMetadata.readBuffer.get();
+                            payload = TransactionEvent.read(connectionMetadata.readBuffer);
+                            if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
+                                InboundEvent inboundEvent = buildInboundEvent(payload);
+                                inboundEvents.add(inboundEvent);
+                            }
+                            i++;
                         }
+                        vmsInternalChannels.transactionInputQueue().addAll(inboundEvents);
+                    } catch(Exception e){
+                        if (e instanceof BufferUnderflowException)
+                            logger.severe(me.identifier + ": Buffer underflow exception while reading batch: " + e);
+                        else
+                            logger.severe(me.identifier + ": Unknown exception: " + e);
+                        // connectionMetadata.channel.read(connectionMetadata.readBuffer).get();
+                        connectionMetadata.readBuffer.reset();
+                        connectionMetadata.readBuffer.compact();
+                        compacted = true;
+                        // force a new read, avoid recursion
+                        result = 0;
                     }
 
+                    // if there are still more batches to process
                     if(connectionMetadata.readBuffer.position() < result){
-                        logger.config("Batch: There is more data to be read. Position: "+
-                                connectionMetadata.readBuffer.position()+" Expected: "+result);
                         this.recursionDepth++;
-                        completed(result, connectionMetadata);
+                        this.completed(result, connectionMetadata);
                     }
                 }
                 case (EVENT) -> {
-                    logger.config(me.identifier+": 1 event received from "+node.identifier);
+                    logger.severe(me.identifier+": 1 event received from "+node.identifier);
                     // can only be event, skip reading the message type
                     // connectionMetadata.readBuffer.position(1);
                     // data dependence or input event
-                    TransactionEvent.Payload payload = TransactionEvent.read(connectionMetadata.readBuffer);
-                    // send to scheduler
-                    if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
-                        InboundEvent inboundEvent = buildInboundEvent(payload);
-                        while(!vmsInternalChannels.transactionInputQueue().offer(inboundEvent));
+                    TransactionEvent.Payload payload;
+                    while(true) {
+                        connectionMetadata.readBuffer.mark();
+                        try {
+                            payload = TransactionEvent.read(connectionMetadata.readBuffer);
+                        } catch (Exception e) {
+                            if(e instanceof BufferUnderflowException)
+                                logger.severe(me.identifier + ": Buffer underflow exception while reading event: " + e);
+                            else
+                                logger.severe(me.identifier + ": Unknown exception: " + e);
+                            connectionMetadata.readBuffer.reset();
+                            connectionMetadata.readBuffer.compact();
+                            try {
+                                connectionMetadata.channel.read(connectionMetadata.readBuffer).get();
+                                connectionMetadata.readBuffer.position(0);
+                                continue;
+                            } catch (InterruptedException | ExecutionException ex) {
+                                logger.severe(me.identifier + ": Will enter in undefined mode: " + ex);
+                                throw new RuntimeException(ex);
+                            }
+                        }
+
+                        // send to scheduler
+                        if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
+                            InboundEvent inboundEvent = buildInboundEvent(payload);
+                            while (!vmsInternalChannels.transactionInputQueue().offer(inboundEvent)) ;
+                        }
+                        break;
                     }
 
                     if(connectionMetadata.readBuffer.position() < result){
-                        logger.config("Event: There is more data to be read. Position: "+
-                                connectionMetadata.readBuffer.position()+" Expected: "+result);
                         this.recursionDepth++;
                         completed(result, connectionMetadata);
                     }
                 }
                 default ->
-                    logger.warning("Unknown message type "+messageType+" received from: "+node.identifier);
+                    logger.severe(me.identifier+": Unknown message type "+messageType+" received from: "+node.identifier);
             }
-            connectionMetadata.readBuffer.clear();
             if(this.recursionDepth > 0){
                 this.recursionDepth--;
                 return;
+            }
+
+            if(!compacted){
+                connectionMetadata.readBuffer.clear();
+            } else {
+                compacted = false;
             }
             connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
         }
 
         @Override
         public void failed(Throwable exc, LockConnectionMetadata connectionMetadata) {
+            logger.warning(me.identifier+": Error on reading VMS message from: "+node.identifier);
             if (connectionMetadata.channel.isOpen()){
                 connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
             } // else no nothing. upon a new connection this metadata can be recycled
@@ -670,7 +755,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             // message identifier
             byte messageIdentifier = this.buffer.get(0);
             if(messageIdentifier != PRESENTATION){
-                logger.warning("A node is trying to connect without a presentation message");
+                logger.warning(me.identifier+": A node is trying to connect without a presentation message");
                 this.buffer.clear();
                 MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
                 try { this.channel.close(); } catch (IOException ignored) {}
@@ -681,9 +766,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             this.buffer.position(2);
 
             switch (nodeTypeIdentifier) {
-
                 case (SERVER_TYPE) -> {
-
                     if(!leader.isActive()) {
                         ConnectionFromLeaderProtocol connectionFromLeader = new ConnectionFromLeaderProtocol(this.channel, this.buffer);
                         connectionFromLeader.processLeaderPresentation();
@@ -693,7 +776,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                     }
                 }
                 case (VMS_TYPE) -> {
-
                     // then it is a vms intending to connect due to a data/event
                     // that should be delivered to this vms
                     VmsNode producerVms = Presentation.readVms(this.buffer, serdesProxy);
@@ -720,7 +802,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                     // setup event receiving from this vms
                     logger.info(me.identifier+": Setting up consumption from producer "+producerVms);
                     this.channel.read(this.buffer, connMetadata, new VmsReadCompletionHandler(producerVms));
-
                 }
                 default -> {
                     logger.warning("Presentation message from unknown source:" + nodeTypeIdentifier);
@@ -751,12 +832,10 @@ public final class VmsEventHandler extends StoppableRunnable {
             logger.info(me.identifier+": An unknown host has started a connection attempt.");
             final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
             try {
-                // logger.info("Remote address: "+channel.getRemoteAddress().toString());
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, true);
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 channel.read( buffer, null, new UnknownNodeReadCompletionHandler(channel, buffer) );
-                // logger.info(me.identifier+": Read handler has been setup: "+channel.getLocalAddress());
             } catch(Exception e){
                 logger.severe(me.identifier+": Accept handler caught exception: "+e.getMessage());
                 buffer.clear();
@@ -819,7 +898,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 logger.info(me.identifier+": Presentation sent to Leader successfully");
                 state = State.PRESENTATION_SENT;
                 // set up leader worker
-                leaderWorker = new LeaderWorker(me, leader, leaderConnectionMetadata, eventsToSendToLeader, leaderWorkerQueue);
+                leaderWorker = new LeaderWorker(me, leader, leaderConnectionMetadata, leaderWorkerQueue);
                 new Thread(leaderWorker).start();
                 logger.info(me.identifier+": Leader worker set up");
                 buffer.clear();
@@ -911,6 +990,12 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     private final class LeaderReadCompletionHandler implements CompletionHandler<Integer, LockConnectionMetadata> {
 
+        private int recursionDepth;
+
+        public LeaderReadCompletionHandler(){
+            this.recursionDepth = 0;
+        }
+
         @Override
         public void completed(Integer result, LockConnectionMetadata connectionMetadata) {
 
@@ -920,12 +1005,15 @@ public final class VmsEventHandler extends StoppableRunnable {
                 return;
             }
 
-            connectionMetadata.readBuffer.position(0);
+            // why? it is the last position on which the buffer was written to.
+            // to initiate a set of reads, we have to start from the beginning
+            if(connectionMetadata.readBuffer.position() == result){
+                connectionMetadata.readBuffer.position(0);
+            }
             byte messageType = connectionMetadata.readBuffer.get();
 
             // receive input events
             switch (messageType) {
-
                 case (BATCH_OF_EVENTS) -> {
                     /*
                      * Given a new batch of events sent by the leader, the last message is the batch info
@@ -958,17 +1046,22 @@ public final class VmsEventHandler extends StoppableRunnable {
                             payloads.add(buildInboundEvent(payload));
                     }
                     // add after to make sure the batch context map is filled by the time the output event is generated
-                    vmsInternalChannels.transactionInputQueue().addAll(payloads);
+                    while(!vmsInternalChannels.transactionInputQueue().addAll(payloads));
+
+                    if(connectionMetadata.readBuffer.position() < result){
+                        this.recursionDepth++;
+                        completed(result, connectionMetadata);
+                    }
                 }
                 case (BATCH_COMMIT_INFO) -> {
                     // events of this batch from VMSs may arrive before the batch commit info
                     // it means this VMS is a terminal node for the batch
-                    logger.info(me.identifier+": Batch commit info received from the leader");
+                    logger.config(me.identifier+": Batch commit info received from the leader");
                     BatchCommitInfo.Payload bPayload = BatchCommitInfo.read(connectionMetadata.readBuffer);
                     processNewBatchInfo(bPayload);
                 }
                 case (BATCH_COMMIT_COMMAND) -> {
-                    logger.info(me.identifier+": Batch commit command received from the leader");
+                    logger.config(me.identifier+": Batch commit command received from the leader");
                     // a batch commit queue from next batch can arrive before this vms moves next? yes
                     BatchCommitCommand.Payload payload = BatchCommitCommand.read(connectionMetadata.readBuffer);
                     processNewBatchInfo(payload);
@@ -977,7 +1070,13 @@ public final class VmsEventHandler extends StoppableRunnable {
                     TransactionEvent.Payload payload = TransactionEvent.read(connectionMetadata.readBuffer);
                     // send to scheduler.... drop if the event cannot be processed (not an input event in this vms)
                     if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
-                        vmsInternalChannels.transactionInputQueue().add(buildInboundEvent(payload));
+                        InboundEvent event = buildInboundEvent(payload);
+                        while(!vmsInternalChannels.transactionInputQueue().offer(event));
+                    }
+
+                    if(connectionMetadata.readBuffer.position() < result){
+                        this.recursionDepth++;
+                        completed(result, connectionMetadata);
                     }
                 }
                 case (TX_ABORT) -> {
@@ -1000,6 +1099,10 @@ public final class VmsEventHandler extends StoppableRunnable {
                 default -> logger.severe(me.identifier+": Message type sent by the leader cannot be identified: "+messageType);
             }
 
+            if(this.recursionDepth > 0){
+                this.recursionDepth--;
+                return;
+            }
             connectionMetadata.readBuffer.clear();
             connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
         }
@@ -1014,7 +1117,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                 leaderWorker.stop();
             }
         }
-
     }
 
     private void processNewBatchInfo(BatchCommitInfo.Payload batchCommitInfo){

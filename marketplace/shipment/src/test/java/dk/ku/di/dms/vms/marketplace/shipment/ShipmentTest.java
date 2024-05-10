@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
 import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
 import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
+import dk.ku.di.dms.vms.marketplace.common.inputs.UpdateDelivery;
 import dk.ku.di.dms.vms.marketplace.shipment.dtos.OldestSellerPackageEntry;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IPackageRepository;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
@@ -16,6 +17,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.function.BiFunction;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.PAYMENT_CONFIRMED;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.UPDATE_DELIVERY;
 import static dk.ku.di.dms.vms.marketplace.shipment.ShipmentService.OLDEST_SHIPMENT_PER_SELLER;
 import static java.lang.Thread.sleep;
 
@@ -35,7 +38,7 @@ public final class ShipmentTest {
             customerId, "test", "test", "test", "test","test", "test", "test",
             "CREDIT_CARD","test","test","test", "test", "test", 1, instanceId);
 
-    // generates an payment with orderId == sellerId
+    // generates a payment with orderId == sellerId
     private static final BiFunction<CustomerCheckout, Integer, PaymentConfirmed> paymentConfirmedBiFunction = (customerCheckout, orderId) -> new PaymentConfirmed(customerCheckout, orderId, 100f,
             List.of(new OrderItem(orderId,1,1, "name", orderId, 1.0f, new Date(), 1.0f, 1, 1.0f, 1.0f, 0.0f) ),
             new Date(), customerCheckout.instanceId);
@@ -86,7 +89,7 @@ public final class ShipmentTest {
         PaymentConfirmed paymentConfirmed = paymentConfirmedBiFunction.apply(customerCheckout, tid);
 
         InboundEvent inboundEvent = new InboundEvent(tid, previousTid, 1,
-                "payment_confirmed", PaymentConfirmed.class, paymentConfirmed);
+                PAYMENT_CONFIRMED, PaymentConfirmed.class, paymentConfirmed);
         vms.internalChannels().transactionInputQueue().add(inboundEvent);
     }
 
@@ -109,7 +112,7 @@ public final class ShipmentTest {
         sleep(1000);
 
         InboundEvent updateShipment = new InboundEvent(numPayments, numPayments-1, 1,
-                "update_shipment", String.class, String.valueOf(numPayments));
+                UPDATE_DELIVERY, UpdateDelivery.class, new UpdateDelivery( String.valueOf(numPayments) ));
         vms.internalChannels().transactionInputQueue().add(updateShipment);
 
         sleep(1000);
@@ -125,7 +128,7 @@ public final class ShipmentTest {
         numPayments++;
 
         updateShipment = new InboundEvent(numPayments, numPayments-1, 1,
-                "update_shipment", String.class, String.valueOf(numPayments));
+                UPDATE_DELIVERY, UpdateDelivery.class, new UpdateDelivery( String.valueOf(numPayments) ));
         vms.internalChannels().transactionInputQueue().add(updateShipment);
 
         sleep(1000);

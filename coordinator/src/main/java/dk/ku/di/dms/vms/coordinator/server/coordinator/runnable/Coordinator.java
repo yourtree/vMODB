@@ -271,21 +271,19 @@ public final class Coordinator extends StoppableRunnable {
             this.setupStarterVMSs();
         }
 
-//        Thread.startVirtualThread(this::processEventsSentByVmsWorkers);
         Thread.ofPlatform().factory().newThread(this::processEventsSentByVmsWorkers).start();
 
-        logger.config("Leader: Starter VMSs processing starting now... ");
+        this.logger.config("Leader: Starter VMSs processing starting now... ");
         // process all VMS_IDENTIFIER first before submitting transactions
         for(;;){
             if(this.vmsMetadataMap.size() >= this.starterVMSs.size())
                 break;
         }
 
-        logger.config("Leader: Transaction processing starting now... ");
+        this.logger.config("Leader: Transaction processing starting now... ");
         long start = System.currentTimeMillis();
         while(this.isRunning()){
             do {
-                // this.processEventsSentByVmsWorkers();
                 this.processTransactionInputEvents();
             } while(System.currentTimeMillis() - start < this.options.getBatchWindow());
             this.advanceCurrentBatchAndSpawnSendBatchOfEvents();
@@ -293,6 +291,7 @@ public final class Coordinator extends StoppableRunnable {
         }
 
         this.failSafeClose();
+        this.logger.info("Leader: Finished execution.");
     }
 
     /**
@@ -853,7 +852,6 @@ public final class Coordinator extends StoppableRunnable {
                             }
                             vmsIdentifier.worker().queue().add( new IVmsWorker.Message( SEND_CONSUMER_SET, mapStr ));
                         }
-
                     }
                     case TRANSACTION_ABORT -> {
                         // send abort to all VMSs...
@@ -904,7 +902,7 @@ public final class Coordinator extends StoppableRunnable {
                 }
 
             } catch (Exception e) {
-                this.logger.warning("Leader: Exception caught while looping through coordinatorQueue: "+e.getMessage());
+                this.logger.severe("Leader: Exception caught while looping through coordinatorQueue: "+e);
             }
 
         }

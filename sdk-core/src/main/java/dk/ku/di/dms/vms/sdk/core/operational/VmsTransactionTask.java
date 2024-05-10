@@ -80,10 +80,14 @@ public final class VmsTransactionTask implements Runnable {
         FINISHED(4),
         OUTPUT_SENT(5);
 
-        public final int value;
+        private final int value;
 
         Status(int value) {
             this.value = value;
+        }
+
+        public int value() {
+            return this.value;
         }
     }
 
@@ -105,7 +109,6 @@ public final class VmsTransactionTask implements Runnable {
 
             this.status = Status.FINISHED;
             this.schedulerCallback.success(signature.executionMode(), eventOutput);
-
         } catch (Exception e) {
             this.schedulerCallback.error(signature.executionMode(), this.tid, e);
         }

@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.stock;
 
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
+import dk.ku.di.dms.vms.marketplace.common.events.PaymentConfirmed;
 import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdated;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
 import dk.ku.di.dms.vms.marketplace.common.events.StockConfirmed;
@@ -91,6 +92,11 @@ public final class StockService {
         }
 
         return new StockConfirmed( reserveStock.timestamp, reserveStock.customerCheckout, cartItemsReserved, reserveStock.instanceId );
+    }
+
+//    @Inbound(values = {PAYMENT_CONFIRMED})
+//    @Transactional(type=RW)
+    public void processPaymentConfirmed(PaymentConfirmed paymentConfirmed){
 
     }
 

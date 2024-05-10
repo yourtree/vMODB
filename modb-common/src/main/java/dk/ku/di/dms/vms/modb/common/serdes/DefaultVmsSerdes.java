@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.modb.common.serdes;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
 import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
@@ -116,7 +117,11 @@ final class DefaultVmsSerdes implements IVmsSerdesProxy {
 
     @Override
     public Map<String, Long> deserializeDependenceMap(String dependenceMapStr) {
-        return this.gson.fromJson(dependenceMapStr, typeDepMap);
+        try {
+            return this.gson.fromJson(dependenceMapStr, typeDepMap);
+        } catch (JsonSyntaxException e){
+            throw new RuntimeException("Failed to deserialize dependence map: " + dependenceMapStr, e);
+        }
     }
 
     @Override

@@ -59,7 +59,7 @@ public final class Main {
         int starterSize = starterVMSs.size();
         int maxSleep = 3;
         do {
-            sleep(1000);
+            sleep(500);
             if(coordinator.getConnectedVMSs().size() == starterSize) break;
             maxSleep--;
         } while (maxSleep > 0);
@@ -104,14 +104,15 @@ public final class Main {
     private static Map<String, TransactionDAG> buildTransactionDAGs(){
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
 
-        /*
-        TransactionDAG updatePriceDag =  TransactionBootstrap.name(UPDATE_PRICE)
+
+        TransactionDAG updatePriceDag = TransactionBootstrap.name(UPDATE_PRICE)
                 .input( "a", "product", UPDATE_PRICE )
                 .terminal("b", "cart", "a")
                 .build();
         transactionMap.put(updatePriceDag.name, updatePriceDag);
 
-        TransactionDAG updateProductDag =  TransactionBootstrap.name(UPDATE_PRODUCT)
+        /*
+        TransactionDAG updateProductDag = TransactionBootstrap.name(UPDATE_PRODUCT)
                 .input( "a", "product", UPDATE_PRODUCT )
                 .terminal("b", "stock", "a")
                  .terminal("c", "cart", "a")
@@ -119,14 +120,21 @@ public final class Main {
         transactionMap.put(updateProductDag.name, updateProductDag);
         */
 
-        TransactionDAG checkoutDag =  TransactionBootstrap.name(CUSTOMER_CHECKOUT)
-                .input( "a", "cart", CUSTOMER_CHECKOUT)
-                .internal( "b", "stock", RESERVE_STOCK, "a")
-                .internal("c", "order", STOCK_CONFIRMED, "b")
-                .internal("d", "payment", INVOICE_ISSUED, "c")
-                .terminal( "e", "shipment",  "d" )
-                .build();
-        transactionMap.put(checkoutDag.name, checkoutDag);
+//        TransactionDAG updateDeliveryDag = TransactionBootstrap.name(UPDATE_DELIVERY)
+//                .input("a", "shipment", UPDATE_DELIVERY)
+//                .terminal("b", "order", "a")
+//                .build();
+//        transactionMap.put(updateDeliveryDag.name, updateDeliveryDag);
+
+//        TransactionDAG checkoutDag = TransactionBootstrap.name(CUSTOMER_CHECKOUT)
+//                .input("a", "cart", CUSTOMER_CHECKOUT)
+//                .internal("b", "stock", RESERVE_STOCK, "a")
+//                .internal("c", "order", STOCK_CONFIRMED, "b")
+//                .internal("d", "payment", INVOICE_ISSUED, "c")
+//                .terminal("e", "shipment",  "d" )
+//                .build();
+//        transactionMap.put(checkoutDag.name, checkoutDag);
+
         return transactionMap;
     }
 
@@ -166,7 +174,23 @@ public final class Main {
         );
     }
 
-    private static Map<Integer, IdentifiableNode> buildStarterVMSs(Properties properties) {
+    private static Map<Integer, IdentifiableNode> buildStarterVMSs(Properties properties){
+        String cartHost = properties.getProperty("cart_host");
+        String productHost = properties.getProperty("product_host");
+
+        if(productHost == null) throw new RuntimeException("Product host is null");
+        if(cartHost == null) throw new RuntimeException("Cart host is null");
+
+        IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, Constants.CART_VMS_PORT);
+        IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
+
+        Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>();
+        starterVMSs.put(cartAddress.hashCode(), cartAddress);
+        starterVMSs.put(productAddress.hashCode(), productAddress);
+        return starterVMSs;
+    }
+
+    private static Map<Integer, IdentifiableNode> buildStarterVMSsCheckout(Properties properties) {
         String cartHost = properties.getProperty("cart_host");
 //        String productHost = properties.getProperty("product_host");
         String stockHost = properties.getProperty("stock_host");
@@ -174,11 +198,11 @@ public final class Main {
         String paymentHost = properties.getProperty("payment_host");
         String shipmentHost = properties.getProperty("shipment_host");
 
-        if(paymentHost == null) throw new RuntimeException("Payment host is null");
         if(cartHost == null) throw new RuntimeException("Cart host is null");
-        if(orderHost == null) throw new RuntimeException("Order host is null");
-        if(shipmentHost == null) throw new RuntimeException("Shipment host is null");
         if(stockHost == null) throw new RuntimeException("Stock host is null");
+        if(orderHost == null) throw new RuntimeException("Order host is null");
+        if(paymentHost == null) throw new RuntimeException("Payment host is null");
+        if(shipmentHost == null) throw new RuntimeException("Shipment host is null");
 
         IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, Constants.CART_VMS_PORT);
 //        IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
@@ -232,12 +256,15 @@ public final class Main {
                             TRANSACTION_INPUTS.add(txInput);
                             break;
                         }
+                        default: {
+                            reportError("product", exchange);
+                            return;
+                        }
                     }
-                    reportError("product", exchange);
-                    return;
+                    break;
                 }
                 case "shipment" : {
-                    if(exchange.getRequestMethod().equalsIgnoreCase("POST")){
+                    if(exchange.getRequestMethod().equalsIgnoreCase("PATCH")){
                         TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_DELIVERY, payload);
                         TransactionInput txInput = new TransactionInput(UPDATE_DELIVERY, eventPayload);
                         TRANSACTION_INPUTS.add(txInput);
@@ -251,7 +278,6 @@ public final class Main {
                     return;
                 }
             }
-
             endExchange(exchange, 200);
         }
 

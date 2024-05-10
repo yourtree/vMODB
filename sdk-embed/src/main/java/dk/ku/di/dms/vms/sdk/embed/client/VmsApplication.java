@@ -30,19 +30,19 @@ public final class VmsApplication {
 
     private final VmsEventHandler eventHandler;
 
-    private final StoppableRunnable scheduler;
+    private final StoppableRunnable transactionScheduler;
 
     private final IVmsInternalChannels internalChannels;
 
     private VmsApplication(VmsRuntimeMetadata vmsRuntimeMetadata,
                            Map<String, Table> catalog,
                            VmsEventHandler eventHandler,
-                           StoppableRunnable scheduler,
+                           StoppableRunnable transactionScheduler,
                            IVmsInternalChannels internalChannels) {
         this.vmsRuntimeMetadata = vmsRuntimeMetadata;
         this.catalog = catalog;
         this.eventHandler = eventHandler;
-        this.scheduler = scheduler;
+        this.transactionScheduler = transactionScheduler;
         this.internalChannels = internalChannels;
     }
 
@@ -120,27 +120,34 @@ public final class VmsApplication {
 //                        vmsInternalPubSubService,
 //                        vmsMetadata.queueToVmsTransactionMap(),
 //                        eventHandler.schedulerHandler());
-        StoppableRunnable scheduler = VmsTransactionScheduler.build(
+
+        // could be higher. must adjust according to the number of cores available
+        // why minus 2? to account for the event handler and the scheduler
+        int threadPoolSize = options.vmsThreadPoolSize() > 0 ? options.vmsThreadPoolSize() : Runtime.getRuntime().availableProcessors() - 2;
+        StoppableRunnable transactionScheduler = VmsTransactionScheduler.build(
                 vmsName,
                 vmsInternalPubSubService,
                 vmsMetadata.queueToVmsTransactionMap(),
                 eventHandler.transactionalHandler(),
-                eventHandler.schedulerHandler() );
+                eventHandler.schedulerHandler(),
+                threadPoolSize );
 
-        return new VmsApplication( vmsMetadata, catalog, eventHandler, scheduler, vmsInternalPubSubService );
+        return new VmsApplication( vmsMetadata, catalog, eventHandler, transactionScheduler, vmsInternalPubSubService );
     }
 
     public void start(){
         // one way to accomplish that, but that would require keep checking the thread status
         Thread eventHandlerThread = new Thread(this.eventHandler);
+        eventHandlerThread.setPriority(Thread.MAX_PRIORITY);
         eventHandlerThread.start();
-        Thread schedulerThread = new Thread(this.scheduler);
-        schedulerThread.start();
+        Thread transactionSchedulerThread = new Thread(this.transactionScheduler);
+        transactionSchedulerThread.setPriority(Thread.MAX_PRIORITY);
+        transactionSchedulerThread.start();
     }
 
     public void stop(){
         this.eventHandler.stop();
-        this.scheduler.stop();
+        this.transactionScheduler.stop();
     }
 
     public IVmsInternalChannels internalChannels() {
