@@ -8,6 +8,7 @@ import dk.ku.di.dms.vms.sdk.core.operational.ISchedulerCallback;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
+import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
@@ -136,9 +137,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     private final SchedulerCallback callback = new SchedulerCallback();
 
-
-
-    private class SchedulerCallback implements ISchedulerCallback, Thread.UncaughtExceptionHandler {
+    private final class SchedulerCallback implements ISchedulerCallback, Thread.UncaughtExceptionHandler {
 
         private final int outputSentStatus = VmsTransactionTask.Status.OUTPUT_SENT.value();
 
@@ -155,7 +154,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
                 vmsChannels.transactionOutputQueue().add(
                         new VmsTransactionResult(outboundEventResult.tid(),
-                                List.of(outboundEventResult)) );
+                                outboundEventResult));
 
                 task.signalOutputSent();
 
@@ -168,8 +167,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
                     // logger.info("adding "+nextTask.tid()+" to output queue...");
                     // this is the app thread executing. it must make sure the output event is pushed
-                    var outputToSend = new VmsTransactionResult(nextTask.tid(),
-                            List.of(nextTask));
+                    var outputToSend = new VmsTransactionResult(nextTask.tid(), nextTask);
                     while(!vmsChannels.transactionOutputQueue().offer(outputToSend));
 
                     transactionTaskMap.get(nextTid).signalOutputSent();
@@ -327,31 +325,16 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         if(this.vmsChannels.transactionInputQueue().isEmpty()){
             if(this.block) {
-                logger.config(this.vmsIdentifier+": Transaction scheduler going to sleep until new event arrives");
-
                 InboundEvent e = null;
+                int pollTimeout = 100;
                 while(e == null) {
-                    e = this.vmsChannels.transactionInputQueue().poll(100, TimeUnit.MILLISECONDS);
+                    pollTimeout = pollTimeout * 2;
+                    logger.info(this.vmsIdentifier+": Transaction scheduler going to sleep for "+pollTimeout+" until new event arrives");
+                    e = this.vmsChannels.transactionInputQueue().poll(pollTimeout, TimeUnit.MILLISECONDS);
                 }
-
                 this.localInputEvents.add(e);
-
-//                this.localInputEvents.add(this.vmsChannels.transactionInputQueue().take());
-
+                // disable block
                 this.block = false;
-
-                /*
-                logger.info(this.vmsIdentifier+": Transaction scheduler woke up since new event arrived!");
-                logger.info(this.vmsIdentifier+": Last finished TID: "+this.lastFinishedTid);
-                Long nextTid = this.lastTidToTidMap.get( this.lastFinishedTid );
-                if(nextTid != null) {
-                    logger.info(this.vmsIdentifier+": Next TID: "+nextTid);
-                    VmsTransactionTask task = this.transactionTaskMap.get( nextTid );
-                    logger.info(vmsIdentifier+": next tid status: "+task.status().name());
-                } else {
-                    logger.info(this.vmsIdentifier+": Next TID is still unknown");
-                }
-                */
             } else {
                 return;
             }

@@ -448,10 +448,10 @@ public final class Coordinator extends StoppableRunnable {
                 // this thread could potentially handle this worker... let's see how this performs later
                 // one aspect that favors the current approach is to release this thread as soon as possible
                 // for other connection attempts and reads from leader/VMSs once it is part of the group pool
-                // ConsumerVms vms = new ConsumerVms( channel.getRemoteAddress() );
-                VmsWorker worker = VmsWorker.build( this.me, new NetworkAddress(channel.getRemoteAddress()), this.coordinatorQueue,
+                VmsWorker worker = VmsWorker.build( this.me,
+                        new NetworkAddress(channel.getRemoteAddress()),
+                        this.coordinatorQueue,
                         channel, this.group, buffer, this.networkBufferSize, this.serdesProxy);
-                // a cached thread pool would be ok in this case
                 new Thread( worker ).start();
             } catch (IOException ignored1) {
                 try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored2){}
@@ -511,7 +511,7 @@ public final class Coordinator extends StoppableRunnable {
         // why do I need to replicate vmsTidMap? to restart from this point if the leader fails
         final long generateBatch = this.currentBatchOffset;
 
-        logger.info("Leader: Batch commit task for batch offset "+generateBatch+" is starting...");
+        this.logger.info("Leader: Batch commit task for batch offset "+generateBatch+" is starting...");
 
         BatchContext currBatchContext = this.batchContextMap.get( generateBatch );
 
@@ -801,11 +801,18 @@ public final class Coordinator extends StoppableRunnable {
      * <a href="https://web.mit.edu/6.005/www/fa14/classes/20-queues-locks/message-passing/">Message passing in Java</a>
      */
     private void processEventsSentByVmsWorkers() {
-
-        // it is ok to keep this loop. at some point events from VMSs will stop arriving
+        int pollTimeout = 50;
         while(this.isRunning()){
             try {
-                Message message = this.coordinatorQueue.take();
+                Message message = this.coordinatorQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
+                // then put to poll again
+                if(message == null){
+                    pollTimeout = pollTimeout * 2;
+                    continue;
+                }
+                // decrease for next polling
+                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+
                 switch(message.type){
                     // receive metadata from all microservices
                     case VMS_IDENTIFIER -> {
@@ -871,7 +878,7 @@ public final class Coordinator extends StoppableRunnable {
                         // what if ACKs from VMSs take too long? or never arrive?
                         // need to deal with intersecting batches? actually just continue emitting for higher throughput
                         BatchComplete.Payload msg = message.asBatchComplete();
-                        this.logger.info("Leader: Received a BATCH_COMPLETE from: "+msg.vms());
+                        this.logger.info("Leader: Processing a BATCH_COMPLETE from: "+msg.vms());
                         BatchContext batchContext = this.batchContextMap.get( msg.batch() );
                         // only if it is not a duplicate vote
                         batchContext.missingVotes.remove( msg.vms() );
@@ -915,14 +922,14 @@ public final class Coordinator extends StoppableRunnable {
     private void sendCommitRequestToVMSs(BatchContext batchContext){
         for(VmsIdentifier vms : this.vmsMetadataMap.values()){
             if(batchContext.terminalVMSs.contains(vms.getIdentifier())) {
-                logger.info("Leader: Will not send commit request to VMS "+ vms.getIdentifier() + " because it is a terminal VMS");
+                logger.info("Leader: Will not send commit request to "+ vms.getIdentifier() + " because it is a terminal VMS");
                 continue;
             }
 
             // has this VMS participated in this batch?
             if(!batchContext.lastTidOfBatchPerVms.containsKey(vms.getIdentifier())){
                 //noinspection StringTemplateMigration
-                logger.info("Leader: Will not send commit request to VMS "+ vms.getIdentifier() + " because it has not participated in this batch.");
+                logger.info("Leader: Will not send commit request to "+ vms.getIdentifier() + " because this VMS has not participated in this batch.");
                 continue;
             }
 

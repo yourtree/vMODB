@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 /**
@@ -68,15 +69,22 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
         this.logger.info(this.me.identifier+ ": Starting worker for consumer VMS: "+this.consumerVms.identifier);
 
+        int pollTimeout = 50;
+        TransactionEvent.PayloadRaw payloadRaw = null;
         List<TransactionEvent.PayloadRaw> events = new ArrayList<>(1000);
         while(this.isRunning()){
 
             try {
-                events.add(this.consumerVms.transactionEvents.take());
-            } catch (InterruptedException e) {
-                this.logger.warning(this.me.identifier+ ": Consumer worker for "+this.consumerVms.identifier+" caught an interrupted exception : "+e.getCause().getMessage());
+                payloadRaw = this.consumerVms.transactionEvents.poll(pollTimeout, TimeUnit.MILLISECONDS);
+                if (payloadRaw == null) {
+                    pollTimeout = pollTimeout * 2;
+                    continue;
+                }
+            } catch (InterruptedException ignored) {
                 continue;
             }
+            pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+            events.add(payloadRaw);
 
             this.consumerVms.transactionEvents.drainTo(events);
 

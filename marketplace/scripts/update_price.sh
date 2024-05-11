@@ -22,7 +22,7 @@ echo ""
 for i in `seq 1 $param1`
 do
 
-  echo "Updating price of product 1/1"
+  echo "Updating price of product 1/1 iteration $i"
 
   curl -X PATCH -H "Content-Type: application/json" -d '{ "sellerId" : 1, "productId" : 1, "price" : 100, "instanceId" : "'$i'" }' localhost:8090/product/1/1
 

@@ -14,7 +14,7 @@ public abstract class StoppableRunnable implements Runnable {
     public StoppableRunnable() {
         // starts running as default
         this.running = true;
-        this.logger = Logger.getLogger(getClass().getSimpleName());
+        this.logger = Logger.getLogger(getClass().getTypeName());
     }
 
     public boolean isRunning() {

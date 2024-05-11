@@ -22,7 +22,7 @@ public final class ConsumerVms extends IdentifiableNode {
         this.transactionEvents = new LinkedBlockingDeque<>();
     }
 
-    public void addEventToBatch(TransactionEvent.PayloadRaw eventPayload){
+    public void queueTransactionEvent(TransactionEvent.PayloadRaw eventPayload){
         this.transactionEvents.add(eventPayload);
     }
 

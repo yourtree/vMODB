@@ -11,6 +11,7 @@ import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 /**
@@ -78,10 +79,17 @@ final class LeaderWorker extends StoppableRunnable {
 
     @Override
     public void run() {
-        logger.info(vmsNode.identifier+": Leader worker started!");
+        this.logger.info(vmsNode.identifier+": Leader worker started!");
+        int pollTimeout = 50;
         while (this.isRunning()){
             try {
-                Message msg = this.leaderWorkerQueue.take();
+                Message msg = this.leaderWorkerQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
+                if(msg == null){
+                    pollTimeout = pollTimeout * 2;
+                    continue;
+                }
+                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+
                 this.logger.config(vmsNode.identifier+": Leader worker will send message type: "+ msg.type());
                 switch (msg.type()) {
                     case SEND_BATCH_COMPLETE -> this.sendBatchComplete(msg.asBatchComplete());

@@ -8,6 +8,7 @@ import dk.ku.di.dms.vms.sdk.core.facade.NetworkRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
+import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
 import org.junit.Test;
 
 import java.lang.reflect.Constructor;
@@ -67,7 +68,7 @@ public class SchedulerTest {
 
         // read from output queue and insert them all into scheduler again
 
-        VmsTransactionResult out = vmsInternalChannels.transactionOutputQueue().take();
+        IVmsTransactionResult out = vmsInternalChannels.transactionOutputQueue().take();
 
         // 1 - check if output queue contains two events
         // 2 - insert these two events in the input queue of the scheduler
@@ -82,7 +83,9 @@ public class SchedulerTest {
         schedulerThread = new Thread(scheduler);
         schedulerThread.start();
 
-        for(var res : out.resultTasks()){
+        assert out.getOutboundEventResults() != null;
+
+        for(var res : out.getOutboundEventResults()){
             Class<?> clazz = vmsRuntimeMetadata.queueToEventMap().get( res.outputQueue() );
             InboundEvent payload_ = new InboundEvent(1,0,1, res.outputQueue(), clazz, res.output());
             vmsInternalChannels.transactionInputQueue().add(payload_);
@@ -98,7 +101,7 @@ public class SchedulerTest {
 
         int count = ms2.getCount();
 
-        // TODO test abort from the application. test 2
+        // test abort from the application. test 2
 
         assert count == 2;
 

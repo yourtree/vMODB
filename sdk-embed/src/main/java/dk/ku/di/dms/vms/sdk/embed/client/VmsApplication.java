@@ -136,9 +136,8 @@ public final class VmsApplication {
     }
 
     public void start(){
-        // one way to accomplish that, but that would require keep checking the thread status
         Thread eventHandlerThread = new Thread(this.eventHandler);
-        eventHandlerThread.setPriority(Thread.MAX_PRIORITY);
+//        eventHandlerThread.setPriority(Thread.MAX_PRIORITY);
         eventHandlerThread.start();
         Thread transactionSchedulerThread = new Thread(this.transactionScheduler);
         transactionSchedulerThread.setPriority(Thread.MAX_PRIORITY);
@@ -167,7 +166,9 @@ public final class VmsApplication {
     }
 
     public Object getService() {
-        return this.vmsRuntimeMetadata.loadedVmsInstances().entrySet().stream().findFirst().get().getValue();
+        var service = this.vmsRuntimeMetadata.loadedVmsInstances().entrySet().stream().findFirst();
+        if(service.isPresent()) return service.get();
+        throw new RuntimeException("Service not loaded");
     }
 
 }

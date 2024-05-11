@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.sdk.core.scheduler;
+package dk.ku.di.dms.vms.sdk.core.scheduler.complex;
 
 import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
@@ -8,6 +8,7 @@ import dk.ku.di.dms.vms.sdk.core.operational.*;
 import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.ComplexVmsTransactionTrackingContext;
 import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.IVmsTransactionTrackingContext;
+import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.OffsetTracker;
 import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.SimpleVmsTransactionTrackingContext;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
@@ -228,7 +229,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
                 }
                 this.currentOffset.signalTaskFinished();
                 this.vmsChannels.transactionOutputQueue().add(
-                        new VmsTransactionResult(this.currentOffset.tid(),
+                        new VmsComplexTransactionResult(this.currentOffset.tid(),
                                 List.of(context.asSimple().result.result())) );
                 this.transactionContextMap.remove(this.currentOffset.tid());
             } catch (Exception e){
@@ -263,7 +264,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
 
                         // now can send all to output queue
                         this.vmsChannels.transactionOutputQueue().add(
-                                new VmsTransactionResult(this.currentOffset.tid(), outbounds) );
+                                new VmsComplexTransactionResult(this.currentOffset.tid(), outbounds) );
 
                         this.transactionContextMap.remove(this.currentOffset.tid());
                     }
@@ -385,7 +386,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
             } else {
                 // unknown transaction, then must create the entry
                 this.waitingTasksPerTidMap.computeIfAbsent(task.tid(),
-                        (x) -> new ArrayList<>(transactionMetadata.numTasksWithMoreThanOneInput)).add( task );
+                        (ignored) -> new ArrayList<>(transactionMetadata.numTasksWithMoreThanOneInput)).add( task );
             }
         }
 
