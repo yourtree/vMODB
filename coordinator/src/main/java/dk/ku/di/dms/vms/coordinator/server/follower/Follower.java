@@ -194,7 +194,7 @@ public final class Follower extends SignalingStoppableRunnable {
                 finished = true;
 
             } catch (Exception ignored) {
-                logger.info("Error connecting to host. I am " + me.host + ":" + me.port + " and the target is " + leader.host + ":" + leader.port);
+                System.out.println("Error connecting to host. I am " + me.host + ":" + me.port + " and the target is " + leader.host + ":" + leader.port);
             }
 
             if(!finished) maxAttempts--;

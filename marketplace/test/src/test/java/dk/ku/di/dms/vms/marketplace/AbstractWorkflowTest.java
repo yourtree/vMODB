@@ -15,9 +15,10 @@ import java.time.Duration;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Function;
-import java.util.logging.Logger;
 
 public class AbstractWorkflowTest {
+
+    protected static final System.Logger logger = System.getLogger(AbstractWorkflowTest.class.getName());
 
     protected static final int BATCH_WINDOW_INTERVAL = 3000;
 
@@ -26,8 +27,6 @@ public class AbstractWorkflowTest {
     protected static final int MAX_CUSTOMERS = 10;
 
     protected static final int MAX_SELLERS = 10;
-
-    protected static final Logger logger = Logger.getLogger(AbstractWorkflowTest.class.getCanonicalName());
 
     protected static final BlockingQueue<TransactionInput> TRANSACTION_INPUTS = new LinkedBlockingDeque<>();
 

@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 
+import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
 /**
@@ -30,7 +31,7 @@ import static java.lang.Thread.sleep;
  */
 public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
 
-    private final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
+    private static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
     private static final CustomerCheckout customerCheckout = new CustomerCheckout();
 
@@ -62,7 +63,7 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
         assert coordinator.getTid() == 21;
     }
 
-    private class InputProducer implements Runnable {
+    private static class InputProducer implements Runnable {
         @Override
         public void run() {
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
@@ -78,12 +79,12 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
                 String payload_ = serdes.serialize(reserveStockEvent, ReserveStock.class);
                 TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
                 TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
-                logger.info("[CheckoutProducer] New reserve stock event with version: "+val);
+                logger.log(INFO, "[CheckoutProducer] New reserve stock event with version: "+val);
                 parsedTransactionRequests.add(txInput_);
 
                 val++;
             }
-            logger.info("InputProducer going to bed definitely... ");
+            logger.log(INFO, "InputProducer going to bed definitely... ");
         }
     }
 

@@ -15,9 +15,9 @@ import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
+import static java.lang.System.Logger.Level.WARNING;
 
 /**
  * This index does not support growing number of keys
@@ -26,7 +26,7 @@ import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
  */
 public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements ReadWriteBufferIndex<IKey> {
 
-    private static final Logger logger = Logger.getLogger("UniqueHashIndex");
+    private static final System.Logger logger = System.getLogger(UniqueHashBufferIndex.class.getName());
 
     private final RecordBufferContext recordBufferContext;
 
@@ -39,7 +39,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     /**
      * Based on HashMap how handle bucket overflow
-     * After 8, records will be overwritten or stored in a non unique hash index
+     * After 8, records will be overwritten or stored in a non-unique hash index
      */
     // static final int TREEIFY_THRESHOLD = 8;
 
@@ -76,7 +76,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         long pos = getPosition(key.hashCode());
 
         if(UNSAFE.getBoolean(null, pos)){
-            logger.warning("Overwriting previously written record.");
+            logger.log(WARNING, "Overwriting previously written record.");
         }
 
         UNSAFE.putBoolean(null, pos, true);

@@ -23,6 +23,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
+import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.WARNING;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -42,6 +44,8 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
  * by design instead of iterating over the nodes to send individual messages)
  */
 public final class ElectionWorker extends SignalingStoppableRunnable {
+
+    private static final System.Logger logger = System.getLogger(ElectionWorker.class.getName());
 
     private volatile int state;
     public static final int NEW          = 0;
@@ -162,7 +166,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
             voted.set(false); // make sure the next round this server is able to vote
         }
 
-        logger.info("Event loop has finished. I am "+me.host+":"+me.port+" and my state is "+state_);
+        logger.log(INFO,"Event loop has finished. I am "+me.host+":"+me.port+" and my state is "+state_);
 
     }
 
@@ -173,7 +177,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
     @Override
     public void run() {
 
-        logger.info("Initializing election round. I am "+me.host+":"+me.port);
+        logger.log(INFO,"Initializing election round. I am "+me.host+":"+me.port);
 
         Broadcaster broadcaster = new Broadcaster();
         SimpleSender simpleSender = new SimpleSender();
@@ -247,7 +251,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
             channel.connect(address).get();
 
-            logger.info("Connected to node "+
+            logger.log(INFO,"Connected to node "+
                     server.host+":"+server.port);
 
             connectionMetadata.writeBuffer.clear();
@@ -262,7 +266,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
         } catch(InterruptedException | IOException | ExecutionException ignored){
 
-            logger.warning("It was not possible to connect to node "+
+            logger.log(WARNING, "It was not possible to connect to node "+
                     server.host+":"+server.port);
 
             if(connectionMetadata != null) {
@@ -302,7 +306,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
 
-            // logger.info("I am "+me.host+":"+me.port+". Initializing message handler for "+server.host+":"+server.port);
+            // logger.log(INFO,"I am "+me.host+":"+me.port+". Initializing message handler for "+server.host+":"+server.port);
 
             try {
                 InetSocketAddress remoteAddress = (InetSocketAddress) channel.getRemoteAddress();
@@ -395,14 +399,14 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
             byte messageIdentifier = readBuffer.get();
 
-            logger.info("Message read. I am "+me.host+":"+me.port+" identifier is "+messageIdentifier);
+            logger.log(INFO,"Message read. I am "+me.host+":"+me.port+" identifier is "+messageIdentifier);
 
             switch (messageIdentifier) {
                 case VOTE_RESPONSE -> {
 
                     VoteResponse.Payload payload = VoteResponse.read(readBuffer);
 
-                    logger.info("Vote response received: "+ payload.response +". I am " + me.host + ":" + me.port);
+                    logger.log(INFO,"Vote response received: "+ payload.response +". I am " + me.host + ":" + me.port);
 
                     int serverId = Objects.hash(payload.host, payload.port);
 
@@ -419,7 +423,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                             // do I have the majority of votes?
                             // !voted prevent two servers from winning the election... but does not prevent
                             if (!voted.get() && responses.size() + 1 > (N / 2)) {
-                                logger.info("I am leader. I am " + me.host + ":" + me.port);
+                                logger.log(INFO,"I am leader. I am " + me.host + ":" + me.port);
                                 leader = me; // only this thread is writing
 
                                 actionQueue.add(LEADER_REQUEST);
@@ -433,13 +437,13 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
                 case VOTE_REQUEST -> {
 
-                    logger.info("Vote request received. I am " + me.host + ":" + me.port);
+                    logger.log(INFO,"Vote request received. I am " + me.host + ":" + me.port);
 
                     ServerNode serverRequestingVote = VoteRequest.read(readBuffer);
 
                     if (voted.get()) {
                         // taskExecutor.submit(new Broadcaster(VOTE_RESPONSE, serverRequestingVote, false));
-                        logger.info("Vote not granted, already voted. I am " + me.host + ":" + me.port);
+                        logger.log(INFO,"Vote not granted, already voted. I am " + me.host + ":" + me.port);
                     } else {
 
                         // TO AVOID TWO (OR MORE) LEADERS!!!
@@ -459,20 +463,20 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                             // grant vote
                             voteMessagesToSend.add( new VoteMessageContext( VOTE_RESPONSE, serverRequestingVote, true ) );
                             voted.set(true);
-                            logger.info("Vote granted. I am " + me.host + ":" + me.port);
+                            logger.log(INFO,"Vote granted. I am " + me.host + ":" + me.port);
                         } else if (serverRequestingVote.lastOffset < me.lastOffset) {
                             voteMessagesToSend.add( new VoteMessageContext( VOTE_RESPONSE, serverRequestingVote, false ) );
-                            logger.info("Vote not granted. I am " + me.host + ":" + me.port);
+                            logger.log(INFO,"Vote not granted. I am " + me.host + ":" + me.port);
                         } else { // equal
 
                             if (serverRequestingVote.hashCode() > me.hashCode()) {
                                 // grant vote
                                 voteMessagesToSend.add( new VoteMessageContext( VOTE_RESPONSE, serverRequestingVote, true ) );
                                 voted.set(true);
-                                logger.info("Vote granted. I am " + me.host + ":" + me.port);
+                                logger.log(INFO,"Vote granted. I am " + me.host + ":" + me.port);
                             } else {
                                 voteMessagesToSend.add( new VoteMessageContext( VOTE_RESPONSE, serverRequestingVote, false ) );
-                                logger.info("Vote not granted. I am " + me.host + ":" + me.port);
+                                logger.log(INFO,"Vote not granted. I am " + me.host + ":" + me.port);
                             }
 
                         }
@@ -486,13 +490,13 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                 }
 
                 case LEADER_REQUEST -> {
-                    logger.info("Leader request received. I am " + me.host + ":" + me.port);
+                    logger.log(INFO,"Leader request received. I am " + me.host + ":" + me.port);
                     LeaderRequest.LeaderRequestPayload leaderRequest = LeaderRequest.read(readBuffer);
                     leader = servers.get(leaderRequest.hashCode());
                     state = FOLLOWER;
                 }
 
-                default -> logger.warning("Message identifier is unknown.");
+                default -> logger.log(WARNING, "Message identifier is unknown.");
             }
 
             readBuffer.clear();
@@ -509,7 +513,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
             // else, the node will try to contact again, and we will update the connection metadata
         }
 
-        // logger.info("Message handler is finished. I am "+me.host+":"+me.port);
+        // logger.log(INFO,"Message handler is finished. I am "+me.host+":"+me.port);
 
     }
 
@@ -581,11 +585,11 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                         }
 
                     } else {
-                        logger.warning("Unknown message Type");
+                        logger.log(WARNING, "Unknown message Type");
                     }
 
                 } catch (Exception ignored) {
-                    logger.warning("Error on write. I am " + me.host + ":" + me.port + " message type is ...");
+                    logger.log(WARNING, "Error on write. I am " + me.host + ":" + me.port + " message type is ...");
                 }
 
             }
@@ -595,7 +599,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
     }
 
     /**
-     * Get connection. Connect if there is not previous established connection
+     * Get connection. Connect if there is not a previous established connection
      */
     private LockConnectionMetadata getConnection(ServerNode server){
         LockConnectionMetadata connMeta = connectionMetadataMap.get( server.hashCode() );
@@ -634,7 +638,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                         connMeta.channel.write(connMeta.writeBuffer, connMeta, writeCompletionHandler);
 
                     } else {
-                        logger.warning("Could not connect to server: "+
+                        logger.log(WARNING, "Could not connect to server: "+
                                 msgContext.target.host+":"+msgContext.target.port);
                     }
 

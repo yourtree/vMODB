@@ -12,7 +12,8 @@ import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
+
+import static java.lang.System.Logger.Level.*;
 
 /**
  * This class is responsible for all writes to the leader.
@@ -22,7 +23,7 @@ import java.util.logging.Logger;
  */
 final class LeaderWorker extends StoppableRunnable {
 
-    private final Logger logger;
+    private static final System.Logger logger = System.getLogger(LeaderWorker.class.getName());
 
     private final ServerNode leader;
 
@@ -73,13 +74,11 @@ final class LeaderWorker extends StoppableRunnable {
         this.leader = leader;
         this.leaderConnectionMetadata = leaderConnectionMetadata;
         this.leaderWorkerQueue = leaderWorkerQueue;
-        this.logger = Logger.getLogger("leader-worker-"+leader.toString());
-        this.logger.setUseParentHandlers(true);
     }
 
     @Override
     public void run() {
-        this.logger.info(vmsNode.identifier+": Leader worker started!");
+        logger.log(INFO, vmsNode.identifier+": Leader worker started!");
         int pollTimeout = 50;
         while (this.isRunning()){
             try {
@@ -90,7 +89,7 @@ final class LeaderWorker extends StoppableRunnable {
                 }
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
 
-                this.logger.config(vmsNode.identifier+": Leader worker will send message type: "+ msg.type());
+                logger.log(DEBUG, vmsNode.identifier+": Leader worker will send message type: "+ msg.type());
                 switch (msg.type()) {
                     case SEND_BATCH_COMPLETE -> this.sendBatchComplete(msg.asBatchComplete());
                     case SEND_BATCH_COMMIT_ACK -> this.sendBatchCommitAck(msg.asBatchCommitAck());
@@ -98,7 +97,7 @@ final class LeaderWorker extends StoppableRunnable {
                     case SEND_EVENT -> this.sendEvent(msg.asEvent());
                 }
             } catch (Exception e) {
-                this.logger.warning(vmsNode.identifier+": Error on taking message from worker queue: "+e.getCause().getMessage());
+                logger.log(WARNING, vmsNode.identifier+": Error on taking message from worker queue: "+e.getCause().getMessage());
             }
         }
     }

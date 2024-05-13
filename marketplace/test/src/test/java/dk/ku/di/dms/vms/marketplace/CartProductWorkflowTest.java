@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
+import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
 public final class CartProductWorkflowTest extends AbstractWorkflowTest {
@@ -105,7 +106,7 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
         );
     }
 
-    private class Producer implements Runnable {
+    private static class Producer implements Runnable {
         @Override
         public void run() {
 
@@ -124,13 +125,13 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
 
                 TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);
 
-                logger.info("[Producer] Adding "+val);
+                logger.log(INFO, "[Producer] Adding "+val);
 
                 TRANSACTION_INPUTS.add(txInput);
 
                 val++;
             }
-            logger.info("Producer going to bed definitely... ");
+            logger.log(INFO, "Producer going to bed definitely... ");
         }
     }
 

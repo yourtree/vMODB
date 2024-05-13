@@ -6,7 +6,8 @@ import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.Optional;
-import java.util.logging.Logger;
+
+import static java.lang.System.Logger.Level.ERROR;
 
 /**
  * Given the transactional handler and callback are shared among all instances
@@ -15,7 +16,7 @@ import java.util.logging.Logger;
  */
 public final class VmsTransactionTaskBuilder {
 
-    private static final Logger logger = Logger.getLogger(VmsTransactionTask.class.getSimpleName());
+    private static final System.Logger logger = System.getLogger(VmsTransactionTask.class.getSimpleName());
 
     private static final int NEW = 0;
     private static final int READY = 1;
@@ -65,7 +66,7 @@ public final class VmsTransactionTaskBuilder {
                     partitionIdAux = Optional.empty();
                 }
             } catch (InvocationTargetException | IllegalAccessException e){
-                logger.warning("Failed to obtain partition key from method "+signature.partitionByMethod().getName());
+                logger.log(ERROR, "Failed to obtain partition key from method "+signature.partitionByMethod().getName());
                 partitionIdAux = Optional.empty();
             }
             this.partitionId = partitionIdAux;

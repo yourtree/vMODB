@@ -7,8 +7,8 @@ import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.ISchedulerCallback;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
-import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder.VmsTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder;
+import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder.VmsTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
@@ -303,7 +303,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         if(this.vmsChannels.transactionInputQueue().isEmpty()){
             if(this.block) {
                 InboundEvent e = null;
-                int pollTimeout = 200;
+                int pollTimeout = 100;
                 while(e == null) {
                     pollTimeout = pollTimeout * 2;
                     LOGGER.log(INFO,this.vmsIdentifier+": Transaction scheduler going to sleep for "+pollTimeout+" until new event arrives");

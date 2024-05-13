@@ -16,7 +16,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
+
+import static java.lang.System.Logger.Level.*;
 
 /**
  * This thread encapsulates the batch of events sending task
@@ -32,9 +33,10 @@ import java.util.logging.Logger;
  */
 final class ConsumerVmsWorker extends StoppableRunnable {
 
+    private static final System.Logger logger = System.getLogger(ConsumerVmsWorker.class.getName());
+    
     private final VmsNode me;
-
-    private final Logger logger;
+    
     private final ConsumerVms consumerVms;
     private final ConnectionMetadata connectionMetadata;
 
@@ -50,8 +52,6 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         this.me = me;
         this.consumerVms = consumerVms;
         this.connectionMetadata = connectionMetadata;
-        this.logger = Logger.getLogger("consumer-vms-worker-"+consumerVms.identifier);
-        this.logger.setUseParentHandlers(true);
         this.writeBufferPool = new ConcurrentLinkedDeque<>();
         this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(networkBufferSize) );
         this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(networkBufferSize) );
@@ -67,10 +67,10 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     @Override
     public void run() {
 
-        this.logger.info(this.me.identifier+ ": Starting worker for consumer VMS: "+this.consumerVms.identifier);
+        logger.log(INFO, this.me.identifier+ ": Starting worker for consumer VMS: "+this.consumerVms.identifier);
 
         int pollTimeout = 50;
-        TransactionEvent.PayloadRaw payloadRaw = null;
+        TransactionEvent.PayloadRaw payloadRaw;
         List<TransactionEvent.PayloadRaw> events = new ArrayList<>(1000);
         while(this.isRunning()){
 
@@ -90,7 +90,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
             /*
             if(events.size() == 1){
-                this.logger.config(this.me.identifier+ ": Submitting 1 event to "+this.consumerVms.identifier);
+                logger.config(this.me.identifier+ ": Submitting 1 event to "+this.consumerVms.identifier);
 
                 ByteBuffer writeBuffer = this.retrieveByteBuffer();
                 TransactionEvent.write( writeBuffer, events.getFirst() );
@@ -100,7 +100,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                     this.WRITE_SYNCHRONIZER.take();
                     this.connectionMetadata.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
                 } catch (InterruptedException e) {
-                    this.logger.warning(this.me.identifier+ ": Consumer worker for "+this.consumerVms.identifier+" caught an on writing to channel : "+e.getMessage());
+                    logger.warning(this.me.identifier+ ": Consumer worker for "+this.consumerVms.identifier+" caught an on writing to channel : "+e.getMessage());
                     this.consumerVms.transactionEvents.offerFirst(events.getFirst());
                 }
                 events.clear();
@@ -116,7 +116,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                     writeBuffer = this.retrieveByteBuffer();
                     remaining = BatchUtils.assembleBatchPayload(remaining, events, writeBuffer);
 
-                    this.logger.config(this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
+                    logger.log(DEBUG, this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
                     count = remaining;
 
                     writeBuffer.flip();
@@ -124,10 +124,10 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                     this.WRITE_SYNCHRONIZER.take();
                     this.connectionMetadata.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
                 } catch (Exception e) {
-                    this.logger.severe(this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier);
+                    logger.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier);
                     // return non-processed events to original location or what?
                     if (!this.connectionMetadata.channel.isOpen()) {
-                        this.logger.warning("The "+this.consumerVms.identifier+" VMS is offline");
+                        logger.log(WARNING, "The "+this.consumerVms.identifier+" VMS is offline");
                     }
                     // return events to the deque
                     for (TransactionEvent.PayloadRaw event : events) {
@@ -156,9 +156,9 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
             if(byteBuffer.hasRemaining()){
-                logger.severe(me.identifier + " on completed. Consumer worker for "+consumerVms.identifier+" found not all bytes were sent!");
+                logger.log(ERROR, me.identifier + " on completed. Consumer worker for "+consumerVms.identifier+" found not all bytes were sent!");
             } else {
-                logger.config(me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
+                logger.log(DEBUG, me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
                 WRITE_SYNCHRONIZER.add(DUMB);
                 returnByteBuffer(byteBuffer);
             }
@@ -167,9 +167,9 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         @Override
         public void failed(Throwable exc, ByteBuffer byteBuffer) {
             if(byteBuffer.hasRemaining()){
-                logger.severe(me.identifier + " on failed. Consumer worker for "+consumerVms.identifier+" found not all bytes were sent!");
+                logger.log(ERROR, me.identifier + " on failed. Consumer worker for "+consumerVms.identifier+" found not all bytes were sent!");
             }
-            logger.severe(me.identifier+": ERROR on writing batch of events to: "+consumerVms.identifier);
+            logger.log(ERROR, me.identifier+": ERROR on writing batch of events to: "+consumerVms.identifier);
             WRITE_SYNCHRONIZER.add(DUMB);
             returnByteBuffer(byteBuffer);
         }

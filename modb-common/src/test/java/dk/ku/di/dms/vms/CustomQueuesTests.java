@@ -3,11 +3,11 @@ package dk.ku.di.dms.vms;
 import dk.ku.di.dms.vms.modb.common.data_structure.OneProducerOneConsumerQueue;
 import org.junit.Test;
 
-import java.util.logging.Logger;
+import static java.lang.System.Logger.Level.INFO;
 
 public class CustomQueuesTests {
 
-    protected static final Logger logger = Logger.getLogger("CustomQueuesTests");
+    protected static final System.Logger logger = System.getLogger("CustomQueuesTests");
 
     private static final OneProducerOneConsumerQueue<Integer> queue =
             new OneProducerOneConsumerQueue<>(1);
@@ -18,12 +18,12 @@ public class CustomQueuesTests {
         public void run() {
             Integer val = 1;
             while(true) {
-                logger.info("Adding "+val);
+                logger.log(INFO, "Adding "+val);
                 queue.add(val);
                 try {
-                    logger.info("Going to bed... ");
+                    logger.log(INFO, "Going to bed... ");
                     Thread.sleep(10000);
-                    logger.info("I woke up! Time to insert one more ");
+                    logger.log(INFO, "I woke up! Time to insert one more ");
                 } catch (InterruptedException ignored) { }
                 val++;
             }
@@ -46,7 +46,7 @@ public class CustomQueuesTests {
                 Integer newVal = queue.remove();
                 if(newVal != null){
                     this.val = newVal;
-                    logger.info("Value read: "+val);
+                    logger.log(INFO, "Value read: "+val);
                 }
 
             }
@@ -69,9 +69,9 @@ public class CustomQueuesTests {
         consumerThread.start();
 
         try {
-            logger.info("Main thread going to bed... ");
+            logger.log(INFO, "Main thread going to bed... ");
             Thread.sleep(20000);
-            logger.info("Main thread woke up!");
+            logger.log(INFO, "Main thread woke up!");
         } catch (InterruptedException ignored) { }
 
         // producer should be able to insert two numbers after 65000 milliseconds

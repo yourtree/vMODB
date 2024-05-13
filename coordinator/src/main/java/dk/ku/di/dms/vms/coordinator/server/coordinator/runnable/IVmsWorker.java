@@ -5,9 +5,6 @@ import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
-import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.BlockingQueue;
-
 /**
  * Interface that represents a unit of work
  * that encapsulates all operations and
@@ -31,7 +28,7 @@ public interface IVmsWorker {
             return (String)object;
         }
 
-        public BatchCommitInfo.Payload asBatchOfEventsRequest(){
+        public BatchCommitInfo.Payload asBatchCommitInfo(){
             return (BatchCommitInfo.Payload)object;
         }
 
@@ -42,8 +39,9 @@ public interface IVmsWorker {
     }
 
     enum Command {
-        SEND_BATCH_OF_EVENTS,
-        SEND_BATCH_OF_EVENTS_WITH_COMMIT_INFO, // to terminals only
+        // SEND_BATCH_OF_EVENTS,
+        // SEND_BATCH_OF_EVENTS_WITH_COMMIT_INFO, // to terminals only
+        SEND_BATCH_COMMIT_INFO,
         SEND_BATCH_COMMIT_COMMAND,
         SEND_TRANSACTION_ABORT,
         SEND_CONSUMER_SET
@@ -63,8 +61,8 @@ public interface IVmsWorker {
         CONSUMER_EXECUTING
     }
 
-    BlockingDeque<TransactionEvent.PayloadRaw> transactionEventsPerBatch(long batch);
+    void queueEvent(TransactionEvent.PayloadRaw payload);
 
-    BlockingQueue<Message> queue();
+    void queueMessage(Message message);
 
 }

@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
+import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
 public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
@@ -139,7 +140,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
                 producePriceUpdate(val, serdes);
                 val++;
             }
-            logger.info("Producer going to bed definitely... ");
+            logger.log(INFO, "Producer going to bed definitely... ");
         }
 
         private static void produceProductUpdate(int val, IVmsSerdesProxy serdes) {
@@ -149,7 +150,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
             String payload = serdes.serialize(updateProduct, UpdateProduct.class);
             TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRODUCT, payload);
             TransactionInput txInput = new TransactionInput(UPDATE_PRODUCT, eventPayload);
-            logger.info("[Producer] New product version: "+ val);
+            logger.log(INFO, "[Producer] New product version: "+ val);
             TRANSACTION_INPUTS.add(txInput);
         }
 
@@ -158,7 +159,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
             String payload = serdes.serialize(priceUpdate, UpdatePrice.class);
             TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRICE, payload);
             TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);
-            logger.info("[Producer] New product price: "+ val);
+            logger.log(INFO, "[Producer] New product price: "+ val);
             TRANSACTION_INPUTS.add(txInput);
         }
     }

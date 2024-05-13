@@ -12,11 +12,11 @@ import java.nio.channels.AsynchronousServerSocketChannel;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
-import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.LEADER_REQUEST;
 import static dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable.FINISHED;
 import static dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable.NO_RESULT;
+import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
 /**
@@ -25,7 +25,7 @@ import static java.lang.Thread.sleep;
 public class LeaderElectionTest
 {
 
-    protected final Logger logger = Logger.getLogger(this.getClass().getName());
+    protected final System.Logger logger = System.getLogger(this.getClass().getName());
 
     @Test
     public void testBufferRead(){
@@ -73,8 +73,8 @@ public class LeaderElectionTest
         byte take1 = em1.getResult();
         byte take2 = em2.getResult();
 
-        logger.info( "result 1: " + take1 );
-        logger.info( "result 2: " + take2 );
+        logger.log(INFO, "result 1: " + take1 );
+        logger.log(INFO, "result 2: " + take2 );
 
         assert(take1 == FINISHED && take2 == FINISHED);
 
@@ -126,8 +126,8 @@ public class LeaderElectionTest
         byte take2 = em2.getResult();
         byte take1 = em1.getResult();
 
-        logger.info( "result 1: " + take1 );
-        logger.info( "result 2: " + take2 );
+        logger.log(INFO,  "result 1: " + take1 );
+        logger.log(INFO,  "result 2: " + take2 );
 
         boolean bothHasSameLeader = em1.getLeader().hashCode() == em2.getLeader().hashCode();
 
@@ -173,7 +173,7 @@ public class LeaderElectionTest
 
         byte take1 = em1.getResult();
 
-        logger.info( "result 1: " + take1 );
+        logger.log(INFO,  "result 1: " + take1 );
 
         assert(take1 == NO_RESULT);
 

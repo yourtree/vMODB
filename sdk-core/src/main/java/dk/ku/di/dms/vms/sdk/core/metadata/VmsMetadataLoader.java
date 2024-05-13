@@ -35,18 +35,16 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Stream;
 
-import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
-import static java.util.logging.Logger.getLogger;
+import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.WARNING;
 
 public final class VmsMetadataLoader {
 
     private VmsMetadataLoader(){}
 
-    private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
+    private static final System.Logger logger = System.getLogger(VmsMetadataLoader.class.getName());
 
     /**
      * For tests that do not involve repositories (i.e., application code execution)
@@ -194,7 +192,7 @@ public final class VmsMetadataLoader {
             // get queue name
             String queue = eventToQueueMap.get( eventClazz );
             if(queue == null){
-                logger.warning("Cannot find the queue of an event type found in this project: "+eventClazz);
+                logger.log(WARNING, "Cannot find the queue of an event type found in this project: "+eventClazz);
                 continue;
             }
 
@@ -614,7 +612,7 @@ public final class VmsMetadataLoader {
             return DataType.STRING_ARRAY;
         }
         else {
-            logger.log( Level.CONFIG, attributeCanonicalName + " will be recognized as a complex data type");
+            logger.log(INFO, attributeCanonicalName + " will be recognized as a complex data type");
             return DataType.COMPLEX;
         }
     }

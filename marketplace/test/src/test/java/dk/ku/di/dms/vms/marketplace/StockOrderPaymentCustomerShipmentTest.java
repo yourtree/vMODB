@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.util.*;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
+import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
 /**
@@ -72,7 +73,7 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
 
         @Override
         public void run() {
-            logger.info("["+name+"] Starting...");
+            logger.log(INFO, "["+name+"] Starting...");
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
             int val = 1;
             while(val <= 10) {
@@ -89,12 +90,12 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
                 String payload_ = serdes.serialize(reserveStockEvent, ReserveStock.class);
                 TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
                 TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
-                logger.info("["+name+"] New reserve stock event with version: "+val);
+                logger.log(INFO, "["+name+"] New reserve stock event with version: "+val);
                 TRANSACTION_INPUTS.add(txInput_);
 
                 val++;
             }
-            logger.info("["+name+"] Going to bed definitely...");
+            logger.log(INFO, "["+name+"] Going to bed definitely...");
         }
     }
 

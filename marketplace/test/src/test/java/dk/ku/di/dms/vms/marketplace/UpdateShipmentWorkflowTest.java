@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.UPDATE_DELIVERY;
+import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
 /**
@@ -43,13 +44,13 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
 
-        logger.info("Triggering checkout workflow...");
+        logger.log(INFO, "Triggering checkout workflow...");
         this.triggerCheckoutWorkflow(coordinator);
 
-        logger.info("Waiting batch window interval...");
+        logger.log(INFO, "Waiting batch window interval...");
         sleep(BATCH_WINDOW_INTERVAL * 7);
 
-        logger.info("Sending update shipment event...");
+        logger.log(INFO, "Sending update shipment event...");
         // now send the update shipment event
         new UpdateShipmentProducer().run();
 
@@ -66,7 +67,7 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
 
         @Override
         public void run() {
-            logger.info("["+name+"] Starting...");
+            logger.log(INFO, "["+name+"] Starting...");
             String instanceId = "1";
 
             // event name
@@ -75,10 +76,10 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
             // transaction name
             TransactionInput txInput_ = new TransactionInput(UPDATE_DELIVERY, eventPayload_);
 
-            logger.info("["+name+"] New update shipment event with version: "+instanceId);
+            logger.log(INFO, "["+name+"] New update shipment event with version: "+instanceId);
             TRANSACTION_INPUTS.add(txInput_);
 
-            logger.info("["+name+"] Going to bed definitely... ");
+            logger.log(INFO, "["+name+"] Going to bed definitely... ");
         }
 
     }

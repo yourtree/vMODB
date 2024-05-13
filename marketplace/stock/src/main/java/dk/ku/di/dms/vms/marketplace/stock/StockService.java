@@ -12,7 +12,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
@@ -20,8 +19,6 @@ import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 
 @Microservice("stock")
 public final class StockService {
-
-    private static final Logger LOGGER = Logger.getLogger(StockService.class.getCanonicalName());
 
     private final IStockRepository stockRepository;
 
@@ -74,7 +71,7 @@ public final class StockService {
             CartItem cartItem = cartItemMap.get( currId );
 
             if (item.version.compareTo(cartItem.Version) != 0) {
-                LOGGER.warning("The version is incorrect. Stock item: "+ item.version+ " Cart item: "+cartItem.Version);
+                System.out.println("The version is incorrect. Stock item: "+ item.version+ " Cart item: "+cartItem.Version);
                 continue;
             }
 

@@ -17,9 +17,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.R;
+import static java.lang.System.Logger.Level.*;
 
 /**
  * The brain of the virtual microservice runtime
@@ -36,7 +36,7 @@ import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.R;
  */
 public final class VmsComplexTransactionScheduler extends StoppableRunnable {
 
-    private final Logger logger = Logger.getLogger("VmsTransactionScheduler");
+    private static final System.Logger logger = System.getLogger("VmsTransactionScheduler");
 
     // payload that cannot execute because some dependence need to be fulfilled
     // payload A < B < C < D
@@ -155,7 +155,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
     @Override
     public void run() {
 
-        this.logger.info(this.vmsIdentifier+": Transaction scheduler has started");
+        logger.log(INFO, this.vmsIdentifier+": Transaction scheduler has started");
 
         this.initializeOffset();
 
@@ -171,7 +171,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
                     this.checkpointHandler.checkpoint();
                 }
             } catch(Exception e){
-                this.logger.warning(this.vmsIdentifier+": Error on scheduler loop: "+e.getMessage());
+                logger.log(WARNING, this.vmsIdentifier+": Error on scheduler loop: "+e.getMessage());
             }
         }
     }
@@ -216,7 +216,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
 
             if(context.asSimple().future.isCancelled()) {
                 // TODO needs to handle cases where the code fails. ideally it should be correct by design
-                logger.severe(this.vmsIdentifier+": Problem in the execution of a VMS");
+                logger.log(ERROR, this.vmsIdentifier+": Problem in the execution of a VMS");
             }
 
             if(!context.asSimple().future.isDone()) return;
@@ -233,7 +233,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
                                 List.of(context.asSimple().result.result())) );
                 this.transactionContextMap.remove(this.currentOffset.tid());
             } catch (Exception e){
-                this.logger.warning(this.vmsIdentifier+": A task supposedly done returned an exception: "+e.getMessage());
+                logger.log(WARNING, this.vmsIdentifier+": A task supposedly done returned an exception: "+e.getMessage());
             }
             return;
         }
@@ -275,7 +275,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
                 }
 
             } catch (InterruptedException | ExecutionException e) {
-                this.logger.warning(this.vmsIdentifier+": A task supposedly done returned an exception: "+e.getMessage());
+                logger.log(WARNING, this.vmsIdentifier+": A task supposedly done returned an exception: "+e.getMessage());
             }
 
         }
@@ -327,7 +327,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
             return;
         }
 
-        logger.warning(vmsIdentifier+": Event cannot be categorized! Queue '" + inboundEvent.event() + "' Batch: " + inboundEvent.batch() + " TID: " + inboundEvent.tid());
+        logger.log(WARNING, vmsIdentifier+": Event cannot be categorized! Queue '" + inboundEvent.event() + "' Batch: " + inboundEvent.batch() + " TID: " + inboundEvent.tid());
 
     }
 

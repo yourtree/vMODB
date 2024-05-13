@@ -52,32 +52,25 @@ public final class BatchContext {
      * last batch. In this case, the (local) state must be restored to
      * last logged state.
      */
-    public enum Status {
-        // newly received batch
-        OPEN(0),
-        // this status is set after all TIDs of the batch have been processed
-        BATCH_COMPLETED(1),
-        // this status is set when the logging process starts right after the leader sends the batch commit request
-        LOGGING(2),
-        // this status is set when the state is logged
-        BATCH_COMMITTED(3);
-
-        public final int value;
-        Status(int value) {
-            this.value = value;
-        }
-    }
+    // newly received batch
+    public static final int OPEN = 0;
+    // this status is set after all TIDs of the batch have been processed
+    public static final int BATCH_COMPLETED = 1;
+    // this status is set when the logging process starts right after the leader sends the batch commit request
+    public static final int LOGGING = 2;
+    // this status is set when the state is logged
+    public static final int BATCH_COMMITTED = 3;
 
     public boolean isOpen(){
-        return this.status < Status.BATCH_COMPLETED.value;
+        return this.status < BATCH_COMPLETED;
     }
 
     public boolean isCommitted(){
-        return this.status == Status.BATCH_COMMITTED.value;
+        return this.status == BATCH_COMMITTED;
     }
 
-    public void setStatus(Status status){
-        this.status = status.value;
+    public void setStatus(int status){
+        this.status = status;
     }
 
 }

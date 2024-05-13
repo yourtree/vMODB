@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 
+import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
 /**
@@ -86,7 +87,7 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
                 String payload = serdes.serialize(updateProduct, UpdateProduct.class);
                 TransactionInput.Event eventPayload = new TransactionInput.Event("update_product", payload);
                 TransactionInput txInput = new TransactionInput("update_product", eventPayload);
-                logger.info("[InputProducer] New product version: "+val);
+                logger.log(INFO, "[InputProducer] New product version: "+val);
                 parsedTransactionRequests.add(txInput);
 
                 // reserve stock
@@ -98,12 +99,12 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
                 String payload_ = serdes.serialize(reserveStockEvent, ReserveStock.class);
                 TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
                 TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
-                logger.info("[CheckoutProducer] New reserve stock event with version: "+val);
+                logger.log(INFO, "[CheckoutProducer] New reserve stock event with version: "+val);
                 parsedTransactionRequests.add(txInput_);
 
                 val++;
             }
-            logger.info("InputProducer going to bed definitely... ");
+            logger.log(INFO, "InputProducer going to bed definitely... ");
         }
     }
 

@@ -6,7 +6,8 @@ import java.util.Map;
 import java.util.SortedSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.logging.Logger;
+
+import static java.lang.System.Logger.Level.WARNING;
 
 /**
  *
@@ -28,7 +29,7 @@ import java.util.logging.Logger;
  */
 public final class MemoryManager {
 
-    private static final Logger LOGGER = Logger.getLogger("MemoryManager");
+    private static final System.Logger LOGGER = System.getLogger(MemoryManager.class.getName());
 
     /**
      * Inspiration from JVM class: {@link sun.nio.ch.Util}
@@ -118,7 +119,7 @@ public final class MemoryManager {
     public static void releaseTemporaryDirectBuffer(final ByteBuffer buf) {
 
         if(buf.position() > 0 || buf.limit() < buf.capacity()) {
-            LOGGER.warning("Buffer returned without being properly cleared!");
+            LOGGER.log(WARNING, "Buffer returned without being properly cleared!");
         }
         long address = MemoryUtils.getByteBufferAddress(buf);
         assignedBuffers.remove(address);

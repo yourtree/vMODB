@@ -37,9 +37,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Logger;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_OF_EVENTS;
+import static java.lang.System.Logger.Level.INFO;
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
@@ -68,23 +68,23 @@ public class EventHandlerTest {
         }
     }
 
-    private static final Logger logger = Logger.getLogger(EventHandlerTest.class.getName());
+    private static final System.Logger logger = System.getLogger(EventHandlerTest.class.getName());
     private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
     private static final class DumbCheckpointAPI implements ITransactionalHandler {
         @Override
         public void checkpoint() {
-             logger.info("Checkpoint called at: "+System.currentTimeMillis());
+             logger.log(INFO, "Checkpoint called at: "+System.currentTimeMillis());
         }
 
         @Override
         public void commit() {
-            logger.info("Commit called at: "+System.currentTimeMillis());
+            logger.log(INFO, "Commit called at: "+System.currentTimeMillis());
         }
 
         @Override
         public void beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) {
-            logger.info("Begin transaction called at: "+System.currentTimeMillis());
+            logger.log(INFO, "Begin transaction called at: "+System.currentTimeMillis());
         }
     }
 
@@ -341,14 +341,14 @@ public class EventHandlerTest {
         // 5 - accept connection but just ignore the payload. the above test is already checking this
         AsynchronousSocketChannel channel = serverSocket.accept().get(); // ignore result
 
-        logger.info("Connection accepted from VMS");
+        logger.log(INFO, "Connection accepted from VMS");
 
         // 6 - read the presentation to set the writer of the producer free to write results
         ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
         channel.read(buffer).get();
         buffer.clear(); // just ignore the presentation as we test this in the previous test
 
-        logger.info("Presentation received from VMS");
+        logger.log(INFO, "Presentation received from VMS");
 
         // 7 - send event input
         InputEventExample1 eventExample = new InputEventExample1(1);
@@ -363,7 +363,7 @@ public class EventHandlerTest {
         channel.write(buffer).get(); // no need to wait
         buffer.clear();
 
-        logger.info("Input event sent");
+        logger.log(INFO, "Input event sent");
 
         /*
          8 - listen from the internal channel. may take some time because of the batch commit scheduler
@@ -376,7 +376,7 @@ public class EventHandlerTest {
         channel.read(buffer).get( 25, TimeUnit.SECONDS );
         // channel.read(buffer).get( );
 
-        logger.info("Batch received");
+        logger.log(INFO, "Batch received");
 
         // 9 - assert the batch of events is received
         buffer.position(0);
@@ -433,7 +433,7 @@ public class EventHandlerTest {
         channel.setOption(SO_KEEPALIVE, true);
         channel.connect(address).get();
 
-        logger.info("Connected. Now sending presentation.");
+        logger.log(INFO, "Connected. Now sending presentation.");
 
         // 3 - the handshake protocol
         ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
@@ -446,7 +446,7 @@ public class EventHandlerTest {
 
         Future<Integer> res = channel.write(buffer);
 
-        logger.info("Presentation sent.");
+        logger.log(INFO, "Presentation sent.");
 
         int result = res.get();
 
@@ -484,7 +484,7 @@ public class EventHandlerTest {
         channel.setOption(SO_KEEPALIVE, true);
         channel.connect(address).get();
 
-        logger.info("Connected. Now sending presentation.");
+        logger.log(INFO, "Connected. Now sending presentation.");
 
         ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
         Presentation.writeServer( buffer, new ServerNode(fakeLeader.host, fakeLeader.port),  true);
@@ -539,7 +539,7 @@ public class EventHandlerTest {
         channel.setOption(SO_KEEPALIVE, true);
         channel.connect(address).get();
 
-        logger.info("Connected. Now sending presentation.");
+        logger.log(INFO, "Connected. Now sending presentation.");
 
         ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer();
         Presentation.writeServer( buffer, new ServerNode(fakeLeader.host, fakeLeader.port),  true);
@@ -568,13 +568,13 @@ public class EventHandlerTest {
         buffer.flip();
         channel.write(buffer).get(); // no need to wait
 
-        logger.info("Input event sent");
+        logger.log(INFO, "Input event sent");
 
         // 6 - read batch of events
         buffer.clear();
         channel.read(buffer).get();
 
-        logger.info("Batch received");
+        logger.log(INFO, "Batch received");
 
         // 9 - assert the batch of events is received
         buffer.position(0);

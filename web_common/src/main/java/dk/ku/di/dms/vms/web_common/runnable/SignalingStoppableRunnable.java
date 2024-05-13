@@ -30,10 +30,6 @@ public abstract class SignalingStoppableRunnable extends StoppableRunnable {
         this.signal = new ArrayBlockingQueue<>(1);
         this.exceptionHandler = new CustomUncaughtExceptionHandler();
         this.issueQueue = new LinkedBlockingQueue<>();
-
-
-//        this.logger.setLevel(Level.ALL);
-        this.logger.setUseParentHandlers(true);
     }
 
     /**
@@ -57,7 +53,7 @@ public abstract class SignalingStoppableRunnable extends StoppableRunnable {
         @Override
         public void uncaughtException(Thread t, Throwable e) {
             signal.add( NO_RESULT );
-            logger.info( e.getLocalizedMessage() );
+            System.out.println( e.getLocalizedMessage() );
         }
     }
 

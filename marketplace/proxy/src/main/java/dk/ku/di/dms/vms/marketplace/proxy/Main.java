@@ -155,6 +155,7 @@ public final class Main {
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         long batchSendRate = Long.parseLong( properties.getProperty("batch_send_rate") );
+        boolean streaming = Boolean.parseBoolean( properties.getProperty("streaming") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
 
         return Coordinator.build(

@@ -42,16 +42,15 @@ import java.lang.foreign.MemorySegment;
 import java.lang.ref.Cleaner;
 import java.lang.reflect.*;
 import java.util.*;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.logging.Logger.GLOBAL_LOGGER_NAME;
-import static java.util.logging.Logger.getLogger;
+import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.WARNING;
 
-public class EmbedMetadataLoader {
+public final class EmbedMetadataLoader {
 
-    private static final Logger logger = getLogger(GLOBAL_LOGGER_NAME);
+    private static final System.Logger logger = System.getLogger(EmbedMetadataLoader.class.getName());
 
     private static final boolean IN_MEMORY_STORAGE = true;
 
@@ -418,7 +417,7 @@ public class EmbedMetadataLoader {
             MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, append);
             return new RecordBufferContext(segment, maxNumberOfRecords);
         } catch (Exception e){
-            logger.warning("Could not map file. Resorting to direct memory allocation attempt: "+e.getMessage());
+            logger.log(WARNING, "Could not map file. Resorting to direct memory allocation attempt: "+e.getMessage());
             try (Arena arena = Arena.ofShared()) {
                 return new RecordBufferContext(arena.allocate(sizeInBytes), maxNumberOfRecords);
             }
@@ -431,31 +430,31 @@ public class EmbedMetadataLoader {
         String userHome = System.getProperty("user.home");
 
         if(userHome == null){
-            logger.warning("User home directory is not set in the environment. Resorting to /usr/local/lib");
+            logger.log(WARNING, "User home directory is not set in the environment. Resorting to /usr/local/lib");
             userHome = "/usr/local/lib";
         }
 
         String filePath = userHome + "/vms/" + append;
 
-        logger.info("Attempt to delete existing file in directory: "+filePath);
+        logger.log(INFO, "Attempt to delete existing file in directory: "+filePath);
 
         File file = new File(filePath);
         if (file.exists()) {
             if(!file.delete()) throw new IllegalStateException("File can not be deleted");
         }
 
-        logger.info("Attempt to create new file in directory: "+filePath);
+        logger.log(INFO, "Attempt to create new file in directory: "+filePath);
 
         if(file.getParentFile().mkdirs()){
-            logger.info("Parent directory required being created.");
+            logger.log(INFO, "Parent directory required being created.");
         } else {
-            logger.info("Parent directory does not need to be created.");
+            logger.log(INFO, "Parent directory does not need to be created.");
         }
 
         try {
 
             if(file.createNewFile()) {
-                logger.info("Attempt to create new file in directory: "+filePath+" completed successfully.");
+                logger.log(INFO, "Attempt to create new file in directory: "+filePath+" completed successfully.");
                 try (Arena arena = Arena.ofShared()) {
                     return arena.allocate(bytes);
                 }
