@@ -13,7 +13,7 @@ import java.util.Optional;
  * This is part of a global cross-microservice transaction
  * <a href="https://stackoverflow.com/questions/4685563/how-to-pass-a-function-as-a-parameter-in-java">Method call</a>
  */
-public class VmsTransactionSignature {
+public final class VmsTransactionSignature {
 
     // the instance of a class annotated with @Microservice
     private final Object vmsInstance;

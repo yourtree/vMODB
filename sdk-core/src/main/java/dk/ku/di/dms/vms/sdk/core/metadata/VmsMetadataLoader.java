@@ -526,7 +526,6 @@ public final class VmsMetadataLoader {
                 try {
                     Method partitionMethod = inputClazz.getMethod(partitionMethodStr);
                     vmsTransactionSignature = new VmsTransactionSignature(obj, method, transactionType, executionMode, Optional.of(partitionMethod), inputQueues, outputQueue);
-
                 } catch (NoSuchMethodException e) {
                     // leave as single threaded
                     vmsTransactionSignature = new VmsTransactionSignature(obj, method, transactionType, executionMode, inputQueues, outputQueue);

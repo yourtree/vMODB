@@ -7,7 +7,8 @@ import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.ISchedulerCallback;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
-import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTask;
+import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder.VmsTransactionTask;
+import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder;
 import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
@@ -67,6 +68,10 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     // used to identify in which VMS this scheduler is running
     private final String vmsIdentifier;
 
+    private final SchedulerCallback callback;
+
+    private final VmsTransactionTaskBuilder vmsTransactionTaskBuilder;
+
     public static VmsTransactionScheduler build(String vmsIdentifier,
                                                 IVmsInternalChannels vmsChannels,
                                                 Map<String, VmsTransactionMetadata> transactionMetadataMap,
@@ -100,7 +105,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         // operational (internal control of transactions and tasks)
         this.transactionTaskMap = new HashMap<>();
-        this.transactionTaskMap.put( 0L, new VmsTransactionTask(0) );
+        this.callback = new SchedulerCallback();
+        this.vmsTransactionTaskBuilder = new VmsTransactionTaskBuilder(transactionalHandler, callback);
+        this.transactionTaskMap.put( 0L, vmsTransactionTaskBuilder.buildFinished(0) );
         this.lastTidToTidMap = new HashMap<>();
 
         this.localInputEvents = new ArrayList<>(50);
@@ -132,8 +139,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         }
     }
 
-    private final SchedulerCallback callback = new SchedulerCallback();
-
     private final class SchedulerCallback implements ISchedulerCallback, Thread.UncaughtExceptionHandler {
 
         @Override
@@ -150,7 +155,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             while(!sent) {
                 sent = vmsChannels.transactionOutputQueue().offer(resultToQueue);
             }
-            task.signalOutputSent();
 
             if(executionMode == ExecutionModeEnum.SINGLE_THREADED)
                 singleThreadTaskRunning.set(false);
@@ -212,8 +216,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
      */
     private boolean block = false;
 
-    private final int newStatus = VmsTransactionTask.Status.NEW.value();
-
     private void executeReadyTasks() {
 
         Long nextTid = this.lastTidToTidMap.get(this.lastTidFinished);
@@ -227,7 +229,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         while(true) {
 
-            if(task.status().value() > this.newStatus){
+            if(task.isScheduled()){
                 // System.out.println(task.tid()+" have not finished yet!");
                 return;
             }
@@ -301,7 +303,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         if(this.vmsChannels.transactionInputQueue().isEmpty()){
             if(this.block) {
                 InboundEvent e = null;
-                int pollTimeout = 100;
+                int pollTimeout = 200;
                 while(e == null) {
                     pollTimeout = pollTimeout * 2;
                     LOGGER.log(INFO,this.vmsIdentifier+": Transaction scheduler going to sleep for "+pollTimeout+" until new event arrives");
@@ -332,9 +334,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             return;
         }
 
-        this.transactionTaskMap.put(inboundEvent.tid(), new VmsTransactionTask(
-                this.transactionalHandler,
-                this.callback,
+        this.transactionTaskMap.put(inboundEvent.tid(), this.vmsTransactionTaskBuilder.build(
                 inboundEvent.tid(),
                 inboundEvent.lastTid(),
                 inboundEvent.batch(),
