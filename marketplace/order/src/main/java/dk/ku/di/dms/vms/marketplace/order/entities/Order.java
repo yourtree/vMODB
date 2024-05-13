@@ -6,10 +6,12 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
 import javax.persistence.Column;
 import javax.persistence.Id;
+import javax.persistence.IdClass;
 import java.io.Serializable;
 import java.util.Date;
 
 @VmsTable(name="orders")
+@IdClass(Order.OrderId.class)
 public final class Order implements IEntity<Order.OrderId> {
 
     public static class OrderId implements Serializable {

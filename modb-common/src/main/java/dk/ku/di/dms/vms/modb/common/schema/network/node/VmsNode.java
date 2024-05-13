@@ -34,6 +34,8 @@ public final class VmsNode extends IdentifiableNode {
      */
     public long previousBatch;
 
+    public int numberOfTIDsCurrentBatch;
+
     // data model
     public final Map<String, VmsDataModel> dataSchema;
 
@@ -54,6 +56,7 @@ public final class VmsNode extends IdentifiableNode {
         this.dataSchema = dataSchema;
         this.inputEventSchema = inputEventSchema;
         this.outputEventSchema = outputEventSchema;
+        this.numberOfTIDsCurrentBatch = 0;
     }
 
     @Override
@@ -65,6 +68,7 @@ public final class VmsNode extends IdentifiableNode {
                 ", batch=" + batch +
                 ", lastTidOfBatch=" + lastTidOfBatch +
                 ", previousBatch=" + previousBatch +
+                ", numberOfTIDsCurrentBatch=" + numberOfTIDsCurrentBatch +
                 '}';
     }
 

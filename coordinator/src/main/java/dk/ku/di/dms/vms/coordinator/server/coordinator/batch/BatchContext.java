@@ -23,6 +23,8 @@ public final class BatchContext {
 
     public Map<String, Long> previousBatchPerVms;
 
+    public Map<String,Integer> numberOfTasksPerVms;
+
     public long tidAborted;
 
     public long lastTid;
@@ -33,11 +35,13 @@ public final class BatchContext {
     }
 
     // called when the batch is over
-    public void seal(long lastTidOverall, Map<String, Long> lastTidOfBatchPerVms, Map<String, Long> previousBatchPerVms){
+    public void seal(long lastTidOverall, Map<String, Long> lastTidOfBatchPerVms,
+                     Map<String, Long> previousBatchPerVms, Map<String,Integer> numberOfTasksPerVms){
         this.lastTid = lastTidOverall;
         // immutable
-        this.lastTidOfBatchPerVms = Map.copyOf(lastTidOfBatchPerVms);
-        this.previousBatchPerVms = Map.copyOf(previousBatchPerVms);
+        this.lastTidOfBatchPerVms = lastTidOfBatchPerVms;
+        this.previousBatchPerVms = previousBatchPerVms;
+        this.numberOfTasksPerVms = numberOfTasksPerVms;
         this.missingVotes = new HashSet<>(this.terminalVMSs);
     }
 

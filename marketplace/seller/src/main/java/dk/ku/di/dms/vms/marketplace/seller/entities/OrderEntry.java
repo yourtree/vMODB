@@ -8,10 +8,12 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
 import javax.persistence.Column;
 import javax.persistence.Id;
+import javax.persistence.IdClass;
 import java.io.Serializable;
 import java.util.Date;
 
 @VmsTable(name="order_entries")
+@IdClass(OrderEntry.OrderEntryId.class)
 public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
 
     public static class OrderEntryId implements Serializable {
@@ -109,6 +111,7 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
         this.delivery_status = delivery_status;
     }
 
+    @Override
     public OrderEntryId getId(){
         return new OrderEntryId( this.customer_id, this.order_id, this.package_id );
     }

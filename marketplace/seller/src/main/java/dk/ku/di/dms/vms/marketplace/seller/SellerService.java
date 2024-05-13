@@ -163,7 +163,6 @@ public final class SellerService {
             }
         }
 
-
         for(DeliveryNotification delivery : shipmentUpdated.deliveryNotifications) {
             OrderEntry orderEntry = this.orderEntryRepository.lookupByKey(
                     new OrderEntry.OrderEntryId( delivery.customerId, delivery.orderId, delivery.productId ) );

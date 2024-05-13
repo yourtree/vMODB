@@ -126,6 +126,14 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
             return this.entryPoint.min(param);
         }
 
+        public NewProjectionOrFromClause count(String param){
+            return this.entryPoint.count(param);
+        }
+
+        public NewProjectionOrFromClause sum(String param){
+            return this.entryPoint.sum(param);
+        }
+
         public OrderByGroupByJoinWhereClauseBridge from(String param) {
             String[] projection = param.replace(" ","").split(",");
             this.statement.fromClause = new ArrayList<>(Arrays.asList(projection));

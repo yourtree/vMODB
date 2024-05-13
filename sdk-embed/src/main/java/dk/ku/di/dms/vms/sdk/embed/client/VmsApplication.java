@@ -162,7 +162,7 @@ public final class VmsApplication {
     }
 
     public long lastTidFinished() {
-        return this.eventHandler.lastTidFinished();
+        return ((VmsTransactionScheduler)transactionScheduler).lastTidFinished();
     }
 
     public Object getService() {

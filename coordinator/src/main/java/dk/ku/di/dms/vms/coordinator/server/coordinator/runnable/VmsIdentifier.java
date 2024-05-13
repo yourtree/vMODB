@@ -19,5 +19,9 @@ public record VmsIdentifier(VmsNode node, IVmsWorker worker) {
         return this.node.identifier;
     }
 
+    public int getNumberOfTIDs(){
+        return this.node.numberOfTIDsCurrentBatch;
+    }
+
 }
 

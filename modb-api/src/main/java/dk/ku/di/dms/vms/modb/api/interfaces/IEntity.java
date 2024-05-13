@@ -4,4 +4,8 @@ import java.io.Serializable;
 
 public interface IEntity<PK extends Serializable> {
 
+    default PK getId() {
+        throw new UnsupportedOperationException();
+    }
+
 }

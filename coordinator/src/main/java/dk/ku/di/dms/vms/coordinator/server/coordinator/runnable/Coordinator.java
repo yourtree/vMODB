@@ -240,8 +240,7 @@ public final class Coordinator extends StoppableRunnable {
         this.batchContextMap = new HashMap<>();
         this.batchContextMap.put(this.currentBatchOffset, new BatchContext(this.currentBatchOffset));
         BatchContext previousBatch = new BatchContext(this.currentBatchOffset - 1);
-        var empty = Map.<String,Long>of();
-        previousBatch.seal(startingTid - 1, empty, empty);
+        previousBatch.seal(startingTid - 1, Map.of(), Map.of(), Map.of());
         this.batchContextMap.put(this.currentBatchOffset - 1, previousBatch);
 
         if(options.getNetworkBufferSize() > 0)
@@ -524,7 +523,11 @@ public final class Coordinator extends StoppableRunnable {
                 .filter(p-> p.node().batch == generateBatch)
                 .collect(Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getPreviousBatch) );
 
-        currBatchContext.seal(this.tid - 1, lastTidOfBatchPerVms, previousBatchPerVms);
+        Map<String,Integer> numberOfTasksPerVms = this.vmsMetadataMap.values().stream()
+                .filter(p-> p.node().batch == generateBatch)
+                .collect(Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getNumberOfTIDs) );
+
+        currBatchContext.seal(this.tid - 1, lastTidOfBatchPerVms, previousBatchPerVms, numberOfTasksPerVms);
 
         // increment batch offset
         this.currentBatchOffset = this.currentBatchOffset + 1;
@@ -552,7 +555,7 @@ public final class Coordinator extends StoppableRunnable {
 
             vms.worker().queue().add(new IVmsWorker.Message(
                     isTerminal ? SEND_BATCH_OF_EVENTS_WITH_COMMIT_INFO : SEND_BATCH_OF_EVENTS,
-                            BatchCommitInfo.of(vms.node().batch, vms.node().lastTidOfBatch, vms.node().previousBatch) ) );
+                            BatchCommitInfo.of(vms.node().batch, vms.node().lastTidOfBatch, vms.node().previousBatch, vms.node().numberOfTIDsCurrentBatch) ) );
         }
 
         // the batch commit only has progress (a safety property) the way it is implemented now when future events
@@ -744,6 +747,7 @@ public final class Coordinator extends StoppableRunnable {
              */
             vms.node().lastTidOfBatch = tid_;
             this.updateVmsBatchAndPrecedenceIfNecessary(vms.node());
+            vms.node().numberOfTIDsCurrentBatch++;
 
             // write. think about failures/atomicity later
             TransactionEvent.PayloadRaw txEvent =
@@ -752,17 +756,17 @@ public final class Coordinator extends StoppableRunnable {
             // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
 
             if(!event.targetVms.equalsIgnoreCase(vms.node().identifier)){
-                logger.severe("Leader: The event was going to be queued to the incorrect VMS worker!");
+                this.logger.severe("Leader: The event was going to be queued to the incorrect VMS worker!");
             }
-            logger.config("Leader: Adding event "+event.name+" to "+vms.node().identifier+" worker");
+            this.logger.config("Leader: Adding event "+event.name+" to "+vms.node().identifier+" worker");
             vms.worker().transactionEventsPerBatch(this.currentBatchOffset).add(txEvent);
-            //}
 
             // update the last tid of the terminals
             for(String vmsIdentifier : transactionDAG.terminalNodes){
                 VmsIdentifier terminalVms = this.vmsMetadataMap.get(vmsIdentifier);
                 terminalVms.node().lastTidOfBatch = tid_;
                 this.updateVmsBatchAndPrecedenceIfNecessary(terminalVms.node());
+                terminalVms.node().numberOfTIDsCurrentBatch++;
             }
 
             // also update the last tid of the internal VMSs
@@ -771,6 +775,7 @@ public final class Coordinator extends StoppableRunnable {
                 VmsIdentifier internalVms = this.vmsMetadataMap.get(vmsIdentifier);
                 internalVms.node().lastTidOfBatch = tid_;
                 this.updateVmsBatchAndPrecedenceIfNecessary(internalVms.node());
+                internalVms.node().numberOfTIDsCurrentBatch++;
             }
 
             // add terminal to the set... so cannot be immutable when the batch context is created...
@@ -788,6 +793,7 @@ public final class Coordinator extends StoppableRunnable {
         if(vms.batch != this.currentBatchOffset){
             vms.previousBatch = vms.batch;
             vms.batch = this.currentBatchOffset;
+            vms.numberOfTIDsCurrentBatch = 0;
         }
     }
 
@@ -937,7 +943,8 @@ public final class Coordinator extends StoppableRunnable {
                     new BatchCommitCommand.Payload(
                         batchContext.batchOffset,
                         batchContext.lastTidOfBatchPerVms.get(vms.getIdentifier()),
-                        batchContext.previousBatchPerVms.get(vms.getIdentifier())
+                        batchContext.previousBatchPerVms.get(vms.getIdentifier()),
+                        batchContext.numberOfTasksPerVms.get(vms.getIdentifier())
                     )
             ));
         }

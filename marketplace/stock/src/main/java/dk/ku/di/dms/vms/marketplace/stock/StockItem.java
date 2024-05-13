@@ -27,10 +27,10 @@ public class StockItem implements IEntity<StockItem.StockId> {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            StockId stockId = (StockId) o;
-            return seller_id == stockId.seller_id && product_id == stockId.product_id;
+            if (o instanceof StockId stockId) {
+                return this.seller_id == stockId.seller_id && this.product_id == stockId.product_id;
+            }
+            return false;
         }
 
         @Override

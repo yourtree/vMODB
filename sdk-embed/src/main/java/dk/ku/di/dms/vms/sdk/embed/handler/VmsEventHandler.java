@@ -103,12 +103,12 @@ public final class VmsEventHandler extends StoppableRunnable {
     private BatchContext currentBatch;
 
     /**
-     * It just marks the last tid that the scheduler has executed.
+     * It just marks how many TIDs that the scheduler has executed.
      * The scheduler is batch-agnostic. That means in order
-     * to progress with the batch here, we need to check if the
-     * batch has completed using the last tid executed.
+     * to progress with the batch in the event handler, we need to check if the
+     * batch has completed using the number of TIDs executed.
      */
-    private long lastTidFinished;
+    private long numberOfTIDsCurrentBatchProcessed;
 
     // metadata about all non-committed batches. when a batch commit finishes, it is removed from this map
     private final Map<Long, BatchContext> batchContextMap;
@@ -164,7 +164,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             // by default, server socket creates a cached thread pool. better to avoid successive creation of threads
 //            ExecutorService socketPool = Executors.newWorkStealingPool(networkThreadPoolSize);
             this.group = null; //AsynchronousChannelGroup.withFixedThreadPool(2, Thread.ofPlatform().factory());
-            this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+            this.serverSocket = AsynchronousServerSocketChannel.open(null);
         }
         this.serverSocket.bind(me.asInetSocketAddress());
 
@@ -178,8 +178,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         this.serdesProxy = serdesProxy;
 
-        this.currentBatch = BatchContext.build(me.batch, me.previousBatch, me.lastTidOfBatch);
-        this.lastTidFinished = me.lastTidOfBatch;
+        this.currentBatch = BatchContext.build(me.batch, me.previousBatch, me.lastTidOfBatch, me.numberOfTIDsCurrentBatch);
         this.currentBatch.setStatus(BatchContext.Status.BATCH_COMMITTED);
         this.batchContextMap = new ConcurrentHashMap<>();
         this.batchToNextBatchMap = new ConcurrentHashMap<>();
@@ -242,12 +241,12 @@ public final class VmsEventHandler extends StoppableRunnable {
                 this.vmsInternalChannels.transactionOutputQueue().drainTo(transactionResults);
 
                 for(IVmsTransactionResult txResult : transactionResults) {
-                    this.lastTidFinished = txResult.tid();
+                    this.numberOfTIDsCurrentBatchProcessed++;
                     // assuming is a simple transaction result, not complex, so no need to iterate
                     OutboundEventResult outputEvent = txResult.getOutboundEventResult();
                     // it is a void method that executed, nothing to send
                     if (outputEvent.outputQueue() == null) continue;
-                    Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(this.lastTidFinished);
+                    Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(txResult.tid());
                     if (precedenceMap == null) {
                         this.logger.warning(this.me.identifier + ": No precedence map found for TID: " + txResult.tid());
                         continue;
@@ -257,7 +256,9 @@ public final class VmsEventHandler extends StoppableRunnable {
                     String precedenceMapUpdated = this.serdesProxy.serializeMap(precedenceMap);
                     this.processOutputEvent(outputEvent, precedenceMapUpdated);
                 }
-                this.moveBatchIfNecessary();
+                if(this.moveBatchIfNecessary()){
+                    this.numberOfTIDsCurrentBatchProcessed = 0;
+                }
                 transactionResults.clear();
             } catch (Exception e) {
                 this.logger.log(Level.SEVERE, this.me.identifier+": Problem on handling event: "+e.getMessage());
@@ -303,14 +304,16 @@ public final class VmsEventHandler extends StoppableRunnable {
      * it may be the case that, due to an abort of the last tid, the last tid changes
      * the current code is not incorporating that
      */
-    private void moveBatchIfNecessary(){
+    private boolean moveBatchIfNecessary(){
         // update if current batch is done AND the next batch has already arrived
         if(this.currentBatch.isCommitted() && this.batchToNextBatchMap.containsKey( this.currentBatch.batch )){
             long nextBatchOffset = this.batchToNextBatchMap.get( this.currentBatch.batch );
             this.currentBatch = this.batchContextMap.get(nextBatchOffset);
         }
+
         // have we processed all the TIDs of this batch?
-        if(this.currentBatch.isOpen() && this.currentBatch.lastTid <= this.lastTidFinished){
+        if(this.currentBatch.numberOfTIDsBatch == this.numberOfTIDsCurrentBatchProcessed
+            && this.currentBatch.isOpen()){
 
             this.logger.config(this.me.identifier+": The last TID ("+this.currentBatch.lastTid+") for the current batch ("+this.currentBatch.batch+") has been executed");
 
@@ -325,7 +328,9 @@ public final class VmsEventHandler extends StoppableRunnable {
                         BatchComplete.of(this.currentBatch.batch, this.me.identifier)));
             }
             this.vmsInternalChannels.batchCommitCommandQueue().add( DUMB_OBJECT );
+            return true;
         }
+        return false;
     }
 
     /**
@@ -1144,10 +1149,6 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     public ITransactionalHandler transactionalHandler(){
         return this.transactionalHandler;
-    }
-
-    public long lastTidFinished() {
-        return this.lastTidFinished;
     }
 
 }

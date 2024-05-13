@@ -84,6 +84,10 @@ public final class CartService {
         this.productReplicaRepository.update(product);
     }
 
+    /**
+     * id being the [seller_id,product_id] is object causality
+     * id being seller id is seller causality
+     */
     @Inbound(values = {PRODUCT_UPDATED})
     @Transactional(type=RW)
     @PartitionBy(clazz = ProductUpdated.class, method = "getId")

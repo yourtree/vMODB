@@ -11,6 +11,8 @@ public final class BatchContext {
 
     public final long lastTid;
 
+    public final int numberOfTIDsBatch;
+
     // if an external thread (i.e., scheduler) modifies
     // this attribute, it needs to change to volatile
     private int status;
@@ -19,23 +21,28 @@ public final class BatchContext {
     public final boolean terminal;
 
     public static BatchContext build(BatchCommitInfo.Payload batchCommitInfo){
-        return new BatchContext(batchCommitInfo.batch(), batchCommitInfo.lastTidOfBatch(), batchCommitInfo.previousBatch(), true);
+        return new BatchContext(batchCommitInfo.batch(),
+                batchCommitInfo.lastTidOfBatch(),
+                batchCommitInfo.previousBatch(),
+                batchCommitInfo.numberOfTIDsBatch(),
+                true);
     }
 
-    public static BatchContext build(long batch, long lastTidOfBatch, long previousBatch){
-        return new BatchContext(batch, lastTidOfBatch, previousBatch, false);
+    public static BatchContext build(long batch, long lastTidOfBatch, long previousBatch, int numberOfTIDsBatch){
+        return new BatchContext(batch, lastTidOfBatch, previousBatch, numberOfTIDsBatch,false);
     }
 
     public static BatchContext build(BatchCommitCommand.Payload batchCommitRequest) {
         return new BatchContext(batchCommitRequest.batch(), batchCommitRequest.lastTidOfBatch(),
-                batchCommitRequest.previousBatch(),false);
+                batchCommitRequest.previousBatch(), batchCommitRequest.numberOfTIDsBatch(), false);
     }
 
-    private BatchContext(long batch, long lastTidOfBatch, long previousBatch, boolean terminal) {
+    private BatchContext(long batch, long lastTidOfBatch, long previousBatch, int numberOfTIDsBatch, boolean terminal) {
         this.batch = batch;
         this.lastTid = lastTidOfBatch;
         this.previousBatch = previousBatch;
-        this.status = Status.OPEN.value;
+        // this.status = Status.OPEN.value; // always start with 0 anyway
+        this.numberOfTIDsBatch = numberOfTIDsBatch;
         this.terminal = terminal;
     }
 
@@ -63,10 +70,6 @@ public final class BatchContext {
 
     public boolean isOpen(){
         return this.status < Status.BATCH_COMPLETED.value;
-    }
-
-    public boolean isCompleted(){
-        return this.status == Status.BATCH_COMPLETED.value;
     }
 
     public boolean isCommitted(){

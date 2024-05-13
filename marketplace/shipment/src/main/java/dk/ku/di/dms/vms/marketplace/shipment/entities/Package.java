@@ -8,10 +8,12 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
 import javax.persistence.Column;
 import javax.persistence.Id;
+import javax.persistence.IdClass;
 import java.io.Serializable;
 import java.util.Date;
 
 @VmsTable(name="packages")
+@IdClass(Package.PackageId.class)
 public final class Package implements IEntity<Package.PackageId> {
 
     public static class PackageId implements Serializable {
@@ -30,6 +32,7 @@ public final class Package implements IEntity<Package.PackageId> {
 
     }
 
+    @Override
     public PackageId getId(){
         return new PackageId( this.customer_id, this.order_id, this.package_id );
     }

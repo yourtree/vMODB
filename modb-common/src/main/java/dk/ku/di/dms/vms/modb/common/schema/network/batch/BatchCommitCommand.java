@@ -11,7 +11,7 @@ import java.nio.ByteBuffer;
  */
 public final class BatchCommitCommand {
 
-    public static final int size = 1 + (3 * Long.BYTES);
+    public static final int size = 1 + (3 * Long.BYTES) + Integer.BYTES;
 
     // send the last tid (corresponding to the vms) and batch id
 //    public static void write(ByteBuffer buffer, long batch, long lastTidOfBatch, long previousBatch){
@@ -23,20 +23,22 @@ public final class BatchCommitCommand {
 
     public static void write(ByteBuffer buffer, BatchCommitCommand.Payload payload){
         buffer.put(Constants.BATCH_COMMIT_COMMAND);
-        buffer.putLong(payload.batch());
-        buffer.putLong(payload.lastTidOfBatch() );
-        buffer.putLong(payload.previousBatch());
+        buffer.putLong(payload.batch);
+        buffer.putLong(payload.lastTidOfBatch);
+        buffer.putLong(payload.previousBatch);
+        buffer.putInt(payload.numberOfTIDsBatch);
     }
 
     public static Payload read(ByteBuffer buffer){
         long batch = buffer.getLong();
         long lastTidOfBatch = buffer.getLong();
         long previousBatch = buffer.getLong();
-        return new Payload(batch, lastTidOfBatch, previousBatch);
+        int numberOfTIDsBatch = buffer.getInt();
+        return new Payload(batch, lastTidOfBatch, previousBatch, numberOfTIDsBatch);
     }
 
     public record Payload(
-            long batch, long lastTidOfBatch, long previousBatch
+            long batch, long lastTidOfBatch, long previousBatch, int numberOfTIDsBatch
     ){}
 
 }

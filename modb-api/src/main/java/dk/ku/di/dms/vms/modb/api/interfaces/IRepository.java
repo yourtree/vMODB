@@ -53,8 +53,6 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
      */
     <DTO> DTO fetchOne(SelectStatement statement, Class<DTO> clazz);
 
-    <DTO> IVmsFuture<DTO> fetchOnePromise(SelectStatement statement, Class<DTO> clazz);
-
     /**
      * Used for retrieving multiple rows.
      * Different method given strong typed system
