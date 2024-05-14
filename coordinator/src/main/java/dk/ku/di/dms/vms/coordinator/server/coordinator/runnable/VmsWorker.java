@@ -18,6 +18,7 @@ import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -245,10 +246,10 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     }
                 }
             } catch (InterruptedException e) {
-                logger.log(ERROR, "Leader: VMS worker for "+this.vmsNode.identifier+" has been interrupted: "+e.getMessage());
+                logger.log(ERROR, "Leader: VMS worker for "+this.vmsNode.identifier+" has been interrupted: "+e);
                 this.stop();
             } catch (Exception e) {
-                logger.log(ERROR, "Leader: VMS worker for "+this.vmsNode.identifier+" has caught an exception: "+e.getMessage());
+                logger.log(ERROR, "Leader: VMS worker for "+this.vmsNode.identifier+" has caught an exception: "+e);
             }
         }
     }
@@ -313,7 +314,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         // the first or new information
         if(this.state == VMS_PRESENTATION_PROCESSED) {
             this.state = CONSUMER_SET_READY_FOR_SENDING;
-            logger.log(INFO, "Leader: Consumer set will be established for: "+this.consumerVms.identifier);
+            logger.log(INFO, "Leader: Consumer set will be sent to: "+this.consumerVms.identifier);
         } else if(this.state == CONSUMER_EXECUTING){
             logger.log(INFO, "Leader: Consumer set is going to be updated for: "+this.consumerVms.identifier);
         } else if(this.state == CONSUMER_SET_SENDING_FAILED){
@@ -321,15 +322,15 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         } // else, nothing...
 
         String vmsConsumerSet = workerMessage.asVmsConsumerSet();
+        ByteBuffer writeBuffer = this.retrieveByteBuffer();
         try {
-            ByteBuffer writeBuffer = this.retrieveByteBuffer();
             ConsumerSet.write(writeBuffer, vmsConsumerSet);
             writeBuffer.flip();
             this.WRITE_SYNCHRONIZER.take();
             this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
-            if (this.state == CONSUMER_SET_READY_FOR_SENDING) // or != CONSUMER_EXECUTING
+            if (this.state == CONSUMER_SET_READY_FOR_SENDING) {// or != CONSUMER_EXECUTING
                 this.state = CONSUMER_EXECUTING;
-
+            }
         } catch (InterruptedException e){
             this.state = CONSUMER_SET_SENDING_FAILED;
             if (channel.isOpen()) {
@@ -340,6 +341,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 logger.log(WARNING,"Write has failed and channel is closed: " + consumerVms);
                 this.stop(); // no reason to continue the loop
             }
+        } catch (IOException | BufferOverflowException e){
+            this.state = CONSUMER_SET_SENDING_FAILED;
+            logger.log(WARNING,"Write has failed and the VMS worker will undergo an unknown state: " + consumerVms);
         }
 
     }

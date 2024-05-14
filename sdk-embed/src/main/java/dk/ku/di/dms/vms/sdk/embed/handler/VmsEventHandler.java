@@ -1109,10 +1109,14 @@ public final class VmsEventHandler extends StoppableRunnable {
 //                vmsInternalChannels.batchAbortQueue().add(batchAbortReq);
 //            }
                 case (CONSUMER_SET) -> {
-                    logger.log(INFO,me.identifier+": Consumer set received from the leader");
-                    Map<String, List<IdentifiableNode>> receivedConsumerVms = ConsumerSet.read(connectionMetadata.readBuffer, serdesProxy);
-                    if (receivedConsumerVms != null) {
-                        connectToReceivedConsumerSet(receivedConsumerVms);
+                    try {
+                        logger.log(INFO, me.identifier + ": Consumer set received from the leader");
+                        Map<String, List<IdentifiableNode>> receivedConsumerVms = ConsumerSet.read(connectionMetadata.readBuffer, serdesProxy);
+                        if (!receivedConsumerVms.isEmpty()) {
+                            connectToReceivedConsumerSet(receivedConsumerVms);
+                        }
+                    } catch (IOException e){
+                        logger.log(ERROR,me.identifier+": IOException while reading consumer set: " + e);
                     }
                 }
                 case (PRESENTATION) -> logger.log(WARNING,me.identifier+": Presentation being sent again by the leader!?");

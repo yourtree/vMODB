@@ -158,6 +158,9 @@ public final class Main {
         long batchSendRate = Long.parseLong( properties.getProperty("batch_send_rate") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
 
+        int definiteBufferSize = networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize;
+        System.out.println("Buffer size: "+definiteBufferSize);
+
         return Coordinator.build(
                 serverMap,
                 starterVMSs,
@@ -166,9 +169,7 @@ public final class Main {
                 new CoordinatorOptions()
                         .withBatchWindow(batchSendRate)
                         .withGroupThreadPoolSize(groupPoolSize)
-                        .withNetworkBufferSize(
-                                networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize
-                        ),
+                        .withNetworkBufferSize(definiteBufferSize),
                 STARTING_BATCH_ID,
                 STARTING_TID,
                 TRANSACTION_INPUTS,
