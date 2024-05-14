@@ -63,12 +63,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     // used to receive external signals that require the scheduler to pause and run tasks, e.g., checkpointing
     private final ICheckpointEventHandler checkpointHandler;
 
-    private final ITransactionalHandler transactionalHandler;
-
     // used to identify in which VMS this scheduler is running
     private final String vmsIdentifier;
-
-    private final SchedulerCallback callback;
 
     private final VmsTransactionTaskBuilder vmsTransactionTaskBuilder;
 
@@ -105,14 +101,13 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         // operational (internal control of transactions and tasks)
         this.transactionTaskMap = new HashMap<>();
-        this.callback = new SchedulerCallback();
+        SchedulerCallback callback = new SchedulerCallback();
         this.vmsTransactionTaskBuilder = new VmsTransactionTaskBuilder(transactionalHandler, callback);
         this.transactionTaskMap.put( 0L, vmsTransactionTaskBuilder.buildFinished(0) );
         this.lastTidToTidMap = new HashMap<>();
 
         this.localInputEvents = new ArrayList<>(50);
 
-        this.transactionalHandler = transactionalHandler;
         this.checkpointHandler = checkpointHandler;
     }
 
@@ -298,14 +293,16 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         return this.numParallelTasksRunning.get() == 0 && numPartitionedTasksRunning.get() == 0;
     }
 
+    private static final int MAX_SLEEP = 10000;
+
     private void checkForNewEvents() throws InterruptedException {
 
         if(this.vmsChannels.transactionInputQueue().isEmpty()){
             if(this.block) {
                 InboundEvent e = null;
-                int pollTimeout = 100;
+                int pollTimeout = 1;
                 while(e == null) {
-                    pollTimeout = pollTimeout * 2;
+                    pollTimeout = Math.min(pollTimeout * 2, MAX_SLEEP);
                     LOGGER.log(INFO,this.vmsIdentifier+": Transaction scheduler going to sleep for "+pollTimeout+" until new event arrives");
                     e = this.vmsChannels.transactionInputQueue().poll(pollTimeout, TimeUnit.MILLISECONDS);
                 }

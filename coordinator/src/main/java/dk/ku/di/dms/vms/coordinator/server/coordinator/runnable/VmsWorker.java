@@ -499,7 +499,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 writeBuffer.flip();
                 // without this async handler, the bytebuffer arriving in the VMS can be corrupted
                 // relying on future.get() yields corrupted buffer in the consumer
-                logger.log(DEBUG, "Leader: Submitting ["+(count - remaining)+"] events to "+vmsNode.identifier);
+                logger.log(INFO, "Leader: Submitting ["+(count - remaining)+"] events to "+vmsNode.identifier);
                 this.WRITE_SYNCHRONIZER.take();
                 this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
                 count = remaining;
@@ -527,6 +527,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
      * then the batch commit info must be appended
      */
     private void sendBatchedEventsWithCommitInfo(BatchCommitInfo.Payload batchCommitInfo){
+        int count = this.localTxEvents.size();
         this.transactionEvents.drainTo(this.localTxEvents);
         int remaining = this.localTxEvents.size();
         ByteBuffer writeBuffer;
@@ -538,11 +539,14 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 if (remaining == 0) {
                     // now must append the batch commit info
                     // do we have space in the buffer?
-                    if (writeBuffer.remaining() < BatchCommitInfo.size) {
+                    if (writeBuffer.remaining() < BatchCommitInfo.SIZE) {
                         // if not, send what we can for now
                         writeBuffer.flip();
+                        logger.log(INFO, "Leader: Submitting ["+(count - remaining)+"] events to "+vmsNode.identifier);
+
                         this.WRITE_SYNCHRONIZER.take();
                         this.channel.write(writeBuffer,  writeBuffer, this.writeCompletionHandler);
+                        count = remaining;
 
                         // get a new bb
                         writeBuffer = this.retrieveByteBuffer();

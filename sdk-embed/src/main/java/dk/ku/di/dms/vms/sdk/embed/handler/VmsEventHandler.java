@@ -683,10 +683,10 @@ public final class VmsEventHandler extends StoppableRunnable {
                 return;
             }
 
-            if(!compacted){
-                connectionMetadata.readBuffer.clear();
-            } else {
+            if(compacted){
                 compacted = false;
+            } else {
+                connectionMetadata.readBuffer.clear();
             }
             connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
         }
@@ -1041,6 +1041,12 @@ public final class VmsEventHandler extends StoppableRunnable {
                         result = 0;
                         this.payloads.clear();
                     }
+
+                    if(connectionMetadata.readBuffer.position() < result){
+                        this.recursionDepth++;
+                        this.completed(result, connectionMetadata);
+                    }
+
                 }
                 case (BATCH_COMMIT_INFO) -> {
                     // events of this batch from VMSs may arrive before the batch commit info
@@ -1048,16 +1054,27 @@ public final class VmsEventHandler extends StoppableRunnable {
                     BatchCommitInfo.Payload bPayload = BatchCommitInfo.read(connectionMetadata.readBuffer);
                     logger.log(INFO,me.identifier + ": Batch ("+bPayload.batch()+") commit info received from the leader");
                     processNewBatchInfo(bPayload);
+
+                    if(connectionMetadata.readBuffer.position() < result){
+                        this.recursionDepth++;
+                        this.completed(result, connectionMetadata);
+                    }
+
                 }
                 case (BATCH_COMMIT_COMMAND) -> {
                     // a batch commit queue from next batch can arrive before this vms moves next? yes
                     BatchCommitCommand.Payload payload = BatchCommitCommand.read(connectionMetadata.readBuffer);
                     logger.log(INFO,me.identifier+": Batch ("+payload.batch()+") commit command received from the leader");
                     processNewBatchInfo(payload);
+
+                    if(connectionMetadata.readBuffer.position() < result){
+                        this.recursionDepth++;
+                        this.completed(result, connectionMetadata);
+                    }
                 }
                 case (EVENT) -> {
                     try {
-                        logger.log(INFO,me.identifier + ": 1 event received from the leader");
+                        logger.log(WARNING,me.identifier + ": 1 event received from the leader");
                         TransactionEvent.Payload payload = TransactionEvent.read(connectionMetadata.readBuffer);
                         // send to scheduler.... drop if the event cannot be processed (not an input event in this vms)
                         if (vmsMetadata.queueToEventMap().get(payload.event()) != null) {
@@ -1075,6 +1092,12 @@ public final class VmsEventHandler extends StoppableRunnable {
                         // force a new read to bring more data
                         result = 0;
                     }
+
+                    if(connectionMetadata.readBuffer.position() < result){
+                        this.recursionDepth++;
+                        this.completed(result, connectionMetadata);
+                    }
+
                 }
                 case (TX_ABORT) -> {
                     TransactionAbort.Payload transactionAbortReq = TransactionAbort.read(connectionMetadata.readBuffer);
@@ -1096,20 +1119,15 @@ public final class VmsEventHandler extends StoppableRunnable {
                 default -> logger.log(ERROR,me.identifier+": Message type sent by the leader cannot be identified: "+messageType);
             }
 
-            if(connectionMetadata.readBuffer.position() < result){
-                this.recursionDepth++;
-                this.completed(result, connectionMetadata);
-            }
-
             if(this.recursionDepth > 0){
                 this.recursionDepth--;
                 return;
             }
 
-            if(!this.compacted) {
-                connectionMetadata.readBuffer.clear();
-            } else {
+            if(this.compacted) {
                 this.compacted = false;
+            } else {
+                connectionMetadata.readBuffer.clear();
             }
             connectionMetadata.channel.read(connectionMetadata.readBuffer, connectionMetadata, this);
         }

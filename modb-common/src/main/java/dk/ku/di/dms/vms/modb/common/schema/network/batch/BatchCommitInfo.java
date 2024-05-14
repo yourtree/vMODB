@@ -13,7 +13,7 @@ import java.nio.ByteBuffer;
 public final class BatchCommitInfo {
 
     // message type + 3 longs + 1 int
-    public static final int size = 1 + (3 * Long.BYTES) + Integer.BYTES;
+    public static final int SIZE = 1 + (3 * Long.BYTES) + Integer.BYTES;
 
     public static void write(ByteBuffer buffer, long batch,
                              long lastTidOfBatch, long previousBatch, int numberOfTIDsBatch){

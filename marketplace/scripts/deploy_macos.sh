@@ -27,7 +27,7 @@ then
   exit 1
 fi
 
-if test -d  `echo $(pwd)/proxy`; then
+if test -d `echo $(pwd)/proxy`; then
   echo "Initializing deploy of microservices..."
 else
   echo "ERROR: Run the script in the marketplace project's root folder!"
@@ -131,7 +131,7 @@ if `echo "$*" | grep -q customer`; then
     then
         echo "customer already running"
     else
-        echo "initializing seller..."
+        echo "initializing customer..."
         osascript -e 'tell app "Terminal"
             do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/customer/target/customer-1.0-SNAPSHOT-jar-with-dependencies.jar"
         end tell'
@@ -142,11 +142,11 @@ if `echo "$*" | grep -q proxy`; then
     p=`ps | grep -c proxy`
     if [ $p = $var1 ]
     then
-        echo "proxy already running"
+        echo "Proxy already running"
     else
         echo "Waiting for microservices before setting up the proxy (coordinator)..."
         sleep 3
-        echo "initializing proxy..."
+        echo "initializing Proxy..."
         osascript -e 'tell app "Terminal"
             do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/proxy/target/proxy-1.0-SNAPSHOT-jar-with-dependencies.jar"
         end tell'

@@ -24,7 +24,7 @@ public final class ProductService {
     @Transactional(type=W)
     @PartitionBy(clazz = UpdateProduct.class, method = "getId")
     public ProductUpdated updateProduct(UpdateProduct updateEvent) {
-        System.out.println("Product received a product update event with version: "+updateEvent.version);
+        System.out.println("APP: Product received a product update event with version: "+updateEvent.version);
 
         // can use issue statement for faster update
         Product product = new Product(updateEvent.seller_id, updateEvent.product_id, updateEvent.name, updateEvent.sku, updateEvent.category,
@@ -40,7 +40,7 @@ public final class ProductService {
     @Transactional(type=RW)
     @PartitionBy(clazz = UpdatePrice.class, method = "getId")
     public PriceUpdated updateProductPrice(UpdatePrice updatePrice) {
-        System.out.println("Product received an update price event with version: "+updatePrice.instanceId);
+        System.out.println("APP: Product received an update price event with version: "+updatePrice.instanceId);
 
         // could use issue statement for faster update
         Product product = this.productRepository.lookupByKey(new Product.ProductId(updatePrice.sellerId, updatePrice.productId));

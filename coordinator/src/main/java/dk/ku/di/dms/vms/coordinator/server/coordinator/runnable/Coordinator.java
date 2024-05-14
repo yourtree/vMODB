@@ -543,14 +543,11 @@ public final class Coordinator extends StoppableRunnable {
         logger.log(INFO,"Leader: New batch offset is "+this.currentBatchOffset);
 
         // new TIDs will be emitted with the new batch in the transaction manager
-        // FIXME just iterate over terminals directly
-        for(VmsIdentifier vms : this.vmsMetadataMap.values()){
-            // if(vms.node().batch != generateBatch) continue; // remove the ones not participating in this batch
-            // the terminals inform the batch completion. that refrains the coordinator from waiting for all VMSs
-            if(currBatchContext.terminalVMSs.contains(vms.node().identifier)){
-                vms.worker().queueMessage(new IVmsWorker.Message(SEND_BATCH_COMMIT_INFO,
-                        BatchCommitInfo.of(vms.node().batch, vms.node().lastTidOfBatch, vms.node().previousBatch, vms.node().numberOfTIDsCurrentBatch) ) );
-            }
+        // just iterate over terminals directly
+        for(String terminalVms : currBatchContext.terminalVMSs){
+            VmsIdentifier vms = this.vmsMetadataMap.get(terminalVms);
+            vms.worker().queueMessage(new IVmsWorker.Message(SEND_BATCH_COMMIT_INFO,
+                    BatchCommitInfo.of(vms.node().batch, vms.node().lastTidOfBatch, vms.node().previousBatch, vms.node().numberOfTIDsCurrentBatch) ) );
         }
 
         // the batch commit only has progress (a safety property) the way it is implemented now when future events
