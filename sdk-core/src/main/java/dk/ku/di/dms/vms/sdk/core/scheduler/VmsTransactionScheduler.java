@@ -293,7 +293,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         return this.numParallelTasksRunning.get() == 0 && numPartitionedTasksRunning.get() == 0;
     }
 
-    private static final int MAX_SLEEP = 10000;
+    private static final int MAX_SLEEP = 1000;
 
     private void checkForNewEvents() throws InterruptedException {
 
@@ -303,7 +303,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 int pollTimeout = 1;
                 while(e == null) {
                     pollTimeout = Math.min(pollTimeout * 2, MAX_SLEEP);
-                    // LOGGER.log(INFO,this.vmsIdentifier+": Transaction scheduler going to sleep for "+pollTimeout+" until new event arrives");
+                    LOGGER.log(DEBUG,this.vmsIdentifier+": Transaction scheduler going to sleep for "+pollTimeout+" until new event arrives");
                     e = this.vmsChannels.transactionInputQueue().poll(pollTimeout, TimeUnit.MILLISECONDS);
                 }
                 this.localInputEvents.add(e);

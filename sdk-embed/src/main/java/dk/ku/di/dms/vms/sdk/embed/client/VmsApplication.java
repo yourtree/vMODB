@@ -135,12 +135,15 @@ public final class VmsApplication {
         return new VmsApplication( vmsMetadata, catalog, eventHandler, transactionScheduler, vmsInternalPubSubService );
     }
 
+    /**
+     * Setting high priority can increase the garbage size, leading to larger garbage collection times
+     */
     public void start(){
         Thread eventHandlerThread = new Thread(this.eventHandler);
 //        eventHandlerThread.setPriority(Thread.MAX_PRIORITY);
         eventHandlerThread.start();
         Thread transactionSchedulerThread = new Thread(this.transactionScheduler);
-        transactionSchedulerThread.setPriority(Thread.MAX_PRIORITY);
+//        transactionSchedulerThread.setPriority(Thread.MAX_PRIORITY);
         transactionSchedulerThread.start();
     }
 

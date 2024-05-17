@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.memory;
 
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.concurrent.ConcurrentHashMap;
@@ -104,7 +103,7 @@ public final class MemoryManager {
         ByteBuffer bb = bufferCache.get(size);
         if(bb == null){
             ByteBuffer newBB = ByteBuffer.allocateDirect(size);
-            newBB.order(ByteOrder.nativeOrder());
+            // newBB.order(ByteOrder.nativeOrder());
             return newBB;
         }
         return bb;

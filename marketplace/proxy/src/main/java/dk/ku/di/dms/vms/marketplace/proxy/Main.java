@@ -23,6 +23,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -61,7 +62,7 @@ public final class Main {
         do {
             sleep(500);
             if(coordinator.getConnectedVMSs().size() == starterSize) break;
-            System.out.println("Waiting for all starter VMSs to come online. Sleeping for "+500+" ms...");
+            System.out.println("Proxy: Waiting for all starter VMSs to come online. Sleeping for "+500+" ms...");
         } while (true);
 
         System.out.println("Proxy: All starter VMSs have connected to the coordinator \nProxy: Initializing the HTTP Server to receive transaction inputs...");
@@ -109,8 +110,10 @@ public final class Main {
 
         TransactionDAG updateProductDag = TransactionBootstrap.name(UPDATE_PRODUCT)
                 .input( "a", "product", UPDATE_PRODUCT )
-                .terminal("b", "stock", "a")
-                .terminal("c", "cart", "a")
+//                .terminal("b", "stock", "a")
+//                .terminal("c", "cart", "a")
+                // omit below if you want to skip batch commit info
+                .terminal("b", "product", "a")
                 .build();
         transactionMap.put(updateProductDag.name, updateProductDag);
 
@@ -151,7 +154,11 @@ public final class Main {
         if(Arrays.stream(transactions).anyMatch(p->p.contentEquals("checkout"))) {
             starterVMSs = buildStarterVMSsFull(properties);
         } else {
-            starterVMSs = buildStarterVMSsBasic(properties);
+            if(transactions.length == 1) {
+                starterVMSs = buildStarterVMS(properties);
+            } else {
+                starterVMSs = buildStarterVMSsBasic(properties);
+            }
         }
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
@@ -175,6 +182,19 @@ public final class Main {
                 TRANSACTION_INPUTS,
                 serdes
         );
+    }
+
+    private static Map<Integer, IdentifiableNode> buildStarterVMS(Properties properties){
+
+        String productHost = properties.getProperty("product_host");
+
+        if(productHost == null) throw new RuntimeException("Product host is null");
+
+        IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
+
+        Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>();
+        starterVMSs.put(productAddress.hashCode(), productAddress);
+        return starterVMSs;
     }
 
     private static Map<Integer, IdentifiableNode> buildStarterVMSsBasic(Properties properties){
@@ -231,11 +251,16 @@ public final class Main {
 
     private static class ProxyHttpHandler implements HttpHandler {
 
+        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+
         public ProxyHttpHandler(){ }
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            String payload = new String( exchange.getRequestBody().readAllBytes() );
+            String payload = new String( exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+
+            // System.out.println("Proxy: Received input \n"+payload);
+
             String[] uriSplit = exchange.getRequestURI().toString().split("/");
             switch(uriSplit[1]){
                 case "cart": {

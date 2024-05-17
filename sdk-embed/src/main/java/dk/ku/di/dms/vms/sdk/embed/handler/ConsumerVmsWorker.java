@@ -88,26 +88,6 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
             this.consumerVms.transactionEvents.drainTo(events);
 
-            /*
-            if(events.size() == 1){
-                logger.config(this.me.identifier+ ": Submitting 1 event to "+this.consumerVms.identifier);
-
-                ByteBuffer writeBuffer = this.retrieveByteBuffer();
-                TransactionEvent.write( writeBuffer, events.getFirst() );
-                writeBuffer.flip();
-
-                try {
-                    this.WRITE_SYNCHRONIZER.take();
-                    this.connectionMetadata.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
-                } catch (InterruptedException e) {
-                    logger.warning(this.me.identifier+ ": Consumer worker for "+this.consumerVms.identifier+" caught an on writing to channel : "+e.getMessage());
-                    this.consumerVms.transactionEvents.offerFirst(events.getFirst());
-                }
-                events.clear();
-                continue;
-            }
-             */
-
             int remaining = events.size();
             int count = remaining;
             ByteBuffer writeBuffer;
@@ -137,7 +117,6 @@ final class ConsumerVmsWorker extends StoppableRunnable {
             }
             events.clear();
         }
-
     }
 
     private ByteBuffer retrieveByteBuffer(){

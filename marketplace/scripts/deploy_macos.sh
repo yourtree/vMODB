@@ -42,7 +42,7 @@ if `echo "$*" | grep -q cart`; then
     else
         echo "initializing cart..."
         osascript -e 'tell app "Terminal"
-            do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/cart/target/cart-1.0-SNAPSHOT-jar-with-dependencies.jar"
+            do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -Xmx2048m -jar '$current_dir'/cart/target/cart-1.0-SNAPSHOT-jar-with-dependencies.jar"
         end tell'
     fi
 fi
@@ -55,7 +55,7 @@ if `echo "$*" | grep -q product`; then
     else
         echo "initializing product..."
         osascript -e 'tell app "Terminal"
-            do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/product/target/product-1.0-SNAPSHOT-jar-with-dependencies.jar"
+            do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -Xmx2048m -jar '$current_dir'/product/target/product-1.0-SNAPSHOT-jar-with-dependencies.jar"
         end tell'
     fi
 fi
@@ -68,7 +68,7 @@ if `echo "$*" | grep -q stock`; then
     else
         echo "initializing stock..."
         osascript -e 'tell app "Terminal"
-            do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/stock/target/stock-1.0-SNAPSHOT-jar-with-dependencies.jar"
+            do script "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -Xmx2048m -jar '$current_dir'/stock/target/stock-1.0-SNAPSHOT-jar-with-dependencies.jar"
         end tell'
     fi
 fi

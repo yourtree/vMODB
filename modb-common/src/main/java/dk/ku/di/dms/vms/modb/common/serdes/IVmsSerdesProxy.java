@@ -45,4 +45,6 @@ public interface IVmsSerdesProxy {
     String serialize(Object value, Class<?> clazz);
     <T> T deserialize( String valueStr, Class<T> clazz);
 
+    String fromJson(String str);
+
 }

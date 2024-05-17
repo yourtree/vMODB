@@ -144,4 +144,9 @@ final class DefaultVmsSerdes implements IVmsSerdesProxy {
         return this.gson.fromJson( valueStr, clazz );
     }
 
+    @Override
+    public String fromJson(String string){
+        return this.gson.fromJson(string, String.class);
+    }
+
 }

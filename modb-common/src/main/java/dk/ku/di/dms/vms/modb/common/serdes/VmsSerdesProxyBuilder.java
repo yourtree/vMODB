@@ -16,7 +16,7 @@ public final class VmsSerdesProxyBuilder {
 
     public static IVmsSerdesProxy build(){
         GsonBuilder builder = new GsonBuilder();
-        Gson gson1 = builder.create();
+        Gson gson1 = builder.serializeNulls().create();
         return new DefaultVmsSerdes( gson1 );
     }
 

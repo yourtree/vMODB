@@ -37,7 +37,7 @@ public class VoteRequest {
 
         // 1 + 8 + 4 = 8 + 4 =
         String host;
-        if(buffer.isDirect()){
+        if(buffer.hasArray()){
             byte[] byteArray = new byte[size];
             for(int i = 0; i < size; i++){
                 byteArray[i] = buffer.get();

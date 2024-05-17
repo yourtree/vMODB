@@ -486,7 +486,7 @@ public final class Coordinator extends StoppableRunnable {
             LockConnectionMetadata connectionMetadata = new LockConnectionMetadata(
                     newServer.hashCode(), SERVER,
                     buffer,
-                    MemoryManager.getTemporaryDirectBuffer(1024),
+                    MemoryManager.getTemporaryDirectBuffer(networkBufferSize),
                     channel,
                     new Semaphore(1) );
             this.serverConnectionMetadataMap.put( newServer.hashCode(), connectionMetadata );
@@ -554,7 +554,6 @@ public final class Coordinator extends StoppableRunnable {
         // touch the same VMSs that have been touched by transactions in the last batch.
         // how can we guarantee progress?
         this.replicateBatchWithReplicas(currBatchContext);
-
     }
 
     private void replicateBatchWithReplicas(BatchContext batchContext) {
