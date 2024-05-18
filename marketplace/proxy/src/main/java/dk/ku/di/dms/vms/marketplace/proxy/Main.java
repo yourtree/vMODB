@@ -44,6 +44,8 @@ public final class Main {
     private static final int STARTING_TID = 1;
     private static final int STARTING_BATCH_ID = 1;
 
+    private static final int SLEEP = 1000;
+
     private static final BlockingQueue<TransactionInput> TRANSACTION_INPUTS = new LinkedBlockingDeque<>();
 
     public static void main(String[] ignoredArgs) throws IOException, InterruptedException {
@@ -60,9 +62,9 @@ public final class Main {
         var starterVMSs = coordinator.getStarterVMSs();
         int starterSize = starterVMSs.size();
         do {
-            sleep(500);
+            sleep(SLEEP);
             if(coordinator.getConnectedVMSs().size() == starterSize) break;
-            System.out.println("Proxy: Waiting for all starter VMSs to come online. Sleeping for "+500+" ms...");
+            System.out.println("Proxy: Waiting for all starter VMSs to come online. Sleeping for "+SLEEP+" ms...");
         } while (true);
 
         System.out.println("Proxy: All starter VMSs have connected to the coordinator \nProxy: Initializing the HTTP Server to receive transaction inputs...");
@@ -92,7 +94,8 @@ public final class Main {
                     httpClient.sendAsync(httpReq, HttpResponse.BodyHandlers.discarding());
                     initTid = lastTid + 1;
                 } catch (Exception e) {
-                    System.out.println("Proxy: Error while sending HTTP request: \n" + e.getStackTrace()[0]);
+                    System.out.println("Proxy: Error while sending HTTP request: \n" +
+                            (e.getStackTrace().length > 0 ? e.getStackTrace()[0] : e));
                 }
             }
         }
@@ -110,10 +113,10 @@ public final class Main {
 
         TransactionDAG updateProductDag = TransactionBootstrap.name(UPDATE_PRODUCT)
                 .input( "a", "product", UPDATE_PRODUCT )
-//                .terminal("b", "stock", "a")
-//                .terminal("c", "cart", "a")
+                .terminal("b", "stock", "a")
+                .terminal("c", "cart", "a")
                 // omit below if you want to skip batch commit info
-                .terminal("b", "product", "a")
+//                .terminal("b", "product", "a")
                 .build();
         transactionMap.put(updateProductDag.name, updateProductDag);
 
@@ -250,8 +253,6 @@ public final class Main {
     }
 
     private static class ProxyHttpHandler implements HttpHandler {
-
-        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         public ProxyHttpHandler(){ }
 

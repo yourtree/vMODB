@@ -415,7 +415,7 @@ public final class Coordinator extends StoppableRunnable {
             buffer.clear();
 
             if(channel.isOpen()) {
-                LeaderRequest.write(buffer, me);
+                LeaderRequest.write(buffer, this.me);
                 buffer.flip();
                 try (channel) {
                     channel.write(buffer); // write and forget

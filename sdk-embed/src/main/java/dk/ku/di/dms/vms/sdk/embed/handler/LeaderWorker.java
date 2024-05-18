@@ -76,18 +76,25 @@ final class LeaderWorker extends StoppableRunnable {
         this.leaderWorkerQueue = leaderWorkerQueue;
     }
 
+    private static final boolean BLOCKING = true;
+
     @Override
     public void run() {
         logger.log(INFO, vmsNode.identifier+": Leader worker started!");
         int pollTimeout = 50;
+        Message msg;
         while (this.isRunning()){
             try {
-                Message msg = this.leaderWorkerQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
-                if(msg == null){
-                    pollTimeout = pollTimeout * 2;
-                    continue;
+                if(BLOCKING){
+                    msg = this.leaderWorkerQueue.take();
+                } else {
+                    msg = this.leaderWorkerQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
+                    if (msg == null) {
+                        pollTimeout = pollTimeout * 2;
+                        continue;
+                    }
+                    pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
                 }
-                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
 
                 logger.log(DEBUG, vmsNode.identifier+": Leader worker will send message type: "+ msg.type());
                 switch (msg.type()) {

@@ -12,10 +12,7 @@ import java.nio.channels.CompletionHandler;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import static java.lang.System.Logger.Level.*;
 
@@ -31,6 +28,7 @@ import static java.lang.System.Logger.Level.*;
  *  in the batch to resend or return to the original location. let the
  *  main loop schedule the timer again. set the network node to off
  */
+@SuppressWarnings("SequencedCollectionMethodCanBeUsed")
 final class ConsumerVmsWorker extends StoppableRunnable {
 
     private static final System.Logger logger = System.getLogger(ConsumerVmsWorker.class.getName());
@@ -64,59 +62,93 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
 
+    private static final int MAX_TIMEOUT = 1000;
+
+    private static final boolean BLOCKING = true;
+
     @Override
     public void run() {
 
         logger.log(INFO, this.me.identifier+ ": Starting worker for consumer VMS: "+this.consumerVms.identifier);
 
-        int pollTimeout = 50;
+        int pollTimeout = 1;
         TransactionEvent.PayloadRaw payloadRaw;
-        List<TransactionEvent.PayloadRaw> events = new ArrayList<>(1000);
+        List<TransactionEvent.PayloadRaw> events = new ArrayList<>(1024);
         while(this.isRunning()){
-
             try {
-                payloadRaw = this.consumerVms.transactionEvents.poll(pollTimeout, TimeUnit.MILLISECONDS);
-                if (payloadRaw == null) {
-                    pollTimeout = pollTimeout * 2;
-                    continue;
+                if(BLOCKING){
+                    payloadRaw = this.consumerVms.transactionEvents.take();
+                } else {
+                    payloadRaw = this.consumerVms.transactionEvents.poll(pollTimeout, TimeUnit.MILLISECONDS);
+                    if (payloadRaw == null) {
+                        pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
+                        continue;
+                    }
+                    pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+
                 }
             } catch (InterruptedException ignored) {
                 continue;
             }
-            pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
             events.add(payloadRaw);
-
             this.consumerVms.transactionEvents.drainTo(events);
 
-            int remaining = events.size();
-            int count = remaining;
-            ByteBuffer writeBuffer;
-            while(remaining > 0){
-                try {
-                    writeBuffer = this.retrieveByteBuffer();
-                    remaining = BatchUtils.assembleBatchPayload(remaining, events, writeBuffer);
+            if(!events.isEmpty()){
+                this.sendBatchOfEvents(events);
+            }
 
-                    logger.log(DEBUG, this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
-                    count = remaining;
+            this.processPendingWrites();
+        }
+    }
 
-                    writeBuffer.flip();
+    private void processPendingWrites() {
+        // do we have pending writes
+        ByteBuffer bb = PENDING_WRITES_BUFFER.poll();
+        if (bb != null) {
+            try {
+                logger.log(INFO, "Leader: Retrying sending failed buffer send");
+                this.WRITE_SYNCHRONIZER.take();
+                this.connectionMetadata.channel.write(bb, 1000L, TimeUnit.MILLISECONDS, bb, this.writeCompletionHandler);
+            } catch (Exception ignored) { }
+        }
+    }
 
-                    this.WRITE_SYNCHRONIZER.take();
-                    this.connectionMetadata.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
-                } catch (Exception e) {
-                    logger.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier);
-                    // return non-processed events to original location or what?
-                    if (!this.connectionMetadata.channel.isOpen()) {
-                        logger.log(WARNING, "The "+this.consumerVms.identifier+" VMS is offline");
-                    }
-                    // return events to the deque
-                    for (TransactionEvent.PayloadRaw event : events) {
-                        this.consumerVms.transactionEvents.offerFirst(event);
+    private void sendBatchOfEvents(List<TransactionEvent.PayloadRaw> events) {
+        int remaining = events.size();
+        int count = remaining;
+        ByteBuffer writeBuffer;
+        while(remaining > 0){
+            try {
+                writeBuffer = this.retrieveByteBuffer();
+                remaining = BatchUtils.assembleBatchPayload(remaining, events, writeBuffer);
+
+                logger.log(DEBUG, this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
+                count = remaining;
+
+                writeBuffer.flip();
+
+                this.WRITE_SYNCHRONIZER.take();
+                this.connectionMetadata.channel.write(writeBuffer, 1000L, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
+
+                // prevents two batches from being placed in the same delivery
+                // without sleep, two batches may be placed in the same buffer in the receiver
+                // sleep(100)
+
+            } catch (Exception e) {
+                logger.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier);
+                // return non-processed events to original location or what?
+                if (!this.connectionMetadata.channel.isOpen()) {
+                    logger.log(WARNING, "The "+this.consumerVms.identifier+" VMS is offline");
+                }
+                // return events to the deque
+                while(!events.isEmpty()) {
+                    if(this.consumerVms.transactionEvents.offerFirst(events.get(0))){
+                        events.remove(0);
                     }
                 }
             }
-            events.clear();
         }
+        events.clear();
     }
 
     private ByteBuffer retrieveByteBuffer(){
@@ -130,7 +162,9 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         this.writeBufferPool.add(bb);
     }
 
-    private class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
+    private final BlockingDeque<ByteBuffer> PENDING_WRITES_BUFFER = new LinkedBlockingDeque<>();
+
+    private final class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
 
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
@@ -145,12 +179,8 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
         @Override
         public void failed(Throwable exc, ByteBuffer byteBuffer) {
-            if(byteBuffer.hasRemaining()){
-                logger.log(ERROR, me.identifier + " on failed. Consumer worker for "+consumerVms.identifier+" found not all bytes were sent!");
-            }
-            logger.log(ERROR, me.identifier+": ERROR on writing batch of events to: "+consumerVms.identifier);
-            WRITE_SYNCHRONIZER.add(DUMB);
-            returnByteBuffer(byteBuffer);
+            logger.log(ERROR, me.identifier+": ERROR on writing batch of events to: "+consumerVms.identifier+": "+exc);
+            PENDING_WRITES_BUFFER.add(byteBuffer);
         }
 
     }
