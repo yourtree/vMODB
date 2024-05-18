@@ -33,6 +33,8 @@ public class CoordinatorOptions {
 
     private int networkBufferSize = MemoryUtils.DEFAULT_PAGE_SIZE;
 
+    private int networkSendTimeout = 1000;
+
     /**
      * thread pool for handling network events.
      * default is number of cores divided by 2
@@ -68,6 +70,14 @@ public class CoordinatorOptions {
         return this.networkBufferSize;
     }
 
+    public CoordinatorOptions withNetworkSendTimeout(int networkSendTimeout) {
+        this.networkSendTimeout = networkSendTimeout;
+        return this;
+    }
+
+    public int getNetworkSendTimeout(){
+        return this.networkSendTimeout;
+    }
 
     public BatchReplicationStrategy getBatchReplicationStrategy() {
         return this.batchReplicationStrategy;

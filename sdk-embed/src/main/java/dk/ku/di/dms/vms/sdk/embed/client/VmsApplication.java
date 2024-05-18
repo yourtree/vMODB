@@ -112,7 +112,8 @@ public final class VmsApplication {
                 vmsMetadata.outputEventSchema());
 
         VmsEventHandler eventHandler = VmsEventHandler.build(
-                vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, serdes, options.networkBufferSize(), options.networkThreadPoolSize());
+                vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, serdes,
+                options.networkBufferSize(), options.networkThreadPoolSize(), options.networkSendTimeout());
 
 //        VmsComplexTransactionScheduler scheduler =
 //                VmsComplexTransactionScheduler.build(
@@ -123,7 +124,7 @@ public final class VmsApplication {
 
         // could be higher. must adjust according to the number of cores available
         // why minus 2? to account for the event handler and the scheduler
-        int threadPoolSize = options.vmsThreadPoolSize() > 0 ? options.vmsThreadPoolSize() : Runtime.getRuntime().availableProcessors() - 2;
+        int threadPoolSize = options.vmsThreadPoolSize() > 0 ? options.vmsThreadPoolSize() : Runtime.getRuntime().availableProcessors() / 2;
         StoppableRunnable transactionScheduler = VmsTransactionScheduler.build(
                 vmsName,
                 vmsInternalPubSubService,

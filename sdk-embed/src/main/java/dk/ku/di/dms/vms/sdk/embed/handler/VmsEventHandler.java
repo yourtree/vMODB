@@ -78,6 +78,8 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     private final int networkBufferSize;
 
+    private final int networkSendTimeout;
+
     /** COORDINATOR **/
     private ServerNode leader;
     private LockConnectionMetadata leaderConnectionMetadata;
@@ -135,10 +137,11 @@ public final class VmsEventHandler extends StoppableRunnable {
                                         IVmsSerdesProxy serdesProxy,
                                         // network
                                         int networkBufferSize,
-                                        int networkThreadPoolSize){
+                                        int networkThreadPoolSize,
+                                        int networkSendTimeout){
         try {
             return new VmsEventHandler(me, vmsMetadata, new ConcurrentHashMap<>(),
-                    transactionalHandler, vmsInternalChannels, serdesProxy, networkBufferSize, networkThreadPoolSize);
+                    transactionalHandler, vmsInternalChannels, serdesProxy, networkBufferSize, networkThreadPoolSize, networkSendTimeout);
         } catch (IOException e){
             throw new RuntimeException("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
@@ -151,19 +154,18 @@ public final class VmsEventHandler extends StoppableRunnable {
                             VmsEmbeddedInternalChannels vmsInternalChannels,
                             IVmsSerdesProxy serdesProxy,
                             int networkBufferSize,
-                            int networkThreadPoolSize) throws IOException {
+                            int networkThreadPoolSize,
+                            int networkSendTimeout) throws IOException {
         super();
 
         // network and executor
         if(networkThreadPoolSize > 0){
             // at least two, one for acceptor and one for new events
-//            ExecutorService socketPool = Executors.newWorkStealingPool(networkThreadPoolSize);
             this.group = AsynchronousChannelGroup.withFixedThreadPool(networkThreadPoolSize, Thread.ofPlatform().factory());
             this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
         } else {
             // by default, server socket creates a cached thread pool. better to avoid successive creation of threads
-//            ExecutorService socketPool = Executors.newWorkStealingPool(networkThreadPoolSize);
-            this.group = null; //AsynchronousChannelGroup.withFixedThreadPool(2, Thread.ofPlatform().factory());
+            this.group = null;
             this.serverSocket = AsynchronousServerSocketChannel.open(null);
         }
         this.serverSocket.bind(me.asInetSocketAddress());
@@ -196,6 +198,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         this.queuesLeaderSubscribesTo = new HashSet<>();
 
         this.networkBufferSize = networkBufferSize;
+        this.networkSendTimeout = networkSendTimeout;
     }
 
     private static final int MAX_TIMEOUT = 1000;
@@ -501,7 +504,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
                         // set up consumer vms worker
                         Thread.ofPlatform().factory().newThread(
-                                new ConsumerVmsWorker(me, consumerVms, connMetadata, networkBufferSize)
+                                new ConsumerVmsWorker(me, consumerVms, connMetadata, networkBufferSize, networkSendTimeout)
                         ).start();
 
                         // set up read from consumer vms
@@ -551,6 +554,8 @@ public final class VmsEventHandler extends StoppableRunnable {
             AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(this.group);
             channel.setOption(TCP_NODELAY, true);
             channel.setOption(SO_KEEPALIVE, true);
+            channel.setOption(SO_SNDBUF, networkBufferSize);
+            channel.setOption(SO_RCVBUF, networkBufferSize);
             ConnectToConsumerVmsProtocol protocol = new ConnectToConsumerVmsProtocol(channel, outputEvents, vmsNode);
             channel.connect(vmsNode.asInetSocketAddress(), protocol, protocol.completionHandler);
         } catch (Exception e) {
@@ -591,31 +596,32 @@ public final class VmsEventHandler extends StoppableRunnable {
             byte messageType = readBuffer.get();
 
             switch (messageType) {
-                case (BATCH_OF_EVENTS) -> processBatchOfEvents(readBuffer);
-                case (EVENT) -> {
-                    logger.log(DEBUG,me.identifier+": 1 event received from "+node.identifier);
-                    try {
-                        TransactionEvent.Payload payload = TransactionEvent.read(readBuffer);
-                        // send to scheduler
-                        if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
-                            InboundEvent inboundEvent = buildInboundEvent(payload);
-                            boolean added;
-                            do {
-                                added = vmsInternalChannels.transactionInputQueue().offer(inboundEvent);
-                            } while(!added);
-                        }
-                    } catch (Exception e) {
-                        if(e instanceof BufferUnderflowException)
-                            logger.log(ERROR,me.identifier + ": Buffer underflow exception while reading event: " + e);
-                        else
-                            logger.log(ERROR,me.identifier + ": Unknown exception: " + e);
-                    }
-                }
-                default ->
-                    logger.log(ERROR,me.identifier+": Unknown message type "+messageType+" received from: "+node.identifier);
+                case (BATCH_OF_EVENTS) -> this.processBatchOfEvents(readBuffer);
+                case (EVENT) -> this.processSingleEvent(readBuffer);
+                default -> logger.log(ERROR,me.identifier+": Unknown message type "+messageType+" received from: "+node.identifier);
             }
 
             returnByteBuffer(readBuffer);
+        }
+
+        private void processSingleEvent(ByteBuffer readBuffer) {
+            logger.log(DEBUG,me.identifier+": 1 event received from "+node.identifier);
+            try {
+                TransactionEvent.Payload payload = TransactionEvent.read(readBuffer);
+                // send to scheduler
+                if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
+                    InboundEvent inboundEvent = buildInboundEvent(payload);
+                    boolean added;
+                    do {
+                        added = vmsInternalChannels.transactionInputQueue().offer(inboundEvent);
+                    } while(!added);
+                }
+            } catch (Exception e) {
+                if(e instanceof BufferUnderflowException)
+                    logger.log(ERROR,me.identifier + ": Buffer underflow exception while reading event: " + e);
+                else
+                    logger.log(ERROR,me.identifier + ": Unknown exception: " + e);
+            }
         }
 
         private void processBatchOfEvents(ByteBuffer readBuffer) {
@@ -662,6 +668,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         public void failed(Throwable exc, ByteBuffer readBuffer) {
             logger.log(WARNING,me.identifier+": Error on reading VMS message from: "+node.identifier);
             if (this.connectionMetadata.channel.isOpen()){
+                readBuffer.clear();
                 this.connectionMetadata.channel.read(readBuffer, readBuffer, this);
             } // else no nothing. upon a new connection this metadata can be recycled
         }

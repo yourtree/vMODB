@@ -32,13 +32,13 @@ public final class Main {
         Properties properties = Utils.loadProperties();
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         int networkThreadPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
-        int vmsThreadPoolSize = Integer.parseInt( properties.getProperty("vms_thread_pool_size") );
+        int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
 
         VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.PRODUCT_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.product",
                 "dk.ku.di.dms.vms.marketplace.common"
         }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
-                networkThreadPoolSize, vmsThreadPoolSize);
+                networkThreadPoolSize, networkSendTimeout);
 
         // initialize threads
         try {

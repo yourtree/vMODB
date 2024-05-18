@@ -31,6 +31,7 @@ public final class Main {
     public static void main(String[] ignoredArgs) {
         Properties properties = Utils.loadProperties();
         int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
+        int networkSendTimeout = Integer.parseInt(properties.getProperty("network_send_timeout"));
         int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
         int vmsThreadPoolSize = Integer.parseInt(properties.getProperty("vms_thread_pool_size"));
 
@@ -38,7 +39,7 @@ public final class Main {
                 "dk.ku.di.dms.vms.marketplace.cart",
                 "dk.ku.di.dms.vms.marketplace.common"
         }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
-                networkThreadPoolSize, vmsThreadPoolSize);
+                networkThreadPoolSize, vmsThreadPoolSize, networkSendTimeout);
 
         VmsApplication vms;
         HttpServer httpServer;

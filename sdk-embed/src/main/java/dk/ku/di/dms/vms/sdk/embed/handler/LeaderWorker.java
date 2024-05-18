@@ -78,6 +78,8 @@ final class LeaderWorker extends StoppableRunnable {
 
     private static final boolean BLOCKING = true;
 
+    private static final int MAX_TIMEOUT = 5000;
+
     @Override
     public void run() {
         logger.log(INFO, vmsNode.identifier+": Leader worker started!");
@@ -90,7 +92,7 @@ final class LeaderWorker extends StoppableRunnable {
                 } else {
                     msg = this.leaderWorkerQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
                     if (msg == null) {
-                        pollTimeout = pollTimeout * 2;
+                        pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
                         continue;
                     }
                     pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;

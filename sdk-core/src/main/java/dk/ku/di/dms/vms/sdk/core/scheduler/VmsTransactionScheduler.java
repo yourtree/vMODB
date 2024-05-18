@@ -209,14 +209,14 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
      * To avoid the scheduler to remain in a busy loop
      * while no new input events arrive
      */
-    private boolean block = false;
+    private boolean BLOCKING = false;
 
     private void executeReadyTasks() {
 
         Long nextTid = this.lastTidToTidMap.get(this.lastTidFinished);
         // if nextTid == null then the scheduler must block until a new event arrive to progress
         if(nextTid == null) {
-            this.block = true;
+            this.BLOCKING = true;
             return;
         }
 
@@ -298,7 +298,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     private void checkForNewEvents() throws InterruptedException {
 
         if(this.vmsChannels.transactionInputQueue().isEmpty()){
-            if(this.block) {
+            if(this.BLOCKING) {
                 InboundEvent e = null;
                 int pollTimeout = 1;
                 while(e == null) {
@@ -308,7 +308,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 }
                 this.localInputEvents.add(e);
                 // disable block
-                this.block = false;
+                this.BLOCKING = false;
             } else {
                 return;
             }

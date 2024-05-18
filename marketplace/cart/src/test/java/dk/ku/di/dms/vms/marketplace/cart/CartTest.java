@@ -78,11 +78,13 @@ public final class CartTest {
         Properties properties = Utils.loadProperties();
         int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
         int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
+        int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
 
         VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CART_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.cart",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize, networkThreadPoolSize);
+        }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
+                networkThreadPoolSize, networkSendTimeout);
 
         VmsApplication vms = VmsApplication.build(options);
         vms.start();

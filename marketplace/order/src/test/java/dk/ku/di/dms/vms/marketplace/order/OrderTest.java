@@ -31,7 +31,7 @@ public final class OrderTest {
                 "dk.ku.di.dms.vms.marketplace.order",
                 "dk.ku.di.dms.vms.marketplace.common"
         }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
-                networkThreadPoolSize);
+                networkThreadPoolSize, 1000);
 
         VmsApplication vms = VmsApplication.build(options);
         vms.start();

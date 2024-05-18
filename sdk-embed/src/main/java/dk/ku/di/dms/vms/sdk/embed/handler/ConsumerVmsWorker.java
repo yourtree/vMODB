@@ -46,7 +46,9 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
     private final int networkBufferSize;
 
-    public ConsumerVmsWorker(VmsNode me, ConsumerVms consumerVms, ConnectionMetadata connectionMetadata, int networkBufferSize){
+    private final int networkSendTimeout;
+
+    public ConsumerVmsWorker(VmsNode me, ConsumerVms consumerVms, ConnectionMetadata connectionMetadata, int networkBufferSize, int networkSendTimeout){
         this.me = me;
         this.consumerVms = consumerVms;
         this.connectionMetadata = connectionMetadata;
@@ -58,6 +60,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         this.WRITE_SYNCHRONIZER.add(DUMB);
 
         this.networkBufferSize = networkBufferSize;
+        this.networkSendTimeout = networkSendTimeout;
     }
 
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
@@ -82,34 +85,41 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                     payloadRaw = this.consumerVms.transactionEvents.poll(pollTimeout, TimeUnit.MILLISECONDS);
                     if (payloadRaw == null) {
                         pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
+                        // guarantees pending writes will be retired even though there is no new event to process
+                        this.processPendingWrites();
                         continue;
                     }
                     pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
-
                 }
-            } catch (InterruptedException ignored) {
-                continue;
-            }
-            events.add(payloadRaw);
-            this.consumerVms.transactionEvents.drainTo(events);
 
-            if(!events.isEmpty()){
-                this.sendBatchOfEvents(events);
+                events.add(payloadRaw);
+                this.consumerVms.transactionEvents.drainTo(events);
+
+                if(!events.isEmpty()){
+                    this.sendBatchOfEvents(events);
+                }
+
+                this.processPendingWrites();
+
+            } catch (Exception e) {
+                logger.log(ERROR, this.me.identifier+ ": Error captured in event loop \n"+e);
             }
 
-            this.processPendingWrites();
         }
     }
 
     private void processPendingWrites() {
         // do we have pending writes
-        ByteBuffer bb = PENDING_WRITES_BUFFER.poll();
+        ByteBuffer bb = this.PENDING_WRITES_BUFFER.poll();
         if (bb != null) {
+            logger.log(INFO, me.identifier+": Retrying sending failed buffer send");
             try {
-                logger.log(INFO, "Leader: Retrying sending failed buffer send");
                 this.WRITE_SYNCHRONIZER.take();
-                this.connectionMetadata.channel.write(bb, 1000L, TimeUnit.MILLISECONDS, bb, this.writeCompletionHandler);
-            } catch (Exception ignored) { }
+                this.connectionMetadata.channel.write(bb, networkSendTimeout, TimeUnit.MILLISECONDS, bb, this.writeCompletionHandler);
+            } catch (Exception e) {
+                logger.log(ERROR, me.identifier+": Error on retrying to send failed buffer: \n"+e);
+                while(!this.PENDING_WRITES_BUFFER.offer(bb));
+            }
         }
     }
 
@@ -133,7 +143,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 writeBuffer.position(0);
 
                 this.WRITE_SYNCHRONIZER.take();
-                this.connectionMetadata.channel.write(writeBuffer, 1000L, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
+                this.connectionMetadata.channel.write(writeBuffer, this.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
 
                 // prevents two batches from being placed in the same delivery
                 // without sleep, two batches may be placed in the same buffer in the receiver
@@ -170,13 +180,14 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     private final BlockingDeque<ByteBuffer> PENDING_WRITES_BUFFER = new LinkedBlockingDeque<>();
 
     private final class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
-
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
             if(byteBuffer.hasRemaining()){
-                logger.log(ERROR, me.identifier + " on completed. Consumer worker for "+consumerVms.identifier+" found not all bytes were sent!");
+                logger.log(ERROR, me.identifier + " on completed. Consumer worker for "+consumerVms.identifier+" found not all bytes were sent. Byte buffer separated for future retry.");
+                byteBuffer.clear();
+                while(!PENDING_WRITES_BUFFER.offer(byteBuffer));
             } else {
-                logger.log(DEBUG, me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
+                logger.log(INFO, me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
                 WRITE_SYNCHRONIZER.add(DUMB);
                 returnByteBuffer(byteBuffer);
             }
@@ -184,9 +195,9 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
         @Override
         public void failed(Throwable exc, ByteBuffer byteBuffer) {
-            logger.log(ERROR, me.identifier+": ERROR on writing batch of events to: "+consumerVms.identifier+": "+exc);
-            PENDING_WRITES_BUFFER.add(byteBuffer);
+            logger.log(ERROR, me.identifier+": ERROR on writing batch of events to: "+consumerVms.identifier+": \n"+exc);
+            byteBuffer.clear();
+            while(!PENDING_WRITES_BUFFER.offer(byteBuffer));
         }
-
     }
 }

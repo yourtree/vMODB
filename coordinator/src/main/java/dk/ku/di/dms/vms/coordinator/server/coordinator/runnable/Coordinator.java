@@ -47,8 +47,7 @@ import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.S
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.VMS_TYPE;
 import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.SERVER;
 import static java.lang.System.Logger.Level.*;
-import static java.net.StandardSocketOptions.SO_KEEPALIVE;
-import static java.net.StandardSocketOptions.TCP_NODELAY;
+import static java.net.StandardSocketOptions.*;
 
 /**
  * Also known as the "Leader"
@@ -122,6 +121,8 @@ public final class Coordinator extends StoppableRunnable {
     private final IVmsSerdesProxy serdesProxy;
 
     private final int networkBufferSize;
+
+    private final int networkSendTimeout;
 
     private final BlockingQueue<Long> batchSignalQueue;
 
@@ -252,6 +253,8 @@ public final class Coordinator extends StoppableRunnable {
         else
             this.networkBufferSize = MemoryUtils.DEFAULT_PAGE_SIZE;
 
+        this.networkSendTimeout = options.getNetworkSendTimeout();
+
         this.batchSignalQueue = new LinkedBlockingQueue<>();
     }
 
@@ -307,7 +310,7 @@ public final class Coordinator extends StoppableRunnable {
         for(IdentifiableNode vmsNode : this.starterVMSs.values()){
             // coordinator will later keep track of this thread when the connection with the VMS is fully established
             VmsWorker worker = VmsWorker.buildAsStarter(this.me, vmsNode, this.coordinatorQueue,
-                    this.group, this.networkBufferSize, this.serdesProxy);
+                    this.group, this.networkBufferSize, this.networkSendTimeout, this.serdesProxy);
             // a cached thread pool would be ok in this case
             new Thread( worker ).start();
         }
@@ -342,7 +345,7 @@ public final class Coordinator extends StoppableRunnable {
      * <a href="https://www.baeldung.com/java-nio2-async-socket-channel">...</a>
      * The first read must be a presentation message, informing what is this server (follower or VMS)
      */
-    private class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, Void> {
+    private final class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, Void> {
 
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
@@ -353,6 +356,8 @@ public final class Coordinator extends StoppableRunnable {
 
                 channel.setOption(TCP_NODELAY, true);
                 channel.setOption(SO_KEEPALIVE, true);
+                channel.setOption(SO_SNDBUF, networkBufferSize);
+                channel.setOption(SO_RCVBUF, networkBufferSize);
 
                 // right now I cannot discern whether it is a VMS or follower. perhaps I can keep alive channels from leader election?
                 buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
@@ -454,7 +459,7 @@ public final class Coordinator extends StoppableRunnable {
                 VmsWorker worker = VmsWorker.buildAsUnknown( this.me,
                         new NetworkAddress(channel.getRemoteAddress()),
                         this.coordinatorQueue,
-                        channel, this.group, buffer, this.networkBufferSize, this.serdesProxy);
+                        channel, this.group, buffer, this.networkBufferSize, this.networkSendTimeout, this.serdesProxy);
                 new Thread( worker ).start();
             } catch (IOException ignored1) {
                 try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored2){}

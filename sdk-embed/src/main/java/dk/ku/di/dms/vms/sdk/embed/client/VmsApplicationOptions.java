@@ -14,45 +14,53 @@ public final class VmsApplicationOptions {
 
     private final int vmsThreadPoolSize;
 
-    public VmsApplicationOptions(String host, int port, String[] packages, int networkBufferSize, int networkThreadPoolSize, int vmsThreadPoolSize) {
+    private final int networkSendTimeout;
+
+    public VmsApplicationOptions(String host, int port, String[] packages, int networkBufferSize, int networkThreadPoolSize, int vmsThreadPoolSize, int networkSendTimeout) {
         this.host = host;
         this.port = port;
         this.packages = packages;
         this.networkBufferSize = networkBufferSize;
         this.networkThreadPoolSize = networkThreadPoolSize;
         this.vmsThreadPoolSize = vmsThreadPoolSize;
+        this.networkSendTimeout = networkSendTimeout;
     }
 
-    public VmsApplicationOptions(String host, int port, String[] packages, int networkBufferSize, int networkThreadPoolSize) {
+    public VmsApplicationOptions(String host, int port, String[] packages, int networkBufferSize, int networkThreadPoolSize, int networkSendTimeout) {
         this.host = host;
         this.port = port;
         this.packages = packages;
         this.networkBufferSize = networkBufferSize;
+        this.networkSendTimeout = networkSendTimeout;
         this.networkThreadPoolSize = networkThreadPoolSize;
         this.vmsThreadPoolSize = 0;
     }
 
     public String host() {
-        return host;
+        return this.host;
     }
 
     public int networkBufferSize() {
-        return networkBufferSize;
+        return this.networkBufferSize;
     }
 
     public int networkThreadPoolSize() {
-        return networkThreadPoolSize;
+        return this.networkThreadPoolSize;
+    }
+
+    public int networkSendTimeout(){
+        return this.networkSendTimeout;
     }
 
     public String[] packages() {
-        return packages;
+        return this.packages;
     }
 
     public int port() {
-        return port;
+        return this.port;
     }
 
     public int vmsThreadPoolSize() {
-        return vmsThreadPoolSize;
+        return this.vmsThreadPoolSize;
     }
 }
