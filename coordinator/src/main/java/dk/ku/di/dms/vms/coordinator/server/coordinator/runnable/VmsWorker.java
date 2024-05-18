@@ -236,10 +236,10 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             try {
                 message = this.messageQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
                 if(message == null){
-                    this.transactionEvents.drainTo(localTxEvents);
-                    if(localTxEvents.isEmpty()){
+                    if(this.transactionEvents.isEmpty()){
                         pollTimeout = Math.min(pollTimeout * 2, MAX_SLEEP);
                     } else {
+                        this.transactionEvents.drainTo(this.localTxEvents);
                         this.sendBatchedEvents();
                     }
                 } else {
@@ -513,13 +513,13 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
      * While a write operation is in progress, it must wait for completion and then submit the next write.
      */
     private void sendBatchedEvents(){
-        int remaining = localTxEvents.size();
+        int remaining = this.localTxEvents.size();
         int count = remaining;
         ByteBuffer writeBuffer;
         while(remaining > 0) {
             try {
                 writeBuffer = this.retrieveByteBuffer();
-                remaining = BatchUtils.assembleBatchPayload(remaining, localTxEvents, writeBuffer);
+                remaining = BatchUtils.assembleBatchPayload(remaining, this.localTxEvents, writeBuffer);
 
                 // without this async handler, the bytebuffer arriving in the VMS can be corrupted
                 // relying on future.get() yields corrupted buffer in the consumer

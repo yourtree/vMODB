@@ -470,7 +470,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 String outputEventSchema = serdesProxy.serializeEventSchema(me.outputEventSchema);
 
                 attachment.buffer.clear();
-                writeVms( attachment.buffer, me, me.identifier, me.batch, me.lastTidOfBatch, me.previousBatch, dataSchema, inputEventSchema, outputEventSchema );
+                Presentation.writeVms( attachment.buffer, me, me.identifier, me.batch, me.lastTidOfBatch, me.previousBatch, dataSchema, inputEventSchema, outputEventSchema );
                 attachment.buffer.flip();
 
                 // have to make sure we send the presentation before writing to this VMS, otherwise an exception can occur (two writers)
@@ -612,17 +612,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                 }
                 default ->
                     logger.log(ERROR,me.identifier+": Unknown message type "+messageType+" received from: "+node.identifier);
-            }
-
-            // this should be a while < result...
-            while(readBuffer.position() < result){
-                byte nextType = readBuffer.get();  //(readBuffer.position());
-                if(nextType == BATCH_OF_EVENTS){
-                    processBatchOfEvents(readBuffer);
-                } else {
-                    logger.log(ERROR, me.identifier +": Buffer has more data to be read that could not be identified. Type="+nextType);
-                    break;
-                }
             }
 
             returnByteBuffer(readBuffer);

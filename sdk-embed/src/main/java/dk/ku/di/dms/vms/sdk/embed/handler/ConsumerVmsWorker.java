@@ -125,7 +125,12 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 logger.log(DEBUG, this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
                 count = remaining;
 
-                writeBuffer.flip();
+                // the flip will allow the underlying network stack to break the message into two or more deliveries
+                // that would be nice if the expectation of the receiver were not receiving the whole message at once
+                // without the flip, given the send and recv buffer are both the size of the message,
+                // that guarantees the entire buffer will be delivered at once
+                // writeBuffer.flip();
+                writeBuffer.position(0);
 
                 this.WRITE_SYNCHRONIZER.take();
                 this.connectionMetadata.channel.write(writeBuffer, 1000L, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
