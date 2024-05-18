@@ -28,7 +28,7 @@ public final class BatchContext {
                 true);
     }
 
-    public static BatchContext build(long batch, long lastTidOfBatch, long previousBatch, int numberOfTIDsBatch){
+    public static BatchContext buildAsStarter(long batch, long lastTidOfBatch, long previousBatch, int numberOfTIDsBatch){
         return new BatchContext(batch, lastTidOfBatch, previousBatch, numberOfTIDsBatch,false);
     }
 
@@ -62,7 +62,7 @@ public final class BatchContext {
     public static final int BATCH_COMMITTED = 3;
 
     public boolean isOpen(){
-        return this.status < BATCH_COMPLETED;
+        return this.status == OPEN;
     }
 
     public boolean isCommitted(){

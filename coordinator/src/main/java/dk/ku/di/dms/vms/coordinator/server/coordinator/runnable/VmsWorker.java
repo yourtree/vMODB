@@ -315,7 +315,10 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         try {
             ByteBuffer writeBuffer = this.retrieveByteBuffer();
             BatchCommitCommand.write(writeBuffer, commitRequest);
-            writeBuffer.flip();
+
+            // writeBuffer.flip();
+            writeBuffer.position(0);
+
             this.WRITE_SYNCHRONIZER.take();
             this.channel.write(writeBuffer, 1000L, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
             logger.log(INFO, "Leader: Commit request sent to: " + this.vmsNode.identifier);
@@ -525,7 +528,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 // relying on future.get() yields corrupted buffer in the consumer
                 logger.log(INFO, "Leader: Submitting ["+(count - remaining)+"] events to "+vmsNode.identifier);
                 count = remaining;
-                writeBuffer.flip();
+
+                //writeBuffer.flip();
+                writeBuffer.position(0);
 
                 this.WRITE_SYNCHRONIZER.take();
                 this.channel.write(writeBuffer, 1000L, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
@@ -569,7 +574,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     // do we have space in the buffer?
                     if (writeBuffer.remaining() < BatchCommitInfo.SIZE) {
                         // if not, send what we can for now
-                        writeBuffer.flip();
+                        // writeBuffer.flip();
+                        writeBuffer.position(0);
+
                         logger.log(INFO, "Leader: Submitting ["+(count - remaining)+"] events to "+vmsNode.identifier);
 
                         this.WRITE_SYNCHRONIZER.take();
@@ -589,7 +596,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                         writeBuffer.putInt(1, currCount);
                         writeBuffer.reset();
                     }
-                    writeBuffer.flip();
+                    // writeBuffer.flip();
+                    writeBuffer.position(0);
+
                     this.WRITE_SYNCHRONIZER.take();
                     this.channel.write(writeBuffer, 1000L, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
 
@@ -597,7 +606,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     break;
                 }
 
-                writeBuffer.flip();
+                // writeBuffer.flip();
+                writeBuffer.position(0);
+
                 this.WRITE_SYNCHRONIZER.take();
                 this.channel.write(writeBuffer, 1000L, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
 

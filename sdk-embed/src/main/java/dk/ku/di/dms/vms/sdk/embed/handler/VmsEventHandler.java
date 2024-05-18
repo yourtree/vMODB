@@ -178,7 +178,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         this.serdesProxy = serdesProxy;
 
-        this.currentBatch = BatchContext.build(me.batch, me.previousBatch, me.lastTidOfBatch, me.numberOfTIDsCurrentBatch);
+        this.currentBatch = BatchContext.buildAsStarter(me.batch, me.previousBatch, me.lastTidOfBatch, me.numberOfTIDsCurrentBatch);
         this.currentBatch.setStatus(BatchContext.BATCH_COMMITTED);
         this.batchContextMap = new ConcurrentHashMap<>();
         this.numberOfTIDsProcessedPerBatch = new HashMap<>();
@@ -198,6 +198,8 @@ public final class VmsEventHandler extends StoppableRunnable {
         this.networkBufferSize = networkBufferSize;
     }
 
+    private static final int MAX_TIMEOUT = 1000;
+
     /**
      * A thread that basically writes events to other VMSs and the Leader
      * Retrieves data from all output queues
@@ -208,28 +210,19 @@ public final class VmsEventHandler extends StoppableRunnable {
      * send and set up the next. Do that iteratively
      */
     private void eventLoop(){
-
-        logger.log(INFO,this.me.identifier+": Event handler has started");
-
-        this.connectToStarterConsumers();
-
-        // setup accept since we need to accept connections from the coordinator and other VMSs
-        this.serverSocket.accept( null, new AcceptCompletionHandler());
-        logger.log(INFO,this.me.identifier+": Accept handler has been setup");
-
         List<IVmsTransactionResult> transactionResults = new ArrayList<>();
-
-        int pollTimeout = 50;
+        int pollTimeout = 1;
         IVmsTransactionResult txResult_;
         while(this.isRunning()){
-            try {
-                // independently of new events or not, we have to check if the batch has moved
-                this.moveBatchIfNecessary();
 
+            // independently of new events or not, we have to check if the batch has moved
+            this.moveBatchIfNecessary();
+
+            try {
                 // this thread can hang indefinitely if poll is not used
                 txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll(pollTimeout, TimeUnit.MILLISECONDS);
                 if(txResult_ == null) {
-                    pollTimeout = pollTimeout * 2;
+                    pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
                     continue;
                 }
 
@@ -266,9 +259,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                 logger.log(ERROR, this.me.identifier+": Problem on handling event: "+e.getMessage());
             }
         }
-
-        this.failSafeClose();
-        logger.log(INFO,this.me.identifier+": Event handler has finished execution.");
     }
 
     private void connectToStarterConsumers() {
@@ -314,9 +304,8 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
 
         // have we processed all the TIDs of this batch?
-        if(this.currentBatch.numberOfTIDsBatch ==
-                this.numberOfTIDsProcessedPerBatch.getOrDefault(this.currentBatch.batch, 0)
-            && this.currentBatch.isOpen()){
+        if(this.currentBatch.isOpen() && this.currentBatch.numberOfTIDsBatch ==
+                this.numberOfTIDsProcessedPerBatch.getOrDefault(this.currentBatch.batch, 0)){
 
             logger.log(INFO,this.me.identifier+": The last TID ("+this.currentBatch.lastTid+") for the current batch ("+this.currentBatch.batch+") has been executed");
 
@@ -349,7 +338,19 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     @Override
     public void run() {
+        logger.log(INFO,this.me.identifier+": Event handler has started");
+
+        this.connectToStarterConsumers();
+
+        // setup accept since we need to accept connections from the coordinator and other VMSs
+        this.serverSocket.accept( null, new AcceptCompletionHandler());
+        logger.log(INFO,this.me.identifier+": Accept handler has been setup");
+
+        // init event loop
         this.eventLoop();
+
+        this.failSafeClose();
+        logger.log(INFO,this.me.identifier+": Event handler has finished execution.");
     }
 
     /**
@@ -1036,9 +1037,9 @@ public final class VmsEventHandler extends StoppableRunnable {
                 default -> logger.log(ERROR, me.identifier + ": Message type sent by the leader cannot be identified: " + messageType);
             }
 
-            if(readBuffer.position() < result){
-                logger.log(ERROR, me.identifier +": Buffer has more data to be read. Type="+readBuffer.get(readBuffer.position()));
-            }
+//            if(readBuffer.position() < result){
+//                logger.log(DEBUG, me.identifier +": Buffer has more data to be read. Type="+readBuffer.get(readBuffer.position()));
+//            }
 
             returnByteBuffer(readBuffer);
         }
