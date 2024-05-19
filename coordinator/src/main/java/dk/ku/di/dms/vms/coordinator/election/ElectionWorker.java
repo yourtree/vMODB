@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
 import dk.ku.di.dms.vms.coordinator.election.schema.VoteResponse;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
+import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
@@ -25,8 +26,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
 import static java.lang.System.Logger.Level.INFO;
 import static java.lang.System.Logger.Level.WARNING;
-import static java.net.StandardSocketOptions.SO_KEEPALIVE;
-import static java.net.StandardSocketOptions.TCP_NODELAY;
 
 /**
  * An election task is a thread that encapsulates all subtasks (i.e., threads)
@@ -237,8 +236,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
             InetSocketAddress address = new InetSocketAddress(server.host, server.port);
             AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
 
-            channel.setOption( TCP_NODELAY, Boolean.TRUE );
-            channel.setOption( SO_KEEPALIVE, Boolean.TRUE );
+            NetworkUtils.configure(channel, 4096);
 
             connectionMetadata = new LockConnectionMetadata(
                     server.hashCode(),

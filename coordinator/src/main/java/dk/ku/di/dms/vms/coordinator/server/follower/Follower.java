@@ -9,6 +9,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplicati
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplicationAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
+import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
@@ -25,7 +26,6 @@ import java.util.Objects;
 import java.util.concurrent.*;
 
 import static java.net.StandardSocketOptions.SO_KEEPALIVE;
-import static java.net.StandardSocketOptions.TCP_NODELAY;
 
 /**
  * Follower
@@ -163,8 +163,7 @@ public final class Follower extends SignalingStoppableRunnable {
 
                 InetSocketAddress address = new InetSocketAddress(leader.host, leader.port);
                 AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(group);
-                channel.setOption(TCP_NODELAY, true);
-                channel.setOption(SO_KEEPALIVE, true);
+                NetworkUtils.configure(channel, 4096);
 
                 channel.connect(address).get();
 
@@ -295,8 +294,7 @@ public final class Follower extends SignalingStoppableRunnable {
 
             // if it is a VMS, need to forward to the leader ? better to let the vms know
             try{
-                channel.setOption(TCP_NODELAY, true);
-                channel.setOption(SO_KEEPALIVE, false);
+                NetworkUtils.configure(channel, 4096);
 
                 leaderConnectionMetadata = new LockConnectionMetadata(
                         leader.hashCode(),

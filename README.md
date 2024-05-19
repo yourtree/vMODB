@@ -18,6 +18,7 @@ Developers can plug and play any microservice at any time, the MODB then adapt t
     * [APIs](#apis)
     * [Play Around](#play)
     * [Testing](#test)
+- [Utils](#utils)
 
 ## <a name="getting-started"></a>Getting Started
 
@@ -30,3 +31,8 @@ Developers can plug and play any microservice at any time, the MODB then adapt t
 
 Differently from traditional server-based database systems, where users interact via a well-defined network protocol, in MODB, users solely write code and all the data management complexity is abstracted by the runtime.
 
+## <a name="utils"></a>Utils
+
+https://stackoverflow.com/a/37267929/7735153
+http://packetbomb.com/understanding-throughput-and-tcp-windows/
+https://docs.oracle.com/cd/E23507_01/Platform.20073/ATGInstallGuide/html/s0507tuningthetcpwindowsize01.html

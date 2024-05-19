@@ -23,8 +23,10 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
+import jdk.net.ExtendedSocketOptions;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -353,11 +355,7 @@ public final class Coordinator extends StoppableRunnable {
             ByteBuffer buffer = null;
 
             try {
-
-                channel.setOption(TCP_NODELAY, true);
-                channel.setOption(SO_KEEPALIVE, true);
-                channel.setOption(SO_SNDBUF, networkBufferSize);
-                channel.setOption(SO_RCVBUF, networkBufferSize);
+                NetworkUtils.configure(channel, networkBufferSize);
 
                 // right now I cannot discern whether it is a VMS or follower. perhaps I can keep alive channels from leader election?
                 buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
@@ -591,8 +589,7 @@ public final class Coordinator extends StoppableRunnable {
 
                     InetSocketAddress address = new InetSocketAddress(server.host, server.port);
                     channel = AsynchronousSocketChannel.open(group);
-                    channel.setOption(TCP_NODELAY, true);
-                    channel.setOption(SO_KEEPALIVE, false);
+                    NetworkUtils.configure(channel, networkBufferSize);
                     channel.connect(address).get();
 
                     ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);

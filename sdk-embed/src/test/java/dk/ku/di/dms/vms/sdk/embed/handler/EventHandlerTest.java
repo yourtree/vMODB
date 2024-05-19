@@ -22,6 +22,7 @@ import dk.ku.di.dms.vms.sdk.embed.events.InputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample2;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample3;
+import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;
@@ -40,8 +41,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_OF_EVENTS;
 import static java.lang.System.Logger.Level.INFO;
-import static java.net.StandardSocketOptions.SO_KEEPALIVE;
-import static java.net.StandardSocketOptions.TCP_NODELAY;
 
 /**
  * Test vms event handler
@@ -429,8 +428,7 @@ public class EventHandlerTest {
         // 2 - connect
         InetSocketAddress address = new InetSocketAddress(vmsToConnectTo.host, vmsToConnectTo.port);
         AsynchronousSocketChannel channel = AsynchronousSocketChannel.open();
-        channel.setOption(TCP_NODELAY, true);
-        channel.setOption(SO_KEEPALIVE, true);
+        NetworkUtils.configure(channel, 4096);
         channel.connect(address).get();
 
         logger.log(INFO, "Connected. Now sending presentation.");
@@ -480,8 +478,7 @@ public class EventHandlerTest {
         // 2 - connect
         InetSocketAddress address = new InetSocketAddress(vmsToConnectTo.host, vmsToConnectTo.port);
         AsynchronousSocketChannel channel = AsynchronousSocketChannel.open();
-        channel.setOption(TCP_NODELAY, true);
-        channel.setOption(SO_KEEPALIVE, true);
+        NetworkUtils.configure(channel, 4096);
         channel.connect(address).get();
 
         logger.log(INFO, "Connected. Now sending presentation.");
@@ -535,8 +532,7 @@ public class EventHandlerTest {
         // 2 - connect
         InetSocketAddress address = new InetSocketAddress(vmsToConnectTo.host, vmsToConnectTo.port);
         AsynchronousSocketChannel channel = AsynchronousSocketChannel.open();
-        channel.setOption(TCP_NODELAY, true);
-        channel.setOption(SO_KEEPALIVE, true);
+        NetworkUtils.configure(channel, 4096);
         channel.connect(address).get();
 
         logger.log(INFO, "Connected. Now sending presentation.");

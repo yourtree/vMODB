@@ -17,9 +17,11 @@ import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
+import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
+import jdk.net.ExtendedSocketOptions;
 
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
@@ -552,10 +554,7 @@ public final class VmsEventHandler extends StoppableRunnable {
     private void connectToConsumerVms(List<String> outputEvents, IdentifiableNode vmsNode) {
         try {
             AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(this.group);
-            channel.setOption(TCP_NODELAY, true);
-            channel.setOption(SO_KEEPALIVE, true);
-            channel.setOption(SO_SNDBUF, networkBufferSize);
-            channel.setOption(SO_RCVBUF, networkBufferSize);
+            NetworkUtils.configure(channel, networkBufferSize);
             ConnectToConsumerVmsProtocol protocol = new ConnectToConsumerVmsProtocol(channel, outputEvents, vmsNode);
             channel.connect(vmsNode.asInetSocketAddress(), protocol, protocol.completionHandler);
         } catch (Exception e) {
@@ -775,10 +774,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             logger.log(INFO,me.identifier+": An unknown host has started a connection attempt.");
             final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
             try {
-                channel.setOption(TCP_NODELAY, true);
-                channel.setOption(SO_KEEPALIVE, true);
-                channel.setOption(SO_SNDBUF, networkBufferSize);
-                channel.setOption(SO_RCVBUF, networkBufferSize);
+                NetworkUtils.configure(channel, networkBufferSize);
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 channel.read( buffer, null, new UnknownNodeReadCompletionHandler(channel, buffer) );
             } catch(Exception e){

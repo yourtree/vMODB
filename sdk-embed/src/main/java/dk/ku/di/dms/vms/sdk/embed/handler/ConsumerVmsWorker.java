@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
+import jdk.net.ExtendedSocketOptions;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.concurrent.*;
 
 import static java.lang.System.Logger.Level.*;
+import static java.lang.Thread.sleep;
 
 /**
  * This thread encapsulates the batch of events sending task
@@ -80,7 +82,6 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         TransactionEvent.PayloadRaw payloadRaw;
         List<TransactionEvent.PayloadRaw> events = new ArrayList<>(1024);
 
-        // FIXME apparently no thread is sending pending buffers. dont know the reason yet
         while(this.isRunning()){
             try {
                 if(BLOCKING){
@@ -113,16 +114,26 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         // do we have pending writes?
         ByteBuffer bb = this.PENDING_WRITES_BUFFER.poll();
         if (bb != null) {
-            logger.log(INFO, me.identifier+": Retrying sending failed buffer send");
+            logger.log(INFO, me.identifier+": Retrying sending failed buffer to "+consumerVms.identifier);
             try {
                 this.WRITE_SYNCHRONIZER.take();
                 this.connectionMetadata.channel.write(bb, networkSendTimeout, TimeUnit.MILLISECONDS, bb, this.writeCompletionHandler);
             } catch (Exception e) {
-                logger.log(ERROR, me.identifier+": Error on retrying to send failed buffer: \n"+e);
+                logger.log(ERROR, me.identifier+": ERROR on retrying to send failed buffer to "+consumerVms.identifier+": \n"+e);
+                if(e instanceof IllegalStateException){
+                    logger.log(INFO, me.identifier+": Connection to "+consumerVms.identifier+" is open? "+connectionMetadata.channel.isOpen());
+                    // probably comes from the class {@AsynchronousSocketChannelImpl}:
+                    // "Writing not allowed due to timeout or cancellation"
+                    try { sleep(100); } catch (InterruptedException ignored) { }
+                }
                 bb.clear();
                 boolean sent = this.PENDING_WRITES_BUFFER.offer(bb);
                 while(!sent){
                     sent = this.PENDING_WRITES_BUFFER.offer(bb);
+                }
+
+                if(this.WRITE_SYNCHRONIZER.isEmpty()){
+                    this.WRITE_SYNCHRONIZER.add(DUMB);
                 }
             }
         }
@@ -150,12 +161,12 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 this.WRITE_SYNCHRONIZER.take();
                 this.connectionMetadata.channel.write(writeBuffer, this.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
 
-                // prevents two batches from being placed in the same delivery
+                // can prevent two batches from having part of their buffers placed in the same delivery
                 // without sleep, two batches may be placed in the same buffer in the receiver
                 // sleep(100)
 
             } catch (Exception e) {
-                logger.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier);
+                logger.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier+": \n"+e);
                 // return non-processed events to original location or what?
                 if (!this.connectionMetadata.channel.isOpen()) {
                     logger.log(WARNING, "The "+this.consumerVms.identifier+" VMS is offline");
@@ -168,8 +179,18 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 }
 
                 if(writeBuffer != null) {
-                    returnByteBuffer(writeBuffer);
+                    this.returnByteBuffer(writeBuffer);
                 }
+
+                if(e instanceof IllegalStateException){
+                    try { sleep(100); } catch (InterruptedException ignored) { }
+                }
+
+                // to avoid problems on future writes
+                if(WRITE_SYNCHRONIZER.isEmpty()){
+                    this.WRITE_SYNCHRONIZER.add(DUMB);
+                }
+
             }
         }
         events.clear();
@@ -189,9 +210,10 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     private final class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
-            // applies for both
-            WRITE_SYNCHRONIZER.add(DUMB);
-            if(byteBuffer.hasRemaining()){
+            if(result < networkBufferSize){
+                // throttle to "force" socket write buffer to be flushed
+                try { sleep(100); } catch (Exception ignored) {}
+                WRITE_SYNCHRONIZER.add(DUMB);
                 logger.log(ERROR, me.identifier + ": ERROR since not all bytes were sent. Byte buffer will be separated for future retry.");
                 byteBuffer.clear();
                 boolean sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
@@ -201,6 +223,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 logger.log(INFO, me.identifier + ": Byte buffer added to pending queue. # of pending buffers: "+PENDING_WRITES_BUFFER.size());
             } else {
                 logger.log(INFO, me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
+                WRITE_SYNCHRONIZER.add(DUMB);
                 returnByteBuffer(byteBuffer);
             }
         }
@@ -208,7 +231,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         @Override
         public void failed(Throwable exc, ByteBuffer byteBuffer) {
             WRITE_SYNCHRONIZER.add(DUMB);
-            logger.log(ERROR, me.identifier+": ERROR on writing batch of events to: "+consumerVms.identifier+": \n"+exc);
+            logger.log(ERROR, me.identifier+": ERROR on writing batch of events to "+consumerVms.identifier+": \n"+exc);
             byteBuffer.clear();
             boolean sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
             while(!sent){
