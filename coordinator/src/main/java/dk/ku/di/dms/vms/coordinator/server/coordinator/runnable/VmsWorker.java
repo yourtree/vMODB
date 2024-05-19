@@ -272,7 +272,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     }
 
     private void processPendingWrites() {
-        ByteBuffer bb = PENDING_WRITES_BUFFER.poll();
+        ByteBuffer bb = this.PENDING_WRITES_BUFFER.poll();
         if(bb != null){
             logger.log(INFO, "Leader: Retrying sending failed buffer send");
             try {
@@ -280,7 +280,10 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 this.channel.write(bb, networkSendTimeout, TimeUnit.MILLISECONDS, bb, this.writeCompletionHandler);
             } catch (Exception e){
                 logger.log(ERROR, "Leader: Error on retrying to send failed buffer: \n"+e);
-                while(!this.PENDING_WRITES_BUFFER.offer(bb));
+                boolean sent = this.PENDING_WRITES_BUFFER.offer(bb);
+                while(!sent){
+                    sent = this.PENDING_WRITES_BUFFER.offer(bb);
+                }
             }
         }
     }
@@ -649,22 +652,29 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private final class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
+            WRITE_SYNCHRONIZER.add(DUMB);
             if(byteBuffer.hasRemaining()) {
                 logger.log(ERROR, "Leader: Consumer worker for "+consumerVms.identifier+" found not all bytes were sent. Retrying...");
                 byteBuffer.clear();
-                PENDING_WRITES_BUFFER.add(byteBuffer);
+                boolean sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
+                while(!sent){
+                    sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
+                }
             } else {
                 logger.log(INFO, "Leader: Message with size " + result + " has been sent to: " + consumerVms.identifier + " by thread " + Thread.currentThread().threadId());
-                WRITE_SYNCHRONIZER.add(DUMB);
                 returnByteBuffer(byteBuffer);
             }
         }
 
         @Override
         public void failed(Throwable exc, ByteBuffer byteBuffer) {
+            WRITE_SYNCHRONIZER.add(DUMB);
             logger.log(ERROR, "Leader: ERROR on writing batch of events to "+consumerVms.identifier+": "+exc);
             byteBuffer.clear();
-            PENDING_WRITES_BUFFER.add(byteBuffer);
+            boolean sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
+            while(!sent){
+                sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
+            }
         }
     }
 

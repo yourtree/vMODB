@@ -1068,7 +1068,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     // move offset to discard message type
                     readBuffer.get();
                     payload = TransactionEvent.read(readBuffer);
-                    logger.log(INFO,me.identifier+": Processed TID "+payload.tid());
+                    logger.log(DEBUG, me.identifier+": Processed TID "+payload.tid());
                     if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
                         payloads.add(buildInboundEvent(payload));
                     }
@@ -1085,7 +1085,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     }
                 } else { // then it is still event
                     payload = TransactionEvent.read(readBuffer);
-                    logger.log(INFO,me.identifier+": Processed TID "+payload.tid());
+                    logger.log(DEBUG,me.identifier+": Processed TID "+payload.tid());
                     if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
                         payloads.add(buildInboundEvent(payload));
                     }
