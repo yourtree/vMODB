@@ -22,8 +22,10 @@ public final class NetworkUtils {
             channel.setOption(ExtendedSocketOptions.IP_DONTFRAGMENT, true);
         }
 
-        channel.setOption(SO_SNDBUF, networkBufferSize);
-        channel.setOption(SO_RCVBUF, networkBufferSize);
+        if(networkBufferSize > 0) {
+            channel.setOption(SO_SNDBUF, networkBufferSize);
+            channel.setOption(SO_RCVBUF, networkBufferSize);
+        }
 
     }
 

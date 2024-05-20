@@ -341,8 +341,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             ByteBuffer writeBuffer = this.retrieveByteBuffer();
             BatchCommitCommand.write(writeBuffer, commitRequest);
 
-            // writeBuffer.flip();
-            writeBuffer.position(0);
+            writeBuffer.flip();
 
             this.WRITE_SYNCHRONIZER.take();
             this.channel.write(writeBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
@@ -611,7 +610,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     // do we have space in the buffer?
                     if (writeBuffer.remaining() < BatchCommitInfo.SIZE) {
                         // if not, send what we can for now
-                        // writeBuffer.flip();
+
                         writeBuffer.position(0);
 
                         logger.log(INFO, "Leader: Submitting ["+(count - remaining)+"] events to "+vmsNode.identifier);
@@ -624,8 +623,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                         // get a new bb
                         writeBuffer = this.retrieveByteBuffer();
                         BatchCommitInfo.write(writeBuffer, batchCommitInfo);
-
-                        writeBuffer.position(0);
+                        writeBuffer.flip();
 
                         // then send batch commit info
                         this.WRITE_SYNCHRONIZER.take();
@@ -685,11 +683,14 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
 
+    /**
+     * For commit-related messages
+     */
     private final class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
             if(byteBuffer.hasRemaining()) {
-                logger.log(ERROR, "Leader: Found not all bytes of commit message were sent to "+consumerVms.identifier+". Retrying soon...");
+                logger.log(ERROR, "Leader: Found not all bytes of commit message were sent to "+consumerVms.identifier);
             }
             WRITE_SYNCHRONIZER.add(DUMB);
         }
@@ -706,19 +707,11 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private final class BatchWriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
-            if(result < networkBufferSize) {
-                // throttle to "force" socket write buffer to be flushed
-                try { sleep(100); } catch (Exception ignored) {}
-                WRITE_SYNCHRONIZER.add(DUMB);
-                logger.log(ERROR, "Leader: Found not all bytes were sent to "+consumerVms.identifier+". Retrying soon...");
-                byteBuffer.clear();
-                boolean sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
-                while(!sent){
-                    sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
-                }
-                logger.log(INFO, "Leader: Byte buffer added to pending queue. # of pending buffers: "+PENDING_WRITES_BUFFER.size());
+            logger.log(INFO, "Leader: Message with size " + result + " has been sent to: " + consumerVms.identifier);
+            if(byteBuffer.hasRemaining()) {
+                // keep the lock and send the remaining
+                channel.write(byteBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, byteBuffer, this);
             } else {
-                logger.log(INFO, "Leader: Message with size " + result + " has been sent to: " + consumerVms.identifier + " by thread " + Thread.currentThread().threadId());
                 WRITE_SYNCHRONIZER.add(DUMB);
                 returnByteBuffer(byteBuffer);
             }

@@ -585,9 +585,25 @@ public final class VmsEventHandler extends StoppableRunnable {
                 return;
             }
 
-            // set up another read for cases of bursts of data
-            ByteBuffer newReadBuffer = retrieveByteBuffer();
-            this.connectionMetadata.channel.read(newReadBuffer, newReadBuffer, this);
+            // this code assumes I am always receiving batch of events
+            int count = result;
+            while(count < networkBufferSize){
+                // get the rest
+                try {
+                    count += this.connectionMetadata.channel.read(readBuffer).get(networkSendTimeout, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                    returnByteBuffer(readBuffer);
+                    logger.log(ERROR,me.identifier+": Error on obtaining data from: "+node.identifier);
+                    // ideally we could send a request telling which is the next tid to the producer VMS
+                    // so the producer vms "aligns" its send stream to account for this "lost" package
+                    // but the pending writes somehow covers this problems
+                    // then can just read again from scratch
+                    setUpNewRead();
+                    return;
+                }
+            }
+
+            setUpNewRead();
 
             readBuffer.position(0);
             byte messageType = readBuffer.get();
@@ -599,6 +615,12 @@ public final class VmsEventHandler extends StoppableRunnable {
             }
 
             returnByteBuffer(readBuffer);
+        }
+
+        private void setUpNewRead() {
+            // set up another read for cases of bursts of data
+            ByteBuffer newReadBuffer = retrieveByteBuffer();
+            this.connectionMetadata.channel.read(newReadBuffer, newReadBuffer, this);
         }
 
         private void processSingleEvent(ByteBuffer readBuffer) {
@@ -960,23 +982,26 @@ public final class VmsEventHandler extends StoppableRunnable {
                 return;
             }
 
-            // set up another read for cases of bursts of data
-            ByteBuffer newReadBuffer = retrieveByteBuffer();
-            connectionMetadata.channel.read(newReadBuffer, newReadBuffer, this);
+            if(readBuffer.get(0) == BATCH_OF_EVENTS) {
+                // must take into account the position of the buffer
+                while (readBuffer.position() < networkBufferSize) {
+                    // get the rest of the batch
+                    try {
+                        this.connectionMetadata.channel.read(readBuffer).get(networkSendTimeout, TimeUnit.MILLISECONDS);
+                    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                        returnByteBuffer(readBuffer);
+                        logger.log(ERROR, me.identifier + ": Error on obtaining data from the leader");
+                        setUpNewRead();
+                        return;
+                    }
+                }
+            }
 
             // why? it is the last position on which the buffer was written to.
             // to initiate a set of reads, we have to start from the beginning
             readBuffer.position(0);
 
-            byte messageType;
-            try {
-                messageType = readBuffer.get();
-            } catch (BufferUnderflowException e){
-                messageType = -1;
-                logger.log(ERROR,me.identifier + ": Position="+readBuffer.position()+
-                        " Result="+result+":  Exception: " + e);
-            }
-
+            byte messageType = readBuffer.get();
             // receive input events
             switch (messageType) {
                 case (BATCH_OF_EVENTS) -> this.processBatchOfEvents(readBuffer);
@@ -994,23 +1019,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     processNewBatchInfo(payload);
                 }
                 case (EVENT) -> {
-                    try {
-                        logger.log(WARNING,me.identifier + ": 1 event received from the leader");
-                        TransactionEvent.Payload payload = TransactionEvent.read(readBuffer);
-                        // send to scheduler.... drop if the event cannot be processed (not an input event in this vms)
-                        if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
-                            InboundEvent event = buildInboundEvent(payload);
-                            boolean sent = vmsInternalChannels.transactionInputQueue().offer(event);
-                            while (!sent){
-                                sent = vmsInternalChannels.transactionInputQueue().offer(event);
-                            }
-                        }
-                    } catch (Exception e) {
-                        if(e instanceof BufferUnderflowException)
-                            logger.log(ERROR,me.identifier + ": Buffer underflow exception while reading event: " + e);
-                        else
-                            logger.log(ERROR,me.identifier + ": Unknown exception: " + e);
-                    }
+                    processSingleEvent(readBuffer);
                 }
                 case (TX_ABORT) -> {
                     logger.log(WARNING, "Transaction abort received from the leader?");
@@ -1038,11 +1047,49 @@ public final class VmsEventHandler extends StoppableRunnable {
                 default -> logger.log(ERROR, me.identifier + ": Message type sent by the leader cannot be identified: " + messageType);
             }
 
-//            if(readBuffer.position() < result){
-//                logger.log(DEBUG, me.identifier +": Buffer has more data to be read. Type="+readBuffer.get(readBuffer.position()));
-//            }
+            // must take into account the result could be the remaining bytes of a batch of events
+            if(readBuffer.get(0) == BATCH_OF_EVENTS){
+                // can set new read safely since everything has been processed
+                // it would not reach here if network size buffer had not been reached
+                setUpNewRead();
+                returnByteBuffer(readBuffer);
+            } else if(readBuffer.position() < result){ // ---> more data to read
+                // cannot set new read now because may break a single batch into two read buffers =(
 
-            returnByteBuffer(readBuffer);
+                // assumption: batch of events always fills the entire buffer (i.e., it is our limit/end mark)
+                readBuffer.compact();
+                connectionMetadata.channel.read(readBuffer, readBuffer, this);
+            } else {
+                setUpNewRead();
+                returnByteBuffer(readBuffer);
+            }
+
+        }
+
+        private void processSingleEvent(ByteBuffer readBuffer) {
+            try {
+                logger.log(WARNING,me.identifier + ": 1 event received from the leader");
+                TransactionEvent.Payload payload = TransactionEvent.read(readBuffer);
+                // send to scheduler.... drop if the event cannot be processed (not an input event in this vms)
+                if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
+                    InboundEvent event = buildInboundEvent(payload);
+                    boolean sent = vmsInternalChannels.transactionInputQueue().offer(event);
+                    while (!sent){
+                        sent = vmsInternalChannels.transactionInputQueue().offer(event);
+                    }
+                }
+            } catch (Exception e) {
+                if(e instanceof BufferUnderflowException)
+                    logger.log(ERROR,me.identifier + ": Buffer underflow exception while reading event: " + e);
+                else
+                    logger.log(ERROR,me.identifier + ": Unknown exception: " + e);
+            }
+        }
+
+        private void setUpNewRead() {
+            // set up another read for cases of bursts of data
+            ByteBuffer newReadBuffer = retrieveByteBuffer();
+            connectionMetadata.channel.read(newReadBuffer, newReadBuffer, this);
         }
 
         private void processBatchOfEvents(ByteBuffer readBuffer) {

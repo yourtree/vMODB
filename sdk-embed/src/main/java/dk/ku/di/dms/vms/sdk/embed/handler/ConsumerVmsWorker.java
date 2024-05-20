@@ -8,6 +8,7 @@ import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -213,21 +214,14 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     }
 
     private final class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
+
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
-            if(result < networkBufferSize){
-                // throttle to "force" socket write buffer to be flushed
-                try { sleep(100); } catch (Exception ignored) {}
-                WRITE_SYNCHRONIZER.add(DUMB);
-                logger.log(ERROR, me.identifier + ": ERROR since not all bytes were sent. Byte buffer will be separated for future retry.");
-                byteBuffer.clear();
-                boolean sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
-                while(!sent){
-                    sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
-                }
-                logger.log(INFO, me.identifier + ": Byte buffer added to pending queue. # of pending buffers: "+PENDING_WRITES_BUFFER.size());
+            logger.log(INFO, me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
+            if(byteBuffer.hasRemaining()){
+                // keep the lock and send the remaining
+                connectionMetadata.channel.write(byteBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, byteBuffer, this);
             } else {
-                logger.log(INFO, me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
                 WRITE_SYNCHRONIZER.add(DUMB);
                 returnByteBuffer(byteBuffer);
             }
