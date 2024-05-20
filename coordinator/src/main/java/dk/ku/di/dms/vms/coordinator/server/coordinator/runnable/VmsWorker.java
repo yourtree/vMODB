@@ -182,6 +182,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
             } catch(Exception e){
                 logger.log(ERROR, "Error on writing presentation: "+e.getCause().toString());
+                if(this.WRITE_SYNCHRONIZER.isEmpty()){
+                    this.WRITE_SYNCHRONIZER.add(DUMB);
+                }
                 return;
             }
 
@@ -282,14 +285,15 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     // "Writing not allowed due to timeout or cancellation"
                     try { sleep(100); } catch (InterruptedException ignored) { }
                 }
+
+                if(this.WRITE_SYNCHRONIZER.isEmpty()){
+                    this.WRITE_SYNCHRONIZER.add(DUMB);
+                }
+
                 bb.clear();
                 boolean sent = this.PENDING_WRITES_BUFFER.offer(bb);
                 while(!sent){
                     sent = this.PENDING_WRITES_BUFFER.offer(bb);
-                }
-
-                if(this.WRITE_SYNCHRONIZER.isEmpty()){
-                    this.WRITE_SYNCHRONIZER.add(DUMB);
                 }
             }
         }
@@ -682,8 +686,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
 
     private final class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
-
-
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
             if(byteBuffer.hasRemaining()) {

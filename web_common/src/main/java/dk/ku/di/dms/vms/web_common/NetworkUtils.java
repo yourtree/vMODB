@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.web_common;
 
 import jdk.net.ExtendedSocketOptions;
-import jdk.net.Sockets;
 
 import java.io.IOException;
 import java.nio.channels.AsynchronousSocketChannel;

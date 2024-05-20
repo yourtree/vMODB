@@ -6,7 +6,6 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
-import jdk.net.ExtendedSocketOptions;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
@@ -106,8 +105,8 @@ final class ConsumerVmsWorker extends StoppableRunnable {
             } catch (Exception e) {
                 logger.log(ERROR, this.me.identifier+ ": Error captured in event loop \n"+e);
             }
-
         }
+        logger.log(INFO, this.me.identifier+ "Finishing worker for consumer VMS: "+this.consumerVms.identifier);
     }
 
     private void processPendingWrites() {
@@ -116,6 +115,8 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         if (bb != null) {
             logger.log(INFO, me.identifier+": Retrying sending failed buffer to "+consumerVms.identifier);
             try {
+                // sleep with the intention to let the OS flush the previous buffer
+                try { sleep(100); } catch (InterruptedException ignored) { }
                 this.WRITE_SYNCHRONIZER.take();
                 this.connectionMetadata.channel.write(bb, networkSendTimeout, TimeUnit.MILLISECONDS, bb, this.writeCompletionHandler);
             } catch (Exception e) {
@@ -124,16 +125,17 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                     logger.log(INFO, me.identifier+": Connection to "+consumerVms.identifier+" is open? "+connectionMetadata.channel.isOpen());
                     // probably comes from the class {@AsynchronousSocketChannelImpl}:
                     // "Writing not allowed due to timeout or cancellation"
-                    try { sleep(100); } catch (InterruptedException ignored) { }
-                }
-                bb.clear();
-                boolean sent = this.PENDING_WRITES_BUFFER.offer(bb);
-                while(!sent){
-                    sent = this.PENDING_WRITES_BUFFER.offer(bb);
+                    stop();
                 }
 
                 if(this.WRITE_SYNCHRONIZER.isEmpty()){
                     this.WRITE_SYNCHRONIZER.add(DUMB);
+                }
+
+                bb.clear();
+                boolean sent = this.PENDING_WRITES_BUFFER.offer(bb);
+                while(!sent){
+                    sent = this.PENDING_WRITES_BUFFER.offer(bb);
                 }
             }
         }
@@ -166,11 +168,12 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 // sleep(100)
 
             } catch (Exception e) {
-                logger.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier+": \n"+e);
+                logger.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier+"\n"+e);
                 // return non-processed events to original location or what?
                 if (!this.connectionMetadata.channel.isOpen()) {
                     logger.log(WARNING, "The "+this.consumerVms.identifier+" VMS is offline");
                 }
+
                 // return events to the deque
                 while(!events.isEmpty()) {
                     if(this.consumerVms.transactionEvents.offerFirst(events.get(0))){
@@ -191,6 +194,8 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                     this.WRITE_SYNCHRONIZER.add(DUMB);
                 }
 
+                // force loop exit
+                remaining = 0;
             }
         }
         events.clear();

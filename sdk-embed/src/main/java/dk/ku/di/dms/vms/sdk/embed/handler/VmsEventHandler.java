@@ -21,7 +21,6 @@ import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
-import jdk.net.ExtendedSocketOptions;
 
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
@@ -34,7 +33,6 @@ import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.*;
 import static java.lang.System.Logger.Level.*;
 import static java.lang.Thread.sleep;
-import static java.net.StandardSocketOptions.*;
 
 /**
  * This default event handler connects direct to the coordinator

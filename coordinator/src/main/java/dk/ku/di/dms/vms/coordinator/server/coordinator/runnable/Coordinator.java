@@ -26,7 +26,6 @@ import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
-import jdk.net.ExtendedSocketOptions;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -49,7 +48,6 @@ import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.S
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.VMS_TYPE;
 import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.SERVER;
 import static java.lang.System.Logger.Level.*;
-import static java.net.StandardSocketOptions.*;
 
 /**
  * Also known as the "Leader"
