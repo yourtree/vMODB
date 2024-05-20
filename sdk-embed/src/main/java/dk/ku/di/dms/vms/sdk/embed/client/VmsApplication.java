@@ -113,7 +113,8 @@ public final class VmsApplication {
 
         VmsEventHandler eventHandler = VmsEventHandler.build(
                 vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, serdes,
-                options.networkBufferSize(), options.networkThreadPoolSize(), options.networkSendTimeout());
+                options.networkBufferSize(), options.osBufferSize(),
+                options.networkThreadPoolSize(), options.networkSendTimeout());
 
 //        VmsComplexTransactionScheduler scheduler =
 //                VmsComplexTransactionScheduler.build(

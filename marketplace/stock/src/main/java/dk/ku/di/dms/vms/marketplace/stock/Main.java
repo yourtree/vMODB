@@ -4,8 +4,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.common.Utils;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
@@ -20,21 +18,17 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.Properties;
 
 public final class Main {
+
     public static void main(String[] args) throws Exception {
 
-        Properties properties = Utils.loadProperties();
-        int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
-        int networkThreadPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
-        int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
-
-        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.STOCK_VMS_PORT, new String[]{
+        VmsApplicationOptions options = VmsApplicationOptions.build(
+                "localhost",
+                Constants.STOCK_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.stock",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
-                networkThreadPoolSize, networkSendTimeout);
+        });
 
         VmsApplication vms = VmsApplication.build(options);
         vms.start();

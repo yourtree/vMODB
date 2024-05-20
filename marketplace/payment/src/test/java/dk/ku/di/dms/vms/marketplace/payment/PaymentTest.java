@@ -19,10 +19,10 @@ public class PaymentTest {
     @Test
     public void test() throws Exception {
 
-        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.PAYMENT_VMS_PORT, new String[]{
+        VmsApplicationOptions options = VmsApplicationOptions.build("localhost", Constants.PAYMENT_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.payment",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, 4096, 2, 1000);
+        });
 
         VmsApplication vms = VmsApplication.build(options);
         vms.start();

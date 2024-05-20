@@ -12,9 +12,12 @@ import java.util.Date;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.PAYMENT_CONFIRMED;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.SHIPMENT_UPDATED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
+import static java.lang.System.Logger.Level.INFO;
 
 @Microservice("customer")
 public final class CustomerService {
+
+    private static final System.Logger LOGGER = System.getLogger(CustomerService.class.getName());
 
     private final ICustomerRepository customerRepository;
 
@@ -25,7 +28,7 @@ public final class CustomerService {
     @Inbound(values = {PAYMENT_CONFIRMED})
     @Transactional(type=RW)
     public void processPaymentConfirmed(PaymentConfirmed paymentConfirmed){
-        System.out.println("APP: Customer received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
+        LOGGER.log(INFO, "APP: Customer received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
 
         Date now = new Date();
         Customer customer = this.customerRepository.lookupByKey( paymentConfirmed.customerCheckout.CustomerId );
@@ -42,7 +45,7 @@ public final class CustomerService {
     @Inbound(values = {SHIPMENT_UPDATED})
     @Transactional(type=RW)
     public void processDeliveryNotification(ShipmentUpdated shipmentUpdated){
-        System.out.println("APP: Customer received a shipment updated event with TID: "+ shipmentUpdated.instanceId);
+        LOGGER.log(INFO,"APP: Customer received a shipment updated event with TID: "+ shipmentUpdated.instanceId);
 
         Date now = new Date();
         for(DeliveryNotification delivery : shipmentUpdated.deliveryNotifications) {

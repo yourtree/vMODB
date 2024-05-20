@@ -5,8 +5,6 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.cart.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.common.Utils;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionContext;
@@ -24,22 +22,21 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.Properties;
+
+import static java.lang.System.Logger.Level.INFO;
 
 public final class Main {
 
-    public static void main(String[] ignoredArgs) {
-        Properties properties = Utils.loadProperties();
-        int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
-        int networkSendTimeout = Integer.parseInt(properties.getProperty("network_send_timeout"));
-        int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
-        int vmsThreadPoolSize = Integer.parseInt(properties.getProperty("vms_thread_pool_size"));
+    private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
-        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CART_VMS_PORT, new String[]{
+    public static void main(String[] ignoredArgs) {
+
+        VmsApplicationOptions options = VmsApplicationOptions.build(
+                "localhost",
+                Constants.CART_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.cart",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
-                networkThreadPoolSize, vmsThreadPoolSize, networkSendTimeout);
+        });
 
         VmsApplication vms;
         HttpServer httpServer;
@@ -53,7 +50,7 @@ public final class Main {
             httpServer.createContext("/cart", new CartHttpHandler(vms));
             httpServer.start();
 
-            System.out.println("Cart HTTP Server initialized");
+            LOGGER.log(INFO, "Cart HTTP Server initialized");
         } catch(Exception e) {
             throw new RuntimeException(e);
         }
@@ -61,7 +58,7 @@ public final class Main {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             vms.stop();
             httpServer.stop(0);
-            System.out.println("Cart terminating ...");
+            LOGGER.log(INFO, "Cart terminating ...");
         }));
 
     }

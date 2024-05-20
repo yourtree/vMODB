@@ -3,14 +3,11 @@ package dk.ku.di.dms.vms.modb.common.serdes;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
-import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
-import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 
 import java.lang.reflect.Type;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,35 +47,6 @@ final class DefaultVmsSerdes implements IVmsSerdesProxy {
     public Map<String, VmsDataModel> deserializeDataSchema(String dataSchemaStr) {
         return this.gson.fromJson(dataSchemaStr, new TypeToken<Map<String, VmsDataModel>>(){}.getType());
     }
-
-    /**
-        DATA
-    **/
-
-     @Override
-    public byte[] serializeDataRequestEvent(DataRequestEvent event) {
-        String json = this.gson.toJson(event);
-        return json.getBytes(StandardCharsets.UTF_8);
-    }
-
-    @Override
-    public DataRequestEvent deserializeDataRequestEvent(byte[] bytes) {
-        String json = new String( bytes );
-        return this.gson.fromJson(json, DataRequestEvent.class);
-    }
-
-    @Override
-    public byte[] serializeDataResponseEvent(DataResponseEvent event) {
-        String json = this.gson.toJson(event);
-        return json.getBytes(StandardCharsets.UTF_8);
-    }
-
-    @Override
-    public DataResponseEvent deserializeToDataResponseEvent(byte[] bytes) {
-        String json = new String( bytes );
-        return this.gson.fromJson(json, DataResponseEvent.class);
-    }
-
 
     @Override
     public <K,V> String serializeMap( Map<K,V> map ){

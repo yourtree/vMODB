@@ -29,9 +29,12 @@ import static dk.ku.di.dms.vms.marketplace.common.Constants.INVOICE_ISSUED;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.SHIPMENT_UPDATED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
+import static java.lang.System.Logger.Level.INFO;
 
 @Microservice("seller")
 public final class SellerService {
+
+    private static final System.Logger LOGGER = System.getLogger(SellerService.class.getName());
 
     // support isolation for seller dashboard retrieval
     private final Map<Integer, ReadWriteLock> sellerLockMap;
@@ -54,7 +57,7 @@ public final class SellerService {
     @Transactional(type=W)
     @Parallel
     public void processInvoiceIssued(InvoiceIssued invoiceIssued){
-        System.out.println("APP: Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
+        LOGGER.log(INFO, "APP: Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
 
         Map<Integer,ReadWriteLock> locksAcquired = new HashMap<>();
         List<OrderItem> orderItems = invoiceIssued.getItems();
@@ -122,7 +125,7 @@ public final class SellerService {
     @Inbound(values = SHIPMENT_UPDATED)
     @Transactional(type=RW)
     public void processShipmentUpdate(ShipmentUpdated shipmentUpdated){
-        System.out.println("APP: Seller received a shipment update event with TID: "+ shipmentUpdated.instanceId);
+        LOGGER.log(INFO, "APP: Seller received a shipment update event with TID: "+ shipmentUpdated.instanceId);
 
         // TODO synchronization must also be present here
 

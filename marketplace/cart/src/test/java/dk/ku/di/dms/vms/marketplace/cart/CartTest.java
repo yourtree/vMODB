@@ -3,9 +3,7 @@ package dk.ku.di.dms.vms.marketplace.cart;
 import dk.ku.di.dms.vms.marketplace.cart.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.cart.repositories.ICartItemRepository;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.common.Utils;
 import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionContext;
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
@@ -17,7 +15,6 @@ import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.Properties;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.CUSTOMER_CHECKOUT;
 import static java.lang.Thread.sleep;
@@ -75,16 +72,13 @@ public final class CartTest {
     }
 
     private static VmsApplication loadCartVms() throws Exception {
-        Properties properties = Utils.loadProperties();
-        int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
-        int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
-        int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
 
-        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CART_VMS_PORT, new String[]{
+        VmsApplicationOptions options = VmsApplicationOptions.build(
+                "localhost",
+                Constants.CART_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.cart",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
-                networkThreadPoolSize, networkSendTimeout);
+        });
 
         VmsApplication vms = VmsApplication.build(options);
         vms.start();

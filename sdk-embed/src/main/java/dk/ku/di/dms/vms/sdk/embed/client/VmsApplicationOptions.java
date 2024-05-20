@@ -1,5 +1,10 @@
 package dk.ku.di.dms.vms.sdk.embed.client;
 
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
+import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
+
+import java.util.Properties;
+
 public final class VmsApplicationOptions {
 
     private final String host;
@@ -16,7 +21,29 @@ public final class VmsApplicationOptions {
 
     private final int networkSendTimeout;
 
-    public VmsApplicationOptions(String host, int port, String[] packages, int networkBufferSize, int networkThreadPoolSize, int vmsThreadPoolSize, int networkSendTimeout) {
+    private final int osBufferSize;
+
+    public static VmsApplicationOptions build(String host, int port, String[] packages) {
+        Properties properties = ConfigUtils.loadProperties();
+        int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
+        int soBufferSize = Integer.parseInt(properties.getProperty("os_buffer_size"));
+        int networkSendTimeout = Integer.parseInt(properties.getProperty("network_send_timeout"));
+        int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
+        int vmsThreadPoolSize = Integer.parseInt(properties.getProperty("vms_thread_pool_size"));
+        return new VmsApplicationOptions(
+                host,
+                port,
+                packages,
+                networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
+                networkThreadPoolSize,
+                vmsThreadPoolSize,
+                networkSendTimeout,
+                soBufferSize);
+    }
+
+    private VmsApplicationOptions(String host, int port, String[] packages,
+                                  int networkBufferSize, int networkThreadPoolSize,
+                                  int vmsThreadPoolSize, int networkSendTimeout, int osBufferSize) {
         this.host = host;
         this.port = port;
         this.packages = packages;
@@ -24,16 +51,7 @@ public final class VmsApplicationOptions {
         this.networkThreadPoolSize = networkThreadPoolSize;
         this.vmsThreadPoolSize = vmsThreadPoolSize;
         this.networkSendTimeout = networkSendTimeout;
-    }
-
-    public VmsApplicationOptions(String host, int port, String[] packages, int networkBufferSize, int networkThreadPoolSize, int networkSendTimeout) {
-        this.host = host;
-        this.port = port;
-        this.packages = packages;
-        this.networkBufferSize = networkBufferSize;
-        this.networkSendTimeout = networkSendTimeout;
-        this.networkThreadPoolSize = networkThreadPoolSize;
-        this.vmsThreadPoolSize = 0;
+        this.osBufferSize = osBufferSize;
     }
 
     public String host() {
@@ -62,5 +80,9 @@ public final class VmsApplicationOptions {
 
     public int vmsThreadPoolSize() {
         return this.vmsThreadPoolSize;
+    }
+
+    public int osBufferSize() {
+        return this.osBufferSize;
     }
 }

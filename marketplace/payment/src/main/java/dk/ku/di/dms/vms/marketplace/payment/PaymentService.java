@@ -23,9 +23,12 @@ import java.util.Properties;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.INVOICE_ISSUED;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.PAYMENT_CONFIRMED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
+import static java.lang.System.Logger.Level.INFO;
 
 @Microservice("payment")
 public final class PaymentService {
+
+    private static final System.Logger LOGGER = System.getLogger(PaymentService.class.getName());
 
     private static final boolean provider;
     private static final IExternalProvider externalProvider;
@@ -65,7 +68,7 @@ public final class PaymentService {
     @Transactional(type=W)
     @Parallel
     public PaymentConfirmed processPayment(InvoiceIssued invoiceIssued) {
-        System.out.println("APP: Payment received an invoice issued event with TID: "+ invoiceIssued.instanceId);
+        LOGGER.log(INFO, "APP: Payment received an invoice issued event with TID: "+ invoiceIssued.instanceId);
 
         Date now = new Date();
 

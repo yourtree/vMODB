@@ -9,9 +9,12 @@ import dk.ku.di.dms.vms.modb.api.annotations.*;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
+import static java.lang.System.Logger.Level.INFO;
 
 @Microservice("product")
 public final class ProductService {
+
+    private static final System.Logger LOGGER = System.getLogger(ProductService.class.getName());
 
     private final IProductRepository productRepository;
 
@@ -24,7 +27,7 @@ public final class ProductService {
     @Transactional(type=W)
     @PartitionBy(clazz = UpdateProduct.class, method = "getId")
     public ProductUpdated updateProduct(UpdateProduct updateEvent) {
-        System.out.println("APP: Product received a product update event with version: "+updateEvent.version);
+        LOGGER.log(INFO,"APP: Product received a product update event with version: "+updateEvent.version);
 
         // can use issue statement for faster update
         Product product = new Product(updateEvent.seller_id, updateEvent.product_id, updateEvent.name, updateEvent.sku, updateEvent.category,
@@ -40,7 +43,7 @@ public final class ProductService {
     @Transactional(type=RW)
     @PartitionBy(clazz = UpdatePrice.class, method = "getId")
     public PriceUpdated updateProductPrice(UpdatePrice updatePrice) {
-        System.out.println("APP: Product received an update price event with version: "+updatePrice.instanceId);
+        LOGGER.log(INFO,"APP: Product received an update price event with version: "+updatePrice.instanceId);
 
         // could use issue statement for faster update
         Product product = this.productRepository.lookupByKey(new Product.ProductId(updatePrice.sellerId, updatePrice.productId));

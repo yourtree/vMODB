@@ -22,10 +22,10 @@ public class CustomerTest {
     @Test
     public void paymentTest() throws Exception {
 
-        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CUSTOMER_VMS_PORT, new String[]{
+        VmsApplicationOptions options = VmsApplicationOptions.build("localhost", Constants.CUSTOMER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.customer",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, 4096, 2, 1000);
+        });
 
         VmsApplication vms = VmsApplication.build(options);
         vms.start();
@@ -50,10 +50,10 @@ public class CustomerTest {
     @Test
     public void shipmentTest() throws Exception {
 
-        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.CUSTOMER_VMS_PORT, new String[]{
+        VmsApplicationOptions options = VmsApplicationOptions.build("localhost", Constants.CUSTOMER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.customer",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, 4096, 2, 1000);
+        });
 
         VmsApplication vms = VmsApplication.build(options);
         vms.start();

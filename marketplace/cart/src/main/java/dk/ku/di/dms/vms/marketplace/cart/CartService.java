@@ -15,9 +15,13 @@ import java.util.List;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
+import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.WARNING;
 
 @Microservice("cart")
 public final class CartService {
+
+    private static final System.Logger LOGGER = System.getLogger(CartService.class.getName());
 
     private final ICartItemRepository cartItemRepository;
     private final IProductReplicaRepository productReplicaRepository;
@@ -33,7 +37,7 @@ public final class CartService {
     @Transactional(type=RW)
     @PartitionBy(clazz = CustomerCheckout.class, method = "getId")
     public ReserveStock checkout(CustomerCheckout checkout) {
-        System.out.println("APP: Cart received a checkout request with TID: "+checkout.instanceId);
+        LOGGER.log(INFO, "APP: Cart received a checkout request with TID: "+checkout.instanceId);
 
         // get cart items from a customer
         List<CartItem> cartItems = this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
@@ -52,7 +56,6 @@ public final class CartService {
 
         this.cartItemRepository.deleteAll(cartItems);
 
-//        System.out.println("APP: Cart finishing checkout request with TID: "+checkout.instanceId);
         return new ReserveStock(new Date(), checkout, convertCartItems( cartItems ), checkout.instanceId);
     }
 
@@ -64,14 +67,14 @@ public final class CartService {
     @Transactional(type=RW)
     @PartitionBy(clazz = PriceUpdated.class, method = "getId")
     public void updateProductPrice(PriceUpdated priceUpdated) {
-        System.out.println("APP: Cart received an update price event with version: "+priceUpdated.instanceId);
+        LOGGER.log(INFO,"APP: Cart received an update price event with version: "+priceUpdated.instanceId);
 
         // could use issue statement for faster update
         ProductReplica product = this.productReplicaRepository.lookupByKey(
                 new ProductReplica.ProductId(priceUpdated.sellerId, priceUpdated.productId));
 
         if(product == null){
-            // System.out.println("Cart has no product replica with seller ID "+priceUpdated.sellerId+" : product ID "+priceUpdated.productId);
+            LOGGER.log(WARNING,"Cart has no product replica with seller ID "+priceUpdated.sellerId+" : product ID "+priceUpdated.productId);
             return;
         }
 
@@ -92,7 +95,7 @@ public final class CartService {
     @Transactional(type=RW)
     @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     public void processProductUpdate(ProductUpdated productUpdated) {
-        System.out.println("APP: Cart received a product update event with version: "+productUpdated.version);
+        LOGGER.log(INFO,"APP: Cart received a product update event with version: "+productUpdated.version);
 
         var product = new ProductReplica(productUpdated.seller_id, productUpdated.product_id, productUpdated.name, productUpdated.sku, productUpdated.category,
                 productUpdated.description, productUpdated.price, productUpdated.freight_value, productUpdated.status, productUpdated.version);

@@ -8,7 +8,6 @@ import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.nio.ByteBuffer;
-import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -78,10 +77,9 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
         logger.log(INFO, this.me.identifier+ ": Starting worker for consumer VMS: "+this.consumerVms.identifier);
 
+        List<TransactionEvent.PayloadRaw> events = new ArrayList<>(1024);
         int pollTimeout = 1;
         TransactionEvent.PayloadRaw payloadRaw;
-        List<TransactionEvent.PayloadRaw> events = new ArrayList<>(1024);
-
         while(this.isRunning()){
             try {
                 if(BLOCKING){

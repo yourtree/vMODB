@@ -9,8 +9,7 @@ import static java.net.StandardSocketOptions.*;
 
 public final class NetworkUtils {
 
-    public static void configure(AsynchronousSocketChannel channel, int networkBufferSize) throws IOException {
-
+    public static void configure(AsynchronousSocketChannel channel, int osBufferSize) throws IOException {
         channel.setOption(TCP_NODELAY, true);
         channel.setOption(SO_KEEPALIVE, true);
 
@@ -22,11 +21,10 @@ public final class NetworkUtils {
             channel.setOption(ExtendedSocketOptions.IP_DONTFRAGMENT, true);
         }
 
-        if(networkBufferSize > 0) {
-            channel.setOption(SO_SNDBUF, networkBufferSize);
-            channel.setOption(SO_RCVBUF, networkBufferSize);
+        if(osBufferSize > 0) {
+            channel.setOption(SO_SNDBUF, osBufferSize);
+            channel.setOption(SO_RCVBUF, osBufferSize);
         }
-
     }
 
 }

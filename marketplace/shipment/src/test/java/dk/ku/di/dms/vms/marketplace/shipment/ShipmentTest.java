@@ -25,10 +25,10 @@ import static java.lang.Thread.sleep;
 public final class ShipmentTest {
 
     private static VmsApplication getVmsApplication() throws Exception {
-        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.SHIPMENT_VMS_PORT, new String[]{
+        VmsApplicationOptions options = VmsApplicationOptions.build("localhost", Constants.SHIPMENT_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.shipment",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, 4096, 2, 1000);
+        });
         return VmsApplication.build(options);
     }
 

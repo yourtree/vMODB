@@ -19,9 +19,12 @@ import java.util.*;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
+import static java.lang.System.Logger.Level.INFO;
 
 @Microservice("order")
 public final class OrderService {
+
+    private static final System.Logger LOGGER = System.getLogger(OrderService.class.getName());
 
     private final IOrderRepository orderRepository;
 
@@ -50,7 +53,7 @@ public final class OrderService {
     @Inbound(values = {SHIPMENT_UPDATED})
     @Transactional(type=RW)
     public void processShipmentNotification(ShipmentUpdated shipmentUpdated){
-        System.out.println("APP: Order received a shipment updated event with TID: "+shipmentUpdated.instanceId);
+        LOGGER.log(INFO,"APP: Order received a shipment updated event with TID: "+shipmentUpdated.instanceId);
 
         Date now = new Date();
         for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {
@@ -87,7 +90,7 @@ public final class OrderService {
     @PartitionBy(clazz = StockConfirmed.class, method = "getCustomerId")
     public InvoiceIssued processStockConfirmed(StockConfirmed stockConfirmed) {
         Date now = new Date();
-        System.out.println("APP: Order received a stock confirmed event with TID: "+ stockConfirmed.instanceId);
+        LOGGER.log(INFO,"APP: Order received a stock confirmed event with TID: "+ stockConfirmed.instanceId);
 
         // calculate total freight_value
         float total_freight = 0;

@@ -9,12 +9,12 @@ import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.common.Utils;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -32,6 +32,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
+import static java.lang.System.Logger.Level.*;
 import static java.lang.Thread.sleep;
 
 /**
@@ -39,7 +40,10 @@ import static java.lang.Thread.sleep;
  * Via the proxy, we configure the transactional DAGs and
  * other important configuration properties of the system.
  */
+@SuppressWarnings("InfiniteLoopStatement")
 public final class Main {
+
+    private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
     private static final int STARTING_TID = 1;
     private static final int STARTING_BATCH_ID = 1;
@@ -50,8 +54,7 @@ public final class Main {
 
     public static void main(String[] ignoredArgs) throws IOException, InterruptedException {
         // read properties
-        Properties properties = Utils.loadProperties();
-
+        Properties properties = ConfigUtils.loadProperties();
         Coordinator coordinator = loadCoordinator(properties);
 
         String driverUrl = properties.getProperty("driver_url");
@@ -64,10 +67,10 @@ public final class Main {
         do {
             sleep(SLEEP);
             if(coordinator.getConnectedVMSs().size() == starterSize) break;
-            System.out.println("Proxy: Waiting for all starter VMSs to come online. Sleeping for "+SLEEP+" ms...");
+            LOGGER.log(INFO, "Proxy: Waiting for all starter VMSs to come online. Sleeping for "+SLEEP+" ms...");
         } while (true);
 
-        System.out.println("Proxy: All starter VMSs have connected to the coordinator \nProxy: Initializing the HTTP Server to receive transaction inputs...");
+        LOGGER.log(INFO,"Proxy: All starter VMSs have connected to the coordinator \nProxy: Initializing the HTTP Server to receive transaction inputs...");
 
         int http_port = Integer.parseInt( properties.getProperty("http_port") );
 
@@ -78,10 +81,10 @@ public final class Main {
         var signalQueue = coordinator.getBatchSignalQueue();
         long initTid = STARTING_TID;
         try (HttpClient httpClient = HttpClient.newHttpClient()) {
-            System.out.println("Proxy: Polling for new batch completion signal started");
+            LOGGER.log(INFO,"Proxy: Polling for new batch completion signal started");
             for(;;) {
                 long lastTid = signalQueue.take();
-                System.out.println("Proxy: New batch completion signal received. Last TID executed: "+lastTid);
+                LOGGER.log(DEBUG,"Proxy: New batch completion signal received. Last TID executed: "+lastTid);
                 // upon a batch completion, send result to driver
                 try {
                     HttpRequest httpReq = HttpRequest.newBuilder()
@@ -94,7 +97,7 @@ public final class Main {
                     httpClient.sendAsync(httpReq, HttpResponse.BodyHandlers.discarding());
                     initTid = lastTid + 1;
                 } catch (Exception e) {
-                    System.out.println("Proxy: Error while sending HTTP request: \n" +
+                    LOGGER.log(ERROR,"Proxy: Error while sending HTTP request: \n" +
                             (e.getStackTrace().length > 0 ? e.getStackTrace()[0] : e));
                 }
             }
@@ -165,11 +168,12 @@ public final class Main {
         }
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
+        int osBufferSize = Integer.parseInt( properties.getProperty("os_buffer_size") );
         long batchSendRate = Long.parseLong( properties.getProperty("batch_send_rate") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
+        int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
 
         int definiteBufferSize = networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize;
-        System.out.println("Buffer size: "+definiteBufferSize);
 
         return Coordinator.build(
                 serverMap,
@@ -179,7 +183,9 @@ public final class Main {
                 new CoordinatorOptions()
                         .withBatchWindow(batchSendRate)
                         .withGroupThreadPoolSize(groupPoolSize)
-                        .withNetworkBufferSize(definiteBufferSize),
+                        .withNetworkBufferSize(definiteBufferSize)
+                        .withNetworkSendTimeout(networkSendTimeout)
+                        .withOsBufferSize(osBufferSize),
                 STARTING_BATCH_ID,
                 STARTING_TID,
                 TRANSACTION_INPUTS,
@@ -188,13 +194,9 @@ public final class Main {
     }
 
     private static Map<Integer, IdentifiableNode> buildStarterVMS(Properties properties){
-
         String productHost = properties.getProperty("product_host");
-
         if(productHost == null) throw new RuntimeException("Product host is null");
-
         IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
-
         Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>();
         starterVMSs.put(productAddress.hashCode(), productAddress);
         return starterVMSs;
@@ -259,9 +261,6 @@ public final class Main {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             String payload = new String( exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-
-            // System.out.println("Proxy: Received input \n"+payload);
-
             String[] uriSplit = exchange.getRequestURI().toString().split("/");
             switch(uriSplit[1]){
                 case "cart": {
@@ -316,7 +315,7 @@ public final class Main {
         }
 
         private static void reportError(String service, HttpExchange exchange) throws IOException {
-            System.out.println("Proxy: Unsupported "+service+" HTTP method: " + exchange.getRequestMethod());
+            LOGGER.log(ERROR,"Proxy: Unsupported "+service+" HTTP method: " + exchange.getRequestMethod());
             endExchange(exchange, 500);
         }
 

@@ -233,7 +233,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private static final int MAX_SLEEP = 1000;
 
     /**
-     * Event loop
+     * Event loop must not be blocking because it performs two tasks:
+     * (a) get and process batch-tracking messages from coordinator
+     * (b) process transaction input events
      */
     private void eventLoop() {
         int pollTimeout = 50;

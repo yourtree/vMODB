@@ -25,9 +25,12 @@ import java.util.List;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
+import static java.lang.System.Logger.Level.INFO;
 
 @Microservice("shipment")
 public final class ShipmentService {
+
+    private static final System.Logger LOGGER = System.getLogger(ShipmentService.class.getName());
 
     private final IShipmentRepository shipmentRepository;
 
@@ -48,7 +51,7 @@ public final class ShipmentService {
     @Outbound(SHIPMENT_UPDATED)
     @Transactional(type=RW)
     public ShipmentUpdated updateShipment(UpdateDelivery updateDelivery){
-        System.out.println("APP: Shipment received an update delivery event with TID: "+ updateDelivery.instanceId);
+        LOGGER.log(INFO, "APP: Shipment received an update delivery event with TID: "+ updateDelivery.instanceId);
         Date now = new Date();
 
         // could lock the packages so to allow for parallel annotation
@@ -105,7 +108,7 @@ public final class ShipmentService {
     @Transactional(type=W)
     @Parallel
     public void processShipment(PaymentConfirmed paymentConfirmed){
-        System.out.println("APP: Shipment received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
+        LOGGER.log(INFO, "APP: Shipment received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
         Date now = new Date();
 
         Shipment shipment = new Shipment(

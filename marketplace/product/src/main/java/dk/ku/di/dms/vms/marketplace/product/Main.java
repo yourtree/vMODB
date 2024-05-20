@@ -4,8 +4,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.common.Utils;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
@@ -20,25 +18,22 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.Properties;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.PRODUCT_HTTP_PORT;
+import static java.lang.System.Logger.Level.INFO;
 
 public final class Main {
 
+    private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
+
     public static void main(String[] ignoredArgs) {
 
-        // load non-fixed properties
-        Properties properties = Utils.loadProperties();
-        int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
-        int networkThreadPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
-        int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
-
-        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.PRODUCT_VMS_PORT, new String[]{
+        VmsApplicationOptions options = VmsApplicationOptions.build(
+                "localhost",
+                Constants.PRODUCT_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.product",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
-                networkThreadPoolSize, networkSendTimeout);
+        });
 
         // initialize threads
         try {
@@ -50,7 +45,7 @@ public final class Main {
             httpServer.createContext("/product", new ProductHttpHandler(vms));
             httpServer.start();
 
-            System.out.println("Product HTTP Server initialized");
+            LOGGER.log(INFO,"Product HTTP Server initialized");
         } catch (Exception e){
             throw new RuntimeException(e);
         }

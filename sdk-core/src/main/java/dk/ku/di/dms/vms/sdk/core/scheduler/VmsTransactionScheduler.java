@@ -225,7 +225,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         while(true) {
 
             if(task.isScheduled()){
-                // System.out.println(task.tid()+" have not finished yet!");
                 return;
             }
 

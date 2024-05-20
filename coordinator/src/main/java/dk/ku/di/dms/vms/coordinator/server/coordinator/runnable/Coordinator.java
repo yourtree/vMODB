@@ -122,6 +122,8 @@ public final class Coordinator extends StoppableRunnable {
 
     private final int networkBufferSize;
 
+    private final int osBufferSize;
+
     private final int networkSendTimeout;
 
     private final BlockingQueue<Long> batchSignalQueue;
@@ -254,6 +256,7 @@ public final class Coordinator extends StoppableRunnable {
             this.networkBufferSize = MemoryUtils.DEFAULT_PAGE_SIZE;
 
         this.networkSendTimeout = options.getNetworkSendTimeout();
+        this.osBufferSize = options.getOsBufferSize();
 
         this.batchSignalQueue = new LinkedBlockingQueue<>();
     }
@@ -353,7 +356,7 @@ public final class Coordinator extends StoppableRunnable {
             ByteBuffer buffer = null;
 
             try {
-                NetworkUtils.configure(channel, networkBufferSize);
+                NetworkUtils.configure(channel, osBufferSize);
 
                 // right now I cannot discern whether it is a VMS or follower. perhaps I can keep alive channels from leader election?
                 buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
@@ -587,7 +590,7 @@ public final class Coordinator extends StoppableRunnable {
 
                     InetSocketAddress address = new InetSocketAddress(server.host, server.port);
                     channel = AsynchronousSocketChannel.open(group);
-                    NetworkUtils.configure(channel, networkBufferSize);
+                    NetworkUtils.configure(channel, osBufferSize);
                     channel.connect(address).get();
 
                     ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);

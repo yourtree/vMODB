@@ -16,9 +16,12 @@ import java.util.stream.Collectors;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
+import static java.lang.System.Logger.Level.INFO;
 
 @Microservice("stock")
 public final class StockService {
+
+    private static final System.Logger LOGGER = System.getLogger(StockService.class.getName());
 
     private final IStockRepository stockRepository;
 
@@ -30,7 +33,7 @@ public final class StockService {
     @Transactional(type=RW)
     @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     public void updateProduct(ProductUpdated updateEvent) {
-        System.out.println("APP: Stock received an update product event with version: "+updateEvent.version);
+        LOGGER.log(INFO,"APP: Stock received an update product event with version: "+updateEvent.version);
 
         // can use issue statement for faster update
         StockItem stock = this.stockRepository.lookupByKey(new StockItem.StockId(updateEvent.seller_id, updateEvent.product_id));
@@ -48,8 +51,7 @@ public final class StockService {
     @Outbound(STOCK_CONFIRMED)
     @Transactional(type=RW)
     public StockConfirmed reserveStock(ReserveStock reserveStock){
-
-        System.out.println("APP: Stock received a reserve stock event with TID: "+reserveStock.instanceId);
+        LOGGER.log(INFO,"APP: Stock received a reserve stock event with TID: "+reserveStock.instanceId);
 
         Map<StockItem.StockId, CartItem> cartItemMap = reserveStock.items.stream().collect( Collectors.toMap( (f)-> new StockItem.StockId(f.SellerId, f.ProductId), Function.identity()) );
 
@@ -71,7 +73,7 @@ public final class StockService {
             CartItem cartItem = cartItemMap.get( currId );
 
             if (item.version.compareTo(cartItem.Version) != 0) {
-                System.out.println("The version is incorrect. Stock item: "+ item.version+ " Cart item: "+cartItem.Version);
+                LOGGER.log(INFO,"The version is incorrect. Stock item: "+ item.version+ " Cart item: "+cartItem.Version);
                 continue;
             }
 

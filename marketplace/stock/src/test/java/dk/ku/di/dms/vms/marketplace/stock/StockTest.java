@@ -26,10 +26,10 @@ public class StockTest {
 
     private static VmsApplication getVmsApplication() throws Exception {
 
-        VmsApplicationOptions options = new VmsApplicationOptions("localhost", Constants.STOCK_VMS_PORT, new String[]{
+        VmsApplicationOptions options = VmsApplicationOptions.build("localhost", Constants.STOCK_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.stock",
                 "dk.ku.di.dms.vms.marketplace.common"
-        }, 4096, 2, 1000);
+        });
 
         return VmsApplication.build(options);
     }

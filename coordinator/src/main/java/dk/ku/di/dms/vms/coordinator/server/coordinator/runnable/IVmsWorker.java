@@ -39,8 +39,6 @@ public interface IVmsWorker {
     }
 
     enum Command {
-        // SEND_BATCH_OF_EVENTS,
-        // SEND_BATCH_OF_EVENTS_WITH_COMMIT_INFO, // to terminals only
         SEND_BATCH_COMMIT_INFO,
         SEND_BATCH_COMMIT_COMMAND,
         SEND_TRANSACTION_ABORT,

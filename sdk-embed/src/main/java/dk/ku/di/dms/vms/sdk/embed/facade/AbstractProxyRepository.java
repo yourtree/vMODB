@@ -228,7 +228,6 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
                 // must get the index of the column first
                 i = this.table.underlyingPrimaryKeyIndex().schema().columnPosition(entry.getKey());
                 if(object[i] == null){
-                    // System.out.println("ERROR in parsing object!");
                     continue;
                 }
                 entry.getValue().set( entity, object[i] );

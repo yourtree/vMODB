@@ -33,6 +33,8 @@ public class CoordinatorOptions {
 
     private int networkBufferSize = MemoryUtils.DEFAULT_PAGE_SIZE;
 
+    private int osBufferSize = 0;
+
     private int networkSendTimeout = 1000;
 
     /**
@@ -63,6 +65,15 @@ public class CoordinatorOptions {
 
     public CoordinatorOptions withNetworkBufferSize(int networkBufferSize) {
         this.networkBufferSize = networkBufferSize;
+        return this;
+    }
+
+    public int getOsBufferSize(){
+        return this.osBufferSize;
+    }
+
+    public CoordinatorOptions withOsBufferSize(int osBufferSize) {
+        this.osBufferSize = osBufferSize;
         return this;
     }
 

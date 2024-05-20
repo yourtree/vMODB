@@ -78,6 +78,8 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     private final int networkBufferSize;
 
+    private final int osBufferSize;
+
     private final int networkSendTimeout;
 
     /** COORDINATOR **/
@@ -137,11 +139,13 @@ public final class VmsEventHandler extends StoppableRunnable {
                                         IVmsSerdesProxy serdesProxy,
                                         // network
                                         int networkBufferSize,
+                                        int osBufferSize,
                                         int networkThreadPoolSize,
                                         int networkSendTimeout){
         try {
             return new VmsEventHandler(me, vmsMetadata, new ConcurrentHashMap<>(),
-                    transactionalHandler, vmsInternalChannels, serdesProxy, networkBufferSize, networkThreadPoolSize, networkSendTimeout);
+                    transactionalHandler, vmsInternalChannels, serdesProxy,
+                    networkBufferSize, osBufferSize, networkThreadPoolSize, networkSendTimeout);
         } catch (IOException e){
             throw new RuntimeException("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
@@ -154,6 +158,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                             VmsEmbeddedInternalChannels vmsInternalChannels,
                             IVmsSerdesProxy serdesProxy,
                             int networkBufferSize,
+                            int osBufferSize,
                             int networkThreadPoolSize,
                             int networkSendTimeout) throws IOException {
         super();
@@ -198,10 +203,13 @@ public final class VmsEventHandler extends StoppableRunnable {
         this.queuesLeaderSubscribesTo = new HashSet<>();
 
         this.networkBufferSize = networkBufferSize;
+        this.osBufferSize = osBufferSize;
         this.networkSendTimeout = networkSendTimeout;
     }
 
     private static final int MAX_TIMEOUT = 1000;
+
+    private static final boolean BLOCKING = false;
 
     /**
      * A thread that basically writes events to other VMSs and the Leader
@@ -213,23 +221,22 @@ public final class VmsEventHandler extends StoppableRunnable {
      * send and set up the next. Do that iteratively
      */
     private void eventLoop(){
-        List<IVmsTransactionResult> transactionResults = new ArrayList<>();
+        List<IVmsTransactionResult> transactionResults = new ArrayList<>(1024);
         int pollTimeout = 1;
         IVmsTransactionResult txResult_;
         while(this.isRunning()){
-
-            // independently of new events or not, we have to check if the batch has moved
-            this.moveBatchIfNecessary();
-
             try {
-                // this thread can hang indefinitely if poll is not used
-                txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll(pollTimeout, TimeUnit.MILLISECONDS);
-                if(txResult_ == null) {
-                    pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
-                    continue;
+                if(BLOCKING){
+                    txResult_ = this.vmsInternalChannels.transactionOutputQueue().take();
+                } else {
+                    txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll(pollTimeout, TimeUnit.MILLISECONDS);
+                    if (txResult_ == null) {
+                        pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
+                        continue;
+                    }
+                    pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
                 }
 
-                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
                 logger.log(DEBUG,this.me.identifier+": New transaction result in event handler. TID = "+txResult_.tid());
 
                 // it is better to get all the results of a given transaction instead of one by one.
@@ -240,7 +247,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     // assuming is a simple transaction result, not complex, so no need to iterate
                     OutboundEventResult outputEvent = txResult.getOutboundEventResult();
 
-                    // scheduler can be much ahead of the last batch committed
+                    // scheduler can be way ahead of the last batch committed
                     this.numberOfTIDsProcessedPerBatch.put(outputEvent.batch(),
                         this.numberOfTIDsProcessedPerBatch.getOrDefault(outputEvent.batch(), 0)
                                 + 1);
@@ -259,8 +266,13 @@ public final class VmsEventHandler extends StoppableRunnable {
                 }
                 transactionResults.clear();
             } catch (Exception e) {
-                logger.log(ERROR, this.me.identifier+": Problem on handling event: "+e.getMessage());
+                logger.log(ERROR, this.me.identifier+": Problem on handling event\n"+e);
             }
+
+            // only upon new events that we have to check if the batch has moved
+            // the leader "seals" a batch with the assumption there will be a future TID fulfilling it
+            this.moveBatchIfNecessary();
+
         }
     }
 
@@ -552,7 +564,7 @@ public final class VmsEventHandler extends StoppableRunnable {
     private void connectToConsumerVms(List<String> outputEvents, IdentifiableNode vmsNode) {
         try {
             AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(this.group);
-            NetworkUtils.configure(channel, networkBufferSize);
+            NetworkUtils.configure(channel, osBufferSize);
             ConnectToConsumerVmsProtocol protocol = new ConnectToConsumerVmsProtocol(channel, outputEvents, vmsNode);
             channel.connect(vmsNode.asInetSocketAddress(), protocol, protocol.completionHandler);
         } catch (Exception e) {
@@ -784,7 +796,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             logger.log(INFO,me.identifier+": An unknown host has started a connection attempt.");
             final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
             try {
-                NetworkUtils.configure(channel, networkBufferSize);
+                NetworkUtils.configure(channel, osBufferSize);
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 channel.read( buffer, null, new UnknownNodeReadCompletionHandler(channel, buffer) );
             } catch(Exception e){

@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.modb.common.serdes;
 
-import dk.ku.di.dms.vms.modb.common.event.DataRequestEvent;
-import dk.ku.di.dms.vms.modb.common.event.DataResponseEvent;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
@@ -21,12 +19,6 @@ public interface IVmsSerdesProxy {
 
     String serializeDataSchema(Map<String, VmsDataModel> vmsDataSchema);
     Map<String, VmsDataModel> deserializeDataSchema(String vmsDataSchema);
-
-    byte[] serializeDataRequestEvent(DataRequestEvent event);
-    DataRequestEvent deserializeDataRequestEvent(byte[] bytes);
-
-    byte[] serializeDataResponseEvent(DataResponseEvent event);
-    DataResponseEvent deserializeToDataResponseEvent(byte[] bytes);
 
     <K,V> String serializeMap(Map<K,V> map);
     <K,V> Map<K,V> deserializeMap(String mapStr);

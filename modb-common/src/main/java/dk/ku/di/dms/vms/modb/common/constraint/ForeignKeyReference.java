@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.constraint;
 
-public class ForeignKeyReference {
+public final class ForeignKeyReference {
     // this is always part of the same virtual microservice
     private final String parentTableName;
 

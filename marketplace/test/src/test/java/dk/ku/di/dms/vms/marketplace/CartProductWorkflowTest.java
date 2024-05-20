@@ -6,12 +6,12 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.marketplace.common.Utils;
 import dk.ku.di.dms.vms.marketplace.common.inputs.UpdatePrice;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -34,7 +34,7 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
         this.ingestDataIntoProductVms();
 
         // initialize coordinator
-        Properties properties = Utils.loadProperties();
+        Properties properties = ConfigUtils.loadProperties();
         Coordinator coordinator = loadCoordinator(properties);
 
         Thread coordinatorThread = new Thread(coordinator);

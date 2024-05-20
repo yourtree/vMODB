@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.constraint;
 
-public class ConstraintConstants {
+public final class ConstraintConstants {
 
     public static final String NULLABLE = "Nullable";
 
