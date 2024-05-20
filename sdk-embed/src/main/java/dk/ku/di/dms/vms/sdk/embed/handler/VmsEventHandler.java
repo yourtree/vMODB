@@ -585,22 +585,12 @@ public final class VmsEventHandler extends StoppableRunnable {
                 return;
             }
 
-            // this code assumes I am always receiving batch of events
-            int count = result;
-            while(count < networkBufferSize){
-                // get the rest
-                try {
-                    count += this.connectionMetadata.channel.read(readBuffer).get(networkSendTimeout, TimeUnit.MILLISECONDS);
-                } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                    returnByteBuffer(readBuffer);
-                    logger.log(ERROR,me.identifier+": Error on obtaining data from: "+node.identifier);
-                    // ideally we could send a request telling which is the next tid to the producer VMS
-                    // so the producer vms "aligns" its send stream to account for this "lost" package
-                    // but the pending writes somehow covers this problems
-                    // then can just read again from scratch
-                    setUpNewRead();
-                    return;
-                }
+            // this code assumes it is always receiving batch of events
+            if(readBuffer.position() < networkBufferSize){
+                // get the rest before continuing
+                // cannot perform a blocking read at this point because it leads to read exception
+                this.connectionMetadata.channel.read(readBuffer, readBuffer, this);
+                return;
             }
 
             setUpNewRead();
