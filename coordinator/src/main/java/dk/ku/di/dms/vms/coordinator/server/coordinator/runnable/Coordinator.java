@@ -888,12 +888,12 @@ public final class Coordinator extends StoppableRunnable {
                             // although they are necessarily applied in order both here and in the VMSs
                             // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes,
                             // it must check the batch context match to see whether it is completed
-                            if( batchContext.batchOffset == this.batchOffsetPendingCommit){
+                            if(batchContext.batchOffset == this.batchOffsetPendingCommit){
                                 this.sendCommitRequestToVMSs(batchContext);
                                 this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
                                 this.batchSignalQueue.put(batchContext.lastTid);
                             } else {
-                                logger.log(INFO,"Leader: Batch "+ msg.batch() +" is not the pending one. Still has to wait for the pending to finish before progressing...");
+                                logger.log(INFO,"Leader: Batch "+ msg.batch() +" is not the pending one. Still has to wait for the pending batch ("+this.batchOffsetPendingCommit+") to finish before progressing...");
                             }
                         }
                     }

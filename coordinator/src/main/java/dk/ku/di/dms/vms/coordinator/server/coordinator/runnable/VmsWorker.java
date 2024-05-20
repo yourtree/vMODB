@@ -247,19 +247,22 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     if(this.transactionEvents.isEmpty()){
                         pollTimeout = Math.min(pollTimeout * 2, MAX_SLEEP);
                     } else {
-                        this.transactionEvents.drainTo(this.localTxEvents);
                         this.sendBatchedEvents();
                     }
                 } else {
                     pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
-                    // drain message queue
                     switch (message.type()) {
                         // in order of probability
-                        case SEND_BATCH_COMMIT_INFO -> this.sendBatchOfEvents(message.asBatchCommitInfo());
+                        case SEND_BATCH_COMMIT_INFO -> this.sendBatchCommitInfo(message.asBatchCommitInfo());
                         case SEND_BATCH_COMMIT_COMMAND -> this.sendBatchCommitRequest(message);
                         case SEND_TRANSACTION_ABORT -> this.sendTransactionAbort(message);
                         case SEND_CONSUMER_SET -> this.sendConsumerSet(message);
                     }
+
+                    if(!this.transactionEvents.isEmpty()){
+                        this.sendBatchedEvents();
+                    }
+
                 }
 
                 this.processPendingWrites();
@@ -342,7 +345,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         try {
             ByteBuffer writeBuffer = this.retrieveByteBuffer();
             BatchCommitCommand.write(writeBuffer, commitRequest);
-
             writeBuffer.flip();
 
             this.WRITE_SYNCHRONIZER.take();
@@ -360,7 +362,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             if(this.WRITE_SYNCHRONIZER.isEmpty()){
                 this.WRITE_SYNCHRONIZER.add(DUMB);
             }
-
         }
     }
 
@@ -469,9 +470,18 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                         logger.log(WARNING, "Leader: Unknown message received.");
 
             }
-            readBuffer.clear();
+
+            // must take into account more data has arrived. otherwise can lead to losing a batch complete
+            if(readBuffer.position() < carryOn + result){
+                carryOn = carryOn + result;
+            } else {
+                carryOn = 0;
+                readBuffer.clear();
+            }
             channel.read( readBuffer, null, this );
         }
+
+        private volatile int carryOn = 0;
 
         @Override
         public void failed(Throwable exc, Void attachment) {
@@ -498,18 +508,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.state = State.VMS_PRESENTATION_PROCESSED;
         // let coordinator aware this vms worker already has the vms identifier
         this.coordinatorQueue.add(new Coordinator.Message(Coordinator.Type.VMS_IDENTIFIER, new VmsIdentifier(this.vmsNode, this)));
-    }
-
-    /**
-     * Need to send the last batch too so the vms can safely start the new batch
-     */
-    private void sendBatchOfEvents(BatchCommitInfo.Payload batchCommitInfo) {
-        if(!this.transactionEvents.isEmpty()){
-            this.transactionEvents.drainTo(localTxEvents);
-            this.sendBatchedEventsWithCommitInfo(batchCommitInfo);
-        } else {
-            this.sendBatchCommitInfo(batchCommitInfo);
-        }
     }
 
     private void sendBatchCommitInfo(BatchCommitInfo.Payload batchCommitInfo){
@@ -550,6 +548,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
      * While a write operation is in progress, it must wait for completion and then submit the next write.
      */
     private void sendBatchedEvents(){
+        this.transactionEvents.drainTo(this.localTxEvents);
         int remaining = this.localTxEvents.size();
         int count = remaining;
         ByteBuffer writeBuffer;
@@ -572,9 +571,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             } catch (Exception e) {
                 logger.log(ERROR, "Leader: Error on submitting ["+count+"] events to "+this.vmsNode.identifier+":"+e);
                 // return events to the deque
-                while(!localTxEvents.isEmpty()) {
-                    if(transactionEvents.offerFirst(localTxEvents.get(0))){
-                        localTxEvents.remove(0);
+                while(!this.localTxEvents.isEmpty()) {
+                    if(this.transactionEvents.offerFirst(this.localTxEvents.get(0))){
+                        this.localTxEvents.remove(0);
                     }
                 }
 
@@ -587,101 +586,10 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
             }
         }
-        localTxEvents.clear();
+        this.localTxEvents.clear();
     }
 
     private final BlockingDeque<ByteBuffer> PENDING_WRITES_BUFFER = new LinkedBlockingDeque<>();
-
-    /**
-     * If the target VMS is a terminal in the current batch,
-     * then the batch commit info must be appended
-     */
-    private void sendBatchedEventsWithCommitInfo(BatchCommitInfo.Payload batchCommitInfo){
-        logger.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info will be sent to: " + this.vmsNode.identifier);
-        this.transactionEvents.drainTo(this.localTxEvents);
-        int remaining = this.localTxEvents.size();
-        int count = remaining;
-        ByteBuffer writeBuffer;
-        while(true) {
-            try {
-                writeBuffer = this.retrieveByteBuffer();
-                remaining = BatchUtils.assembleBatchPayload(remaining, this.localTxEvents, writeBuffer);
-
-                if (remaining == 0) {
-                    // now must append the batch commit info
-                    // do we have space in the buffer?
-                    if (writeBuffer.remaining() < BatchCommitInfo.SIZE) {
-                        // if not, send what we can for now
-
-                        writeBuffer.position(0);
-
-                        logger.log(INFO, "Leader: Submitting ["+(count - remaining)+"] events to "+vmsNode.identifier);
-
-                        // send batch first
-                        this.WRITE_SYNCHRONIZER.take();
-                        this.channel.write(writeBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.batchWriteCompletionHandler);
-                        count = remaining;
-
-                        // get a new bb
-                        writeBuffer = this.retrieveByteBuffer();
-                        BatchCommitInfo.write(writeBuffer, batchCommitInfo);
-                        writeBuffer.flip();
-
-                        // then send batch commit info
-                        this.WRITE_SYNCHRONIZER.take();
-                        this.channel.write(writeBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
-
-                    } else {
-                        BatchCommitInfo.write(writeBuffer, batchCommitInfo);
-
-                        // update number of events
-                        writeBuffer.mark();
-                        int currCount = writeBuffer.getInt(1);
-                        currCount++;
-                        writeBuffer.putInt(1, currCount);
-                        writeBuffer.reset();
-
-                        writeBuffer.position(0);
-
-                        this.WRITE_SYNCHRONIZER.take();
-                        this.channel.write(writeBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.batchWriteCompletionHandler);
-                    }
-
-                    // break because there is no more events to process
-                    break;
-                }
-
-                // writeBuffer.flip();
-                writeBuffer.position(0);
-
-                this.WRITE_SYNCHRONIZER.take();
-                this.channel.write(writeBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.batchWriteCompletionHandler);
-
-            } catch (Exception e) {
-                logger.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") with commit info to " + this.vmsNode.identifier+" ERROR: "+e);
-                // return events to the deque
-                while(!this.localTxEvents.isEmpty()) {
-                    if(this.transactionEvents.offerFirst(this.localTxEvents.get(0))){
-                        this.localTxEvents.remove(0);
-                    }
-                }
-                if(!this.channel.isOpen()){
-                    this.vmsNode.off();
-                    break; // force exit loop
-                }
-
-                if(this.WRITE_SYNCHRONIZER.isEmpty()){
-                    this.WRITE_SYNCHRONIZER.add(DUMB);
-                }
-
-            }
-        }
-
-        // clear list of events to avoid repetition
-        this.localTxEvents.clear();
-
-        logger.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") with commit info sent to: " + this.vmsNode.identifier);
-    }
 
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
 
@@ -709,7 +617,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private final class BatchWriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
-            logger.log(INFO, "Leader: Message with size " + result + " has been sent to: " + consumerVms.identifier);
+            logger.log(DEBUG, "Leader: Message with size " + result + " has been sent to: " + consumerVms.identifier);
             if(byteBuffer.hasRemaining()) {
                 // keep the lock and send the remaining
                 channel.write(byteBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, byteBuffer, this);

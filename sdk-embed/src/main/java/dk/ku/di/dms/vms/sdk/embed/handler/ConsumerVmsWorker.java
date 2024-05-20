@@ -215,8 +215,9 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
-            logger.log(INFO, me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
+            logger.log(DEBUG, me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
             if(byteBuffer.hasRemaining()){
+                logger.log(WARNING, me.identifier + ": Remaining bytes will be sent to: " + consumerVms.identifier);
                 // keep the lock and send the remaining
                 connectionMetadata.channel.write(byteBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, byteBuffer, this);
             } else {

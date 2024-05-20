@@ -605,7 +605,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 return;
             }
 
-            setUpNewRead();
+            this.setUpNewRead();
 
             readBuffer.position(0);
             byte messageType = readBuffer.get();
@@ -650,13 +650,14 @@ public final class VmsEventHandler extends StoppableRunnable {
             if(inboundEvents == null) inboundEvents = new ArrayList<>(1024);
             try {
                 int count = readBuffer.getInt();
-                logger.log(INFO,me.identifier + ": Batch of [" + count + "] events received from " + node.identifier);
+                logger.log(DEBUG,me.identifier + ": Batch of [" + count + "] events received from " + node.identifier);
                 TransactionEvent.Payload payload;
                 int i = 0;
                 while (i < count) {
                     // move offset to discard message type
                     readBuffer.get();
                     payload = TransactionEvent.read(readBuffer);
+                    logger.log(INFO, me.identifier+": Processed TID "+payload.tid());
                     if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
                         InboundEvent inboundEvent = buildInboundEvent(payload);
                         inboundEvents.add(inboundEvent);
@@ -672,7 +673,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     }
                 }
 
-                logger.log(INFO, "Number of inputs pending processing: "+vmsInternalChannels.transactionInputQueue().size());
+                logger.log(DEBUG, "Number of inputs pending processing: "+vmsInternalChannels.transactionInputQueue().size());
 
             } catch(Exception e){
                 if (e instanceof BufferUnderflowException)
@@ -986,16 +987,10 @@ public final class VmsEventHandler extends StoppableRunnable {
 
             if(readBuffer.get(0) == BATCH_OF_EVENTS) {
                 // must take into account the position of the buffer
-                while (readBuffer.position() < networkBufferSize) {
+                if (readBuffer.position() < networkBufferSize) {
                     // get the rest of the batch
-                    try {
-                        this.connectionMetadata.channel.read(readBuffer).get(networkSendTimeout, TimeUnit.MILLISECONDS);
-                    } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                        returnByteBuffer(readBuffer);
-                        logger.log(ERROR, me.identifier + ": Error on obtaining data from the leader");
-                        setUpNewRead();
-                        return;
-                    }
+                    this.connectionMetadata.channel.read(readBuffer, readBuffer, this);
+                    return;
                 }
             }
 
@@ -1011,13 +1006,13 @@ public final class VmsEventHandler extends StoppableRunnable {
                     // events of this batch from VMSs may arrive before the batch commit info
                     // it means this VMS is a terminal node for the batch
                     BatchCommitInfo.Payload bPayload = BatchCommitInfo.read(readBuffer);
-                    logger.log(INFO,me.identifier + ": Batch ("+bPayload.batch()+") commit info received from the leader");
+                    logger.log(DEBUG,me.identifier + ": Batch ("+bPayload.batch()+") commit info received from the leader");
                     processNewBatchInfo(bPayload);
                 }
                 case (BATCH_COMMIT_COMMAND) -> {
                     // a batch commit queue from next batch can arrive before this vms moves next? yes
                     BatchCommitCommand.Payload payload = BatchCommitCommand.read(readBuffer);
-                    logger.log(INFO,me.identifier+": Batch ("+payload.batch()+") commit command received from the leader");
+                    logger.log(DEBUG,me.identifier+": Batch ("+payload.batch()+") commit command received from the leader");
                     processNewBatchInfo(payload);
                 }
                 case (EVENT) -> {
@@ -1055,18 +1050,24 @@ public final class VmsEventHandler extends StoppableRunnable {
                 // it would not reach here if network size buffer had not been reached
                 setUpNewRead();
                 returnByteBuffer(readBuffer);
-            } else if(readBuffer.position() < result){ // ---> more data to read
+                carryOn = 0;
+            } else if(readBuffer.position() < carryOn + result){ // ---> more data to read
                 // cannot set new read now because may break a single batch into two read buffers =(
 
                 // assumption: batch of events always fills the entire buffer (i.e., it is our limit/end mark)
                 readBuffer.compact();
+                int aux = carryOn + result;
+                carryOn = aux;
                 connectionMetadata.channel.read(readBuffer, readBuffer, this);
             } else {
                 setUpNewRead();
                 returnByteBuffer(readBuffer);
+                carryOn = 0;
             }
 
         }
+
+        private volatile int carryOn = 0;
 
         private void processSingleEvent(ByteBuffer readBuffer) {
             try {
@@ -1104,36 +1105,16 @@ public final class VmsEventHandler extends StoppableRunnable {
             try {
                 // to increase performance, one would buffer this buffer for processing and then read from another buffer
                 int count = readBuffer.getInt();
-                logger.log(INFO,me.identifier + ": Batch of [" + count + "] events received from the leader");
+                logger.log(DEBUG,me.identifier + ": Batch of [" + count + "] events received from the leader");
 
                 // extract events batched
-                for (int i = 0; i < count - 1; i++) {
+                for (int i = 0; i < count; i++) {
                     // move offset to discard message type
                     readBuffer.get();
                     payload = TransactionEvent.read(readBuffer);
-                    logger.log(DEBUG, me.identifier+": Processed TID "+payload.tid());
+                    logger.log(INFO, me.identifier+": Processed TID "+payload.tid());
                     if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
                         payloads.add(buildInboundEvent(payload));
-                    }
-                }
-                // batch commit info always come last
-                byte eventType = readBuffer.get();
-                if (eventType == BATCH_COMMIT_INFO) {
-                    // it means this VMS is a terminal node in sent batch
-                    BatchCommitInfo.Payload bPayload = BatchCommitInfo.read(readBuffer);
-                    logger.log(INFO,me.identifier + ": Batch ("+bPayload.batch()+") commit info received from the leader");
-                    processNewBatchInfo(bPayload);
-                    if((count-1) != payloads.size()){
-                        logger.log(WARNING,me.identifier + ": Batch of [" +count+ "] events != "+payloads.size()+" from leader that will be pushed to worker "+me.identifier);
-                    }
-                } else { // then it is still event
-                    payload = TransactionEvent.read(readBuffer);
-                    logger.log(DEBUG,me.identifier+": Processed TID "+payload.tid());
-                    if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
-                        payloads.add(buildInboundEvent(payload));
-                    }
-                    if(count != payloads.size()){
-                        logger.log(WARNING,me.identifier + ": Batch of [" +count+ "] events != "+payloads.size()+" from leader that will be pushed to worker "+me.identifier);
                     }
                 }
 
@@ -1144,7 +1125,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     }
                 }
 
-                logger.log(INFO, "Number of inputs pending processing: "+vmsInternalChannels.transactionInputQueue().size());
+                logger.log(DEBUG, "Number of inputs pending processing: "+vmsInternalChannels.transactionInputQueue().size());
 
             } catch (Exception e){
                 logger.log(ERROR, me.identifier +": Error while processing a batch:"+e);

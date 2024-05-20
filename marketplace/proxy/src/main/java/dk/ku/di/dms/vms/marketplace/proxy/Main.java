@@ -156,7 +156,7 @@ public final class Main {
         Map<Integer, IdentifiableNode> starterVMSs;
 
         String transactionsRaw = properties.getProperty("transactions");
-        String[] transactions = transactionsRaw.split(";");
+        String[] transactions = transactionsRaw.split(",");
         if(Arrays.stream(transactions).anyMatch(p->p.contentEquals("checkout"))) {
             starterVMSs = buildStarterVMSsFull(properties);
         } else {
