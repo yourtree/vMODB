@@ -18,8 +18,7 @@ public class ConnectionMetadata {
 
     public enum NodeType {
         SERVER,
-        VMS,
-        CLIENT
+        VMS
     }
 
     public ConnectionMetadata(int key, NodeType nodeType, AsynchronousSocketChannel channel) {
@@ -27,4 +26,5 @@ public class ConnectionMetadata {
         this.nodeType = nodeType;
         this.channel = channel;
     }
+
 }

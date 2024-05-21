@@ -19,7 +19,6 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
@@ -84,13 +83,14 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     /** COORDINATOR **/
     private ServerNode leader;
-    private LockConnectionMetadata leaderConnectionMetadata;
+
+    private ConnectionMetadata leaderConnectionMetadata;
 
     // the thread responsible to send data to the leader
     private LeaderWorker leaderWorker;
 
     // refer to what operation must be performed
-    private final BlockingQueue<LeaderWorker.Message> leaderWorkerQueue;
+    // private final BlockingQueue<Object> leaderWorkerQueue;
 
     // cannot be final, may differ across time and new leaders
     private final Set<String> queuesLeaderSubscribesTo;
@@ -199,7 +199,6 @@ public final class VmsEventHandler extends StoppableRunnable {
         this.leader = new ServerNode("localhost",0);
         this.leader.off();
 
-        this.leaderWorkerQueue = new LinkedBlockingDeque<>();
         this.queuesLeaderSubscribesTo = new HashSet<>();
 
         this.networkBufferSize = networkBufferSize;
@@ -225,6 +224,10 @@ public final class VmsEventHandler extends StoppableRunnable {
         int pollTimeout = 1;
         IVmsTransactionResult txResult_;
         while(this.isRunning()){
+
+            // can acknowledge batch completion even though no event from next batch has arrived
+            this.moveBatchIfNecessary();
+
             try {
                 if(BLOCKING){
                     txResult_ = this.vmsInternalChannels.transactionOutputQueue().take();
@@ -269,10 +272,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                 logger.log(ERROR, this.me.identifier+": Problem on handling event\n"+e);
             }
 
-            // only upon new events that we have to check if the batch has moved
-            // the leader "seals" a batch with the assumption there will be a future TID fulfilling it
-            this.moveBatchIfNecessary();
-
         }
     }
 
@@ -305,7 +304,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
     }
 
-    // private static final Object DUMB_OBJECT = new Object();
+    private static final Object DUMB_OBJECT = new Object();
 
     /**
      * it may be the case that, due to an abort of the last tid, the last tid changes
@@ -322,20 +321,20 @@ public final class VmsEventHandler extends StoppableRunnable {
         if(this.currentBatch.isOpen() && this.currentBatch.numberOfTIDsBatch ==
                 this.numberOfTIDsProcessedPerBatch.getOrDefault(this.currentBatch.batch, 0)){
 
-            logger.log(INFO,this.me.identifier+": The last TID ("+this.currentBatch.lastTid+") for the current batch ("+this.currentBatch.batch+") has been executed");
+            logger.log(DEBUG,this.me.identifier+": The last TID ("+this.currentBatch.lastTid+") for the current batch ("+this.currentBatch.batch+") has been executed");
 
             // many outputs from the same transaction may arrive here, but can only send the batch commit once
             this.currentBatch.setStatus(BatchContext.BATCH_COMPLETED);
 
             // if terminal, must send batch complete
             if(this.currentBatch.terminal) {
-                logger.log(INFO,this.me.identifier+": Informing coordinator the current batch ("+this.currentBatch.batch+") completion since I am a terminal node");
+                logger.log(DEBUG,this.me.identifier+": Informing coordinator the current batch ("+this.currentBatch.batch+") completion since I am a terminal node");
                 // must be queued in case leader is off and comes back online
-                this.leaderWorkerQueue.add(new LeaderWorker.Message(LeaderWorker.Command.SEND_BATCH_COMPLETE,
-                        BatchComplete.of(this.currentBatch.batch, this.me.identifier)));
+                this.leaderWorker.queueMessage(BatchComplete.of(this.currentBatch.batch, this.me.identifier));
             }
-            // add in a later moment
-            // this.vmsInternalChannels.batchCommitCommandQueue().add( DUMB_OBJECT );
+
+            // this is necessary to move the batch to committed and allow the batches to progress
+            this.vmsInternalChannels.batchCommitCommandQueue().add( DUMB_OBJECT );
         }
     }
 
@@ -399,8 +398,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         // it may not be necessary. the leader has already moved on at this point
         if(INFORM_BATCH_ACK) {
-             this.leaderWorkerQueue.add( new LeaderWorker.Message( LeaderWorker.Command.SEND_BATCH_COMMIT_ACK,
-                    BatchCommitAck.of(this.currentBatch.batch, this.me.identifier) ));
+            this.leaderWorker.queueMessage(BatchCommitAck.of(this.currentBatch.batch, this.me.identifier));
         }
     }
 
@@ -658,7 +656,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     // move offset to discard message type
                     readBuffer.get();
                     payload = TransactionEvent.read(readBuffer);
-                    logger.log(INFO, me.identifier+": Processed TID "+payload.tid());
+                    logger.log(DEBUG, me.identifier+": Processed TID "+payload.tid());
                     if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
                         InboundEvent inboundEvent = buildInboundEvent(payload);
                         inboundEvents.add(inboundEvent);
@@ -863,7 +861,9 @@ public final class VmsEventHandler extends StoppableRunnable {
                 logger.log(INFO,me.identifier+": Presentation sent to Leader successfully");
                 state = State.PRESENTATION_SENT;
                 // set up leader worker
-                leaderWorker = new LeaderWorker(me, leader, leaderConnectionMetadata, leaderWorkerQueue);
+                leaderWorker = new LeaderWorker(me, leader,
+                        leaderConnectionMetadata.channel,
+                        MemoryManager.getTemporaryDirectBuffer(networkBufferSize));
                 new Thread(leaderWorker).start();
                 logger.log(INFO,me.identifier+": Leader worker set up");
                 buffer.clear();
@@ -901,13 +901,10 @@ public final class VmsEventHandler extends StoppableRunnable {
 
             if(leaderConnectionMetadata == null) {
                 // then setup connection metadata and read completion handler
-                leaderConnectionMetadata = new LockConnectionMetadata(
+                leaderConnectionMetadata = new ConnectionMetadata(
                         leader.hashCode(),
-                        LockConnectionMetadata.NodeType.SERVER,
-                        buffer,
-                        MemoryManager.getTemporaryDirectBuffer(networkBufferSize),
-                        channel,
-                        null
+                        ConnectionMetadata.NodeType.SERVER,
+                        channel
                 );
             } else {
                 // considering the leader has replicated the metadata before failing
@@ -970,9 +967,9 @@ public final class VmsEventHandler extends StoppableRunnable {
     @SuppressWarnings("SequencedCollectionMethodCanBeUsed")
     private final class LeaderReadCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
 
-        private final LockConnectionMetadata connectionMetadata;
+        private final ConnectionMetadata connectionMetadata;
 
-        public LeaderReadCompletionHandler(LockConnectionMetadata connectionMetadata){
+        public LeaderReadCompletionHandler(ConnectionMetadata connectionMetadata){
             this.connectionMetadata = connectionMetadata;
             LIST_BUFFER.add(new ArrayList<>(1024));
         }
@@ -1112,7 +1109,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     // move offset to discard message type
                     readBuffer.get();
                     payload = TransactionEvent.read(readBuffer);
-                    logger.log(INFO, me.identifier+": Processed TID "+payload.tid());
+                    logger.log(DEBUG, me.identifier+": Processed TID "+payload.tid());
                     if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
                         payloads.add(buildInboundEvent(payload));
                     }

@@ -42,7 +42,6 @@ import java.util.stream.Collectors;
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
 import static dk.ku.di.dms.vms.coordinator.server.coordinator.options.BatchReplicationStrategy.ALL;
 import static dk.ku.di.dms.vms.coordinator.server.coordinator.options.BatchReplicationStrategy.*;
-import static dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.IVmsWorker.Command.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.PRESENTATION;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.SERVER_TYPE;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.VMS_TYPE;
@@ -128,39 +127,7 @@ public final class Coordinator extends StoppableRunnable {
 
     private final BlockingQueue<Long> batchSignalQueue;
 
-    /**
-     * Vms workers append to this queue
-      */
-    public record Message(
-            Type type,
-            Object object) {
-
-        public BatchComplete.Payload asBatchComplete(){
-            return (BatchComplete.Payload)object;
-        }
-
-        public TransactionAbort.Payload asTransactionAbort(){
-            return (TransactionAbort.Payload)object;
-        }
-
-        public BatchCommitAck.Payload asBatchCommitAck(){
-            return (BatchCommitAck.Payload)object;
-        }
-
-        public VmsIdentifier asVmsIdentifier(){
-            return (VmsIdentifier)object;
-        }
-
-    }
-
-    enum Type {
-        BATCH_COMPLETE,
-        TRANSACTION_ABORT,
-        BATCH_COMMIT_ACK,
-        VMS_IDENTIFIER
-    }
-
-    private final BlockingQueue<Message> coordinatorQueue;
+    private final BlockingQueue<Object> coordinatorQueue;
 
     public static Coordinator build(// obtained from leader election or passed by parameter on setup
                                     Map<Integer, ServerNode> servers,
@@ -544,15 +511,16 @@ public final class Coordinator extends StoppableRunnable {
         BatchContext newBatchContext = new BatchContext(this.currentBatchOffset);
         this.batchContextMap.put( this.currentBatchOffset, newBatchContext );
 
-        logger.log(INFO,"Leader: New batch offset is "+this.currentBatchOffset);
-
         // new TIDs will be emitted with the new batch in the transaction manager
         // just iterate over terminals directly
         for(String terminalVms : currBatchContext.terminalVMSs){
             VmsIdentifier vms = this.vmsMetadataMap.get(terminalVms);
-            vms.worker().queueMessage(new IVmsWorker.Message(SEND_BATCH_COMMIT_INFO,
-                    BatchCommitInfo.of(vms.node().batch, vms.node().lastTidOfBatch, vms.node().previousBatch, vms.node().numberOfTIDsCurrentBatch) ) );
+            vms.worker().queueMessage(
+                    BatchCommitInfo.of(vms.node().batch, vms.node().lastTidOfBatch,
+                            vms.node().previousBatch, vms.node().numberOfTIDsCurrentBatch) );
         }
+
+        logger.log(INFO,"Leader: Next batch offset will be "+this.currentBatchOffset);
 
         // the batch commit only has progress (a safety property) the way it is implemented now when future events
         // touch the same VMSs that have been touched by transactions in the last batch.
@@ -753,7 +721,7 @@ public final class Coordinator extends StoppableRunnable {
                 logger.log(ERROR,"Leader: The event was going to be queued to the incorrect VMS worker!");
             }
             logger.log(DEBUG,"Leader: Adding event "+event.name+" to "+vms.node().identifier+" worker");
-            vms.worker().queueEvent(txEvent);
+            vms.worker().queueTransactionEvent(txEvent);
 
             // update the last tid of the terminals
             for(String vmsIdentifier : transactionDAG.terminalNodes){
@@ -802,9 +770,10 @@ public final class Coordinator extends StoppableRunnable {
      */
     private void processEventsSentByVmsWorkers() {
         int pollTimeout = 50;
+        Object message;
         while(this.isRunning()){
             try {
-                Message message = this.coordinatorQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
+                message = this.coordinatorQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
                 // then put to poll again
                 if(message == null){
                     pollTimeout = pollTimeout * 2;
@@ -813,10 +782,9 @@ public final class Coordinator extends StoppableRunnable {
                 // decrease for next polling
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
 
-                switch(message.type){
+                switch(message){
                     // receive metadata from all microservices
-                    case VMS_IDENTIFIER -> {
-                        VmsIdentifier vmsIdentifier_ = message.asVmsIdentifier();
+                    case VmsIdentifier vmsIdentifier_ -> {
                         logger.log(INFO,"Leader: Received a VMS_IDENTIFIER from: "+vmsIdentifier_.getIdentifier());
                         // update metadata of this node so coordinator can reason about data dependencies
                         this.vmsMetadataMap.put( vmsIdentifier_.getIdentifier(), vmsIdentifier_ );
@@ -857,27 +825,25 @@ public final class Coordinator extends StoppableRunnable {
                                 mapStr = this.serdesProxy.serializeConsumerSet(vmsConsumerSet);
                                 logger.log(INFO,"Leader: Consumer set built for "+vmsIdentifier.getIdentifier()+": "+mapStr);
                             }
-                            vmsIdentifier.worker().queueMessage( new IVmsWorker.Message( SEND_CONSUMER_SET, mapStr ));
+                            vmsIdentifier.worker().queueMessage(mapStr);
                         }
                     }
-                    case TRANSACTION_ABORT -> {
+                    case TransactionAbort.Payload msg -> {
                         // send abort to all VMSs...
                         // later we can optimize the number of messages since some VMSs may not need to receive this abort
                         // cannot commit the batch unless the VMS is sure there will be no aborts...
                         // this is guaranteed by design, since the batch complete won't arrive unless all events of the batch arrive at the terminal VMSs
-                        TransactionAbort.Payload msg = message.asTransactionAbort();
                         this.batchContextMap.get( msg.batch() ).tidAborted = msg.tid();
                         // can reuse the same buffer since the message does not change across VMSs like the commit request
                         for(VmsIdentifier vms : this.vmsMetadataMap.values()){
                             // don't need to send to the vms that aborted
                             if(vms.getIdentifier().equalsIgnoreCase( msg.vms() )) continue;
-                            vms.worker().queueMessage( new IVmsWorker.Message( SEND_TRANSACTION_ABORT, msg.tid()));
+                            vms.worker().queueMessage(msg.tid());
                         }
                     }
-                    case BATCH_COMPLETE -> {
+                    case BatchComplete.Payload msg -> {
                         // what if ACKs from VMSs take too long? or never arrive?
                         // need to deal with intersecting batches? actually just continue emitting for higher throughput
-                        BatchComplete.Payload msg = message.asBatchComplete();
                         logger.log(INFO,"Leader: Processing batch ("+msg.batch()+") complete from: "+msg.vms());
                         BatchContext batchContext = this.batchContextMap.get( msg.batch() );
                         // only if it is not a duplicate vote
@@ -897,15 +863,13 @@ public final class Coordinator extends StoppableRunnable {
                             }
                         }
                     }
-                    case BATCH_COMMIT_ACK -> {
+                    case BatchCommitAck.Payload msg ->
                         // let's just ignore the ACKs. since the terminals have responded, that means the VMSs before them have processed the transactions in the batch
                         // not sure if this is correct since we have to wait for all VMSs to respond...
                         // only when all vms respond with BATCH_COMMIT_ACK we move this ...
                         //        this.batchOffsetPendingCommit = batchContext.batchOffset;
-                        BatchCommitAck.Payload msg = message.asBatchCommitAck();
                         logger.log(INFO,"Leader: Batch "+ msg.batch() +" commit ACK received from "+msg.vms());
-                    }
-                    default -> logger.log(WARNING,"Leader: Received an unidentified message: "+message.type);
+                    default -> logger.log(WARNING,"Leader: Received an unidentified message type: "+message.getClass().getName());
                 }
 
             } catch (Exception e) {
@@ -933,14 +897,14 @@ public final class Coordinator extends StoppableRunnable {
                 continue;
             }
 
-            vms.worker().queueMessage( new IVmsWorker.Message(SEND_BATCH_COMMIT_COMMAND,
+            vms.worker().queueMessage(
                     new BatchCommitCommand.Payload(
                         batchContext.batchOffset,
                         batchContext.lastTidOfBatchPerVms.get(vms.getIdentifier()),
                         batchContext.previousBatchPerVms.get(vms.getIdentifier()),
                         batchContext.numberOfTasksPerVms.get(vms.getIdentifier())
                     )
-            ));
+            );
         }
     }
 

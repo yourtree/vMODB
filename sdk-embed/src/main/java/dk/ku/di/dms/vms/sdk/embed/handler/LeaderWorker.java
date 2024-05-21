@@ -6,11 +6,13 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
-import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
+import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 
 import static java.lang.System.Logger.Level.*;
@@ -27,56 +29,28 @@ final class LeaderWorker extends StoppableRunnable {
 
     private final ServerNode leader;
 
-    private final LockConnectionMetadata leaderConnectionMetadata;
+    private final AsynchronousSocketChannel channel;
+    
+    private final ByteBuffer writeBuffer;
 
     // private final BlockingDeque<TransactionEvent.PayloadRaw> eventsToSendToLeader;
 
-    private final BlockingQueue<Message> leaderWorkerQueue;
+    private final BlockingQueue<Object> leaderWorkerQueue;
 
     private final VmsNode vmsNode;
 
-    /**
-     * Messages that correspond to operations that can only be
-     * spawned when a set of asynchronous messages arrive
-     */
-    enum Command {
-        SEND_EVENT,
-        SEND_BATCH_COMPLETE, // inform batch completion
-        SEND_BATCH_COMMIT_ACK, // inform commit completed
-        SEND_TRANSACTION_ABORT // inform that a tid aborted
-    }
-
-    record Message(Command type, Object object){
-
-        public BatchCommitAck.Payload asBatchCommitAck() {
-            return (BatchCommitAck.Payload)object;
-        }
-
-        public BatchComplete.Payload asBatchComplete(){
-            return (BatchComplete.Payload)object;
-        }
-
-        public TransactionAbort.Payload asTransactionAbort(){
-            return (TransactionAbort.Payload)object;
-        }
-
-        public TransactionEvent.PayloadRaw asEvent(){
-            return (TransactionEvent.PayloadRaw)object;
-        }
-
-    }
-
     public LeaderWorker(VmsNode vmsNode,
                         ServerNode leader,
-                        LockConnectionMetadata leaderConnectionMetadata,
-                        BlockingQueue<Message> leaderWorkerQueue){
+                        AsynchronousSocketChannel channel,
+                        ByteBuffer writeBuffer){
         this.vmsNode = vmsNode;
         this.leader = leader;
-        this.leaderConnectionMetadata = leaderConnectionMetadata;
-        this.leaderWorkerQueue = leaderWorkerQueue;
+        this.channel = channel;
+        this.writeBuffer = writeBuffer;
+        this.leaderWorkerQueue = new LinkedBlockingDeque<>();
     }
 
-    private static final boolean BLOCKING = true;
+    private static final boolean BLOCKING = false;
 
     private static final int MAX_TIMEOUT = 5000;
 
@@ -84,7 +58,7 @@ final class LeaderWorker extends StoppableRunnable {
     public void run() {
         LOGGER.log(INFO, vmsNode.identifier+": Leader worker started!");
         int pollTimeout = 50;
-        Message msg;
+        Object msg;
         while (this.isRunning()){
             try {
                 if(BLOCKING){
@@ -98,12 +72,19 @@ final class LeaderWorker extends StoppableRunnable {
                     pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
                 }
 
-                LOGGER.log(INFO, vmsNode.identifier+": Leader worker will send message type: "+ msg.type());
-                switch (msg.type()) {
-                    case SEND_BATCH_COMPLETE -> this.sendBatchComplete(msg.asBatchComplete());
-                    case SEND_BATCH_COMMIT_ACK -> this.sendBatchCommitAck(msg.asBatchCommitAck());
-                    case SEND_TRANSACTION_ABORT -> this.sendTransactionAbort(msg.asTransactionAbort());
-                    case SEND_EVENT -> this.sendEvent(msg.asEvent());
+                LOGGER.log(INFO, vmsNode.identifier+": Leader worker will send message type: "+ msg.getClass().getName());
+                try {
+                    switch (msg) {
+                        case BatchComplete.Payload o -> this.sendBatchComplete(o);
+                        case BatchCommitAck.Payload o -> this.sendBatchCommitAck(o);
+                        case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
+                        case TransactionEvent.PayloadRaw o -> this.sendEvent(o);
+                        default ->
+                                LOGGER.log(WARNING, vmsNode.identifier + ": Leader worker do not recognize message type: " + msg.getClass().getName());
+                    }
+                } catch (Exception e){
+                    LOGGER.log(ERROR, vmsNode.identifier+": Error on processing message: " + e.getMessage());
+                    this.queueMessage(msg);
                 }
             } catch (Exception e) {
                 LOGGER.log(ERROR, vmsNode.identifier+": Error on taking message from worker queue: "+e.getCause().getMessage());
@@ -119,31 +100,30 @@ final class LeaderWorker extends StoppableRunnable {
             int newRemaining = remaining - result;
             if(newRemaining > 0) {
                 LOGGER.log(DEBUG, vmsNode.identifier+": Leader worker will send remaining bytes: "+newRemaining);
-                leaderConnectionMetadata.channel.write(leaderConnectionMetadata.writeBuffer, newRemaining, writeCompletionHandler);
+                channel.write(writeBuffer, newRemaining, this);
             } else {
-                leaderConnectionMetadata.writeBuffer.clear();
+                writeBuffer.clear();
             }
         }
 
         @Override
         public void failed(Throwable exc, Integer remaining) {
             LOGGER.log(ERROR, vmsNode.identifier+": Leader worker found an error: \n"+exc);
-            leaderConnectionMetadata.writeBuffer.clear();
+            writeBuffer.clear();
         }
     }
 
     private void write() {
-        this.leaderConnectionMetadata.writeBuffer.flip();
-        int remaining = this.leaderConnectionMetadata.writeBuffer.limit();
+        this.writeBuffer.flip();
+        int remaining = this.writeBuffer.limit();
         try {
-            this.leaderConnectionMetadata.channel.write(this.leaderConnectionMetadata.writeBuffer, remaining, writeCompletionHandler);
+            this.channel.write(this.writeBuffer, remaining, this.writeCompletionHandler);
         } catch (Exception e){
-            this.leaderConnectionMetadata.writeBuffer.clear();
-            if(!leaderConnectionMetadata.channel.isOpen()) {
+            this.writeBuffer.clear();
+            if(!channel.isOpen()) {
                 leader.off();
                 this.stop();
             }
-            this.leaderConnectionMetadata.writeBuffer.clear();
         }
     }
 
@@ -155,23 +135,30 @@ final class LeaderWorker extends StoppableRunnable {
      * the acknowledgment arrives
      */
     private void sendEvent(TransactionEvent.PayloadRaw payloadRaw) {
-        TransactionEvent.write( this.leaderConnectionMetadata.writeBuffer, payloadRaw );
+        TransactionEvent.write( this.writeBuffer, payloadRaw );
         write();
     }
 
     private void sendBatchComplete(BatchComplete.Payload payload) {
-        BatchComplete.write( this.leaderConnectionMetadata.writeBuffer, payload );
+        BatchComplete.write( this.writeBuffer, payload );
         write();
     }
 
     private void sendBatchCommitAck(BatchCommitAck.Payload payload) {
-        BatchCommitAck.write( leaderConnectionMetadata.writeBuffer, payload );
+        BatchCommitAck.write( writeBuffer, payload );
         write();
     }
 
     private void sendTransactionAbort(TransactionAbort.Payload payload) {
-        TransactionAbort.write( leaderConnectionMetadata.writeBuffer, payload );
+        TransactionAbort.write( writeBuffer, payload );
         write();
+    }
+
+    public void queueMessage(Object message) {
+        boolean sent = this.leaderWorkerQueue.offer(message);
+        while(!sent) {
+            sent = this.leaderWorkerQueue.offer(message);
+        }
     }
 
 }
