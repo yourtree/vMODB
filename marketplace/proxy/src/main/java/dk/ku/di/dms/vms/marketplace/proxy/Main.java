@@ -52,6 +52,7 @@ public final class Main {
 
     private static final BlockingQueue<TransactionInput> TRANSACTION_INPUTS = new LinkedBlockingDeque<>();
 
+    @SuppressWarnings("BusyWait")
     public static void main(String[] ignoredArgs) throws IOException, InterruptedException {
         // read properties
         Properties properties = ConfigUtils.loadProperties();
@@ -84,7 +85,7 @@ public final class Main {
             LOGGER.log(INFO,"Proxy: Polling for new batch completion signal started");
             for(;;) {
                 long lastTid = signalQueue.take();
-                LOGGER.log(DEBUG,"Proxy: New batch completion signal received. Last TID executed: "+lastTid);
+                LOGGER.log(INFO,"Proxy: New batch completion signal received. Last TID executed: "+lastTid);
                 // upon a batch completion, send result to driver
                 try {
                     HttpRequest httpReq = HttpRequest.newBuilder()

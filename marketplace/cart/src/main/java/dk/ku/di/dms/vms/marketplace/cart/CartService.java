@@ -15,8 +15,7 @@ import java.util.List;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
-import static java.lang.System.Logger.Level.INFO;
-import static java.lang.System.Logger.Level.WARNING;
+import static java.lang.System.Logger.Level.*;
 
 @Microservice("cart")
 public final class CartService {
@@ -43,7 +42,8 @@ public final class CartService {
         List<CartItem> cartItems = this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
 
         if(cartItems == null || cartItems.isEmpty()) {
-            throw new RuntimeException("No cart items found for TID: "+checkout.CustomerId);
+            LOGGER.log(ERROR, "APP: No cart items found for TID: "+checkout.instanceId);
+            throw new RuntimeException("APP: No cart items found for TID: "+checkout.CustomerId);
         }
 
         for (var cartItem : cartItems) {

@@ -14,10 +14,8 @@ public final class ConfigUtils {
         Properties properties = new Properties();
         try {
             if (Files.exists(Paths.get(configFile))) {
-                System.out.println("Loading external config file: " + configFile);
                 properties.load(new FileInputStream(configFile));
             } else {
-                System.out.println("Loading internal config file: app.properties");
                 properties.load(ConfigUtils.class.getClassLoader().getResourceAsStream(configFile));
             }
             return properties;

@@ -415,6 +415,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         // is it an abort, a commit response?
         // it cannot be replication because have opened another channel for that
 
+        @SuppressWarnings("UnnecessaryLocalVariable")
         @Override
         public void completed(Integer result, Void connectionMetadata) {
 
@@ -473,7 +474,8 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
             // must take into account more data has arrived. otherwise can lead to losing a batch complete
             if(readBuffer.position() < carryOn + result){
-                carryOn = carryOn + result;
+                int aux = carryOn + result;
+                carryOn = aux;
             } else {
                 carryOn = 0;
                 readBuffer.clear();

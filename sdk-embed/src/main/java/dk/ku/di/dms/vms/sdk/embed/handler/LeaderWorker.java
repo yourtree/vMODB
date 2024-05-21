@@ -9,8 +9,8 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
+import java.nio.channels.CompletionHandler;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static java.lang.System.Logger.Level.*;
@@ -23,7 +23,7 @@ import static java.lang.System.Logger.Level.*;
  */
 final class LeaderWorker extends StoppableRunnable {
 
-    private static final System.Logger logger = System.getLogger(LeaderWorker.class.getName());
+    private static final System.Logger LOGGER = System.getLogger(LeaderWorker.class.getName());
 
     private final ServerNode leader;
 
@@ -82,7 +82,7 @@ final class LeaderWorker extends StoppableRunnable {
 
     @Override
     public void run() {
-        logger.log(INFO, vmsNode.identifier+": Leader worker started!");
+        LOGGER.log(INFO, vmsNode.identifier+": Leader worker started!");
         int pollTimeout = 50;
         Message msg;
         while (this.isRunning()){
@@ -98,7 +98,7 @@ final class LeaderWorker extends StoppableRunnable {
                     pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
                 }
 
-                logger.log(DEBUG, vmsNode.identifier+": Leader worker will send message type: "+ msg.type());
+                LOGGER.log(INFO, vmsNode.identifier+": Leader worker will send message type: "+ msg.type());
                 switch (msg.type()) {
                     case SEND_BATCH_COMPLETE -> this.sendBatchComplete(msg.asBatchComplete());
                     case SEND_BATCH_COMMIT_ACK -> this.sendBatchCommitAck(msg.asBatchCommitAck());
@@ -106,22 +106,43 @@ final class LeaderWorker extends StoppableRunnable {
                     case SEND_EVENT -> this.sendEvent(msg.asEvent());
                 }
             } catch (Exception e) {
-                logger.log(WARNING, vmsNode.identifier+": Error on taking message from worker queue: "+e.getCause().getMessage());
+                LOGGER.log(ERROR, vmsNode.identifier+": Error on taking message from worker queue: "+e.getCause().getMessage());
             }
+        }
+    }
+
+    private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
+
+    private final class WriteCompletionHandler implements CompletionHandler<Integer, Integer> {
+        @Override
+        public void completed(Integer result, Integer remaining) {
+            int newRemaining = remaining - result;
+            if(newRemaining > 0) {
+                LOGGER.log(DEBUG, vmsNode.identifier+": Leader worker will send remaining bytes: "+newRemaining);
+                leaderConnectionMetadata.channel.write(leaderConnectionMetadata.writeBuffer, newRemaining, writeCompletionHandler);
+            } else {
+                leaderConnectionMetadata.writeBuffer.clear();
+            }
+        }
+
+        @Override
+        public void failed(Throwable exc, Integer remaining) {
+            LOGGER.log(ERROR, vmsNode.identifier+": Leader worker found an error: \n"+exc);
+            leaderConnectionMetadata.writeBuffer.clear();
         }
     }
 
     private void write() {
         this.leaderConnectionMetadata.writeBuffer.flip();
+        int remaining = this.leaderConnectionMetadata.writeBuffer.limit();
         try {
-            this.leaderConnectionMetadata.channel.write(this.leaderConnectionMetadata.writeBuffer).get();
-        } catch (InterruptedException | ExecutionException e){
+            this.leaderConnectionMetadata.channel.write(this.leaderConnectionMetadata.writeBuffer, remaining, writeCompletionHandler);
+        } catch (Exception e){
             this.leaderConnectionMetadata.writeBuffer.clear();
             if(!leaderConnectionMetadata.channel.isOpen()) {
                 leader.off();
                 this.stop();
             }
-        } finally {
             this.leaderConnectionMetadata.writeBuffer.clear();
         }
     }

@@ -16,7 +16,7 @@ import static java.lang.System.Logger.Level.ERROR;
  */
 public final class VmsTransactionTaskBuilder {
 
-    private static final System.Logger logger = System.getLogger(VmsTransactionTask.class.getSimpleName());
+    private static final System.Logger LOGGER = System.getLogger(VmsTransactionTask.class.getSimpleName());
 
     private static final int NEW = 0;
     private static final int READY = 1;
@@ -66,34 +66,42 @@ public final class VmsTransactionTaskBuilder {
                     partitionIdAux = Optional.empty();
                 }
             } catch (InvocationTargetException | IllegalAccessException e){
-                logger.log(ERROR, "Failed to obtain partition key from method "+signature.partitionByMethod().getName());
+                LOGGER.log(ERROR, "Failed to obtain partition key from method "+signature.partitionByMethod().getName());
                 partitionIdAux = Optional.empty();
             }
             this.partitionId = partitionIdAux;
         }
 
         @Override
+        public String toString() {
+            return "{"
+                    + "\"batch\":\"" + this.batch + "\""
+                    + ",\"lastTid\":\"" + this.lastTid + "\""
+                    + ",\"tid\":\"" + tid + "\""
+                    + "}";
+        }
+
+        @Override
         public void run() {
-
             this.status = RUNNING;
-
             transactionalHandler.beginTransaction(this.tid, -1, this.lastTid, this.signature.transactionType() == TransactionTypeEnum.R);
-
             try {
                 Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.input);
-
                 OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
-
                 if(this.signature.transactionType() != TransactionTypeEnum.R){
                     transactionalHandler.commit();
                 }
-
                 this.status = FINISHED;
                 schedulerCallback.success(signature.executionMode(), eventOutput);
-            } catch (Exception e) {
+            } catch (IllegalAccessException | InvocationTargetException e) {
+                LOGGER.log(ERROR, "Error during invoking task "+this.toString()+"\n"+ e);
+                e.printStackTrace(System.out);
+                schedulerCallback.error(signature.executionMode(), this.tid, e);
+            } catch (Exception e){
+                LOGGER.log(ERROR, "Error not related to invoking task "+this.toString()+"\n"+ e);
+                e.printStackTrace(System.out);
                 schedulerCallback.error(signature.executionMode(), this.tid, e);
             }
-
         }
 
         public long tid() {
@@ -109,7 +117,7 @@ public final class VmsTransactionTaskBuilder {
         }
 
         public Object input(){
-            return input;
+            return this.input;
         }
 
         public int status(){
@@ -126,7 +134,7 @@ public final class VmsTransactionTaskBuilder {
         }
 
         public Optional<Object> partitionId() {
-            return partitionId;
+            return this.partitionId;
         }
 
     }

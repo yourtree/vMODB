@@ -305,7 +305,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
     }
 
-    private static final Object DUMB_OBJECT = new Object();
+    // private static final Object DUMB_OBJECT = new Object();
 
     /**
      * it may be the case that, due to an abort of the last tid, the last tid changes
@@ -334,7 +334,8 @@ public final class VmsEventHandler extends StoppableRunnable {
                 this.leaderWorkerQueue.add(new LeaderWorker.Message(LeaderWorker.Command.SEND_BATCH_COMPLETE,
                         BatchComplete.of(this.currentBatch.batch, this.me.identifier)));
             }
-            this.vmsInternalChannels.batchCommitCommandQueue().add( DUMB_OBJECT );
+            // add in a later moment
+            // this.vmsInternalChannels.batchCommitCommandQueue().add( DUMB_OBJECT );
         }
     }
 
@@ -976,6 +977,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             LIST_BUFFER.add(new ArrayList<>(1024));
         }
 
+        @SuppressWarnings("UnnecessaryLocalVariable")
         @Override
         public void completed(Integer result, ByteBuffer readBuffer) {
 
@@ -1015,9 +1017,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     logger.log(DEBUG,me.identifier+": Batch ("+payload.batch()+") commit command received from the leader");
                     processNewBatchInfo(payload);
                 }
-                case (EVENT) -> {
-                    processSingleEvent(readBuffer);
-                }
+                case (EVENT) -> processSingleEvent(readBuffer);
                 case (TX_ABORT) -> {
                     logger.log(WARNING, "Transaction abort received from the leader?");
                     TransactionAbort.Payload transactionAbortReq = TransactionAbort.read(readBuffer);

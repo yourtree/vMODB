@@ -20,6 +20,7 @@ import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
@@ -102,11 +103,15 @@ public final class Main {
 
                     try {
                         var entity = this.repository.parseObjectIntoEntity(record);
+                        if(entity == null){
+                            returnFailed(exchange);
+                            return;
+                        }
                         OutputStream outputStream = exchange.getResponseBody();
-                        exchange.sendResponseHeaders(200, 0);
+                        exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, 0);
                         outputStream.write( entity.toString().getBytes(StandardCharsets.UTF_8) );
                         outputStream.close();
-                    } catch(RuntimeException e) {
+                    } catch(Exception e) {
                         returnFailed(exchange);
                     }
                     break;
@@ -150,7 +155,6 @@ public final class Main {
                         exchange.sendResponseHeaders(200, 0);
                         outputStream.flush();
                         outputStream.close();
-
                     } catch(Exception e){
                         returnFailed(exchange);
                     }
@@ -165,7 +169,7 @@ public final class Main {
         private static void returnFailed(HttpExchange exchange) throws IOException {
             // failed response
             OutputStream outputStream = exchange.getResponseBody();
-            exchange.sendResponseHeaders(404, 0);
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_INTERNAL_ERROR, 0);
             outputStream.flush();
             outputStream.close();
         }

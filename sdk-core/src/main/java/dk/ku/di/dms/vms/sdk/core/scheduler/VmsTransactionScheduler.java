@@ -14,6 +14,7 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -31,6 +32,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     private static final System.Logger LOGGER = System.getLogger(VmsTransactionScheduler.class.getName());
 
+    // must be concurrent since different threads are writing and reading from it concurrently
     private final Map<Long, VmsTransactionTask> transactionTaskMap;
 
     // map the last tid
@@ -100,7 +102,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         this.vmsChannels = vmsChannels;
 
         // operational (internal control of transactions and tasks)
-        this.transactionTaskMap = new HashMap<>();
+        this.transactionTaskMap = new ConcurrentHashMap<>();
         SchedulerCallback callback = new SchedulerCallback();
         this.vmsTransactionTaskBuilder = new VmsTransactionTaskBuilder(transactionalHandler, callback);
         this.transactionTaskMap.put( 0L, vmsTransactionTaskBuilder.buildFinished(0) );
