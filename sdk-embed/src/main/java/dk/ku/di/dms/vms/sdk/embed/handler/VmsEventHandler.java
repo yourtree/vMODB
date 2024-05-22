@@ -1047,19 +1047,19 @@ public final class VmsEventHandler extends StoppableRunnable {
                 // it would not reach here if network size buffer had not been reached
                 setUpNewRead();
                 returnByteBuffer(readBuffer);
-                carryOn = 0;
-            } else if(readBuffer.position() < carryOn + result){ // ---> more data to read
+                this.carryOn = 0;
+            } else if(readBuffer.position() < this.carryOn + result){ // ---> more data to read
                 // cannot set new read now because may break a single batch into two read buffers =(
 
                 // assumption: batch of events always fills the entire buffer (i.e., it is our limit/end mark)
                 readBuffer.compact();
-                int aux = carryOn + result;
-                carryOn = aux;
+                int aux = this.carryOn + result;
+                this.carryOn = aux;
                 connectionMetadata.channel.read(readBuffer, readBuffer, this);
             } else {
                 setUpNewRead();
                 returnByteBuffer(readBuffer);
-                carryOn = 0;
+                this.carryOn = 0;
             }
 
         }

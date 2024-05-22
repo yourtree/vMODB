@@ -20,6 +20,7 @@ import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
 import java.nio.BufferOverflowException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -153,7 +154,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             this.state = CONNECTION_ESTABLISHED;
             this.processVmsIdentifier();
             this.readBuffer.clear();
-            this.channel.read( this.readBuffer, null, new VmsReadCompletionHandler() );
+            this.channel.read( this.readBuffer, 0, new VmsReadCompletionHandler() );
             return;
         }
 
@@ -192,7 +193,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             this.state = State.LEADER_PRESENTATION_SENT;
 
             // set read handler here
-            this.channel.read( this.readBuffer, null, new VmsReadCompletionHandler() );
+            this.channel.read( this.readBuffer, 0, new VmsReadCompletionHandler() );
 
         } catch (Exception e) {
             LOGGER.log(WARNING,"Failed to connect to a known VMS: " + this.consumerVms.identifier);
@@ -349,9 +350,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             writeBuffer.flip();
             this.WRITE_SYNCHRONIZER.take();
             this.channel.write(writeBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
-            LOGGER.log(INFO, "Leader: Commit request sent to: " + this.vmsNode.identifier);
+            LOGGER.log(INFO, "Leader: Batch commit command sent to: " + this.vmsNode.identifier);
         } catch (Exception e){
-            LOGGER.log(ERROR,"Leader: Commit request write has failed:\n"+e.getMessage());
+            LOGGER.log(ERROR,"Leader: Batch commit command write has failed:\n"+e.getMessage());
             if(!this.channel.isOpen()){
                 LOGGER.log(WARNING,"Leader: Channel with "+this.vmsNode.identifier+"is closed");
                 this.vmsNode.off();
@@ -408,14 +409,14 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
      * The idea is to decode the message and deliver back to socket loop as soon as possible
      * This thread must be set free as soon as possible, should not do long-running computation
      */
-    private final class VmsReadCompletionHandler implements CompletionHandler<Integer, Void> {
+    private final class VmsReadCompletionHandler implements CompletionHandler<Integer, Integer> {
 
         // is it an abort, a commit response?
         // it cannot be replication because have opened another channel for that
 
         @SuppressWarnings("UnnecessaryLocalVariable")
         @Override
-        public void completed(Integer result, Void connectionMetadata) {
+        public void completed(Integer result, Integer startPosition) {
 
             if(result == -1){
                 LOGGER.log(INFO, "Leader: " + vmsNode.identifier+" has disconnected");
@@ -423,81 +424,88 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             }
 
             // decode message by getting the first byte
-            byte type = readBuffer.get(0);
-            readBuffer.position(1);
+            readBuffer.position(startPosition);
+            byte type = readBuffer.get();
 
-            switch (type) {
-                case PRESENTATION -> {
-                    // this is a very bad conditional statement
-                    // we could do better removing this concept of "unknown" and simply check the state
-                    if(state == LEADER_PRESENTATION_SENT){
-                        state = VMS_PRESENTATION_RECEIVED;// for the first time
-                        processVmsIdentifier();
-                        state = VMS_PRESENTATION_PROCESSED;
-                    } else {
-                        // in the future it can be an update of the vms schema or crash recovery
-                        LOGGER.log(ERROR, "Leader: Presentation already received from VMS: "+vmsNode.identifier);
+            try {
+                switch (type) {
+                    case PRESENTATION -> {
+                        // this is a very bad conditional statement
+                        // we could do better removing this concept of "unknown" and simply check the state
+                        if (state == LEADER_PRESENTATION_SENT) {
+                            state = VMS_PRESENTATION_RECEIVED;// for the first time
+                            processVmsIdentifier();
+                            state = VMS_PRESENTATION_PROCESSED;
+                        } else {
+                            // in the future it can be an update of the vms schema or crash recovery
+                            LOGGER.log(ERROR, "Leader: Presentation already received from VMS: " + vmsNode.identifier);
+                        }
                     }
-                }
-                // from all terminal VMSs involved in the last batch
-                case BATCH_COMPLETE -> {
-                    // don't actually need the host and port in the payload since we have the attachment to this read operation...
-                    BatchComplete.Payload response = BatchComplete.read(readBuffer);
-                    LOGGER.log(INFO, "Leader: Batch ("+response.batch()+") complete received from: "+vmsNode.identifier);
-                    // must have a context, i.e., what batch, the last?
-                    coordinatorQueue.add(response);
-                    // if one abort, no need to keep receiving
-                    // actually it is unclear in which circumstances a vms would respond no... probably in case it has not received an ack from an aborted commit response?
-                    // because only the aborted transaction will be rolled back
-                }
-                case BATCH_COMMIT_ACK -> {
-                    LOGGER.log(INFO, "Leader: Batch commit ACK received from: "+vmsNode.identifier);
-                    BatchCommitAck.Payload response = BatchCommitAck.read(readBuffer);
-                    // logger.config("Just logging it, since we don't necessarily need to wait for that. "+response);
-                    coordinatorQueue.add(response);
-                }
-                case TX_ABORT -> {
-                    // get information of what
-                    TransactionAbort.Payload response = TransactionAbort.read(readBuffer);
-                    coordinatorQueue.add(response);
-                }
-                case EVENT ->
-                        LOGGER.log(INFO, "Leader: New event received from: "+vmsNode.identifier);
-                case BATCH_OF_EVENTS -> //
-                        LOGGER.log(INFO, "Leader: New batch of events received from VMS");
-                default ->
-                        LOGGER.log(WARNING, "Leader: Unknown message received.");
+                    // from all terminal VMSs involved in the last batch
+                    case BATCH_COMPLETE -> {
+                        // don't actually need the host and port in the payload since we have the attachment to this read operation...
+                        BatchComplete.Payload response = BatchComplete.read(readBuffer);
+                        LOGGER.log(INFO, "Leader: Batch (" + response.batch() + ") complete received from: " + vmsNode.identifier);
+                        // must have a context, i.e., what batch, the last?
+                        coordinatorQueue.add(response);
+                        // if one abort, no need to keep receiving
+                        // actually it is unclear in which circumstances a vms would respond no... probably in case it has not received an ack from an aborted commit response?
+                        // because only the aborted transaction will be rolled back
+                    }
+                    case BATCH_COMMIT_ACK -> {
+                        LOGGER.log(INFO, "Leader: Batch commit ACK received from: " + vmsNode.identifier);
+                        BatchCommitAck.Payload response = BatchCommitAck.read(readBuffer);
+                        // logger.config("Just logging it, since we don't necessarily need to wait for that. "+response);
+                        coordinatorQueue.add(response);
+                    }
+                    case TX_ABORT -> {
+                        // get information of what
+                        TransactionAbort.Payload response = TransactionAbort.read(readBuffer);
+                        coordinatorQueue.add(response);
+                    }
+                    case EVENT -> LOGGER.log(INFO, "Leader: New event received from: " + vmsNode.identifier);
+                    case BATCH_OF_EVENTS -> LOGGER.log(INFO, "Leader: New batch of events received from VMS");
+                    default -> LOGGER.log(WARNING, "Leader: Unknown message received.");
 
+                }
+            } catch (BufferUnderflowException e){
+                LOGGER.log(WARNING, "Leader: Buffer underflow captured. Will read more with the hope the full data is delivered.");
+                e.printStackTrace(System.out);
+                channel.read( readBuffer, startPosition, this );
+                return;
+            } catch (Exception e){
+                LOGGER.log(ERROR, "Leader: Unknown error captured \n"+e);
+                e.printStackTrace(System.out);
             }
 
-            // must take into account more data has arrived. otherwise can lead to losing a batch complete
-            if(readBuffer.position() < carryOn + result){
-                int aux = carryOn + result;
-                carryOn = aux;
+            // must take into account more data has arrived. otherwise can lead to losing a batch complete message
+            if(readBuffer.position() < this.carryOn + result){
+                int aux = this.carryOn + result;
+                this.carryOn = aux;
+                channel.read( readBuffer, readBuffer.position(), this );
             } else {
-                carryOn = 0;
+                this.carryOn = 0;
                 readBuffer.clear();
+                channel.read( readBuffer, 0, this );
             }
-            channel.read( readBuffer, null, this );
         }
 
         private volatile int carryOn = 0;
 
         @Override
-        public void failed(Throwable exc, Void attachment) {
+        public void failed(Throwable exc, Integer startPosition) {
             if(state == LEADER_PRESENTATION_SENT){
                 state = VMS_PRESENTATION_RECEIVE_FAILED;
                 LOGGER.log(WARNING,"It was not possible to receive a presentation message from consumer VMS: "+exc.getMessage());
             } else {
                 if (channel.isOpen()) {
                     LOGGER.log(WARNING,"Read has failed but channel is open. Trying to read again from: " + consumerVms);
-
                 } else {
                     LOGGER.log(WARNING,"Read has failed and channel is closed: " + consumerVms);
                 }
             }
             readBuffer.clear();
-            channel.read(readBuffer, null, this);
+            channel.read(readBuffer, 0, this);
         }
     }
 

@@ -19,7 +19,11 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
+import static java.lang.System.Logger.Level.*;
+
 public final class Main {
+
+    private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
     public static void main(String[] args) throws Exception {
 
@@ -80,6 +84,9 @@ public final class Main {
                 }
                 case "POST": {
                     String str = new String( exchange.getRequestBody().readAllBytes() );
+
+                    LOGGER.log(DEBUG, "APP: POST request for stock item: \n" + str);
+
                     StockItem stock = this.serdes.deserialize(str, StockItem.class);
                     Object[] obj = this.repository.extractFieldValuesFromEntityObject(stock);
                     IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), obj );

@@ -10,5 +10,7 @@ sudo apt install cpulimit
 # install jdk 21
 sudo apt install -y openjdk-21-jdk
 
-# set java home
-export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+# remember to set java home manually or run below
+# JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+
+echo "export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64" >>~/.bashrc

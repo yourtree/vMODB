@@ -32,8 +32,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
-import static java.lang.System.Logger.Level.ERROR;
-import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.*;
 import static java.lang.Thread.sleep;
 
 /**
@@ -96,8 +95,8 @@ public final class Main {
                             .header("keep-alive", "true")
                             .POST(HttpRequest.BodyPublishers.ofString(initTid+"-"+lastTid))
                             .build();
-                    //HttpResponse<Void> resp = httpClient.send(httpReq, HttpResponse.BodyHandlers.discarding());
-                    // LOGGER.log(INFO,"Proxy: Response: "+resp.statusCode());
+                    HttpResponse<Void> resp = httpClient.send(httpReq, HttpResponse.BodyHandlers.discarding());
+                    LOGGER.log(DEBUG,"Proxy: Response: "+resp.statusCode());
                     initTid = lastTid + 1;
                 } catch (Exception e) {
                     LOGGER.log(ERROR,"Proxy: Error while sending HTTP request: \n" +

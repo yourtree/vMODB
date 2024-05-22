@@ -20,7 +20,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.PRODUCT_HTTP_PORT;
-import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.*;
 
 public final class Main {
 
@@ -100,6 +100,9 @@ public final class Main {
                 }
                 case "POST": {
                     String str = new String( exchange.getRequestBody().readAllBytes() );
+
+                    LOGGER.log(DEBUG, "APP: POST request for product: \n" + str);
+
                     Product product = serdes.deserialize(str, Product.class);
 
                     Object[] obj = this.repository.extractFieldValuesFromEntityObject(product);
