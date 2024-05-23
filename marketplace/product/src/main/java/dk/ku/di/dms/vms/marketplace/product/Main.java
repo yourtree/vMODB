@@ -101,7 +101,7 @@ public final class Main {
                 case "POST": {
                     String str = new String( exchange.getRequestBody().readAllBytes() );
 
-                    LOGGER.log(DEBUG, "APP: POST request for product: \n" + str);
+                    LOGGER.log(INFO, "APP: POST request for product: \n" + str);
 
                     Product product = serdes.deserialize(str, Product.class);
 

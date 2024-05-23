@@ -208,7 +208,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     private static final int MAX_TIMEOUT = 1000;
 
-    private static final boolean BLOCKING = false;
+    private static final boolean BLOCKING = true;
 
     /**
      * A thread that basically writes events to other VMSs and the Leader
@@ -1012,7 +1012,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     // a batch commit queue from next batch can arrive before this vms moves next? yes
                     BatchCommitCommand.Payload payload = BatchCommitCommand.read(readBuffer);
                     logger.log(DEBUG,me.identifier+": Batch ("+payload.batch()+") commit command received from the leader");
-                    processNewBatchInfo(payload);
+                    processNewBatchCommand(payload);
                 }
                 case (EVENT) -> processSingleEvent(readBuffer);
                 case (TX_ABORT) -> {
@@ -1152,7 +1152,7 @@ public final class VmsEventHandler extends StoppableRunnable {
      * If the previous batch is completed and this received batch is the next,
      * we just let the main loop update it
      */
-    private void processNewBatchInfo(BatchCommitCommand.Payload batchCommitCommand){
+    private void processNewBatchCommand(BatchCommitCommand.Payload batchCommitCommand){
         BatchContext batchContext = BatchContext.build(batchCommitCommand);
         this.batchContextMap.put(batchCommitCommand.batch(), batchContext);
         this.batchToNextBatchMap.put( batchCommitCommand.previousBatch(), batchCommitCommand.batch() );

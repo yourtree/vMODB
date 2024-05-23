@@ -70,7 +70,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
     private static final int MAX_TIMEOUT = 1000;
 
-    private static final boolean BLOCKING = false;
+    private static final boolean BLOCKING = true;
 
     @Override
     public void run() {

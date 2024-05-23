@@ -258,12 +258,16 @@ public final class Coordinator extends StoppableRunnable {
 
         logger.log(DEBUG,"Leader: Transaction processing starting now... ");
         long start = System.currentTimeMillis();
+        long end = start + this.options.getBatchWindow();
         while(this.isRunning()){
             do {
+                // considering a high workload scenario,
+                // it is fine to have this loop probing the inputs
                 this.processTransactionInputEvents();
-            } while(System.currentTimeMillis() - start < this.options.getBatchWindow());
-            this.advanceCurrentBatchAndSpawnSendBatchOfEvents();
+            } while(System.currentTimeMillis() < end);
+            this.advanceCurrentBatch();
             start = System.currentTimeMillis();
+            end = start + this.options.getBatchWindow();
         }
 
         this.failSafeClose();
@@ -473,7 +477,7 @@ public final class Coordinator extends StoppableRunnable {
      * send a batch request.
      * For logging, must store the transaction inputs in disk before sending
      */
-    private void advanceCurrentBatchAndSpawnSendBatchOfEvents(){
+    private void advanceCurrentBatch(){
 
         BatchContext previousBatch = this.batchContextMap.get( this.currentBatchOffset - 1 );
         // have we processed any input event since the start of this coordinator thread?
@@ -721,7 +725,7 @@ public final class Coordinator extends StoppableRunnable {
                 logger.log(ERROR,"Leader: The event was going to be queued to the incorrect VMS worker!");
             }
             logger.log(DEBUG,"Leader: Adding event "+event.name+" to "+vms.node().identifier+" worker");
-            vms.worker().queueTransactionEvent(txEvent);
+            vms.worker().queueMessage(txEvent);
 
             // update the last tid of the terminals
             for(String vmsIdentifier : transactionDAG.terminalNodes){
@@ -759,6 +763,8 @@ public final class Coordinator extends StoppableRunnable {
         }
     }
 
+    private static final boolean BLOCKING = true;
+
     /**
      * This task assumes the channels are already established
      * Cannot have two threads writing to the same channel at the same time
@@ -773,14 +779,18 @@ public final class Coordinator extends StoppableRunnable {
         Object message;
         while(this.isRunning()){
             try {
-                message = this.coordinatorQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
-                // then put to poll again
-                if(message == null){
-                    pollTimeout = pollTimeout * 2;
-                    continue;
+                if(BLOCKING){
+                    message = this.coordinatorQueue.take();
+                } else {
+                    message = this.coordinatorQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
+                    // then put to poll again
+                    if (message == null) {
+                        pollTimeout = pollTimeout * 2;
+                        continue;
+                    }
+                    // decrease for next polling
+                    pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
                 }
-                // decrease for next polling
-                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
 
                 switch(message){
                     // receive metadata from all microservices
@@ -855,11 +865,12 @@ public final class Coordinator extends StoppableRunnable {
                             // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes,
                             // it must check the batch context match to see whether it is completed
                             if(batchContext.batchOffset == this.batchOffsetPendingCommit){
+                                // ack driver earlier
+                                this.batchSignalQueue.put(batchContext.lastTid);
                                 this.sendCommitRequestToVMSs(batchContext);
                                 this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
-                                this.batchSignalQueue.put(batchContext.lastTid);
                             } else {
-                                logger.log(INFO,"Leader: Batch "+ msg.batch() +" is not the pending one. Still has to wait for the pending batch ("+this.batchOffsetPendingCommit+") to finish before progressing...");
+                                logger.log(WARNING,"Leader: Batch "+ msg.batch() +" is not the pending one. Still has to wait for the pending batch ("+this.batchOffsetPendingCommit+") to finish before progressing...");
                             }
                         }
                     }

@@ -15,6 +15,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
+import jdk.internal.misc.VirtualThreads;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -29,6 +30,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
@@ -74,8 +76,11 @@ public final class Main {
         LOGGER.log(INFO,"Proxy: All starter VMSs have connected to the coordinator \nProxy: Initializing the HTTP Server to receive transaction inputs...");
 
         int http_port = Integer.parseInt( properties.getProperty("http_port") );
+        int http_thread_pool_size = Integer.parseInt( properties.getProperty("http_thread_pool_size") );
+        int backlog = Integer.parseInt( properties.getProperty("backlog") );
 
-        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", http_port), 0);
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", http_port), backlog+10);
+        httpServer.setExecutor(Executors.newFixedThreadPool(http_thread_pool_size));
         httpServer.createContext("/", new ProxyHttpHandler());
         httpServer.start();
 
@@ -183,7 +188,6 @@ public final class Main {
         }
 
     }
-
 
     private static Map<String, TransactionDAG> buildTransactionDAGs(){
         Map<String, TransactionDAG> transactionMap = new HashMap<>();

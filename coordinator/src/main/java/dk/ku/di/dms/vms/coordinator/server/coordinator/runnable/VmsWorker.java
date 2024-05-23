@@ -69,9 +69,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private AsynchronousSocketChannel channel;
 
     // DTs particular to this vms worker
-    private final BlockingDeque<TransactionEvent.PayloadRaw> transactionEventQueue;
+    // private final BlockingDeque<TransactionEvent.PayloadRaw> transactionEventQueue;
 
-    private final BlockingQueue<Object> messageQueue;
+    private final BlockingDeque<Object> messageQueue;
 
     // could be switched by a semaphore
     private final BlockingQueue<Byte> WRITE_SYNCHRONIZER = new ArrayBlockingQueue<>(1);
@@ -141,8 +141,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.WRITE_SYNCHRONIZER.add(DUMB);
 
         // in
-        this.transactionEventQueue = new LinkedBlockingDeque<>();
-        this.messageQueue = new LinkedBlockingQueue<>();
+        this.messageQueue = new LinkedBlockingDeque<>();
 
         // out - shared by many vms workers
         this.coordinatorQueue = coordinatorQueue;
@@ -230,43 +229,54 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.eventLoop();
     }
 
-    private final List<TransactionEvent.PayloadRaw> localTxEvents = new ArrayList<>(1024);
-
     private static final int MAX_SLEEP = 1000;
 
+    private static final boolean BLOCKING = true;
+
     /**
-     * Event loop must not be blocking because it performs two tasks:
+     * Event loop performs two tasks:
      * (a) get and process batch-tracking messages from coordinator
      * (b) process transaction input events
      */
     private void eventLoop() {
-        int pollTimeout = 50;
+        int pollTimeout = 1;
         Object message;
+        List<Object> messages = new ArrayList<>(1024);
         while (this.isRunning()){
             try {
-                message = this.messageQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
-                if(message == null){
-                    if(this.transactionEventQueue.isEmpty()){
-                        pollTimeout = Math.min(pollTimeout * 2, MAX_SLEEP);
-                    } else {
-                        this.sendBatchedEvents();
-                    }
+                if(BLOCKING){
+                    message = this.messageQueue.take();
                 } else {
+                    message = this.messageQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
+                    if(message == null){
+                        pollTimeout = Math.min(pollTimeout * 2, MAX_SLEEP);
+                        this.processPendingWrites();
+                        continue;
+                    }
                     pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+                }
 
+                messages.add(message);
+                this.messageQueue.drainTo(messages);
+
+                for(Object message_ : messages) {
                     // in order of usual recurrence
-                    switch (message) {
-                        case BatchCommitInfo.Payload o -> this.sendBatchCommitInfo(o);
+                    switch (message_) {
+                        case TransactionEvent.PayloadRaw o -> this.transactionEvents.add(o);
                         case BatchCommitCommand.Payload o -> this.sendBatchCommitCommand(o);
+                        case BatchCommitInfo.Payload o -> this.sendBatchCommitInfo(o);
                         case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
                         case String o -> this.sendConsumerSet(o);
                         default ->
                                 LOGGER.log(WARNING, "Leader: VMS worker for " + this.vmsNode.identifier + " has unknown message type: " + message.getClass().getName());
                     }
+                }
 
-                    if(!this.transactionEventQueue.isEmpty()){
-                        this.sendBatchedEvents();
-                    }
+                // clear messages for next round
+                messages.clear();
+
+                if(!this.transactionEvents.isEmpty()){
+                    this.sendBatchedEvents();
                 }
 
                 this.processPendingWrites();
@@ -305,14 +315,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     sent = this.PENDING_WRITES_BUFFER.offer(bb);
                 }
             }
-        }
-    }
-
-    @Override
-    public void queueTransactionEvent(TransactionEvent.PayloadRaw payload){
-        boolean sent = this.transactionEventQueue.offer(payload);
-        while (!sent){
-            sent = this.transactionEventQueue.offer(payload);
         }
     }
 
@@ -556,18 +558,20 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.writeBufferPool.add(bb);
     }
 
+    private final List<TransactionEvent.PayloadRaw> transactionEvents = new ArrayList<>(1024);
+
     /**
      * While a write operation is in progress, it must wait for completion and then submit the next write.
      */
     private void sendBatchedEvents(){
-        this.transactionEventQueue.drainTo(this.localTxEvents);
-        int remaining = this.localTxEvents.size();
+        // this.transactionEventQueue.drainTo(this.transactionEvents);
+        int remaining = this.transactionEvents.size();
         int count = remaining;
         ByteBuffer writeBuffer;
         while(remaining > 0) {
             try {
                 writeBuffer = this.retrieveByteBuffer();
-                remaining = BatchUtils.assembleBatchPayload(remaining, this.localTxEvents, writeBuffer);
+                remaining = BatchUtils.assembleBatchPayload(remaining, this.transactionEvents, writeBuffer);
 
                 // without this async handler, the bytebuffer arriving in the VMS can be corrupted
                 // relying on future.get() yields corrupted buffer in the consumer
@@ -583,9 +587,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             } catch (Exception e) {
                 LOGGER.log(ERROR, "Leader: Error on submitting ["+count+"] events to "+this.vmsNode.identifier+":"+e);
                 // return events to the deque
-                while(!this.localTxEvents.isEmpty()) {
-                    if(this.transactionEventQueue.offerFirst(this.localTxEvents.get(0))){
-                        this.localTxEvents.remove(0);
+                while(!this.transactionEvents.isEmpty()) {
+                    if(this.messageQueue.offerFirst(this.transactionEvents.get(0))){
+                        this.transactionEvents.remove(0);
                     }
                 }
 
@@ -598,7 +602,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
             }
         }
-        this.localTxEvents.clear();
+        this.transactionEvents.clear();
     }
 
     private final BlockingDeque<ByteBuffer> PENDING_WRITES_BUFFER = new LinkedBlockingDeque<>();

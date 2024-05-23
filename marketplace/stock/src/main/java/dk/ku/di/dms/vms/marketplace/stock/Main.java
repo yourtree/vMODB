@@ -85,7 +85,7 @@ public final class Main {
                 case "POST": {
                     String str = new String( exchange.getRequestBody().readAllBytes() );
 
-                    LOGGER.log(DEBUG, "APP: POST request for stock item: \n" + str);
+                    LOGGER.log(INFO, "APP: POST request for stock item: \n" + str);
 
                     StockItem stock = this.serdes.deserialize(str, StockItem.class);
                     Object[] obj = this.repository.extractFieldValuesFromEntityObject(stock);

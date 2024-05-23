@@ -50,7 +50,7 @@ final class LeaderWorker extends StoppableRunnable {
         this.leaderWorkerQueue = new LinkedBlockingDeque<>();
     }
 
-    private static final boolean BLOCKING = false;
+    private static final boolean BLOCKING = true;
 
     private static final int MAX_TIMEOUT = 5000;
 
