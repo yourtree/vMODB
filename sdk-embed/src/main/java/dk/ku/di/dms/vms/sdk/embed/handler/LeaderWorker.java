@@ -72,7 +72,7 @@ final class LeaderWorker extends StoppableRunnable {
                     pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
                 }
 
-                LOGGER.log(INFO, vmsNode.identifier+": Leader worker will send message type: "+ msg.getClass().getName());
+                LOGGER.log(DEBUG, vmsNode.identifier+": Leader worker will send message type: "+ msg.getClass().getName());
                 try {
                     switch (msg) {
                         case BatchComplete.Payload o -> this.sendBatchComplete(o);
@@ -83,7 +83,7 @@ final class LeaderWorker extends StoppableRunnable {
                                 LOGGER.log(WARNING, vmsNode.identifier + ": Leader worker do not recognize message type: " + msg.getClass().getName());
                     }
                 } catch (Exception e){
-                    LOGGER.log(ERROR, vmsNode.identifier+": Error on processing message: " + e.getMessage());
+                    LOGGER.log(ERROR, vmsNode.identifier+": Error on processing message. \n Payload: \n " +e + "\n Error message \n"+ e.getMessage());
                     this.queueMessage(msg);
                 }
             } catch (Exception e) {

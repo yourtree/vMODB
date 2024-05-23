@@ -41,6 +41,14 @@ public final class BatchComplete {
 
     public record Payload(
         long batch, String vms
-    ){}
+    ){
+        @Override
+        public String toString() {
+            return "{"
+                    + "\"batch\":\"" + batch + "\""
+                    + ",\"vms\":\"" + vms + "\""
+                    + "}";
+        }
+    }
 
 }

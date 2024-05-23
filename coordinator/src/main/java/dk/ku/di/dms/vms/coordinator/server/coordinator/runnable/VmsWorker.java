@@ -520,7 +520,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private void sendBatchCommitInfo(BatchCommitInfo.Payload batchCommitInfo){
         // then send only the batch commit info
-        LOGGER.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info will be sent to: " + this.vmsNode.identifier);
+        LOGGER.log(DEBUG, "Leader: Batch ("+batchCommitInfo.batch()+") commit info will be sent to: " + this.vmsNode.identifier);
         try {
             ByteBuffer writeBuffer = this.retrieveByteBuffer();
             BatchCommitInfo.write(writeBuffer, batchCommitInfo);
@@ -536,6 +536,8 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             if(this.WRITE_SYNCHRONIZER.isEmpty()){
                 this.WRITE_SYNCHRONIZER.add(DUMB);
             }
+
+            return;
         }
         LOGGER.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info sent to: " + this.vmsNode.identifier);
     }
@@ -610,7 +612,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
             if(byteBuffer.hasRemaining()) {
-                LOGGER.log(ERROR, "Leader: Found not all bytes of commit message were sent to "+consumerVms.identifier);
+                LOGGER.log(WARNING, "Leader: Found not all bytes of message (type: "+byteBuffer.get(0)+") were sent to "+consumerVms.identifier+" Trying to send the remaining now...");
+                channel.write(byteBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, byteBuffer, this);
+                return;
             }
             WRITE_SYNCHRONIZER.add(DUMB);
         }

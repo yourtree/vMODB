@@ -45,6 +45,14 @@ public final class BatchCommitAck {
     // so no need for further information in the payload
     public record Payload(
             long batch, String vms
-    ) {}
+    ) {
+        @Override
+        public String toString() {
+            return "{"
+                    + "\"batch\":\"" + batch + "\""
+                    + ",\"vms\":\"" + vms + "\""
+                    + "}";
+        }
+    }
 
 }

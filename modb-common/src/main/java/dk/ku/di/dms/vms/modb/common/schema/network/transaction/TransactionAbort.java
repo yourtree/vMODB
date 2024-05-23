@@ -43,6 +43,15 @@ public class TransactionAbort {
     // so no need for further information in the payload
     public record Payload(
             long batch, long tid, String vms
-    ) {}
+    ) {
+        @Override
+        public String toString() {
+            return "{"
+                    + "\"batch\":\"" + batch + "\""
+                    + ",\"tid\":\"" + tid + "\""
+                    + ",\"vms\":\"" + vms + "\""
+                    + "}";
+        }
+    }
 
 }

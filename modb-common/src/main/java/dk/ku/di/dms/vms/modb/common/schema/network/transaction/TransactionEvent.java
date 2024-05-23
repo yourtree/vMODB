@@ -48,12 +48,31 @@ public final class TransactionEvent {
      */
     public record PayloadRaw(
             long tid, long batch, byte[] event, byte[] payload, byte[] precedenceMap, int totalSize
-    ){}
+    ){
+        @Override
+        public String toString() {
+            return "{"
+                    + "\"batch\":\"" + batch + "\""
+                    + ",\"tid\":\"" + tid + "\""
+                    + "}";
+        }
+    }
 
     //
     public record Payload(
             long tid, long batch, String event, String payload, String precedenceMap, int totalSize
-    ){}
+    ){
+        @Override
+        public String toString() {
+            return "{"
+                    + "\"batch\":\"" + batch + "\""
+                    + ",\"tid\":\"" + tid + "\""
+                    + ",\"event\":\"" + event + "\""
+                    + ",\"payload\":\"" + payload + "\""
+                    + ",\"precedenceMap\":\"" + precedenceMap + "\""
+                    + "}";
+        }
+    }
 
     public static PayloadRaw of(long tid, long batch, String event, String payload, String precedenceMap){
         // considering UTF-8
