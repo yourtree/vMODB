@@ -15,7 +15,6 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
-import jdk.internal.misc.VirtualThreads;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -31,10 +30,10 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingDeque;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
-import static java.lang.System.Logger.Level.*;
+import static java.lang.System.Logger.Level.ERROR;
+import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
 /**
@@ -47,24 +46,25 @@ public final class Main {
 
     private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
+    private static final int NUM_CPUS = Runtime.getRuntime().availableProcessors();
+
     private static final int STARTING_TID = 1;
     private static final int STARTING_BATCH_ID = 1;
 
     private static final int SLEEP = 1000;
 
-    private static final BlockingQueue<TransactionInput> TRANSACTION_INPUTS = new LinkedBlockingDeque<>();
+    // private static final BlockingQueue<TransactionInput> TRANSACTION_INPUTS = new LinkedBlockingDeque<>();
 
-    @SuppressWarnings("BusyWait")
     public static void main(String[] ignoredArgs) throws IOException, InterruptedException {
-        // read properties
         Properties properties = ConfigUtils.loadProperties();
         Coordinator coordinator = loadCoordinator(properties);
+        initHttpServer(properties, coordinator);
 
-        String driverUrl = properties.getProperty("driver_url");
+        ackBatchCompletionLoop(properties, coordinator.getBatchSignalQueue());
+    }
 
-        Thread coordinatorThread = new Thread(coordinator);
-        coordinatorThread.start();
-
+    @SuppressWarnings("BusyWait")
+    private static void waitForAllStarterVMSs(Coordinator coordinator) throws InterruptedException {
         var starterVMSs = coordinator.getStarterVMSs();
         int starterSize = starterVMSs.size();
         do {
@@ -74,20 +74,33 @@ public final class Main {
         } while (true);
 
         LOGGER.log(INFO,"Proxy: All starter VMSs have connected to the coordinator \nProxy: Initializing the HTTP Server to receive transaction inputs...");
+    }
+
+    private static void initHttpServer(Properties properties, Coordinator coordinator) throws IOException, InterruptedException {
+
+        waitForAllStarterVMSs(coordinator);
 
         int http_port = Integer.parseInt( properties.getProperty("http_port") );
         int http_thread_pool_size = Integer.parseInt( properties.getProperty("http_thread_pool_size") );
         int backlog = Integer.parseInt( properties.getProperty("backlog") );
 
-        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", http_port), backlog+10);
-        httpServer.setExecutor(Executors.newFixedThreadPool(http_thread_pool_size));
-        httpServer.createContext("/", new ProxyHttpHandler());
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", http_port), backlog);
+        if(http_thread_pool_size > 0) {
+            httpServer.setExecutor(Executors.newFixedThreadPool(http_thread_pool_size));
+        } else {
+            // do not use cached thread pool here
+            httpServer.setExecutor(Executors.newWorkStealingPool(NUM_CPUS-1));
+        }
+        httpServer.createContext("/", new ProxyHttpHandler(coordinator));
         httpServer.start();
-
-        ackBatchCompletionLoop(coordinator.getBatchSignalQueue(), driverUrl);
     }
 
-    private static void ackBatchCompletionLoop(BlockingQueue<Long> signalQueue, String driverUrl) throws InterruptedException {
+    private static void ackBatchCompletionLoop(Properties properties, BlockingQueue<Long> signalQueue) throws InterruptedException {
+
+        boolean driverAlive = Boolean.parseBoolean(properties.getProperty("driver_alive"));
+        if(!driverAlive) { return; }
+        String driverUrl = properties.getProperty("driver_url");
+
         long initTid = STARTING_TID;
         try (HttpClient httpClient = HttpClient.newHttpClient()) {
             LOGGER.log(INFO,"Proxy: Polling for new batch completion signal started");
@@ -103,9 +116,7 @@ public final class Main {
                             .header("keep-alive", "true")
                             .POST(HttpRequest.BodyPublishers.ofString(initTid+"-"+lastTid))
                             .build();
-//                    HttpResponse<Void> resp =
                     httpClient.send(httpReq, HttpResponse.BodyHandlers.discarding());
-                    // LOGGER.log(DEBUG,"Proxy: Response: "+resp.statusCode());
                     initTid = lastTid + 1;
                 } catch (Exception e) {
                     LOGGER.log(ERROR,"Proxy: Error while sending HTTP request: \n" +
@@ -117,7 +128,11 @@ public final class Main {
 
     private static class ProxyHttpHandler implements HttpHandler {
 
-        public ProxyHttpHandler(){ }
+        private final Coordinator coordinator;
+
+        public ProxyHttpHandler(Coordinator coordinator){
+            this.coordinator = coordinator;
+        }
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -128,8 +143,8 @@ public final class Main {
                     if(exchange.getRequestMethod().equalsIgnoreCase("POST")){
                         TransactionInput.Event eventPayload = new TransactionInput.Event(CUSTOMER_CHECKOUT, payload);
                         TransactionInput txInput = new TransactionInput(CUSTOMER_CHECKOUT, eventPayload);
-                        TRANSACTION_INPUTS.add(txInput);
-                        break;
+                        if(this.coordinator.queueTransactionInput(txInput))
+                            break;
                     }
                     reportError("cart", exchange);
                     return;
@@ -140,15 +155,15 @@ public final class Main {
                         case "PATCH": {
                             TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRICE, payload);
                             TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);
-                            TRANSACTION_INPUTS.add(txInput);
-                            break;
+                            if(this.coordinator.queueTransactionInput(txInput))
+                                break;
                         }
                         // product update
                         case "PUT": {
                             TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRODUCT, payload);
                             TransactionInput txInput = new TransactionInput(UPDATE_PRODUCT, eventPayload);
-                            TRANSACTION_INPUTS.add(txInput);
-                            break;
+                            if(this.coordinator.queueTransactionInput(txInput))
+                                break;
                         }
                         default: {
                             reportError("product", exchange);
@@ -161,8 +176,8 @@ public final class Main {
                     if(exchange.getRequestMethod().equalsIgnoreCase("PATCH")){
                         TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_DELIVERY, payload);
                         TransactionInput txInput = new TransactionInput(UPDATE_DELIVERY, eventPayload);
-                        TRANSACTION_INPUTS.add(txInput);
-                        break;
+                        if(this.coordinator.queueTransactionInput(txInput))
+                            break;
                     }
                     reportError("shipment", exchange);
                     return;
@@ -186,7 +201,6 @@ public final class Main {
             outputStream.flush();
             outputStream.close();
         }
-
     }
 
     private static Map<String, TransactionDAG> buildTransactionDAGs(){
@@ -256,10 +270,11 @@ public final class Main {
         long batchSendRate = Long.parseLong( properties.getProperty("batch_send_rate") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
         int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
+        int task_thread_pool_size = Integer.parseInt( properties.getProperty("task_thread_pool_size") );
 
         int definiteBufferSize = networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize;
 
-        return Coordinator.build(
+        Coordinator coordinator = Coordinator.build(
                 serverMap,
                 starterVMSs,
                 transactionMap,
@@ -269,12 +284,16 @@ public final class Main {
                         .withGroupThreadPoolSize(groupPoolSize)
                         .withNetworkBufferSize(definiteBufferSize)
                         .withNetworkSendTimeout(networkSendTimeout)
-                        .withOsBufferSize(osBufferSize),
+                        .withOsBufferSize(osBufferSize)
+                        .withTaskThreadPoolSize(task_thread_pool_size > 0 ? task_thread_pool_size : NUM_CPUS),
                 STARTING_BATCH_ID,
                 STARTING_TID,
-                TRANSACTION_INPUTS,
                 serdes
         );
+
+        Thread coordinatorThread = new Thread(coordinator);
+        coordinatorThread.start();
+        return coordinator;
     }
 
     private static Map<Integer, IdentifiableNode> buildStarterVMS(Properties properties){

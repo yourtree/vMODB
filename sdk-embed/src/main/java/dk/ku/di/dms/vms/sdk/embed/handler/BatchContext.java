@@ -9,8 +9,6 @@ public final class BatchContext {
 
     public final long previousBatch;
 
-    public final long lastTid;
-
     public final int numberOfTIDsBatch;
 
     // if an external thread (i.e., scheduler) modifies
@@ -22,24 +20,23 @@ public final class BatchContext {
 
     public static BatchContext build(BatchCommitInfo.Payload batchCommitInfo){
         return new BatchContext(batchCommitInfo.batch(),
-                batchCommitInfo.lastTidOfBatch(),
                 batchCommitInfo.previousBatch(),
                 batchCommitInfo.numberOfTIDsBatch(),
                 true);
     }
 
-    public static BatchContext buildAsStarter(long batch, long lastTidOfBatch, long previousBatch, int numberOfTIDsBatch){
-        return new BatchContext(batch, lastTidOfBatch, previousBatch, numberOfTIDsBatch,false);
+    public static BatchContext buildAsStarter(long batch, long previousBatch, int numberOfTIDsBatch){
+        return new BatchContext(batch, previousBatch, numberOfTIDsBatch,false);
     }
 
     public static BatchContext build(BatchCommitCommand.Payload batchCommitRequest) {
-        return new BatchContext(batchCommitRequest.batch(), batchCommitRequest.lastTidOfBatch(),
-                batchCommitRequest.previousBatch(), batchCommitRequest.numberOfTIDsBatch(), false);
+        return new BatchContext(batchCommitRequest.batch(),
+                batchCommitRequest.previousBatch(),
+                batchCommitRequest.numberOfTIDsBatch(), false);
     }
 
-    private BatchContext(long batch, long lastTidOfBatch, long previousBatch, int numberOfTIDsBatch, boolean terminal) {
+    private BatchContext(long batch, long previousBatch, int numberOfTIDsBatch, boolean terminal) {
         this.batch = batch;
-        this.lastTid = lastTidOfBatch;
         this.previousBatch = previousBatch;
         // this.status = Status.OPEN.value; // always start with 0 anyway
         this.numberOfTIDsBatch = numberOfTIDsBatch;

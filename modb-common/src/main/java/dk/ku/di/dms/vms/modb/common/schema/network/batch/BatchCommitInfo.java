@@ -13,13 +13,12 @@ import java.nio.ByteBuffer;
 public final class BatchCommitInfo {
 
     // message type + 3 longs + 1 int
-    public static final int SIZE = 1 + (3 * Long.BYTES) + Integer.BYTES;
+    public static final int SIZE = 1 + (2 * Long.BYTES) + Integer.BYTES;
 
     public static void write(ByteBuffer buffer, long batch,
-                             long lastTidOfBatch, long previousBatch, int numberOfTIDsBatch){
+                             long previousBatch, int numberOfTIDsBatch){
         buffer.put(Constants.BATCH_COMMIT_INFO);
         buffer.putLong( batch );
-        buffer.putLong( lastTidOfBatch );
         buffer.putLong( previousBatch );
         buffer.putInt( numberOfTIDsBatch );
     }
@@ -27,25 +26,23 @@ public final class BatchCommitInfo {
     public static void write(ByteBuffer buffer, BatchCommitInfo.Payload payload){
         buffer.put(Constants.BATCH_COMMIT_INFO);
         buffer.putLong( payload.batch );
-        buffer.putLong( payload.lastTidOfBatch );
         buffer.putLong(payload.previousBatch );
         buffer.putInt(payload.numberOfTIDsBatch);
     }
 
     public static Payload read(ByteBuffer buffer){
         long batch = buffer.getLong();
-        long lastTidOfBatch = buffer.getLong();
         long previousBatch = buffer.getLong();
         int numberOfTIDsBatch = buffer.getInt();
-        return new Payload(batch, lastTidOfBatch, previousBatch, numberOfTIDsBatch);
+        return new Payload(batch, previousBatch, numberOfTIDsBatch);
     }
 
-    public static Payload of(long batch, long lastTidOfBatch, long previousBatch, int numberOfTIDsBatch){
-        return new Payload(batch, lastTidOfBatch, previousBatch, numberOfTIDsBatch);
+    public static Payload of(long batch, long previousBatch, int numberOfTIDsBatch){
+        return new Payload(batch, previousBatch, numberOfTIDsBatch);
     }
 
     public record Payload(
-            long batch, long lastTidOfBatch, long previousBatch, int numberOfTIDsBatch
+            long batch, long previousBatch, int numberOfTIDsBatch
     ){}
 
 }

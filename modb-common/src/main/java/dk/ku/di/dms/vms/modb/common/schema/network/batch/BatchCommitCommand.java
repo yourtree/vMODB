@@ -11,26 +11,24 @@ import java.nio.ByteBuffer;
  */
 public final class BatchCommitCommand {
 
-    public static final int size = 1 + (3 * Long.BYTES) + Integer.BYTES;
+    public static final int size = 1 + (2 * Long.BYTES) + Integer.BYTES;
 
     public static void write(ByteBuffer buffer, BatchCommitCommand.Payload payload){
         buffer.put(Constants.BATCH_COMMIT_COMMAND);
         buffer.putLong(payload.batch);
-        buffer.putLong(payload.lastTidOfBatch);
         buffer.putLong(payload.previousBatch);
         buffer.putInt(payload.numberOfTIDsBatch);
     }
 
     public static Payload read(ByteBuffer buffer){
         long batch = buffer.getLong();
-        long lastTidOfBatch = buffer.getLong();
         long previousBatch = buffer.getLong();
         int numberOfTIDsBatch = buffer.getInt();
-        return new Payload(batch, lastTidOfBatch, previousBatch, numberOfTIDsBatch);
+        return new Payload(batch, previousBatch, numberOfTIDsBatch);
     }
 
     public record Payload(
-            long batch, long lastTidOfBatch, long previousBatch, int numberOfTIDsBatch
+            long batch, long previousBatch, int numberOfTIDsBatch
     ){}
 
 }

@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.marketplace;
 
-import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.customer.Customer;
 import dk.ku.di.dms.vms.marketplace.product.Product;
@@ -12,8 +11,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Function;
 
 public class AbstractWorkflowTest {
@@ -27,8 +24,6 @@ public class AbstractWorkflowTest {
     protected static final int MAX_CUSTOMERS = 10;
 
     protected static final int MAX_SELLERS = 10;
-
-    protected static final BlockingQueue<TransactionInput> TRANSACTION_INPUTS = new LinkedBlockingDeque<>();
 
     protected static final Function<Integer, CustomerCheckout> customerCheckoutFunction = customerId -> new CustomerCheckout(
             customerId, "test", "test", "test", "test","test",

@@ -56,7 +56,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
 
         if(coordinator.getConnectedVMSs().size() < 3) throw new RuntimeException("VMSs did not connect to coordinator on time");
 
-        Thread thread = new Thread(new Producer());
+        Thread thread = new Thread(new Producer(coordinator));
         thread.start();
 
         sleep(BATCH_WINDOW_INTERVAL * 2);
@@ -110,7 +110,6 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
                         .withNetworkBufferSize(networkBufferSize),
                 1,
                 1,
-                TRANSACTION_INPUTS,
                 serdes
         );
     }
@@ -128,6 +127,13 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
     }
 
     private static class Producer implements Runnable {
+
+        Coordinator coordinator;
+
+        public Producer(Coordinator coordinator) {
+            this.coordinator = coordinator;
+        }
+
         @Override
         public void run() {
 
@@ -143,7 +149,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
             logger.log(INFO, "Producer going to bed definitely... ");
         }
 
-        private static void produceProductUpdate(int val, IVmsSerdesProxy serdes) {
+        private void produceProductUpdate(int val, IVmsSerdesProxy serdes) {
             UpdateProduct updateProduct = new UpdateProduct(
                     1,1,"test","test","test","test",10.0F,10.0F,"test", String.valueOf(val)
             );
@@ -151,16 +157,16 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
             TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRODUCT, payload);
             TransactionInput txInput = new TransactionInput(UPDATE_PRODUCT, eventPayload);
             logger.log(INFO, "[Producer] New product version: "+ val);
-            TRANSACTION_INPUTS.add(txInput);
+            coordinator.queueTransactionInput(txInput);
         }
 
-        private static void producePriceUpdate(int val, IVmsSerdesProxy serdes) {
+        private void producePriceUpdate(int val, IVmsSerdesProxy serdes) {
             UpdatePrice priceUpdate = new UpdatePrice(1,1,10.0F, String.valueOf(val));
             String payload = serdes.serialize(priceUpdate, UpdatePrice.class);
             TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRICE, payload);
             TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);
             logger.log(INFO, "[Producer] New product price: "+ val);
-            TRANSACTION_INPUTS.add(txInput);
+            coordinator.queueTransactionInput(txInput);
         }
     }
 

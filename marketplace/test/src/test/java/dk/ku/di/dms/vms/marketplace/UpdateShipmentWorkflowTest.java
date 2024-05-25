@@ -52,7 +52,7 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
 
         logger.log(INFO, "Sending update shipment event...");
         // now send the update shipment event
-        new UpdateShipmentProducer().run();
+        new UpdateShipmentProducer(coordinator).run();
 
         sleep(BATCH_WINDOW_INTERVAL * 3);
 
@@ -64,6 +64,12 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
     private static class UpdateShipmentProducer implements Runnable {
 
         private final String name = UpdateShipmentProducer.class.getSimpleName();
+
+        Coordinator coordinator;
+
+        public UpdateShipmentProducer(Coordinator coordinator) {
+            this.coordinator = coordinator;
+        }
 
         @Override
         public void run() {
@@ -77,7 +83,7 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
             TransactionInput txInput_ = new TransactionInput(UPDATE_DELIVERY, eventPayload_);
 
             logger.log(INFO, "["+name+"] New update shipment event with version: "+instanceId);
-            TRANSACTION_INPUTS.add(txInput_);
+            coordinator.queueTransactionInput(txInput_);
 
             logger.log(INFO, "["+name+"] Going to bed definitely... ");
         }
@@ -144,7 +150,6 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
                 1,
-                TRANSACTION_INPUTS,
                 serdes
         );
     }

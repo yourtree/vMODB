@@ -22,6 +22,7 @@ import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
@@ -31,7 +32,6 @@ import java.util.concurrent.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.*;
 import static java.lang.System.Logger.Level.*;
-import static java.lang.Thread.sleep;
 
 /**
  * This default event handler connects direct to the coordinator
@@ -185,7 +185,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         this.serdesProxy = serdesProxy;
 
-        this.currentBatch = BatchContext.buildAsStarter(me.batch, me.previousBatch, me.lastTidOfBatch, me.numberOfTIDsCurrentBatch);
+        this.currentBatch = BatchContext.buildAsStarter(me.batch, me.previousBatch, me.numberOfTIDsCurrentBatch);
         this.currentBatch.setStatus(BatchContext.BATCH_COMMITTED);
         this.batchContextMap = new ConcurrentHashMap<>();
         this.numberOfTIDsProcessedPerBatch = new HashMap<>();
@@ -321,7 +321,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         if(this.currentBatch.isOpen() && this.currentBatch.numberOfTIDsBatch ==
                 this.numberOfTIDsProcessedPerBatch.getOrDefault(this.currentBatch.batch, 0)){
 
-            logger.log(DEBUG,this.me.identifier+": The last TID ("+this.currentBatch.lastTid+") for the current batch ("+this.currentBatch.batch+") has been executed");
+            logger.log(DEBUG,this.me.identifier+": All TIDs for the current batch ("+this.currentBatch.batch+") have been executed");
 
             // many outputs from the same transaction may arrive here, but can only send the batch commit once
             this.currentBatch.setStatus(BatchContext.BATCH_COMPLETED);
@@ -467,6 +467,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             public void completed(Void result, ConnectToConsumerVmsProtocol attachment) {
 
                 attachment.state = State.CONNECTED;
+                logger.log(DEBUG,me.identifier+ ": The node "+ node.host+" "+ node.port+" status = "+attachment.state);
 
                 ConnectionMetadata connMetadata = new ConnectionMetadata(
                         node.hashCode(),
@@ -485,7 +486,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 String outputEventSchema = serdesProxy.serializeEventSchema(me.outputEventSchema);
 
                 attachment.buffer.clear();
-                Presentation.writeVms( attachment.buffer, me, me.identifier, me.batch, me.lastTidOfBatch, me.previousBatch, dataSchema, inputEventSchema, outputEventSchema );
+                Presentation.writeVms( attachment.buffer, me, me.identifier, me.batch, 0, me.previousBatch, dataSchema, inputEventSchema, outputEventSchema );
                 attachment.buffer.flip();
 
                 // have to make sure we send the presentation before writing to this VMS, otherwise an exception can occur (two writers)
@@ -493,6 +494,9 @@ public final class VmsEventHandler extends StoppableRunnable {
                     @Override
                     public void completed(Integer result, ConnectToConsumerVmsProtocol attachment) {
                         attachment.state = State.PRESENTATION_SENT;
+
+                        logger.log(DEBUG,me.identifier+ ": The node "+ node.host+" "+ node.port+" status = "+attachment.state);
+
                         attachment.buffer.clear();
 
                         if(me.hashCode() == node.hashCode()){
@@ -713,14 +717,13 @@ public final class VmsEventHandler extends StoppableRunnable {
         public void completed(Integer result, Void void_) {
 
             if(result == 0){
-                logger.log(WARNING,me.identifier+": A node is trying to connect with an empty message. Trying to read it again in 5 seconds");
-                try { sleep(5000); } catch (InterruptedException ignored) { }
-                channel.read(this.buffer, null, this);
+                logger.log(WARNING,me.identifier+": A node is trying to connect with an empty message!");
+                try { this.channel.close(); } catch (IOException ignored) {}
+                return;
             } else if(result == -1){
                 logger.log(WARNING,me.identifier+": A node died before sending the presentation message");
+                return;
             }
-
-            logger.log(INFO,me.identifier+": Start processing presentation message");
 
             // message identifier
             byte messageIdentifier = this.buffer.get(0);
@@ -737,15 +740,29 @@ public final class VmsEventHandler extends StoppableRunnable {
 
             switch (nodeTypeIdentifier) {
                 case (SERVER_TYPE) -> {
+                    logger.log(INFO,me.identifier+": Start processing presentation message from a node claiming to be a server");
                     if(!leader.isActive()) {
                         ConnectionFromLeaderProtocol connectionFromLeader = new ConnectionFromLeaderProtocol(this.channel, this.buffer);
                         connectionFromLeader.processLeaderPresentation();
                     } else {
+
+                        // is the same leader willing to open an additional connection?
+                        try {
+                            if (this.channel.getRemoteAddress() instanceof InetSocketAddress o) {
+                                 if(leader.asInetSocketAddress().getHostString().equalsIgnoreCase(o.getHostString())){
+                                     logger.log(INFO,me.identifier+": Leader requested an additional connection");
+                                     this.buffer.clear();
+                                     this.channel.read(this.buffer, buffer, new LeaderReadCompletionHandler(leaderConnectionMetadata));
+                                 }
+                            }
+                        } catch (Exception ignored) {}
+
                         logger.log(WARNING,"Dropping a connection attempt from a node claiming to be leader");
                         try { this.channel.close(); } catch (IOException ignored) {}
                     }
                 }
                 case (VMS_TYPE) -> {
+                    logger.log(INFO,me.identifier+": Start processing presentation message from a node claiming to be a VMS");
                     // then it is a vms intending to connect due to a data/event
                     // that should be delivered to this vms
                     VmsNode producerVms = readVms(this.buffer, serdesProxy);
@@ -759,7 +776,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
                     // what if a vms is both producer to and consumer from this vms?
                     if(consumerConnectionMetadataMap.containsKey(producerVms.hashCode())){
-                        logger.log(WARNING,"The node "+producerVms.host+" "+producerVms.port+" already contains a connection as a consumer");
+                        logger.log(WARNING,me.identifier+": The node "+producerVms.host+" "+producerVms.port+" already contains a connection as a consumer");
                     }
 
                     producerConnectionMetadataMap.put(producerVms.hashCode(), connMetadata);
@@ -769,7 +786,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     this.channel.read(this.buffer, this.buffer, new VmsReadCompletionHandler(producerVms, connMetadata));
                 }
                 default -> {
-                    logger.log(WARNING,"Presentation message from unknown source:" + nodeTypeIdentifier);
+                    logger.log(WARNING,me.identifier+": Presentation message from unknown source:" + nodeTypeIdentifier);
                     this.buffer.clear();
                     MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
                     try {
@@ -851,20 +868,20 @@ public final class VmsEventHandler extends StoppableRunnable {
             PRESENTATION_SENT
         }
 
-        /**
-         * Should be void or ConnectionFromLeaderProtocol??? only testing to know...
-         */
         private final class WriteCompletionHandler implements CompletionHandler<Integer,Void> {
 
             @Override
             public void completed(Integer result, Void attachment) {
-                logger.log(INFO,me.identifier+": Presentation sent to Leader successfully");
                 state = State.PRESENTATION_SENT;
+                logger.log(INFO,me.identifier+": Message sent to Leader successfully = "+state);
+
                 // set up leader worker
                 leaderWorker = new LeaderWorker(me, leader,
                         leaderConnectionMetadata.channel,
                         MemoryManager.getTemporaryDirectBuffer(networkBufferSize));
-                new Thread(leaderWorker).start();
+                Thread leaderWorkerThread = Thread.ofPlatform().factory().newThread(leaderWorker);
+                leaderWorkerThread.setName("leader-worker-"+me.identifier);
+                leaderWorkerThread.start();
                 logger.log(INFO,me.identifier+": Leader worker set up");
                 buffer.clear();
                 channel.read(buffer, buffer, new LeaderReadCompletionHandler(leaderConnectionMetadata) );
@@ -883,9 +900,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
 
         public void processLeaderPresentation() {
-
             logger.log(INFO,me.identifier+": Start processing the Leader presentation");
-
             boolean includeMetadata = this.buffer.get() == YES;
 
             // leader has disconnected, or new leader
@@ -921,15 +936,15 @@ public final class VmsEventHandler extends StoppableRunnable {
                 String vmsInputEventSchemaStr = serdesProxy.serializeEventSchema(me.inputEventSchema);
                 String vmsOutputEventSchemaStr = serdesProxy.serializeEventSchema(me.outputEventSchema);
 
-                Presentation.writeVms(this.buffer, me, me.identifier, me.batch, me.lastTidOfBatch, me.previousBatch, vmsDataSchemaStr, vmsInputEventSchemaStr, vmsOutputEventSchemaStr);
+                Presentation.writeVms(this.buffer, me, me.identifier, me.batch, 0, me.previousBatch, vmsDataSchemaStr, vmsInputEventSchemaStr, vmsOutputEventSchemaStr);
                 // the protocol requires the leader to wait for the metadata in order to start sending messages
             } else {
-                Presentation.writeVms(this.buffer, me, me.identifier, me.batch, me.lastTidOfBatch, me.previousBatch);
+                Presentation.writeVms(this.buffer, me, me.identifier, me.batch, 0, me.previousBatch);
             }
 
             this.buffer.flip();
             this.state = State.PRESENTATION_PROCESSED;
-            logger.log(INFO,me.identifier+": Writing presentation to leader");
+            logger.log(INFO,me.identifier+": Message received from Leader successfully = "+state);
             this.channel.write( this.buffer, null, this.writeCompletionHandler );
         }
     }

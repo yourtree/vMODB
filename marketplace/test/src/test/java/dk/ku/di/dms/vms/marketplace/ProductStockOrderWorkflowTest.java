@@ -152,7 +152,6 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
                 1,
-                parsedTransactionRequests,
                 serdes
         );
     }

@@ -19,8 +19,6 @@ public final class BatchContext {
 
     public final Set<String> terminalVMSs;
 
-    public Map<String, Long> lastTidOfBatchPerVms;
-
     public Map<String, Long> previousBatchPerVms;
 
     public Map<String,Integer> numberOfTasksPerVms;
@@ -35,13 +33,13 @@ public final class BatchContext {
     }
 
     // called when the batch is over
-    public void seal(long lastTidOverall, Map<String, Long> lastTidOfBatchPerVms,
+    public void seal(long lastTidOverall,
                      Map<String, Long> previousBatchPerVms, Map<String,Integer> numberOfTasksPerVms){
         this.lastTid = lastTidOverall;
         // immutable
-        this.lastTidOfBatchPerVms = lastTidOfBatchPerVms;
         this.previousBatchPerVms = previousBatchPerVms;
         this.numberOfTasksPerVms = numberOfTasksPerVms;
+        // must be a modifiable hash set because the set will be modified upon BATCH_COMPLETE messages received
         this.missingVotes = new HashSet<>(this.terminalVMSs);
     }
 

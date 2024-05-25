@@ -147,6 +147,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.coordinatorQueue = coordinatorQueue;
     }
 
+    @SuppressWarnings("BusyWait")
     public void initHandshakeProtocol(){
         // a vms has tried to connect
         if(this.channel != null) {
@@ -578,7 +579,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 LOGGER.log(INFO, "Leader: Submitting ["+(count - remaining)+"] events to "+vmsNode.identifier);
                 count = remaining;
 
-                //writeBuffer.flip();
                 writeBuffer.position(0);
 
                 this.WRITE_SYNCHRONIZER.take();

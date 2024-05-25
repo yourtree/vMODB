@@ -62,7 +62,7 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
             connectedVMSs = coordinator.getConnectedVMSs();
         } while (connectedVMSs.size() < numStarterVMSs);
 
-        new ReserveStockProducer().run();
+        new ReserveStockProducer(coordinator).run();
     }
 
     private static final Random random = new Random();
@@ -70,6 +70,12 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
     private static class ReserveStockProducer implements Runnable {
 
         private final String name = ReserveStockProducer.class.getSimpleName();
+
+        Coordinator coordinator;
+
+        public ReserveStockProducer(Coordinator coordinator) {
+            this.coordinator = coordinator;
+        }
 
         @Override
         public void run() {
@@ -91,7 +97,7 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
                 TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
                 TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
                 logger.log(INFO, "["+name+"] New reserve stock event with version: "+val);
-                TRANSACTION_INPUTS.add(txInput_);
+                coordinator.queueTransactionInput(txInput_);
 
                 val++;
             }
@@ -140,7 +146,6 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
                 1,
-                TRANSACTION_INPUTS,
                 serdes
         );
     }

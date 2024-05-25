@@ -56,7 +56,7 @@ public final class SellerDashboardTest extends AbstractWorkflowTest {
 
             TransactionInput txInput_ = new TransactionInput(UPDATE_DELIVERY, eventPayload_);
 
-            TRANSACTION_INPUTS.add(txInput_);
+            coordinator.queueTransactionInput(txInput_);
         }
 
         // wait for commit
@@ -99,7 +99,6 @@ public final class SellerDashboardTest extends AbstractWorkflowTest {
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
                 1,
-                TRANSACTION_INPUTS,
                 serdes
         );
     }

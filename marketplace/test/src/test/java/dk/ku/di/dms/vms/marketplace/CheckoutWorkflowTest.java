@@ -65,7 +65,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
             connectedVMSs = coordinator.getConnectedVMSs();
         } while (connectedVMSs.size() < numStarterVMSs);
 
-        new ReserveStockProducer().run();
+        new ReserveStockProducer(coordinator).run();
     }
 
     private static final Random random = new Random();
@@ -73,6 +73,12 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
     private static class ReserveStockProducer implements Runnable {
 
         private final String name = ReserveStockProducer.class.getSimpleName();
+
+        Coordinator coordinator;
+
+        public ReserveStockProducer(Coordinator coordinator) {
+            this.coordinator = coordinator;
+        }
 
         @Override
         public void run() {
@@ -94,7 +100,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
                 TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
                 TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
                 logger.log(INFO, "["+this.name+"] New reserve stock event with version: "+val);
-                TRANSACTION_INPUTS.add(txInput_);
+                coordinator.queueTransactionInput(txInput_);
 
                 val++;
             }
@@ -133,7 +139,6 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
                 new CoordinatorOptions().withBatchWindow(1000),
                 1,
                 1,
-                TRANSACTION_INPUTS,
                 serdes
         );
     }

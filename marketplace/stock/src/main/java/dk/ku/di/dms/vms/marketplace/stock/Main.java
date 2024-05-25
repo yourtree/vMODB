@@ -19,7 +19,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
-import static java.lang.System.Logger.Level.*;
+import static java.lang.System.Logger.Level.INFO;
 
 public final class Main {
 

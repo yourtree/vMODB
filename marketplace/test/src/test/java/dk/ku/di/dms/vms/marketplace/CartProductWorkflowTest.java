@@ -51,7 +51,7 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
 
         if(coordinator.getConnectedVMSs().size() < 2) throw new RuntimeException("VMSs did not connect to coordinator on time");
 
-        Thread thread = new Thread(new Producer());
+        Thread thread = new Thread(new Producer(coordinator));
         thread.start();
 
         sleep(BATCH_WINDOW_INTERVAL * 3);
@@ -101,12 +101,18 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
                         .withNetworkBufferSize(networkBufferSize),
                 1,
                 1,
-                TRANSACTION_INPUTS,
                 serdes
         );
     }
 
     private static class Producer implements Runnable {
+
+        Coordinator coordinator;
+
+        public Producer(Coordinator coordinator) {
+            this.coordinator = coordinator;
+        }
+
         @Override
         public void run() {
 
@@ -127,7 +133,7 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
 
                 logger.log(INFO, "[Producer] Adding "+val);
 
-                TRANSACTION_INPUTS.add(txInput);
+                coordinator.queueTransactionInput(txInput);
 
                 val++;
             }

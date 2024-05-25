@@ -28,7 +28,6 @@ import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousChannelGroup;
@@ -66,7 +65,7 @@ public final class Coordinator extends StoppableRunnable {
     private final AsynchronousChannelGroup group;
 
     // general tasks, like sending info to VMSs and other servers
-    private final ExecutorService taskExecutor;
+    // private final ExecutorService taskExecutor;
 
     // even though we can start with a known number of servers, their payload may have changed after a crash
     private final Map<Integer, ServerNode> servers;
@@ -111,7 +110,7 @@ public final class Coordinator extends StoppableRunnable {
     private final Map<Long, BatchContext> batchContextMap;
 
     // transaction requests coming from the http event loop
-    private final BlockingQueue<TransactionInput> parsedTransactionRequests;
+    private final List<LinkedBlockingDeque<TransactionInput>> transactionInputDeques;
 
     // transaction definitions coming from the http event loop
     private final Map<String, TransactionDAG> transactionMap;
@@ -141,13 +140,10 @@ public final class Coordinator extends StoppableRunnable {
                                     long startingBatchOffset,
                                     // starting tid (may come from storage after a crash)
                                     long startingTid,
-                                    // queue containing the input transactions. ingestion performed by http server
-                                    BlockingQueue<TransactionInput> parsedTransactionRequests,
                                     IVmsSerdesProxy serdesProxy) throws IOException {
         return new Coordinator(servers == null ? new ConcurrentHashMap<>() : servers,
                 new HashMap<>(), startersVMSs, Objects.requireNonNull(transactionMap),
-                me, options, startingBatchOffset, startingTid,
-                parsedTransactionRequests, serdesProxy);
+                me, options, startingBatchOffset, startingTid, serdesProxy);
     }
 
     private Coordinator(Map<Integer, ServerNode> servers,
@@ -158,15 +154,11 @@ public final class Coordinator extends StoppableRunnable {
                         CoordinatorOptions options,
                         long startingBatchOffset,
                         long startingTid,
-                        BlockingQueue<TransactionInput> parsedTransactionRequests,
                         IVmsSerdesProxy serdesProxy) throws IOException {
         super();
 
         // coordinator options
         this.options = options;
-
-        // used to complete handshake protocol
-        this.taskExecutor = Executors.newFixedThreadPool(options.getTaskThreadPoolSize());
 
         if(options.getGroupThreadPoolSize() > 0) {
             this.group = AsynchronousChannelGroup.withThreadPool(Executors.newWorkStealingPool(options.getGroupThreadPoolSize()));
@@ -177,13 +169,7 @@ public final class Coordinator extends StoppableRunnable {
         }
 
         // network and executor
-        if(options.isNetworkEnabled()) {
-            this.serverSocket.bind(me.asInetSocketAddress());
-        } else {
-            // loopback address and default port
-            InetSocketAddress loopback = new InetSocketAddress(InetAddress.getLoopbackAddress(), me.port);
-            this.serverSocket.bind( loopback );
-        }
+        this.serverSocket.bind(me.asInetSocketAddress());
 
         this.starterVMSs = startersVMSs;
         this.vmsMetadataMap = new ConcurrentHashMap<>();
@@ -197,7 +183,10 @@ public final class Coordinator extends StoppableRunnable {
         this.serdesProxy = serdesProxy;
 
         // shared data structure with http handler
-        this.parsedTransactionRequests = parsedTransactionRequests;
+        this.transactionInputDeques = new ArrayList<>();
+        for(int i = 0; i < options.getTaskThreadPoolSize(); i++){
+            this.transactionInputDeques.add(new LinkedBlockingDeque<>());
+        }
 
         // in production, it requires receiving new transaction definitions
         this.transactionMap = transactionMap;
@@ -214,7 +203,7 @@ public final class Coordinator extends StoppableRunnable {
         this.batchContextMap = new HashMap<>();
         this.batchContextMap.put(this.currentBatchOffset, new BatchContext(this.currentBatchOffset));
         BatchContext previousBatch = new BatchContext(this.currentBatchOffset - 1);
-        previousBatch.seal(startingTid - 1, Map.of(), Map.of(), Map.of());
+        previousBatch.seal(startingTid - 1, Map.of(), Map.of());
         this.batchContextMap.put(this.currentBatchOffset - 1, previousBatch);
 
         if(options.getNetworkBufferSize() > 0)
@@ -240,12 +229,10 @@ public final class Coordinator extends StoppableRunnable {
     @Override
     public void run() {
 
-        if(this.options.isNetworkEnabled()) {
-            // setup asynchronous listener for new connections
-            this.serverSocket.accept(null, new AcceptCompletionHandler());
-            // connect to all virtual microservices
-            this.setupStarterVMSs();
-        }
+        // setup asynchronous listener for new connections
+        this.serverSocket.accept(null, new AcceptCompletionHandler());
+        // connect to all virtual microservices
+        this.setupStarterVMSs();
 
         Thread.ofPlatform().factory().newThread(this::processEventsSentByVmsWorkers).start();
 
@@ -259,10 +246,20 @@ public final class Coordinator extends StoppableRunnable {
         logger.log(DEBUG,"Leader: Transaction processing starting now... ");
         long start = System.currentTimeMillis();
         long end = start + this.options.getBatchWindow();
+
+        int numberDeques = options.getTaskThreadPoolSize();
+        int dequeIdx = 0;
         while(this.isRunning()){
             do {
                 // considering a high workload scenario,
                 // it is fine to have this loop probing the inputs
+                // drain from all queues
+                do{
+                    this.transactionInputDeques.get(dequeIdx).drainTo(this.transactionRequests);
+                    dequeIdx++;
+                } while (dequeIdx < numberDeques);
+                dequeIdx = 0;
+
                 this.processTransactionInputEvents();
             } while(System.currentTimeMillis() < end);
             this.advanceCurrentBatch();
@@ -283,10 +280,12 @@ public final class Coordinator extends StoppableRunnable {
     private void setupStarterVMSs() {
         for(IdentifiableNode vmsNode : this.starterVMSs.values()){
             // coordinator will later keep track of this thread when the connection with the VMS is fully established
-            VmsWorker worker = VmsWorker.buildAsStarter(this.me, vmsNode, this.coordinatorQueue,
+            VmsWorker vmsWorker = VmsWorker.buildAsStarter(this.me, vmsNode, this.coordinatorQueue,
                     this.group, this.networkBufferSize, this.networkSendTimeout, this.serdesProxy);
             // a cached thread pool would be ok in this case
-            new Thread( worker ).start();
+            Thread vmsWorkerThread = Thread.ofPlatform().factory().newThread(vmsWorker);
+            vmsWorkerThread.setName("vms-worker-"+vmsNode.identifier);
+            vmsWorkerThread.start();
         }
     }
 
@@ -311,6 +310,16 @@ public final class Coordinator extends StoppableRunnable {
     private void failSafeClose(){
         // safe close
         try { this.serverSocket.close(); } catch (IOException ignored) {}
+    }
+
+    private final Random random = new Random();
+
+    /**
+     * Distribute the inserts across many deques to avoid contention across http threads
+     */
+    public boolean queueTransactionInput(TransactionInput transactionInput) {
+        int idx = this.random.nextInt(0, options.getTaskThreadPoolSize());
+        return this.transactionInputDeques.get(idx).offerLast(transactionInput);
     }
 
     /**
@@ -338,7 +347,7 @@ public final class Coordinator extends StoppableRunnable {
                     @Override
                     public void completed(Integer result, ByteBuffer buffer) {
                         // set this thread free. release the thread that belongs to the channel group
-                        taskExecutor.submit(() -> processReadAfterAcceptConnection(channel, buffer));
+                        processReadAfterAcceptConnection(channel, buffer);
                     }
 
                     @Override
@@ -369,105 +378,109 @@ public final class Coordinator extends StoppableRunnable {
             }
         }
 
-    }
+        /**
+         *
+         * Process Accept connection request
+         * Task for informing the server running for leader that a leader is already established
+         * We would no longer need to establish connection in case the {@link dk.ku.di.dms.vms.coordinator.election.ElectionWorker}
+         * maintains the connections.
+         */
+        private void processReadAfterAcceptConnection(AsynchronousSocketChannel channel, ByteBuffer buffer){
 
-    /**
-     *
-     * Process Accept connection request
-     * Task for informing the server running for leader that a leader is already established
-     * We would no longer need to establish connection in case the {@link dk.ku.di.dms.vms.coordinator.election.ElectionWorker}
-     * maintains the connections.
-     */
-    private void processReadAfterAcceptConnection(AsynchronousSocketChannel channel, ByteBuffer buffer){
+            // message identifier
+            byte messageIdentifier = buffer.get(0);
 
-        // message identifier
-        byte messageIdentifier = buffer.get(0);
+            if(messageIdentifier == VOTE_REQUEST || messageIdentifier == VOTE_RESPONSE){
+                // so I am leader, and I respond with a leader request to this new node
+                // taskExecutor.submit( new ElectionWorker.WriteTask( LEADER_REQUEST, server ) );
+                // would be better to maintain the connection open.....
+                buffer.clear();
 
-        if(messageIdentifier == VOTE_REQUEST || messageIdentifier == VOTE_RESPONSE){
-            // so I am leader, and I respond with a leader request to this new node
-            // taskExecutor.submit( new ElectionWorker.WriteTask( LEADER_REQUEST, server ) );
-            // would be better to maintain the connection open.....
-            buffer.clear();
-
-            if(channel.isOpen()) {
-                LeaderRequest.write(buffer, this.me);
-                buffer.flip();
-                try (channel) {
-                    channel.write(buffer); // write and forget
-                } catch (IOException ignored) {
-                } finally {
-                    MemoryManager.releaseTemporaryDirectBuffer(buffer);
+                if(channel.isOpen()) {
+                    LeaderRequest.write(buffer, me);
+                    buffer.flip();
+                    try (channel) {
+                        channel.write(buffer); // write and forget
+                    } catch (IOException ignored) {
+                    } finally {
+                        MemoryManager.releaseTemporaryDirectBuffer(buffer);
+                    }
                 }
+                return;
             }
-            return;
-        }
 
-        if(messageIdentifier == LEADER_REQUEST){
-            // buggy node intending to pose as leader...
-            try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored){}
-            return;
-        }
-
-        // if it is not a presentation, drop connection
-        if(messageIdentifier != PRESENTATION){
-            logger.log(WARNING,"A node is trying to connect without a presentation message:");
-            try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored){}
-            return;
-        }
-
-        // now let's do the work
-        buffer.position(1);
-
-        byte type = buffer.get();
-        if(type == SERVER_TYPE){
-            this.processServerPresentationMessage(channel, buffer);
-        } else if(type == VMS_TYPE){
-            try {
-                // this thread could potentially handle this worker... let's see how this performs later
-                // one aspect that favors the current approach is to release this thread as soon as possible
-                // for other connection attempts and reads from leader/VMSs once it is part of the group pool
-                VmsWorker worker = VmsWorker.buildAsUnknown( this.me,
-                        new NetworkAddress(channel.getRemoteAddress()),
-                        this.coordinatorQueue,
-                        channel, this.group, buffer, this.networkBufferSize, this.networkSendTimeout, this.serdesProxy);
-                new Thread( worker ).start();
-            } catch (IOException ignored1) {
-                try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored2){}
+            if(messageIdentifier == LEADER_REQUEST){
+                // buggy node intending to pose as leader...
+                try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored){}
+                return;
             }
-        } else {
-            // simply unknown... probably a bug?
-            logger.log(WARNING,"Unknown type of client connection. Probably a bug? ");
-            try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored){}
+
+            // if it is not a presentation, drop connection
+            if(messageIdentifier != PRESENTATION){
+                logger.log(WARNING,"A node is trying to connect without a presentation message:");
+                try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored){}
+                return;
+            }
+
+            // now let's do the work
+            buffer.position(1);
+
+            byte type = buffer.get();
+            if(type == SERVER_TYPE){
+                this.processServerPresentationMessage(channel, buffer);
+            } else if(type == VMS_TYPE){
+                try {
+                    this.processVmsConnectionAttempt(channel, buffer);
+                } catch (IOException ignored1) {
+                    try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored2){}
+                }
+            } else {
+                // simply unknown... probably a bug?
+                logger.log(WARNING,"Unknown type of client connection. Probably a bug? ");
+                try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored){}
+            }
         }
 
-    }
+        private void processVmsConnectionAttempt(AsynchronousSocketChannel channel, ByteBuffer buffer) throws IOException {
+            // this thread could potentially handle this worker... let's see how this performs later
+            // one aspect that favors the current approach is to release this thread as soon as possible
+            // for other connection attempts and reads from leader/VMSs once it is part of the group pool
+            VmsWorker worker = VmsWorker.buildAsUnknown( me,
+                    new NetworkAddress(channel.getRemoteAddress()),
+                    coordinatorQueue,
+                    channel, group, buffer, networkBufferSize, networkSendTimeout, serdesProxy);
+            Thread vmsWorkerThread = Thread.ofPlatform().factory().newThread(worker);
+            vmsWorkerThread.setName("vms-worker-unknown");
+            vmsWorkerThread.start();
+        }
 
-    /**
-     * Still need to define what to do with connections from replicas....
-     */
-    private void processServerPresentationMessage(AsynchronousSocketChannel channel, ByteBuffer buffer) {
-        // server
-        // ....
-        ServerNode newServer = Presentation.readServer(buffer);
+        /**
+         * Still need to define what to do with connections from replicas....
+         */
+        private void processServerPresentationMessage(AsynchronousSocketChannel channel, ByteBuffer buffer) {
+            // server
+            // ....
+            ServerNode newServer = Presentation.readServer(buffer);
 
-        // check whether this server is known... maybe it has crashed... then we only need to update the respective channel
-        if(this.servers.get(newServer.hashCode()) != null){
-            LockConnectionMetadata connectionMetadata = this.serverConnectionMetadataMap.get( newServer.hashCode() );
-            // update metadata of this node
-            this.servers.put( newServer.hashCode(), newServer );
-            connectionMetadata.channel = channel;
-        } else { // no need for locking here
-            this.servers.put( newServer.hashCode(), newServer );
-            LockConnectionMetadata connectionMetadata = new LockConnectionMetadata(
-                    newServer.hashCode(), SERVER,
-                    buffer,
-                    MemoryManager.getTemporaryDirectBuffer(networkBufferSize),
-                    channel,
-                    new Semaphore(1) );
-            this.serverConnectionMetadataMap.put( newServer.hashCode(), connectionMetadata );
-            // create a read handler for this connection
-            // attach buffer, so it can be read upon completion
-            // channel.read(buffer, connectionMetadata, new VmsReadCompletionHandler());
+            // check whether this server is known... maybe it has crashed... then we only need to update the respective channel
+            if(servers.get(newServer.hashCode()) != null){
+                LockConnectionMetadata connectionMetadata = serverConnectionMetadataMap.get( newServer.hashCode() );
+                // update metadata of this node
+                servers.put( newServer.hashCode(), newServer );
+                connectionMetadata.channel = channel;
+            } else { // no need for locking here
+                servers.put( newServer.hashCode(), newServer );
+                LockConnectionMetadata connectionMetadata = new LockConnectionMetadata(
+                        newServer.hashCode(), SERVER,
+                        buffer,
+                        MemoryManager.getTemporaryDirectBuffer(networkBufferSize),
+                        channel,
+                        new Semaphore(1) );
+                serverConnectionMetadataMap.put( newServer.hashCode(), connectionMetadata );
+                // create a read handler for this connection
+                // attach buffer, so it can be read upon completion
+                // channel.read(buffer, connectionMetadata, new VmsReadCompletionHandler());
+            }
         }
     }
 
@@ -493,11 +506,6 @@ public final class Coordinator extends StoppableRunnable {
 
         BatchContext currBatchContext = this.batchContextMap.get( generateBatch );
 
-        // a map of the last tid for each vms participating in this batch
-        Map<String,Long> lastTidOfBatchPerVms = this.vmsMetadataMap.values().stream()
-                .filter(p-> p.node().batch == generateBatch)
-                .collect(Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getLastTidOfBatch) );
-
         Map<String,Long> previousBatchPerVms = this.vmsMetadataMap.values().stream()
                 .filter(p-> p.node().batch == generateBatch)
                 .collect(Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getPreviousBatch) );
@@ -506,7 +514,7 @@ public final class Coordinator extends StoppableRunnable {
                 .filter(p-> p.node().batch == generateBatch)
                 .collect(Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getNumberOfTIDs) );
 
-        currBatchContext.seal(this.tid - 1, lastTidOfBatchPerVms, previousBatchPerVms, numberOfTasksPerVms);
+        currBatchContext.seal(this.tid - 1, previousBatchPerVms, numberOfTasksPerVms);
 
         // increment batch offset
         this.currentBatchOffset = this.currentBatchOffset + 1;
@@ -520,8 +528,7 @@ public final class Coordinator extends StoppableRunnable {
         for(String terminalVms : currBatchContext.terminalVMSs){
             VmsIdentifier vms = this.vmsMetadataMap.get(terminalVms);
             vms.worker().queueMessage(
-                    BatchCommitInfo.of(vms.node().batch, vms.node().lastTidOfBatch,
-                            vms.node().previousBatch, vms.node().numberOfTIDsCurrentBatch) );
+                    BatchCommitInfo.of(vms.node().batch, vms.node().previousBatch, vms.node().numberOfTIDsCurrentBatch) );
         }
 
         logger.log(INFO,"Leader: Next batch offset will be "+this.currentBatchOffset);
@@ -545,7 +552,7 @@ public final class Coordinator extends StoppableRunnable {
 
         Set<Integer> serverVotes = Collections.synchronizedSet(new HashSet<>(nServers));
 
-        String lastTidOfBatchPerVmsJson = this.serdesProxy.serializeMap(batchContext.lastTidOfBatchPerVms);
+        // String lastTidOfBatchPerVmsJson = this.serdesProxy.serializeMap(batchContext.lastTidOfBatchPerVms);
 
         int i = 0;
         for (ServerNode server : activeServers) {
@@ -566,7 +573,7 @@ public final class Coordinator extends StoppableRunnable {
                     channel.connect(address).get();
 
                     ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
-                    BatchReplication.write(buffer, batchContext.batchOffset, lastTidOfBatchPerVmsJson);
+                    // BatchReplication.write(buffer, batchContext.batchOffset, lastTidOfBatchPerVmsJson);
                     channel.write(buffer).get();
 
                     buffer.clear();
@@ -600,10 +607,7 @@ public final class Coordinator extends StoppableRunnable {
 
                 // these threads need to block to wait for server response
 
-            }, taskExecutor).exceptionallyAsync((ignored) -> {
-                // defaultLogError(UNREACHABLE_NODE, server.hashCode());
-                return null;
-            }, taskExecutor);
+            });
             i++;
         }
 
@@ -647,7 +651,7 @@ public final class Coordinator extends StoppableRunnable {
      * Local list of requests to be processed
      * Must be cleaned after use
      */
-    private final Collection<TransactionInput> transactionRequests = new ArrayList<>(10000);
+    private final List<TransactionInput> transactionRequests = new ArrayList<>(100000);
 
     /**
      * Should read in a proportion that matches the batch and heartbeat window, otherwise
@@ -659,11 +663,6 @@ public final class Coordinator extends StoppableRunnable {
      * the network buffering will send
      */
     private void processTransactionInputEvents(){
-
-        if( this.parsedTransactionRequests.isEmpty() ){
-            return;
-        }
-        this.parsedTransactionRequests.drainTo( this.transactionRequests );
 
         for(TransactionInput transactionInput : this.transactionRequests){
 
@@ -870,6 +869,7 @@ public final class Coordinator extends StoppableRunnable {
                                 this.sendCommitRequestToVMSs(batchContext);
                                 this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
                             } else {
+                                // this probably means some batch complete message got lost
                                 logger.log(WARNING,"Leader: Batch "+ msg.batch() +" is not the pending one. Still has to wait for the pending batch ("+this.batchOffsetPendingCommit+") to finish before progressing...");
                             }
                         }
@@ -902,7 +902,7 @@ public final class Coordinator extends StoppableRunnable {
             }
 
             // has this VMS participated in this batch?
-            if(!batchContext.lastTidOfBatchPerVms.containsKey(vms.getIdentifier())){
+            if(!batchContext.numberOfTasksPerVms.containsKey(vms.getIdentifier())){
                 //noinspection StringTemplateMigration
                 logger.log(INFO,"Leader: Will not send commit request to "+ vms.getIdentifier() + " because this VMS has not participated in this batch.");
                 continue;
@@ -911,7 +911,6 @@ public final class Coordinator extends StoppableRunnable {
             vms.worker().queueMessage(
                     new BatchCommitCommand.Payload(
                         batchContext.batchOffset,
-                        batchContext.lastTidOfBatchPerVms.get(vms.getIdentifier()),
                         batchContext.previousBatchPerVms.get(vms.getIdentifier()),
                         batchContext.numberOfTasksPerVms.get(vms.getIdentifier())
                     )

@@ -22,6 +22,9 @@ public final class BatchAlgo {
         return buildPrecedenceRecursive(inputEvent, transactionDAG, vmsMetadata);
     }
 
+    /**
+     * API that considers complex scheduler (i.e., a VMS task can have two input events)
+     */
     public static Map<String, Long> buildPrecedenceMap(TransactionDAG transactionDAG, Map<String, VmsIdentifier> vmsMetadata) {
         List<Map<String, Long>> listOfMapPerInputEvent = new ArrayList<>(transactionDAG.inputEvents.size());
         for(EventIdentifier inputEvent : transactionDAG.inputEvents.values()) {

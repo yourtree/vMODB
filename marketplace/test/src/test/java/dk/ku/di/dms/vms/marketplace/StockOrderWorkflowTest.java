@@ -20,8 +20,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
 
 import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
@@ -30,8 +28,6 @@ import static java.lang.Thread.sleep;
  *
  */
 public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
-
-    private static final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
 
     private static final CustomerCheckout customerCheckout = new CustomerCheckout();
 
@@ -53,7 +49,7 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
             connectedVMSs = coordinator.getConnectedVMSs();
         } while (connectedVMSs.size() < 2);
 
-        Thread thread = new Thread(new InputProducer());
+        Thread thread = new Thread(new InputProducer(coordinator));
         thread.start();
 
         sleep(BATCH_WINDOW_INTERVAL * 3);
@@ -64,6 +60,13 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
     }
 
     private static class InputProducer implements Runnable {
+
+        Coordinator coordinator;
+
+        public InputProducer(Coordinator coordinator) {
+            this.coordinator = coordinator;
+        }
+
         @Override
         public void run() {
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
@@ -80,7 +83,7 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
                 TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
                 TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
                 logger.log(INFO, "[CheckoutProducer] New reserve stock event with version: "+val);
-                parsedTransactionRequests.add(txInput_);
+                coordinator.queueTransactionInput(txInput_);
 
                 val++;
             }
@@ -118,7 +121,6 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
                 1,
-                parsedTransactionRequests,
                 serdes
         );
     }

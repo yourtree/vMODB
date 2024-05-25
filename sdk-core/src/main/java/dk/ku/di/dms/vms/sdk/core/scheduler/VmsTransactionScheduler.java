@@ -243,6 +243,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     if (!this.singleThreadTaskRunning.get() && this.numPartitionedTasksRunning.get() == 0) {
                         this.numParallelTasksRunning.incrementAndGet();
                         task.signalReady();
+                        LOGGER.log(DEBUG, this.vmsIdentifier+": Scheduling parallel task "+task.tid()+" for execution...");
                         this.sharedTaskPool.submit(task);
                     } else {
                         return;
