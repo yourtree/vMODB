@@ -584,7 +584,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 LOGGER.log(INFO, "Leader: Submitting ["+(count - remaining)+"] events to "+vmsNode.identifier);
                 count = remaining;
 
-                writeBuffer.position(0);
+                writeBuffer.flip();
 
                 this.WRITE_SYNCHRONIZER.take();
                 this.channel.write(writeBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.batchWriteCompletionHandler);

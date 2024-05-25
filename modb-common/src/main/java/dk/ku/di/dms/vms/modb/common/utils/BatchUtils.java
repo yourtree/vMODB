@@ -15,7 +15,7 @@ public final class BatchUtils {
         // no need. the client must make sure to deliver a clean buffer
         // writeBuffer.clear();
         writeBuffer.put(BATCH_OF_EVENTS);
-        writeBuffer.position(5);
+        writeBuffer.position(9);
 
         // batch them all in the buffer,
         // until buffer capacity is reached or elements are all sent
@@ -31,7 +31,8 @@ public final class BatchUtils {
         }
 
         writeBuffer.mark();
-        writeBuffer.putInt(1, count);
+        writeBuffer.putInt(1, writeBuffer.limit() - remainingBytes);
+        writeBuffer.putInt(5, count);
         writeBuffer.reset();
 
         return remaining - count;

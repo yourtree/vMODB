@@ -602,7 +602,8 @@ public final class VmsEventHandler extends StoppableRunnable {
             }
 
             // this code assumes it is always receiving batch of events
-            if(readBuffer.position() < networkBufferSize){
+            int bufferSize = readBuffer.getInt(1);
+            if(readBuffer.position() < bufferSize){
                 // get the rest before continuing
                 // cannot perform a blocking read at this point because it leads to read exception
                 this.connectionMetadata.channel.read(readBuffer, readBuffer, this);
@@ -653,6 +654,8 @@ public final class VmsEventHandler extends StoppableRunnable {
             List<InboundEvent> inboundEvents = LIST_BUFFER.poll();
             if(inboundEvents == null) inboundEvents = new ArrayList<>(1024);
             try {
+                // discard size of batch
+                readBuffer.getInt();
                 int count = readBuffer.getInt();
                 logger.log(DEBUG,me.identifier + ": Batch of [" + count + "] events received from " + node.identifier);
                 TransactionEvent.Payload payload;
@@ -746,16 +749,17 @@ public final class VmsEventHandler extends StoppableRunnable {
                     } else {
 
                         // is the same leader willing to open an additional connection?
+                        /*
                         try {
                             if (this.channel.getRemoteAddress() instanceof InetSocketAddress o) {
                                  if(leader.asInetSocketAddress().getHostString().equalsIgnoreCase(o.getHostString())){
                                      logger.log(INFO,me.identifier+": Leader requested an additional connection");
                                      this.buffer.clear();
-                                     this.channel.read(this.buffer, buffer, new LeaderReadCompletionHandler(leaderConnectionMetadata));
+                                     this.channel.read(this.buffer, 0, new LeaderReadCompletionHandler(leaderConnectionMetadata, buffer));
                                  }
                             }
                         } catch (Exception ignored) {}
-
+                        */
                         logger.log(WARNING,"Dropping a connection attempt from a node claiming to be leader");
                         try { this.channel.close(); } catch (IOException ignored) {}
                     }
@@ -883,7 +887,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 leaderWorkerThread.start();
                 logger.log(INFO,me.identifier+": Leader worker set up");
                 buffer.clear();
-                channel.read(buffer, buffer, new LeaderReadCompletionHandler(leaderConnectionMetadata) );
+                channel.read(buffer, 0, new LeaderReadCompletionHandler(leaderConnectionMetadata, buffer) );
             }
 
             @Override
@@ -978,19 +982,19 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     private static final ConcurrentLinkedDeque<List<InboundEvent>> LIST_BUFFER = new ConcurrentLinkedDeque<>();
 
-    @SuppressWarnings("SequencedCollectionMethodCanBeUsed")
-    private final class LeaderReadCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
+    private final class LeaderReadCompletionHandler implements CompletionHandler<Integer, Integer> {
 
         private final ConnectionMetadata connectionMetadata;
+        private final ByteBuffer readBuffer;
 
-        public LeaderReadCompletionHandler(ConnectionMetadata connectionMetadata){
+        public LeaderReadCompletionHandler(ConnectionMetadata connectionMetadata, ByteBuffer readBuffer){
             this.connectionMetadata = connectionMetadata;
+            this.readBuffer = readBuffer;
             LIST_BUFFER.add(new ArrayList<>(1024));
         }
 
-        @SuppressWarnings("UnnecessaryLocalVariable")
         @Override
-        public void completed(Integer result, ByteBuffer readBuffer) {
+        public void completed(Integer result, Integer carryOn) {
 
             if(result == -1){
                 logger.log(INFO,me.identifier+": Leader has disconnected");
@@ -999,10 +1003,12 @@ public final class VmsEventHandler extends StoppableRunnable {
             }
 
             if(readBuffer.get(0) == BATCH_OF_EVENTS) {
+                int bufferSize = readBuffer.getInt(1);
                 // must take into account the position of the buffer
-                if (readBuffer.position() < networkBufferSize) {
+                if (readBuffer.position() < bufferSize) {
+                    int aux = carryOn + result;
                     // get the rest of the batch
-                    this.connectionMetadata.channel.read(readBuffer, readBuffer, this);
+                    this.connectionMetadata.channel.read(readBuffer, aux, this);
                     return;
                 }
             }
@@ -1056,29 +1062,18 @@ public final class VmsEventHandler extends StoppableRunnable {
             }
 
             // must take into account the result could be the remaining bytes of a batch of events
-            if(readBuffer.get(0) == BATCH_OF_EVENTS){
-                // can set new read safely since everything has been processed
-                // it would not reach here if network size buffer had not been reached
-                setUpNewRead();
-                returnByteBuffer(readBuffer);
-                this.carryOn = 0;
-            } else if(readBuffer.position() < this.carryOn + result){ // ---> more data to read
+            if(readBuffer.position() < carryOn + result){ // ---> more data to read
                 // cannot set new read now because may break a single batch into two read buffers =(
 
                 // assumption: batch of events always fills the entire buffer (i.e., it is our limit/end mark)
                 readBuffer.compact();
-                int aux = this.carryOn + result;
-                this.carryOn = aux;
-                connectionMetadata.channel.read(readBuffer, readBuffer, this);
+                int aux = carryOn + result;
+                connectionMetadata.channel.read(readBuffer, aux, this);
             } else {
                 setUpNewRead();
-                returnByteBuffer(readBuffer);
-                this.carryOn = 0;
             }
 
         }
-
-        private volatile int carryOn = 0;
 
         private void processSingleEvent(ByteBuffer readBuffer) {
             try {
@@ -1101,11 +1096,12 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
 
         private void setUpNewRead() {
+            readBuffer.clear();
             // set up another read for cases of bursts of data
-            ByteBuffer newReadBuffer = retrieveByteBuffer();
-            connectionMetadata.channel.read(newReadBuffer, newReadBuffer, this);
+            connectionMetadata.channel.read(readBuffer, 0, this);
         }
 
+        @SuppressWarnings("SequencedCollectionMethodCanBeUsed")
         private void processBatchOfEvents(ByteBuffer readBuffer) {
             List<InboundEvent> payloads = LIST_BUFFER.poll();
             if(payloads == null) payloads = new ArrayList<>(1024);
@@ -1114,6 +1110,8 @@ public final class VmsEventHandler extends StoppableRunnable {
              */
             TransactionEvent.Payload payload;
             try {
+                // discard size of batch
+                readBuffer.getInt();
                 // to increase performance, one would buffer this buffer for processing and then read from another buffer
                 int count = readBuffer.getInt();
                 logger.log(DEBUG,me.identifier + ": Batch of [" + count + "] events received from the leader");
@@ -1134,8 +1132,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                     }
                 }
 
-                logger.log(DEBUG, "Number of inputs pending processing: "+vmsInternalChannels.transactionInputQueue().size());
-
             } catch (Exception e){
                 logger.log(ERROR, me.identifier +": Error while processing a batch:"+e);
             } finally {
@@ -1145,9 +1141,9 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
 
         @Override
-        public void failed(Throwable exc, ByteBuffer readBuffer) {
+        public void failed(Throwable exc, Integer carryOn) {
             logger.log(ERROR,me.identifier+": Message could not be processed: "+exc);
-            returnByteBuffer(readBuffer);
+            setUpNewRead();
         }
     }
 

@@ -156,14 +156,10 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 // that would be nice if the expectation of the receiver were not receiving the whole message at once
                 // without the flip, given the send and recv buffer are both the size of the message,
                 // that guarantees the entire buffer will be delivered at once
-                writeBuffer.position(0);
+                writeBuffer.flip();
 
                 this.WRITE_SYNCHRONIZER.take();
                 this.connectionMetadata.channel.write(writeBuffer, this.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
-
-                // can prevent two batches from having part of their buffers placed in the same delivery
-                // without sleep, two batches may be placed in the same buffer in the receiver
-                // sleep(100)
 
             } catch (Exception e) {
                 logger.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier+"\n"+e);
