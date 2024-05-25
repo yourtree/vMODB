@@ -55,4 +55,23 @@ public final class BatchAlgo {
         return listToBuildMap;
     }
 
+    public static List<VmsIdentifier> buildTransactionDagVmsList(TransactionDAG transactionDAG, Map<String, VmsIdentifier> vmsMetadata){
+        List<VmsIdentifier> transactionDagVmsList = new ArrayList<>();
+        for(EventIdentifier event : transactionDAG.inputEvents.values()) {
+            transactionDagVmsList.add( vmsMetadata.get(event.targetVms) );
+            transactionDagVmsList.addAll( buildTransactionDagVmsListRecursive( event.children, vmsMetadata ) );
+        }
+        return transactionDagVmsList;
+    }
+
+    private static List<VmsIdentifier> buildTransactionDagVmsListRecursive(List<EventIdentifier> internalNodeList, Map<String, VmsIdentifier> vmsMetadata) {
+        List<VmsIdentifier> transactionDagVmsList = new ArrayList<>();
+        for(EventIdentifier event : internalNodeList) {
+            transactionDagVmsList.add( vmsMetadata.get(event.targetVms) );
+            if(!event.terminal){ //&& !event.children.isEmpty()){
+                transactionDagVmsList.addAll( buildTransactionDagVmsListRecursive( event.children, vmsMetadata ) );
+            }
+        }
+        return transactionDagVmsList;
+    }
 }

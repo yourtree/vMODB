@@ -43,6 +43,15 @@ public final class BatchCommitInfo {
 
     public record Payload(
             long batch, long previousBatch, int numberOfTIDsBatch
-    ){}
+    ){
+        @Override
+        public String toString() {
+            return "{"
+                    + "\"batch\":\"" + batch + "\""
+                    + ",\"previousBatch\":\"" + previousBatch + "\""
+                    + ",\"numberOfTIDsBatch\":\"" + numberOfTIDsBatch + "\""
+                    + "}";
+        }
+    }
 
 }

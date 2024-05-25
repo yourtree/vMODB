@@ -99,7 +99,7 @@ final class LeaderWorker extends StoppableRunnable {
         public void completed(Integer result, Integer remaining) {
             int newRemaining = remaining - result;
             if(newRemaining > 0) {
-                LOGGER.log(DEBUG, vmsNode.identifier+": Leader worker will send remaining bytes: "+newRemaining);
+                LOGGER.log(WARNING, vmsNode.identifier+": Leader worker will send remaining bytes: "+newRemaining);
                 channel.write(writeBuffer, newRemaining, this);
             } else {
                 writeBuffer.clear();
@@ -113,12 +113,14 @@ final class LeaderWorker extends StoppableRunnable {
         }
     }
 
-    private void write() {
+    private void write(Object object) {
         this.writeBuffer.flip();
         int remaining = this.writeBuffer.limit();
         try {
             this.channel.write(this.writeBuffer, remaining, this.writeCompletionHandler);
         } catch (Exception e){
+            // queue to try insert again
+            this.queueMessage(object);
             this.writeBuffer.clear();
             if(!channel.isOpen()) {
                 leader.off();
@@ -134,24 +136,24 @@ final class LeaderWorker extends StoppableRunnable {
      * for acknowledging batch reception. This way, we could hold batches in memory until
      * the acknowledgment arrives
      */
-    private void sendEvent(TransactionEvent.PayloadRaw payloadRaw) {
-        TransactionEvent.write( this.writeBuffer, payloadRaw );
-        write();
+    private void sendEvent(TransactionEvent.PayloadRaw payload) {
+        TransactionEvent.write( this.writeBuffer, payload );
+        write(payload);
     }
 
     private void sendBatchComplete(BatchComplete.Payload payload) {
         BatchComplete.write( this.writeBuffer, payload );
-        write();
+        write(payload);
     }
 
     private void sendBatchCommitAck(BatchCommitAck.Payload payload) {
         BatchCommitAck.write( writeBuffer, payload );
-        write();
+        write(payload);
     }
 
     private void sendTransactionAbort(TransactionAbort.Payload payload) {
         TransactionAbort.write( writeBuffer, payload );
-        write();
+        write(payload);
     }
 
     public void queueMessage(Object message) {

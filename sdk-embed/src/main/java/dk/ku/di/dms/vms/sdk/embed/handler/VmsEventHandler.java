@@ -93,6 +93,7 @@ public final class VmsEventHandler extends StoppableRunnable {
     // private final BlockingQueue<Object> leaderWorkerQueue;
 
     // cannot be final, may differ across time and new leaders
+    @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
     private final Set<String> queuesLeaderSubscribesTo;
 
     /** INTERNAL STATE **/
@@ -208,7 +209,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     private static final int MAX_TIMEOUT = 1000;
 
-    private static final boolean BLOCKING = true;
+    private static final boolean BLOCKING = false;
 
     /**
      * A thread that basically writes events to other VMSs and the Leader
@@ -224,10 +225,10 @@ public final class VmsEventHandler extends StoppableRunnable {
         int pollTimeout = 1;
         IVmsTransactionResult txResult_;
         while(this.isRunning()){
-
             // can acknowledge batch completion even though no event from next batch has arrived
+            // but if BLOCKING, only upon a new event such method will be invoked
+            // that will jeopardize the batch process
             this.moveBatchIfNecessary();
-
             try {
                 if(BLOCKING){
                     txResult_ = this.vmsInternalChannels.transactionOutputQueue().take();
@@ -412,7 +413,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         String objStr = this.serdesProxy.serialize(outputEvent.output(), clazz);
 
         /*
-        // does the leader consumes this queue?
+         * does the leader consumes this queue?
         if( this.queuesLeaderSubscribesTo.contains( outputEvent.outputQueue() ) ){
             logger.log(DEBUG,me.identifier+": An output event (queue: "+outputEvent.outputQueue()+") will be queued to leader");
             this.leaderWorkerQueue.add(new LeaderWorker.Message(SEND_EVENT, payload));

@@ -448,7 +448,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     case BATCH_COMPLETE -> {
                         // don't actually need the host and port in the payload since we have the attachment to this read operation...
                         BatchComplete.Payload response = BatchComplete.read(readBuffer);
-                        LOGGER.log(INFO, "Leader: Batch (" + response.batch() + ") complete received from: " + vmsNode.identifier);
+                        LOGGER.log(DEBUG, "Leader: Batch (" + response.batch() + ") complete received from: " + vmsNode.identifier);
                         // must have a context, i.e., what batch, the last?
                         coordinatorQueue.add(response);
                         // if one abort, no need to keep receiving
@@ -456,7 +456,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                         // because only the aborted transaction will be rolled back
                     }
                     case BATCH_COMMIT_ACK -> {
-                        LOGGER.log(INFO, "Leader: Batch commit ACK received from: " + vmsNode.identifier);
+                        LOGGER.log(DEBUG, "Leader: Batch commit ACK received from: " + vmsNode.identifier);
                         BatchCommitAck.Payload response = BatchCommitAck.read(readBuffer);
                         // logger.config("Just logging it, since we don't necessarily need to wait for that. "+response);
                         coordinatorQueue.add(response);
@@ -479,6 +479,11 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             } catch (Exception e){
                 LOGGER.log(ERROR, "Leader: Unknown error captured \n"+e);
                 e.printStackTrace(System.out);
+
+                this.carryOn = 0;
+                readBuffer.clear();
+                channel.read( readBuffer, 0, this );
+                return;
             }
 
             // must take into account more data has arrived. otherwise can lead to losing a batch complete message
@@ -523,7 +528,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private void sendBatchCommitInfo(BatchCommitInfo.Payload batchCommitInfo){
         // then send only the batch commit info
-        LOGGER.log(DEBUG, "Leader: Batch ("+batchCommitInfo.batch()+") commit info will be sent to: " + this.vmsNode.identifier);
+        LOGGER.log(DEBUG, "Leader: Batch ("+batchCommitInfo.batch()+") commit info will be sent to " + this.vmsNode.identifier);
         try {
             ByteBuffer writeBuffer = this.retrieveByteBuffer();
             BatchCommitInfo.write(writeBuffer, batchCommitInfo);
@@ -542,7 +547,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
             return;
         }
-        LOGGER.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info sent to: " + this.vmsNode.identifier);
+        LOGGER.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info sent to " + this.vmsNode.identifier+"\n"+batchCommitInfo);
     }
 
     private ByteBuffer retrieveByteBuffer() {

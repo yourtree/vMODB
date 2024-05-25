@@ -217,6 +217,8 @@ public final class Coordinator extends StoppableRunnable {
         this.batchSignalQueue = new LinkedBlockingQueue<>();
     }
 
+    private final Map<String, List<VmsIdentifier>> vmsIdentifiersPerDAG = new HashMap<>();
+
     /**
      * This method contains the event loop that contains the main functions of a leader/coordinator
      * What happens if two nodes declare themselves as leaders? We need some way to let it know
@@ -241,6 +243,11 @@ public final class Coordinator extends StoppableRunnable {
         for(;;){
             if(this.vmsMetadataMap.size() >= this.starterVMSs.size())
                 break;
+        }
+
+        // build list of VmsIdentifier per transaction DAG
+        for(var dag : this.transactionMap.entrySet()){
+            this.vmsIdentifiersPerDAG.put(dag.getKey(), BatchAlgo.buildTransactionDagVmsList( dag.getValue(), this.vmsMetadataMap ));
         }
 
         logger.log(DEBUG,"Leader: Transaction processing starting now... ");
@@ -694,7 +701,7 @@ public final class Coordinator extends StoppableRunnable {
             EventIdentifier event = transactionDAG.inputEvents.get(transactionInput.event.name);
 
             // get the vms
-            VmsIdentifier vms = this.vmsMetadataMap.get(event.targetVms);
+            VmsIdentifier inputVms = this.vmsMetadataMap.get(event.targetVms);
 
             // a vms, although receiving an event from a "next" batch, cannot yet commit, since
             // there may have additional events to arrive from the current batch
@@ -704,15 +711,10 @@ public final class Coordinator extends StoppableRunnable {
             // progress since the precedence info will never arrive
             // this way, we need to send in this event the precedence info for all downstream VMSs of this event
             // having this info avoids having to contact all internal/terminal nodes to inform the precedence of events
-            Map<String, Long> precedenceMap = BatchAlgo.buildPrecedenceMap(event, transactionDAG, this.vmsMetadataMap);
-            String precedenceMapStr = this.serdesProxy.serializeMap(precedenceMap);
-
-            /*
-             * update for next transaction. this is basically to ensure VMS do not wait for a tid that will never come. TIDs processed by a vms may not be sequential
-             */
-            vms.node().lastTidOfBatch = tid_;
-            this.updateVmsBatchAndPrecedenceIfNecessary(vms.node());
-            vms.node().numberOfTIDsCurrentBatch++;
+            List<VmsIdentifier> vmsList = this.vmsIdentifiersPerDAG.get( transactionDAG.name );
+            Map<String, Long> previousBatchPerVms = vmsList.stream()
+                    .collect(Collectors.toMap( VmsIdentifier::getIdentifier, VmsIdentifier::getLastTidOfBatch) );
+            String precedenceMapStr = this.serdesProxy.serializeMap(previousBatchPerVms);
 
             // write. think about failures/atomicity later
             TransactionEvent.PayloadRaw txEvent = TransactionEvent.of(tid_, this.currentBatchOffset,
@@ -720,27 +722,19 @@ public final class Coordinator extends StoppableRunnable {
 
             // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
 
-            if(!event.targetVms.equalsIgnoreCase(vms.node().identifier)){
+            if(!event.targetVms.equalsIgnoreCase(inputVms.node().identifier)){
                 logger.log(ERROR,"Leader: The event was going to be queued to the incorrect VMS worker!");
             }
-            logger.log(DEBUG,"Leader: Adding event "+event.name+" to "+vms.node().identifier+" worker");
-            vms.worker().queueMessage(txEvent);
+            logger.log(DEBUG,"Leader: Adding event "+event.name+" to "+inputVms.node().identifier+" worker");
+            inputVms.worker().queueMessage(txEvent);
 
-            // update the last tid of the terminals
-            for(String vmsIdentifier : transactionDAG.terminalNodes){
-                VmsIdentifier terminalVms = this.vmsMetadataMap.get(vmsIdentifier);
-                terminalVms.node().lastTidOfBatch = tid_;
-                this.updateVmsBatchAndPrecedenceIfNecessary(terminalVms.node());
-                terminalVms.node().numberOfTIDsCurrentBatch++;
-            }
-
-            // also update the last tid of the internal VMSs
-            // to make sure they receive the batch commit command with the appropriate lastTid
-            for(String vmsIdentifier : transactionDAG.internalNodes){
-                VmsIdentifier internalVms = this.vmsMetadataMap.get(vmsIdentifier);
-                internalVms.node().lastTidOfBatch = tid_;
-                this.updateVmsBatchAndPrecedenceIfNecessary(internalVms.node());
-                internalVms.node().numberOfTIDsCurrentBatch++;
+            /*
+             * update for next transaction. this is basically to ensure VMS do not wait for a tid that will never come. TIDs processed by a vms may not be sequential
+             */
+            for(var vms_ : vmsList){
+                vms_.node().lastTidOfBatch = tid_;
+                this.updateVmsBatchAndPrecedenceIfNecessary(vms_.node());
+                vms_.node().numberOfTIDsCurrentBatch++;
             }
 
             // add terminal to the set... so cannot be immutable when the batch context is created...
@@ -853,7 +847,7 @@ public final class Coordinator extends StoppableRunnable {
                     case BatchComplete.Payload msg -> {
                         // what if ACKs from VMSs take too long? or never arrive?
                         // need to deal with intersecting batches? actually just continue emitting for higher throughput
-                        logger.log(INFO,"Leader: Processing batch ("+msg.batch()+") complete from: "+msg.vms());
+                        logger.log(DEBUG,"Leader: Processing batch ("+msg.batch()+") complete from: "+msg.vms());
                         BatchContext batchContext = this.batchContextMap.get( msg.batch() );
                         // only if it is not a duplicate vote
                         batchContext.missingVotes.remove( msg.vms() );
@@ -897,14 +891,14 @@ public final class Coordinator extends StoppableRunnable {
     private void sendCommitRequestToVMSs(BatchContext batchContext){
         for(VmsIdentifier vms : this.vmsMetadataMap.values()){
             if(batchContext.terminalVMSs.contains(vms.getIdentifier())) {
-                logger.log(INFO,"Leader: Will not send commit request to "+ vms.getIdentifier() + " because it is a terminal VMS");
+                logger.log(INFO,"Leader: Batch commit command not sent to "+ vms.getIdentifier() + " (terminal)");
                 continue;
             }
 
             // has this VMS participated in this batch?
             if(!batchContext.numberOfTasksPerVms.containsKey(vms.getIdentifier())){
                 //noinspection StringTemplateMigration
-                logger.log(INFO,"Leader: Will not send commit request to "+ vms.getIdentifier() + " because this VMS has not participated in this batch.");
+                logger.log(DEBUG,"Leader: Batch commit command will not be sent to "+ vms.getIdentifier() + " because this VMS has not participated in this batch.");
                 continue;
             }
 
