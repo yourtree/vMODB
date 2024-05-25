@@ -658,8 +658,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                 TransactionEvent.Payload payload;
                 int i = 0;
                 while (i < count) {
-                    // move offset to discard message type
-                    readBuffer.get();
                     payload = TransactionEvent.read(readBuffer);
                     logger.log(DEBUG, me.identifier+": Processed TID "+payload.tid());
                     if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
@@ -1122,8 +1120,6 @@ public final class VmsEventHandler extends StoppableRunnable {
 
                 // extract events batched
                 for (int i = 0; i < count; i++) {
-                    // move offset to discard message type
-                    readBuffer.get();
                     payload = TransactionEvent.read(readBuffer);
                     logger.log(DEBUG, me.identifier+": Processed TID "+payload.tid());
                     if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {

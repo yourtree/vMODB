@@ -13,10 +13,9 @@ public final class TransactionEvent {
 
     // this payload
     // message type | tid | batch | size | event name | size | payload | size | precedence map
-    private static final int FIXED_LENGTH = 1 + (2 * Long.BYTES) + (3 *  Integer.BYTES);
+    private static final int FIXED_LENGTH = (2 * Long.BYTES) + (3 *  Integer.BYTES);
 
     public static void write(ByteBuffer buffer, PayloadRaw payload){
-        buffer.put( Constants.EVENT );
         buffer.putLong( payload.tid );
         buffer.putLong( payload.batch );
         buffer.putInt( payload.event.length );
@@ -34,7 +33,6 @@ public final class TransactionEvent {
         String event = ByteUtils.extractStringFromByteBuffer( buffer, eventSize );
         int payloadSize = buffer.getInt();
         String payload = ByteUtils.extractStringFromByteBuffer( buffer, payloadSize );
-//        System.out.println("VMS: Payload read for TID "+tid+" \n" + payload);
         int precedenceSize = buffer.getInt();
         String precedenceMap = ByteUtils.extractStringFromByteBuffer( buffer, precedenceSize );
         return new Payload( tid, batch, event, payload, precedenceMap, (Long.BYTES * 3) + eventSize + payloadSize + precedenceSize );

@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
+import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
@@ -137,6 +138,7 @@ final class LeaderWorker extends StoppableRunnable {
      * the acknowledgment arrives
      */
     private void sendEvent(TransactionEvent.PayloadRaw payload) {
+        this.writeBuffer.put( Constants.EVENT );
         TransactionEvent.write( this.writeBuffer, payload );
         write(payload);
     }

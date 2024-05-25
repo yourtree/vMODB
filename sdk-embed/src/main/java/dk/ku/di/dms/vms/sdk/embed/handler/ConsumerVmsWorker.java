@@ -156,7 +156,6 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 // that would be nice if the expectation of the receiver were not receiving the whole message at once
                 // without the flip, given the send and recv buffer are both the size of the message,
                 // that guarantees the entire buffer will be delivered at once
-                // writeBuffer.flip();
                 writeBuffer.position(0);
 
                 this.WRITE_SYNCHRONIZER.take();
