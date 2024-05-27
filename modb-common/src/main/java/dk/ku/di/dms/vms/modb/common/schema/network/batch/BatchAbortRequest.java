@@ -12,6 +12,8 @@ import java.nio.ByteBuffer;
  */
 public final class BatchAbortRequest {
 
+    public static final int SIZE = 1 + Long.BYTES;
+
     // send the last tid (corresponding to the vms) and batch id
     public static void write(ByteBuffer buffer, long batch){
         buffer.put(Constants.BATCH_ABORT_REQUEST);

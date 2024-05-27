@@ -11,7 +11,7 @@ import java.nio.ByteBuffer;
  */
 public final class BatchCommitCommand {
 
-    public static final int size = 1 + (2 * Long.BYTES) + Integer.BYTES;
+    public static final int SIZE = 1 + (2 * Long.BYTES) + Integer.BYTES;
 
     public static void write(ByteBuffer buffer, BatchCommitCommand.Payload payload){
         buffer.put(Constants.BATCH_COMMIT_COMMAND);
@@ -29,6 +29,15 @@ public final class BatchCommitCommand {
 
     public record Payload(
             long batch, long previousBatch, int numberOfTIDsBatch
-    ){}
+    ){
+        @Override
+        public String toString() {
+            return "{"
+                    + "\"batch\":\"" + batch + "\""
+                    + ",\"previousBatch\":\"" + previousBatch + "\""
+                    + ",\"numberOfTIDsBatch\":\"" + numberOfTIDsBatch + "\""
+                    + "}";
+        }
+    }
 
 }

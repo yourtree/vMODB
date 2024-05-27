@@ -110,7 +110,7 @@ public final class Coordinator extends StoppableRunnable {
     private final Map<Long, BatchContext> batchContextMap;
 
     // transaction requests coming from the http event loop
-    private final List<LinkedBlockingDeque<TransactionInput>> transactionInputDeques;
+    private final List<ConcurrentLinkedDeque<TransactionInput>> transactionInputDeques;
 
     // transaction definitions coming from the http event loop
     private final Map<String, TransactionDAG> transactionMap;
@@ -185,7 +185,7 @@ public final class Coordinator extends StoppableRunnable {
         // shared data structure with http handler
         this.transactionInputDeques = new ArrayList<>();
         for(int i = 0; i < options.getTaskThreadPoolSize(); i++){
-            this.transactionInputDeques.add(new LinkedBlockingDeque<>());
+            this.transactionInputDeques.add(new ConcurrentLinkedDeque<>());
         }
 
         // in production, it requires receiving new transaction definitions
@@ -253,20 +253,21 @@ public final class Coordinator extends StoppableRunnable {
         logger.log(DEBUG,"Leader: Transaction processing starting now... ");
         long start = System.currentTimeMillis();
         long end = start + this.options.getBatchWindow();
-
         int numberDeques = options.getTaskThreadPoolSize();
         int dequeIdx = 0;
+        ConcurrentLinkedDeque<TransactionInput> deque;
+        TransactionInput data;
         while(this.isRunning()){
             do {
-                // considering a high workload scenario,
-                // it is fine to have this loop probing the inputs
-                // drain from all queues
-                do{
-                    this.transactionInputDeques.get(dequeIdx).drainTo(this.transactionRequests);
+                // iterate over deques and drain transaction inputs
+                do {
+                    deque = this.transactionInputDeques.get(dequeIdx);
+                    while ((data = deque.poll()) != null) {
+                        this.transactionRequests.add(data);
+                    }
                     dequeIdx++;
-                } while (dequeIdx < numberDeques);
+                } while (dequeIdx < numberDeques && System.currentTimeMillis() < end);
                 dequeIdx = 0;
-
                 this.processTransactionInputEvents();
             } while(System.currentTimeMillis() < end);
             this.advanceCurrentBatch();
@@ -484,9 +485,6 @@ public final class Coordinator extends StoppableRunnable {
                         channel,
                         new Semaphore(1) );
                 serverConnectionMetadataMap.put( newServer.hashCode(), connectionMetadata );
-                // create a read handler for this connection
-                // attach buffer, so it can be read upon completion
-                // channel.read(buffer, connectionMetadata, new VmsReadCompletionHandler());
             }
         }
     }
@@ -840,7 +838,7 @@ public final class Coordinator extends StoppableRunnable {
                         // can reuse the same buffer since the message does not change across VMSs like the commit request
                         for(VmsIdentifier vms : this.vmsMetadataMap.values()){
                             // don't need to send to the vms that aborted
-                            if(vms.getIdentifier().equalsIgnoreCase( msg.vms() )) continue;
+                            // if(vms.getIdentifier().equalsIgnoreCase( msg.vms() )) continue;
                             vms.worker().queueMessage(msg.tid());
                         }
                     }
@@ -876,13 +874,10 @@ public final class Coordinator extends StoppableRunnable {
                         logger.log(INFO,"Leader: Batch "+ msg.batch() +" commit ACK received from "+msg.vms());
                     default -> logger.log(WARNING,"Leader: Received an unidentified message type: "+message.getClass().getName());
                 }
-
             } catch (Exception e) {
                 logger.log(ERROR,"Leader: Exception caught while looping through coordinatorQueue: "+e);
             }
-
         }
-
     }
 
     /**

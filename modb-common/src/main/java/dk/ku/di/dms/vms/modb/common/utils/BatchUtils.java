@@ -9,20 +9,20 @@ import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_OF_EVE
 
 public final class BatchUtils {
 
+    private static final int JUMP = (2 * Integer.BYTES);
+
     public static int assembleBatchPayload(int remaining, List<TransactionEvent.PayloadRaw> events, ByteBuffer writeBuffer){
         int remainingBytes = writeBuffer.remaining();
 
-        // no need. the client must make sure to deliver a clean buffer
-        // writeBuffer.clear();
         writeBuffer.put(BATCH_OF_EVENTS);
-        writeBuffer.position(9);
+        // jump 2 integers
+        writeBuffer.position(1 + JUMP);
+        remainingBytes = remainingBytes - 1 - JUMP;
 
         // batch them all in the buffer,
         // until buffer capacity is reached or elements are all sent
         int count = 0;
-        remainingBytes = remainingBytes - 1 - Integer.BYTES;
         int idx = events.size() - remaining;
-
         while(idx < events.size() && remainingBytes > events.get(idx).totalSize()){
             TransactionEvent.write( writeBuffer, events.get(idx) );
             remainingBytes = remainingBytes - events.get(idx).totalSize();
@@ -30,10 +30,13 @@ public final class BatchUtils {
             count++;
         }
 
-        writeBuffer.mark();
-        writeBuffer.putInt(1, writeBuffer.limit() - remainingBytes);
+        // writeBuffer.mark();
+        int position = writeBuffer.position();
+        // assert writeBuffer.position() == writeBuffer.capacity() - remainingBytes;
+        writeBuffer.putInt(1, position);
         writeBuffer.putInt(5, count);
-        writeBuffer.reset();
+        writeBuffer.position(position);
+        // writeBuffer.reset();
 
         return remaining - count;
     }

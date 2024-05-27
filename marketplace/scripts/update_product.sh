@@ -19,6 +19,14 @@ curl -X GET localhost:8001/product/1/1
 
 echo ""
 
+echo "Adding stock item 1/1"
+
+curl -X POST -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "qty_available" : 10, "qty_reserved" : 0, "order_count" : 0, "ytd": 0, "data" : "", "version": "0"}' localhost:8002/stock
+
+echo "Retrieving stock item 1/1"
+
+curl -X GET localhost:8002/stock/1/1
+
 for i in `seq 1 $param1`
 do
 

@@ -414,20 +414,20 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
      */
     private final class VmsReadCompletionHandler implements CompletionHandler<Integer, Integer> {
 
-        // is it an abort, a commit response?
-        // it cannot be replication because have opened another channel for that
-
-        @SuppressWarnings("UnnecessaryLocalVariable")
         @Override
-        public void completed(Integer result, Integer startPosition) {
+        public void completed(Integer result, Integer startPos) {
 
             if(result == -1){
                 LOGGER.log(INFO, "Leader: " + vmsNode.identifier+" has disconnected");
                 return;
             }
 
+            if(startPos == 0){
+                readBuffer.flip();
+            }
+
             // decode message by getting the first byte
-            readBuffer.position(startPosition);
+            readBuffer.position(startPos);
             byte type = readBuffer.get();
 
             try {
@@ -474,31 +474,23 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             } catch (BufferUnderflowException e){
                 LOGGER.log(WARNING, "Leader: Buffer underflow captured. Will read more with the hope the full data is delivered.");
                 e.printStackTrace(System.out);
-                channel.read( readBuffer, startPosition, this );
+                readBuffer.position(startPos);
+                readBuffer.compact();
+                channel.read( readBuffer, startPos, this );
                 return;
             } catch (Exception e){
                 LOGGER.log(ERROR, "Leader: Unknown error captured \n"+e);
                 e.printStackTrace(System.out);
-
-                this.carryOn = 0;
-                readBuffer.clear();
-                channel.read( readBuffer, 0, this );
                 return;
             }
 
-            // must take into account more data has arrived. otherwise can lead to losing a batch complete message
-            if(readBuffer.position() < this.carryOn + result){
-                int aux = this.carryOn + result;
-                this.carryOn = aux;
-                channel.read( readBuffer, readBuffer.position(), this );
+            if(readBuffer.hasRemaining()){
+                this.completed(result, readBuffer.position());
             } else {
-                this.carryOn = 0;
                 readBuffer.clear();
                 channel.read( readBuffer, 0, this );
             }
         }
-
-        private volatile int carryOn = 0;
 
         @Override
         public void failed(Throwable exc, Integer startPosition) {
