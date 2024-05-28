@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.marketplace;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
@@ -55,12 +54,10 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
     }
 
     protected void triggerCheckoutWorkflow(Coordinator coordinator) throws Exception {
-        Map<String, VmsIdentifier> connectedVMSs;
         int numStarterVMSs = coordinator.getStarterVMSs().size();
         do{
             sleep(2000);
-            connectedVMSs = coordinator.getConnectedVMSs();
-        } while (connectedVMSs.size() < numStarterVMSs);
+        } while (coordinator.getConnectedVMSs().size() < numStarterVMSs);
 
         new ReserveStockProducer(coordinator).run();
     }

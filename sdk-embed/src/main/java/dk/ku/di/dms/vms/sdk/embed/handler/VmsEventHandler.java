@@ -360,7 +360,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         this.connectToStarterConsumers();
 
         // setup accept since we need to accept connections from the coordinator and other VMSs
-        this.serverSocket.accept( null, new AcceptCompletionHandler());
+        this.serverSocket.accept(null, new AcceptCompletionHandler());
         LOGGER.log(INFO,this.me.identifier+": Accept handler has been setup");
 
         // init event loop
@@ -768,21 +768,20 @@ public final class VmsEventHandler extends StoppableRunnable {
                         ConnectionFromLeaderProtocol connectionFromLeader = new ConnectionFromLeaderProtocol(this.channel, this.buffer);
                         connectionFromLeader.processLeaderPresentation();
                     } else {
-
-                        // is the same leader willing to open an additional connection?
-                        /* * another idea is having a VMS partitioned rather than opening two connections
-                        try {
-                            if (this.channel.getRemoteAddress() instanceof InetSocketAddress o) {
-                                 if(leader.asInetSocketAddress().getHostString().equalsIgnoreCase(o.getHostString())){
-                                     logger.log(INFO,me.identifier+": Leader requested an additional connection");
-                                     this.buffer.clear();
-                                     this.channel.read(this.buffer, 0, new LeaderReadCompletionHandler(leaderConnectionMetadata, buffer));
-                                 }
-                            }
-                        } catch (Exception ignored) {}
-                        */
-                        LOGGER.log(WARNING,"Dropping a connection attempt from a node claiming to be leader");
-                        try { this.channel.close(); } catch (IOException ignored) {}
+                        // discard include metadata bit
+                        this.buffer.get();
+                        ServerNode serverNode = Presentation.readServer(this.buffer);
+                        // known leader attempting additional connection?
+                        if(serverNode.asInetSocketAddress().equals(leader.asInetSocketAddress())) {
+                            LOGGER.log(INFO, me.identifier + ": Leader requested an additional connection");
+                            this.buffer.clear();
+                            channel.read(buffer, 0, new LeaderReadCompletionHandler(new ConnectionMetadata(leader.hashCode(), ConnectionMetadata.NodeType.SERVER, channel), buffer));
+                        } else {
+                            try {
+                                LOGGER.log(WARNING,"Dropping a connection attempt from a node claiming to be leader");
+                                 this.channel.close();
+                            } catch (Exception ignored) {}
+                        }
                     }
                 }
                 case (VMS_TYPE) -> {
@@ -839,7 +838,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             try {
                 NetworkUtils.configure(channel, osBufferSize);
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
-                channel.read( buffer, null, new UnknownNodeReadCompletionHandler(channel, buffer) );
+                channel.read(buffer, null, new UnknownNodeReadCompletionHandler(channel, buffer));
             } catch(Exception e){
                 LOGGER.log(ERROR,me.identifier+": Accept handler caught exception: "+e.getMessage());
                 buffer.clear();
@@ -928,7 +927,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             boolean includeMetadata = this.buffer.get() == YES;
 
             // leader has disconnected, or new leader
-            leader = readServer(this.buffer);
+            leader = Presentation.readServer(this.buffer);
 
             // read queues leader is interested
             boolean hasQueuesToSubscribe = this.buffer.get() == YES;
@@ -968,7 +967,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
             this.buffer.flip();
             this.state = State.PRESENTATION_PROCESSED;
-            LOGGER.log(INFO,me.identifier+": Message received from Leader successfully = "+state);
+            LOGGER.log(INFO,me.identifier+": Message successfully received from the Leader  = "+state);
             this.channel.write( this.buffer, null, this.writeCompletionHandler );
         }
     }

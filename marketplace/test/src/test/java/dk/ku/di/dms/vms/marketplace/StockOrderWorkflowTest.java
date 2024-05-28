@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.marketplace;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
@@ -43,11 +42,9 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
 
-        Map<String, VmsIdentifier> connectedVMSs;
         do{
             sleep(5000);
-            connectedVMSs = coordinator.getConnectedVMSs();
-        } while (connectedVMSs.size() < 2);
+        } while (coordinator.getConnectedVMSs().size() < 2);
 
         Thread thread = new Thread(new InputProducer(coordinator));
         thread.start();

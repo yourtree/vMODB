@@ -59,6 +59,22 @@ public final class VmsNode extends IdentifiableNode {
         this.numberOfTIDsCurrentBatch = 0;
     }
 
+    public long getLastTidOfBatch(){
+        return this.lastTidOfBatch;
+    }
+
+    public long getPreviousBatch(){
+        return this.previousBatch;
+    }
+
+    public String getIdentifier(){
+        return this.identifier;
+    }
+
+    public int getNumberOfTIDs(){
+        return this.numberOfTIDsCurrentBatch;
+    }
+
     @Override
     public String toString() {
         return "{" +

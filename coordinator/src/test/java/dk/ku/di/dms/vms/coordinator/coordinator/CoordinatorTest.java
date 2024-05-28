@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.coordinator.coordinator;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchAlgo;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
@@ -39,10 +38,10 @@ public class CoordinatorTest {
     public void testSimpleDependenceMap(){
 
         // build VMSs
-        VmsIdentifier vms1 = new VmsIdentifier( new VmsNode("",0,"vms1",1,1,0,null,null,null), null);
-        VmsIdentifier vms2 = new VmsIdentifier( new VmsNode("",0,"vms2",2,2,1,null,null,null), null);
+        VmsNode vms1 =  new VmsNode("",0,"vms1",1,1,0,null,null,null);
+        VmsNode vms2 =  new VmsNode("",0,"vms2",2,2,1,null,null,null);
 
-        Map<String, VmsIdentifier> vmsMetadataMap = new HashMap<>(2);
+        Map<String, VmsNode> vmsMetadataMap = new HashMap<>(2);
         vmsMetadataMap.put(vms1.getIdentifier(), vms1);
         vmsMetadataMap.put(vms2.getIdentifier(), vms2);
 
@@ -60,13 +59,13 @@ public class CoordinatorTest {
     public void testComplexDependenceMap(){
 
         // build VMSs
-        VmsIdentifier vms1 = new VmsIdentifier( new VmsNode("",0,"customer",1,1,0,null,null,null), null);
-        VmsIdentifier vms2 = new VmsIdentifier( new VmsNode("",0,"item",2,2,1,null,null,null), null);
-        VmsIdentifier vms3 = new VmsIdentifier( new VmsNode("",0,"stock",3,3,2,null,null,null), null);
-        VmsIdentifier vms4 = new VmsIdentifier( new VmsNode("",0,"warehouse",4,4,3,null,null,null), null);
-        VmsIdentifier vms5 = new VmsIdentifier( new VmsNode("",0,"order",5,5,4,null,null,null), null);
+        VmsNode vms1 =  new VmsNode("",0,"customer",1,1,0,null,null,null);
+        VmsNode vms2 =  new VmsNode("",0,"item",2,2,1,null,null,null);
+        VmsNode vms3 =  new VmsNode("",0,"stock",3,3,2,null,null,null);
+        VmsNode vms4 =  new VmsNode("",0,"warehouse",4,4,3,null,null,null);
+        VmsNode vms5 =  new VmsNode("",0,"order",5,5,4,null,null,null);
 
-        Map<String, VmsIdentifier> vmsMetadataMap = new HashMap<>(5);
+        Map<String, VmsNode> vmsMetadataMap = new HashMap<>(5);
         vmsMetadataMap.put(vms1.getIdentifier(), vms1);
         vmsMetadataMap.put(vms2.getIdentifier(), vms2);
         vmsMetadataMap.put(vms3.getIdentifier(), vms3);

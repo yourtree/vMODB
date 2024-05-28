@@ -24,37 +24,10 @@ public final class Presentation {
     public static final byte NO = 1;
     public static final byte SERVER_TYPE = 10;
     public static final byte VMS_TYPE = 11;
-    public static final byte CLIENT = 12;
 
     //                                                      0 server 1 vms  if leader already have metadata
     //                                     message type | node type [0,1] | metadata bit | lastOffset | port | size host
-    private static final int serverHeader = Byte.BYTES + Byte.BYTES +    Byte.BYTES +      Long.BYTES + Integer.BYTES + Integer.BYTES;
-
-    public static void writeClient(ByteBuffer buffer, String table){
-        buffer.put( Constants.PRESENTATION );
-        buffer.put( CLIENT );
-
-        byte[] tableBytes = table.getBytes(StandardCharsets.UTF_8);
-        buffer.putInt( tableBytes.length );
-        buffer.put( tableBytes );
-    }
-
-    public static String readClient(ByteBuffer buffer){
-        int stringSize = buffer.getInt();
-
-        String table;
-        if(buffer.isDirect()){
-            byte[] byteArray = new byte[stringSize];
-            for(int i = 0; i < stringSize; i++){
-                byteArray[i] = buffer.get();
-            }
-            table = new String(byteArray, 0, stringSize, StandardCharsets.UTF_8);
-        } else {
-            table = new String(buffer.array(), serverHeader, stringSize, StandardCharsets.UTF_8);
-        }
-        return table;
-    }
-
+    private static final int SERVER_HEADER_SIZE = Byte.BYTES + Byte.BYTES +    Byte.BYTES +      Long.BYTES + Integer.BYTES + Integer.BYTES;
 
     // for server consumption
     public static void writeServer(ByteBuffer buffer,
@@ -94,7 +67,7 @@ public final class Presentation {
             }
             host = new String(byteArray, 0, hostSize, StandardCharsets.UTF_8);
         } else {
-            host = new String(buffer.array(), serverHeader, hostSize, StandardCharsets.UTF_8);
+            host = new String(buffer.array(), SERVER_HEADER_SIZE, hostSize, StandardCharsets.UTF_8);
         }
         return new ServerNode( host, port, offset );
     }

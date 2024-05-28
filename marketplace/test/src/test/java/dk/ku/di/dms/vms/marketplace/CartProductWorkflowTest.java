@@ -2,7 +2,6 @@ package dk.ku.di.dms.vms.marketplace;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
@@ -40,12 +39,10 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
 
-        Map<String, VmsIdentifier> connectedVMSs;
         int maxSleep = 3;
         do {
             sleep(5000);
-            connectedVMSs = coordinator.getConnectedVMSs();
-            if(connectedVMSs.size() == 2) break;
+            if(coordinator.getConnectedVMSs().size() == 2) break;
             maxSleep--;
         } while (maxSleep > 0);
 

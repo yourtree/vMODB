@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.coordinator.server.coordinator.batch;
 
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,14 +18,14 @@ public final class BatchAlgo {
      * A map of vms and corresponding precedent TID for a given tid
      * Build precedence for the downstream events of an (input) event
      */
-    public static Map<String, Long> buildPrecedenceMap(EventIdentifier inputEvent, TransactionDAG transactionDAG, Map<String, VmsIdentifier> vmsMetadata) {
+    public static Map<String, Long> buildPrecedenceMap(EventIdentifier inputEvent, TransactionDAG transactionDAG, Map<String, VmsNode> vmsMetadata) {
         return buildPrecedenceRecursive(inputEvent, transactionDAG, vmsMetadata);
     }
 
     /**
      * API that considers complex scheduler (i.e., a VMS task can have two input events)
      */
-    public static Map<String, Long> buildPrecedenceMap(TransactionDAG transactionDAG, Map<String, VmsIdentifier> vmsMetadata) {
+    public static Map<String, Long> buildPrecedenceMap(TransactionDAG transactionDAG, Map<String, VmsNode> vmsMetadata) {
         List<Map<String, Long>> listOfMapPerInputEvent = new ArrayList<>(transactionDAG.inputEvents.size());
         for(EventIdentifier inputEvent : transactionDAG.inputEvents.values()) {
             listOfMapPerInputEvent.add( buildPrecedenceRecursive(inputEvent, transactionDAG, vmsMetadata) );
@@ -39,7 +39,7 @@ public final class BatchAlgo {
 
     private static Map<String, Long> buildPrecedenceRecursive(EventIdentifier event,
                                                               TransactionDAG transactionDAG,
-                                                              Map<String, VmsIdentifier> vmsMetadata){
+                                                              Map<String, VmsNode> vmsMetadata){
         Map<String, Long> listToBuildMap = new HashMap<>();
 
         // input and internal nodes first, since they have children
@@ -55,8 +55,8 @@ public final class BatchAlgo {
         return listToBuildMap;
     }
 
-    public static List<VmsIdentifier> buildTransactionDagVmsList(TransactionDAG transactionDAG, Map<String, VmsIdentifier> vmsMetadata){
-        List<VmsIdentifier> transactionDagVmsList = new ArrayList<>();
+    public static List<VmsNode> buildTransactionDagVmsList(TransactionDAG transactionDAG, Map<String, VmsNode> vmsMetadata){
+        List<VmsNode> transactionDagVmsList = new ArrayList<>();
         for(EventIdentifier event : transactionDAG.inputEvents.values()) {
             transactionDagVmsList.add( vmsMetadata.get(event.targetVms) );
             transactionDagVmsList.addAll( buildTransactionDagVmsListRecursive( event.children, vmsMetadata ) );
@@ -64,8 +64,8 @@ public final class BatchAlgo {
         return transactionDagVmsList;
     }
 
-    private static List<VmsIdentifier> buildTransactionDagVmsListRecursive(List<EventIdentifier> internalNodeList, Map<String, VmsIdentifier> vmsMetadata) {
-        List<VmsIdentifier> transactionDagVmsList = new ArrayList<>();
+    private static List<VmsNode> buildTransactionDagVmsListRecursive(List<EventIdentifier> internalNodeList, Map<String, VmsNode> vmsMetadata) {
+        List<VmsNode> transactionDagVmsList = new ArrayList<>();
         for(EventIdentifier event : internalNodeList) {
             transactionDagVmsList.add( vmsMetadata.get(event.targetVms) );
             if(!event.terminal){ //&& !event.children.isEmpty()){
