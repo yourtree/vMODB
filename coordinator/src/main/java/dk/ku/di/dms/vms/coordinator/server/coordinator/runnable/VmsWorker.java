@@ -9,7 +9,6 @@ import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -34,21 +33,18 @@ import static java.lang.System.Logger.Level.*;
 import static java.lang.Thread.sleep;
 
 @SuppressWarnings("SequencedCollectionMethodCanBeUsed")
-final class VmsWorker extends StoppableRunnable implements IVmsWorker {
+public final class VmsWorker extends StoppableRunnable {
 
     private static final System.Logger LOGGER = System.getLogger(VmsWorker.class.getName());
     
     private final ServerNode me;
 
     // the vms this worker is responsible for
-    private final IdentifiableNode consumerVms;
+    private IdentifiableNode consumerVms;
 
     private final int networkBufferSize;
 
     private final int networkSendTimeout;
-
-    // defined after presentation being sent by the actual vms
-    private VmsNode vmsNode = new VmsNode("", 0, "unknown", 0, 0, 0, null, null, null);
 
     private State state;
 
@@ -63,9 +59,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
      */
     private final BlockingQueue<Object> coordinatorQueue;
 
-    private final AsynchronousChannelGroup group;
-
-    private AsynchronousSocketChannel channel;
+    private final AsynchronousSocketChannel channel;
 
     // DTs particular to this vms worker
     // private final BlockingDeque<TransactionEvent.PayloadRaw> transactionEventQueue;
@@ -89,9 +83,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                                     AsynchronousChannelGroup group,
                                     int networkBufferSize,
                                     int networkSendTimeout,
-                                    IVmsSerdesProxy serdesProxy) {
+                                    IVmsSerdesProxy serdesProxy) throws IOException {
         // passing null is clearly not a good option. when it comes to support VMS node crashes, it will be necessary to rethink this design
-        return new VmsWorker(me, consumerVms, coordinatorQueue, group,
+        return new VmsWorker(me, consumerVms, coordinatorQueue, AsynchronousSocketChannel.open(group),
                 MemoryManager.getTemporaryDirectBuffer(networkBufferSize),
                 networkBufferSize, networkSendTimeout, serdesProxy, true);
     }
@@ -102,9 +96,9 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                             AsynchronousChannelGroup group,
                             int networkBufferSize,
                             int networkSendTimeout,
-                            IVmsSerdesProxy serdesProxy) {
+                            IVmsSerdesProxy serdesProxy) throws IOException {
         // passing null is clearly not a good option. when it comes to support VMS node crashes, it will be necessary to rethink this design
-        return new VmsWorker(me, consumerVms, coordinatorQueue, group,
+        return new VmsWorker(me, consumerVms, coordinatorQueue, AsynchronousSocketChannel.open(group),
                 MemoryManager.getTemporaryDirectBuffer(networkBufferSize),
                 networkBufferSize, networkSendTimeout, serdesProxy, false);
     }
@@ -115,7 +109,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                       IdentifiableNode consumerVms,
                       // events to share with coordinator
                       BlockingQueue<Object> coordinatorQueue,
-                      AsynchronousChannelGroup group,
+                      AsynchronousSocketChannel channel,
                       ByteBuffer readBuffer,
                       int networkBufferSize,
                       int networkSendTimeout,
@@ -125,7 +119,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.state = State.NEW;
         this.consumerVms = consumerVms;
 
-        this.group = group;
+        this.channel = channel;
 
         this.networkBufferSize = networkBufferSize;
         this.networkSendTimeout = networkSendTimeout;
@@ -152,16 +146,13 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     }
 
     private void connect() throws IOException, InterruptedException, ExecutionException {
-        // connect to starter vms
-        LOGGER.log(INFO, "Leader: Attempting connection to "+this.consumerVms.identifier);
-        this.channel = AsynchronousSocketChannel.open(this.group);
         NetworkUtils.configure(this.channel, networkBufferSize);
         this.channel.connect(this.consumerVms.asInetSocketAddress()).get();
     }
 
     public void initHandshakeProtocol(){
-
         try{
+            LOGGER.log(INFO, "Leader: Attempting connection to "+this.consumerVms.identifier);
             this.connect();
 
             this.state = CONNECTION_ESTABLISHED;
@@ -212,21 +203,29 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     @Override
     public void run() {
+        LOGGER.log(INFO, "VmsWorker starting for consumer VMS: \n"+consumerVms);
         if(this.initHandshake) {
             this.initHandshakeProtocol();
         } else {
-            // only connects. the presenation has already been sent
-            LOGGER.log(INFO, Thread.currentThread().getName()+": Attempting additional connection to to VMS: " + this.consumerVms.identifier);
-            try {
-                this.connect();
-                ByteBuffer writeBuffer = this.retrieveByteBuffer();
-                this.sendLeaderPresentationToVms(writeBuffer);
-            } catch(Exception ignored){
-                LOGGER.log(ERROR, Thread.currentThread().getName()+": Cannot connect to VMS: " + this.consumerVms.identifier);
-                return;
-            }
+            if (this.initSimpleConnection()) return;
         }
         this.eventLoop();
+        LOGGER.log(INFO, "VmsWorker finished for consumer VMS: \n"+consumerVms);
+    }
+
+    private boolean initSimpleConnection() {
+        // only connect. the presentation has already been sent
+        LOGGER.log(INFO, Thread.currentThread().getName()+": Attempting additional connection to to VMS: " + this.consumerVms.identifier);
+        try {
+            this.connect();
+            ByteBuffer writeBuffer = this.retrieveByteBuffer();
+            this.sendLeaderPresentationToVms(writeBuffer);
+        } catch(Exception ignored){
+            LOGGER.log(ERROR, Thread.currentThread().getName()+": Cannot connect to VMS: " + this.consumerVms.identifier);
+            return true;
+        }
+        LOGGER.log(INFO, Thread.currentThread().getName()+": Additional connection to "+this.consumerVms.identifier+" succeeded");
+        return false;
     }
 
     private static final int MAX_SLEEP = 1000;
@@ -268,7 +267,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                         case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
                         case String o -> this.sendConsumerSet(o);
                         default ->
-                                LOGGER.log(WARNING, "Leader: VMS worker for " + this.vmsNode.identifier + " has unknown message type: " + message.getClass().getName());
+                                LOGGER.log(WARNING, "Leader: VMS worker for " + this.consumerVms.identifier + " has unknown message type: " + message.getClass().getName());
                     }
                 }
 
@@ -282,10 +281,10 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 this.processPendingWrites();
 
             } catch (InterruptedException e) {
-                LOGGER.log(ERROR, "Leader: VMS worker for "+this.vmsNode.identifier+" has been interrupted: "+e);
+                LOGGER.log(ERROR, "Leader: VMS worker for "+this.consumerVms.identifier+" has been interrupted: "+e);
                 this.stop();
             } catch (Exception e) {
-                LOGGER.log(ERROR, "Leader: VMS worker for "+this.vmsNode.identifier+" has caught an exception: "+e);
+                LOGGER.log(ERROR, "Leader: VMS worker for "+this.consumerVms.identifier+" has caught an exception: "+e);
             }
         }
     }
@@ -310,20 +309,14 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 }
 
                 bb.clear();
-                boolean sent = this.PENDING_WRITES_BUFFER.offer(bb);
-                while(!sent){
-                    sent = this.PENDING_WRITES_BUFFER.offer(bb);
-                }
+                this.PENDING_WRITES_BUFFER.offer(bb);
+
             }
         }
     }
 
-    @Override
     public void queueMessage(Object message) {
-        boolean sent = this.messageQueue.offer(message);
-        while(!sent) {
-            sent = this.messageQueue.offer(message);
-        }
+        this.messageQueue.offerLast(message);
     }
 
     private void sendTransactionAbort(TransactionAbort.Payload tidToAbort) {
@@ -333,12 +326,11 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             writeBuffer.flip();
             this.WRITE_SYNCHRONIZER.take();
             this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
-            LOGGER.log(WARNING,"Leader: Transaction abort sent to: " + this.vmsNode.identifier);
+            LOGGER.log(WARNING,"Leader: Transaction abort sent to: " + this.consumerVms.identifier);
         } catch (InterruptedException e){
             LOGGER.log(ERROR,"Leader: Transaction abort write has failed:\n"+e.getMessage());
             if(!channel.isOpen()){
                 LOGGER.log(WARNING,"Leader: Channel with "+this.consumerVms.identifier+" is closed");
-                this.vmsNode.off();
                 this.stop(); // no reason to continue the loop
             }
             this.queueMessage(tidToAbort);
@@ -352,12 +344,11 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             writeBuffer.flip();
             this.WRITE_SYNCHRONIZER.take();
             this.channel.write(writeBuffer, this.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
-            LOGGER.log(INFO, "Leader: Batch commit command sent to: " + this.vmsNode.identifier);
+            LOGGER.log(INFO, "Leader: Batch commit command sent to: " + this.consumerVms.identifier);
         } catch (Exception e){
             LOGGER.log(ERROR,"Leader: Batch commit command write has failed:\n"+e.getMessage());
             if(!this.channel.isOpen()){
-                LOGGER.log(WARNING,"Leader: Channel with "+this.vmsNode.identifier+"is closed");
-                this.vmsNode.off();
+                LOGGER.log(WARNING,"Leader: Channel with "+this.consumerVms.identifier+"is closed");
                 this.stop(); // no reason to continue the loop
             }
             this.queueMessage(batchCommitCommand);
@@ -417,7 +408,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         public void completed(Integer result, Integer startPos) {
 
             if(result == -1){
-                LOGGER.log(INFO, "Leader: " + vmsNode.identifier+" has disconnected");
+                LOGGER.log(INFO, "Leader: " + consumerVms.identifier+" has disconnected");
                 return;
             }
 
@@ -440,14 +431,14 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                             state = VMS_PRESENTATION_PROCESSED;
                         } else {
                             // in the future it can be an update of the vms schema or crash recovery
-                            LOGGER.log(ERROR, "Leader: Presentation already received from VMS: " + vmsNode.identifier);
+                            LOGGER.log(ERROR, "Leader: Presentation already received from VMS: " + consumerVms.identifier);
                         }
                     }
                     // from all terminal VMSs involved in the last batch
                     case BATCH_COMPLETE -> {
                         // don't actually need the host and port in the payload since we have the attachment to this read operation...
                         BatchComplete.Payload response = BatchComplete.read(readBuffer);
-                        LOGGER.log(DEBUG, "Leader: Batch (" + response.batch() + ") complete received from: " + vmsNode.identifier);
+                        LOGGER.log(DEBUG, "Leader: Batch (" + response.batch() + ") complete received from: " + consumerVms.identifier);
                         // must have a context, i.e., what batch, the last?
                         coordinatorQueue.add(response);
                         // if one abort, no need to keep receiving
@@ -455,7 +446,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                         // because only the aborted transaction will be rolled back
                     }
                     case BATCH_COMMIT_ACK -> {
-                        LOGGER.log(DEBUG, "Leader: Batch commit ACK received from: " + vmsNode.identifier);
+                        LOGGER.log(DEBUG, "Leader: Batch commit ACK received from: " + consumerVms.identifier);
                         BatchCommitAck.Payload response = BatchCommitAck.read(readBuffer);
                         // logger.config("Just logging it, since we don't necessarily need to wait for that. "+response);
                         coordinatorQueue.add(response);
@@ -465,7 +456,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                         TransactionAbort.Payload response = TransactionAbort.read(readBuffer);
                         coordinatorQueue.add(response);
                     }
-                    case EVENT -> LOGGER.log(INFO, "Leader: New event received from: " + vmsNode.identifier);
+                    case EVENT -> LOGGER.log(INFO, "Leader: New event received from: " + consumerVms.identifier);
                     case BATCH_OF_EVENTS -> LOGGER.log(INFO, "Leader: New batch of events received from VMS");
                     default -> LOGGER.log(WARNING, "Leader: Unknown message received.");
 
@@ -511,15 +502,15 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private void processVmsIdentifier() {
         // always a vms
         this.readBuffer.position(2);
-        this.vmsNode = Presentation.readVms(readBuffer, serdesProxy);
+        this.consumerVms = Presentation.readVms(readBuffer, serdesProxy);
         this.state = State.VMS_PRESENTATION_PROCESSED;
         // let coordinator aware this vms worker already has the vms identifier
-        this.coordinatorQueue.add(this.vmsNode);
+        this.coordinatorQueue.add(this.consumerVms);
     }
 
     private void sendBatchCommitInfo(BatchCommitInfo.Payload batchCommitInfo){
         // then send only the batch commit info
-        LOGGER.log(DEBUG, "Leader: Batch ("+batchCommitInfo.batch()+") commit info will be sent to " + this.vmsNode.identifier);
+        LOGGER.log(DEBUG, "Leader: Batch ("+batchCommitInfo.batch()+") commit info will be sent to " + this.consumerVms.identifier);
         try {
             ByteBuffer writeBuffer = this.retrieveByteBuffer();
             BatchCommitInfo.write(writeBuffer, batchCommitInfo);
@@ -527,18 +518,13 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             this.WRITE_SYNCHRONIZER.take();
             this.channel.write(writeBuffer, this.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
         } catch (Exception e) {
-
-            if(!this.channel.isOpen()) {
-                this.vmsNode.off();
-            }
             this.queueMessage(batchCommitInfo);
             if(this.WRITE_SYNCHRONIZER.isEmpty()){
                 this.WRITE_SYNCHRONIZER.add(DUMB);
             }
-
             return;
         }
-        LOGGER.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info sent to " + this.vmsNode.identifier+"\n"+batchCommitInfo);
+        LOGGER.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info sent to " + this.consumerVms.identifier+"\n"+batchCommitInfo);
     }
 
     private ByteBuffer retrieveByteBuffer() {
@@ -572,7 +558,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
                 // without this async handler, the bytebuffer arriving in the VMS can be corrupted
                 // relying on future.get() yields corrupted buffer in the consumer
-                LOGGER.log(INFO, "Leader: Submitting ["+(count - remaining)+"] events to "+vmsNode.identifier);
+                LOGGER.log(INFO, "Leader: Submitting ["+(count - remaining)+"] events to "+consumerVms.identifier);
                 count = remaining;
 
                 writeBuffer.flip();
@@ -581,7 +567,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 this.channel.write(writeBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.batchWriteCompletionHandler);
 
             } catch (Exception e) {
-                LOGGER.log(ERROR, "Leader: Error on submitting ["+count+"] events to "+this.vmsNode.identifier+":"+e);
+                LOGGER.log(ERROR, "Leader: Error on submitting ["+count+"] events to "+this.consumerVms.identifier+":"+e);
                 // return events to the deque
                 while(!this.transactionEvents.isEmpty()) {
                     if(this.messageQueue.offerFirst(this.transactionEvents.get(0))){
@@ -648,10 +634,7 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             WRITE_SYNCHRONIZER.add(DUMB);
             LOGGER.log(ERROR, "Leader: ERROR on writing batch of events to "+consumerVms.identifier+": "+exc);
             byteBuffer.position(0);
-            boolean sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
-            while(!sent){
-                sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
-            }
+            PENDING_WRITES_BUFFER.offer(byteBuffer);
             LOGGER.log(INFO,  "Leader: Byte buffer added to pending queue. #pending: "+PENDING_WRITES_BUFFER.size());
         }
     }

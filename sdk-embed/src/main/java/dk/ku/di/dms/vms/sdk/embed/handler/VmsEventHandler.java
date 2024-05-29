@@ -31,7 +31,6 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
-import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.*;
 import static java.lang.System.Logger.Level.*;
 
 /**
@@ -62,10 +61,10 @@ public final class VmsEventHandler extends StoppableRunnable {
     private final VmsRuntimeMetadata vmsMetadata;
 
     /** EXTERNAL VMSs **/
-    private final Map<String, Deque<ConsumerVms>> eventToConsumersMap;
+    private final Map<String, List<ConsumerVmsContainer>> eventToConsumersMap;
 
     // built while connecting to the consumers
-    private final Map<Integer, ConnectionMetadata> consumerConnectionMetadataMap;
+    private final Map<IdentifiableNode, ConsumerVmsContainer> consumerVmsContainerMap;
 
     // built dynamically as new producers request connection
     private final Map<Integer, ConnectionMetadata> producerConnectionMetadataMap;
@@ -81,6 +80,8 @@ public final class VmsEventHandler extends StoppableRunnable {
     private final int osBufferSize;
 
     private final int networkSendTimeout;
+
+    private final int vmsThreadPoolSize;
 
     /** COORDINATOR **/
     private ServerNode leader;
@@ -143,11 +144,12 @@ public final class VmsEventHandler extends StoppableRunnable {
                                         int networkBufferSize,
                                         int osBufferSize,
                                         int networkThreadPoolSize,
-                                        int networkSendTimeout){
+                                        int networkSendTimeout,
+                                        int vmsThreadPoolSize){
         try {
-            return new VmsEventHandler(me, vmsMetadata, new ConcurrentHashMap<>(),
+            return new VmsEventHandler(me, vmsMetadata,
                     transactionalHandler, vmsInternalChannels, serdesProxy,
-                    networkBufferSize, osBufferSize, networkThreadPoolSize, networkSendTimeout);
+                    networkBufferSize, osBufferSize, networkThreadPoolSize, networkSendTimeout, vmsThreadPoolSize);
         } catch (IOException e){
             throw new RuntimeException("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
@@ -155,14 +157,14 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     private VmsEventHandler(VmsNode me,
                             VmsRuntimeMetadata vmsMetadata,
-                            Map<String, Deque<ConsumerVms>> eventToConsumersMap,
                             ITransactionalHandler transactionalHandler,
                             VmsEmbeddedInternalChannels vmsInternalChannels,
                             IVmsSerdesProxy serdesProxy,
                             int networkBufferSize,
                             int osBufferSize,
                             int networkThreadPoolSize,
-                            int networkSendTimeout) throws IOException {
+                            int networkSendTimeout,
+                            int vmsThreadPoolSize) throws IOException {
         super();
 
         // network and executor
@@ -181,8 +183,10 @@ public final class VmsEventHandler extends StoppableRunnable {
         this.me = me;
 
         this.vmsMetadata = vmsMetadata;
-        this.eventToConsumersMap = eventToConsumersMap;
-        this.consumerConnectionMetadataMap = new ConcurrentHashMap<>();
+        // no concurrent threads modifying them
+        this.eventToConsumersMap = new HashMap<>();
+        this.consumerVmsContainerMap = new HashMap<>();
+        // concurrent threads modifying it
         this.producerConnectionMetadataMap = new ConcurrentHashMap<>();
 
         this.serdesProxy = serdesProxy;
@@ -206,11 +210,64 @@ public final class VmsEventHandler extends StoppableRunnable {
         this.networkBufferSize = networkBufferSize;
         this.osBufferSize = osBufferSize;
         this.networkSendTimeout = networkSendTimeout;
+        this.vmsThreadPoolSize = vmsThreadPoolSize;
     }
 
     private static final int MAX_TIMEOUT = 1000;
 
     private static final boolean BLOCKING = false;
+
+    @Override
+    public void run() {
+        LOGGER.log(INFO,this.me.identifier+": Event handler has started");
+
+        // setup accept since we need to accept connections from the coordinator and other VMSs
+        this.serverSocket.accept(null, new AcceptCompletionHandler());
+        LOGGER.log(INFO,this.me.identifier+": Accept handler has been setup");
+
+        // init event loop
+        this.eventLoop();
+
+        this.failSafeClose();
+        LOGGER.log(INFO,this.me.identifier+": Event handler has finished execution.");
+    }
+
+    /**
+     * A container of consumer VMS workers to facilitate
+     * scalable pushing of transaction events
+     */
+    private static final class ConsumerVmsContainer {
+
+        private final IdentifiableNode node;
+        private final List<ConsumerVmsWorker> consumerVmsWorkers;
+        private int next;
+
+        // init a container with the initial consumer VMS
+        ConsumerVmsContainer(ConsumerVmsWorker initialConsumerVms, IdentifiableNode node) {
+            this.consumerVmsWorkers = new ArrayList<>();
+            this.consumerVmsWorkers.add(initialConsumerVms);
+            this.next = 0;
+            this.node = node;
+        }
+
+        public synchronized void addConsumerVms(ConsumerVmsWorker vmsWorker) {
+            this.consumerVmsWorkers.add(vmsWorker);
+        }
+
+        public void queue(TransactionEvent.PayloadRaw payload){
+            this.consumerVmsWorkers.get(this.next).queueTransactionEvent(payload);
+            if(this.next == this.consumerVmsWorkers.size()-1){
+                this.next = 0;
+            } else {
+                this.next += 1;
+            }
+        }
+
+        public String identifier(){
+            return this.node.identifier;
+        }
+
+    }
 
     /**
      * A thread that basically writes events to other VMSs and the Leader
@@ -277,22 +334,6 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
     }
 
-    private void connectToStarterConsumers() {
-        if(!this.eventToConsumersMap.isEmpty()){
-            // then it is received from constructor, and we must initially contact them
-            Map<ConsumerVms, List<String>> consumerToEventsMap = new HashMap<>();
-            // build an indirect map
-            for(Map.Entry<String,Deque<ConsumerVms>> entry : this.eventToConsumersMap.entrySet()) {
-                for(ConsumerVms consumer : entry.getValue()){
-                    consumerToEventsMap.computeIfAbsent(consumer, (ignored) -> new ArrayList<>()).add(entry.getKey());
-                }
-            }
-            for( var consumerEntry : consumerToEventsMap.entrySet() ) {
-                this.connectToConsumerVms( consumerEntry.getValue(), consumerEntry.getKey() );
-            }
-        }
-    }
-
     private void connectToReceivedConsumerSet(Map<String, List<IdentifiableNode>> receivedConsumerVms) {
         Map<IdentifiableNode, List<String>> consumerToEventsMap = new HashMap<>();
         // build an indirect map
@@ -302,7 +343,10 @@ public final class VmsEventHandler extends StoppableRunnable {
             }
         }
         for( Map.Entry<IdentifiableNode,List<String>> consumerEntry : consumerToEventsMap.entrySet() ) {
-            this.connectToConsumerVms( consumerEntry.getValue(), consumerEntry.getKey() );
+            // connect to more consumers...
+            for(int i = 0; i < this.vmsThreadPoolSize; i++){
+                this.initConsumerVmsWorker(consumerEntry.getKey(), consumerEntry.getValue(), i);
+            }
         }
     }
 
@@ -351,23 +395,6 @@ public final class VmsEventHandler extends StoppableRunnable {
         try { if(this.serverSocket.isOpen()) this.serverSocket.close(); } catch (IOException ignored) {
             LOGGER.log(WARNING,this.me.identifier+": Could not close socket");
         }
-    }
-
-    @Override
-    public void run() {
-        LOGGER.log(INFO,this.me.identifier+": Event handler has started");
-
-        this.connectToStarterConsumers();
-
-        // setup accept since we need to accept connections from the coordinator and other VMSs
-        this.serverSocket.accept(null, new AcceptCompletionHandler());
-        LOGGER.log(INFO,this.me.identifier+": Accept handler has been setup");
-
-        // init event loop
-        this.eventLoop();
-
-        this.failSafeClose();
-        LOGGER.log(INFO,this.me.identifier+": Event handler has finished execution.");
     }
 
     /**
@@ -421,7 +448,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
         */
 
-        Deque<ConsumerVms> consumerVMSs = this.eventToConsumersMap.get(outputEvent.outputQueue());
+        List<ConsumerVmsContainer> consumerVMSs = this.eventToConsumersMap.get(outputEvent.outputQueue());
         if(consumerVMSs == null || consumerVMSs.isEmpty()){
             LOGGER.log(DEBUG,this.me.identifier+": An output event (queue: "+outputEvent.outputQueue()+") has no target virtual microservices.");
             return;
@@ -432,150 +459,44 @@ public final class VmsEventHandler extends StoppableRunnable {
         TransactionEvent.PayloadRaw payload = TransactionEvent.of(
                 outputEvent.tid(), outputEvent.batch(), outputEvent.outputQueue(), objStr, precedenceMap );
 
-        for(ConsumerVms consumerVms : consumerVMSs) {
-            LOGGER.log(DEBUG,this.me.identifier+": An output event (queue: " + outputEvent.outputQueue() + ") will be queued to VMS: " + consumerVms.identifier);
-            consumerVms.queueTransactionEvent(payload);
+        for(ConsumerVmsContainer consumerVmsContainer : consumerVMSs) {
+            LOGGER.log(DEBUG,this.me.identifier+": An output event (queue: " + outputEvent.outputQueue() + ") will be queued to VMS: " + consumerVmsContainer.identifier());
+            consumerVmsContainer.queue(payload);
         }
     }
 
-    /**
-     * Responsible for making sure the handshake protocol is
-     * successfully performed with a consumer VMS
-     */
-    private final class ConnectToConsumerVmsProtocol {
-
-        private State state;
-        private final AsynchronousSocketChannel channel;
-        private final ByteBuffer buffer;
-        public final CompletionHandler<Void, ConnectToConsumerVmsProtocol> completionHandler;
-        private final IdentifiableNode node;
-
-        private final List<String> outputEvents;
-
-        public ConnectToConsumerVmsProtocol(AsynchronousSocketChannel channel, List<String> outputEvents, IdentifiableNode node) {
-            this.state = State.NEW;
-            this.channel = channel;
-            this.completionHandler = new ConnectToConsumerVmsCompletionHandler();
-            this.buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
-            this.outputEvents = outputEvents;
-            this.node = node;
+    public void initConsumerVmsWorker(IdentifiableNode node, List<String> outputEvents, int identifier){
+        if(this.producerConnectionMetadataMap.containsKey(node.hashCode())){
+            LOGGER.log(WARNING,"The node "+ node.host+" "+ node.port+" already contains a connection as a producer");
         }
 
-        private enum State { NEW, CONNECTED, PRESENTATION_SENT }
+        if(this.me.hashCode() == node.hashCode()){
+            LOGGER.log(ERROR,this.me.identifier+" is receiving itself as consumer: "+ node.identifier);
+            return;
+        }
 
-        private class ConnectToConsumerVmsCompletionHandler implements CompletionHandler<Void, ConnectToConsumerVmsProtocol> {
+        ConsumerVmsWorker consumerVmsWorker = new ConsumerVmsWorker(this.me, node, this.group, this.serdesProxy, this.networkBufferSize, this.osBufferSize, this.networkSendTimeout);
+        Thread thread = Thread.ofPlatform().factory().newThread(consumerVmsWorker);
+        thread.setName("vms-consumer-"+node.identifier+"-"+identifier);
+        thread.start();
 
-            @Override
-            public void completed(Void result, ConnectToConsumerVmsProtocol attachment) {
-
-                attachment.state = State.CONNECTED;
-                LOGGER.log(DEBUG,me.identifier+ ": The node "+ node.host+" "+ node.port+" status = "+attachment.state);
-
-                ConnectionMetadata connMetadata = new ConnectionMetadata(
-                        node.hashCode(),
-                        ConnectionMetadata.NodeType.VMS,
-                        channel
-                        );
-
-                if(producerConnectionMetadataMap.containsKey(node.hashCode())){
-                    LOGGER.log(WARNING,"The node "+ node.host+" "+ node.port+" already contains a connection as a producer");
-                }
-
-                consumerConnectionMetadataMap.put(node.hashCode(), connMetadata);
-
-                String dataSchema = serdesProxy.serializeDataSchema(me.dataSchema);
-                String inputEventSchema = serdesProxy.serializeEventSchema(me.inputEventSchema);
-                String outputEventSchema = serdesProxy.serializeEventSchema(me.outputEventSchema);
-
-                attachment.buffer.clear();
-                Presentation.writeVms( attachment.buffer, me, me.identifier, me.batch, 0, me.previousBatch, dataSchema, inputEventSchema, outputEventSchema );
-                attachment.buffer.flip();
-
-                // have to make sure we send the presentation before writing to this VMS, otherwise an exception can occur (two writers)
-                attachment.channel.write(attachment.buffer, attachment, new CompletionHandler<>() {
-                    @Override
-                    public void completed(Integer result, ConnectToConsumerVmsProtocol attachment) {
-                        attachment.state = State.PRESENTATION_SENT;
-
-                        LOGGER.log(DEBUG,me.identifier+ ": The node "+ node.host+" "+ node.port+" status = "+attachment.state);
-
-                        attachment.buffer.clear();
-
-                        if(me.hashCode() == node.hashCode()){
-                            LOGGER.log(ERROR,me.identifier+" is receiving itself as consumer: "+ node.identifier);
-                            return;
-                        }
-
-                        LOGGER.log(INFO,me.identifier+ " setting up worker to send transactions to consumer VMS: "+node.identifier);
-                        ConsumerVms consumerVms = new ConsumerVms(
-                                node.identifier,
-                                node.host,
-                                node.port);
-
-                        // add to tracked VMSs...
-                        for (String outputEvent : outputEvents) {
-                            LOGGER.log(INFO,me.identifier+ " adding "+outputEvent+" to consumers map with "+consumerVms.identifier);
-                            eventToConsumersMap.computeIfAbsent(outputEvent, (ignored) -> new ConcurrentLinkedDeque<>());
-                            eventToConsumersMap.get(outputEvent).add(consumerVms);
-                        }
-
-                        // set up consumer vms worker
-                        Thread.ofPlatform().factory().newThread(
-                                new ConsumerVmsWorker(me, consumerVms, connMetadata, networkBufferSize, networkSendTimeout)
-                        ).start();
-
-                        // set up read from consumer vms
-                        attachment.channel.read(attachment.buffer, 0, new VmsReadCompletionHandler(node, connMetadata, attachment.buffer));
-                    }
-
-                    @Override
-                    public void failed(Throwable exc, ConnectToConsumerVmsProtocol attachment) {
-                        // check if connection is still online. if so, try again
-                        // otherwise, retry connection in a few minutes
-                        //issueQueue.add(new Issue(CANNOT_CONNECT_TO_NODE, attachment.node.hashCode()));
-                        LOGGER.log(ERROR,me.identifier+ "caught an error while trying to connect to consumer VMS: "+node.identifier);
-                        attachment.buffer.clear();
-                    }
-                });
-
+        ConsumerVmsContainer consumerVmsContainer;
+        if(!this.consumerVmsContainerMap.containsKey(node)){
+            consumerVmsContainer = new ConsumerVmsContainer(consumerVmsWorker, node);
+            this.consumerVmsContainerMap.put(node, consumerVmsContainer);
+            // add to tracked VMSs...
+            for (String outputEvent : outputEvents) {
+                LOGGER.log(INFO,me.identifier+ " adding "+outputEvent+" to consumers map with "+node.identifier);
+                this.eventToConsumersMap.computeIfAbsent(outputEvent, (ignored) -> new ArrayList<>());
+                this.eventToConsumersMap.get(outputEvent).add(consumerVmsContainer);
             }
-
-            @Override
-            public void failed(Throwable exc, ConnectToConsumerVmsProtocol attachment) {
-                // queue for later attempt
-                // perhaps can use scheduled task
-                //issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, attachment.node.hashCode()) );
-                LOGGER.log(ERROR,me.identifier+ "caught an error while trying to connect to consumer VMS: "+node.identifier);
-                // node.off(); no need it is already off
-            }
+        } else {
+            consumerVmsContainer = this.consumerVmsContainerMap.get(node);
+            consumerVmsContainer.addConsumerVms(consumerVmsWorker);
         }
 
-    }
-
-    /**
-     * The leader will let each VMS aware of their dependencies,
-     * to which VMSs they have to connect to
-//    private void connectToConsumerVMSs(List<String> outputEvents, List<NetworkAddress> consumerSet) {
-//        for(NetworkAddress vms : consumerSet) {
-//            // process only the new ones
-//            LockConnectionMetadata connectionMetadata = this.consumerConnectionMetadataMap.get(vms.hashCode());
-//            if(connectionMetadata != null && connectionMetadata.channel != null && connectionMetadata.channel.isOpen()){
-//                continue; // ignore
-//            }
-//            this.connectToConsumerVms(outputEvents, vms);
-//        }
-//    }
-     */
-    private void connectToConsumerVms(List<String> outputEvents, IdentifiableNode vmsNode) {
-        try {
-            AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(this.group);
-            NetworkUtils.configure(channel, osBufferSize);
-            ConnectToConsumerVmsProtocol protocol = new ConnectToConsumerVmsProtocol(channel, outputEvents, vmsNode);
-            channel.connect(vmsNode.asInetSocketAddress(), protocol, protocol.completionHandler);
-        } catch (Exception e) {
-            //this.issueQueue.add( new Issue(CANNOT_CONNECT_TO_NODE, vmsNode.hashCode()) );
-            LOGGER.log(ERROR,me.identifier+" caught an error while trying to connect to "+vmsNode.identifier+": "+e);
-        }
+        // set up read from consumer vms? we read nothing from consumer vms. maybe in the future can negotiate amount of data to avoid performance problems
+        // channel.read(buffer, 0, new VmsReadCompletionHandler(this.node, connMetadata, buffer));
     }
 
     /**
@@ -662,10 +583,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 // send to scheduler
                 if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
                     InboundEvent inboundEvent = buildInboundEvent(payload);
-                    boolean added;
-                    do {
-                        added = vmsInternalChannels.transactionInputQueue().offer(inboundEvent);
-                    } while(!added);
+                    vmsInternalChannels.transactionInputQueue().add(inboundEvent);
                 }
             } catch (Exception e) {
                 if(e instanceof BufferUnderflowException)
@@ -745,6 +663,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 return;
             } else if(result == -1){
                 LOGGER.log(WARNING,me.identifier+": A node died before sending the presentation message");
+                try { this.channel.close(); } catch (IOException ignored) {}
                 return;
             }
 
@@ -762,61 +681,73 @@ public final class VmsEventHandler extends StoppableRunnable {
             this.buffer.position(2);
 
             switch (nodeTypeIdentifier) {
-                case (SERVER_TYPE) -> {
-                    LOGGER.log(INFO,me.identifier+": Start processing presentation message from a node claiming to be a server");
-                    if(!leader.isActive()) {
-                        ConnectionFromLeaderProtocol connectionFromLeader = new ConnectionFromLeaderProtocol(this.channel, this.buffer);
-                        connectionFromLeader.processLeaderPresentation();
-                    } else {
-                        // discard include metadata bit
-                        this.buffer.get();
-                        ServerNode serverNode = Presentation.readServer(this.buffer);
-                        // known leader attempting additional connection?
-                        if(serverNode.asInetSocketAddress().equals(leader.asInetSocketAddress())) {
-                            LOGGER.log(INFO, me.identifier + ": Leader requested an additional connection");
-                            this.buffer.clear();
-                            channel.read(buffer, 0, new LeaderReadCompletionHandler(new ConnectionMetadata(leader.hashCode(), ConnectionMetadata.NodeType.SERVER, channel), buffer));
-                        } else {
-                            try {
-                                LOGGER.log(WARNING,"Dropping a connection attempt from a node claiming to be leader");
-                                 this.channel.close();
-                            } catch (Exception ignored) {}
-                        }
-                    }
-                }
-                case (VMS_TYPE) -> {
-                    LOGGER.log(INFO,me.identifier+": Start processing presentation message from a node claiming to be a VMS");
-                    // then it is a vms intending to connect due to a data/event
-                    // that should be delivered to this vms
-                    VmsNode producerVms = readVms(this.buffer, serdesProxy);
+                case (Presentation.SERVER_TYPE) -> this.processServerPresentation();
+                case (Presentation.VMS_TYPE) -> this.processVmsPresentation();
+                default -> this.processUnknownNodeType(nodeTypeIdentifier);
+            }
+        }
+
+        private void processServerPresentation() {
+            LOGGER.log(INFO,me.identifier+": Start processing presentation message from a node claiming to be a server");
+            if(!leader.isActive()) {
+                ConnectionFromLeaderProtocol connectionFromLeader = new ConnectionFromLeaderProtocol(this.channel, this.buffer);
+                connectionFromLeader.processLeaderPresentation();
+            } else {
+                // discard include metadata bit
+                this.buffer.get();
+                ServerNode serverNode = Presentation.readServer(this.buffer);
+                // known leader attempting additional connection?
+                if(serverNode.asInetSocketAddress().equals(leader.asInetSocketAddress())) {
+                    LOGGER.log(INFO, me.identifier + ": Leader requested an additional connection");
                     this.buffer.clear();
-
-                    ConnectionMetadata connMetadata = new ConnectionMetadata(
-                            producerVms.hashCode(),
-                            ConnectionMetadata.NodeType.VMS,
-                            this.channel
-                    );
-
-                    // what if a vms is both producer to and consumer from this vms?
-                    if(consumerConnectionMetadataMap.containsKey(producerVms.hashCode())){
-                        LOGGER.log(WARNING,me.identifier+": The node "+producerVms.host+" "+producerVms.port+" already contains a connection as a consumer");
-                    }
-
-                    producerConnectionMetadataMap.put(producerVms.hashCode(), connMetadata);
-
-                    // setup event receiving from this vms
-                    LOGGER.log(INFO,me.identifier+": Setting up consumption from producer "+producerVms);
-                    this.channel.read(this.buffer, 0, new VmsReadCompletionHandler(producerVms, connMetadata, this.buffer));
-                }
-                default -> {
-                    LOGGER.log(WARNING,me.identifier+": Presentation message from unknown source:" + nodeTypeIdentifier);
-                    this.buffer.clear();
-                    MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
+                    channel.read(buffer, 0, new LeaderReadCompletionHandler(new ConnectionMetadata(leader.hashCode(), ConnectionMetadata.NodeType.SERVER, channel), buffer));
+                } else {
                     try {
-                        this.channel.close();
-                    } catch (IOException ignored) { }
+                        LOGGER.log(WARNING,"Dropping a connection attempt from a node claiming to be leader");
+                         this.channel.close();
+                    } catch (Exception ignored) {}
                 }
             }
+        }
+
+        private void processVmsPresentation() {
+            LOGGER.log(INFO,me.identifier+": Start processing presentation message from a node claiming to be a VMS");
+
+            // then it is a VMS intending to connect due to a data/event
+            // that should be delivered to this vms
+            VmsNode producerVms = Presentation.readVms(this.buffer, serdesProxy);
+            this.buffer.clear();
+
+            ConnectionMetadata connMetadata = new ConnectionMetadata(
+                    producerVms.hashCode(),
+                    ConnectionMetadata.NodeType.VMS,
+                    this.channel
+            );
+
+            // what if a vms is both producer to and consumer from this vms?
+            if(consumerVmsContainerMap.containsKey(producerVms.hashCode())){
+                LOGGER.log(WARNING,me.identifier+": The node "+producerVms.host+" "+producerVms.port+" already contains a connection as a consumer");
+            }
+
+            // just to keep track whether this
+            if(producerConnectionMetadataMap.containsKey(producerVms.hashCode())) {
+                LOGGER.log(INFO, me.identifier+": Setting up additional consumption from producer "+producerVms);
+            } else {
+                producerConnectionMetadataMap.put(producerVms.hashCode(), connMetadata);
+                // setup event receiving from this vms
+                LOGGER.log(INFO,me.identifier+": Setting up consumption from producer "+producerVms);
+            }
+
+            this.channel.read(this.buffer, 0, new VmsReadCompletionHandler(producerVms, connMetadata, this.buffer));
+        }
+
+        private void processUnknownNodeType(byte nodeTypeIdentifier) {
+            LOGGER.log(WARNING,me.identifier+": Presentation message from unknown source:" + nodeTypeIdentifier);
+            this.buffer.clear();
+            MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
+            try {
+                this.channel.close();
+            } catch (IOException ignored) { }
         }
 
         @Override
@@ -924,33 +855,31 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         public void processLeaderPresentation() {
             LOGGER.log(INFO,me.identifier+": Start processing the Leader presentation");
-            boolean includeMetadata = this.buffer.get() == YES;
+            boolean includeMetadata = this.buffer.get() == Presentation.YES;
 
             // leader has disconnected, or new leader
             leader = Presentation.readServer(this.buffer);
 
             // read queues leader is interested
-            boolean hasQueuesToSubscribe = this.buffer.get() == YES;
+            boolean hasQueuesToSubscribe = this.buffer.get() == Presentation.YES;
             if(hasQueuesToSubscribe){
-                queuesLeaderSubscribesTo.addAll(readQueuesToSubscribeTo(this.buffer, serdesProxy));
+                queuesLeaderSubscribesTo.addAll(Presentation.readQueuesToSubscribeTo(this.buffer, serdesProxy));
             }
 
             // only connects to all VMSs on first leader connection
 
-            if(leaderConnectionMetadata == null) {
-                // then setup connection metadata and read completion handler
-                leaderConnectionMetadata = new ConnectionMetadata(
-                        leader.hashCode(),
-                        ConnectionMetadata.NodeType.SERVER,
-                        channel
-                );
-            } else {
+            if(leaderConnectionMetadata != null) {
                 // considering the leader has replicated the metadata before failing
                 // so no need to send metadata again. but it may be necessary...
                 // what if the tid and batch id is necessary. the replica may not be
                 // sync with last leader...
-                leaderConnectionMetadata.channel = channel; // update channel
+                LOGGER.log(WARNING, me.identifier+": Updating leader connection metadata due to new connection");
             }
+            leaderConnectionMetadata = new ConnectionMetadata(
+                    leader.hashCode(),
+                    ConnectionMetadata.NodeType.SERVER,
+                    channel
+            );
             leader.on();
             this.buffer.clear();
 
@@ -1149,8 +1078,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 // extract events batched
                 for (int i = 0; i < count; i++) {
                     payload = TransactionEvent.read(readBuffer);
-                    if(payload.tid() == 99)
-                        LOGGER.log(DEBUG, me.identifier+": Processed TID "+payload.tid());
+                    LOGGER.log(DEBUG, me.identifier+": Processed TID "+payload.tid());
                     if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
                         payloads.add(buildInboundEvent(payload));
                     }

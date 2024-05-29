@@ -14,7 +14,7 @@ public class ConnectionMetadata {
 
     // unfortunately cannot set to final because of the election protocol in coordinator
     // see processServerPresentationMessage
-    public AsynchronousSocketChannel channel;
+    public final AsynchronousSocketChannel channel;
 
     public enum NodeType {
         SERVER,

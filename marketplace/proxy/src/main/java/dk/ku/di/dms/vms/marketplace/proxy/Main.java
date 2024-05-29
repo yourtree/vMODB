@@ -24,10 +24,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
 
@@ -59,7 +56,6 @@ public final class Main {
         Properties properties = ConfigUtils.loadProperties();
         Coordinator coordinator = loadCoordinator(properties);
         initHttpServer(properties, coordinator);
-
         ackBatchCompletionLoop(properties, coordinator.getBatchSignalQueue());
     }
 
@@ -203,38 +199,47 @@ public final class Main {
         }
     }
 
-    private static Map<String, TransactionDAG> buildTransactionDAGs(){
+    private static Map<String, TransactionDAG> buildTransactionDAGs(String[] transactionList){
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
+        Set<String> transactions = Set.of(transactionList);
 
-        TransactionDAG updatePriceDag = TransactionBootstrap.name(UPDATE_PRICE)
-                .input( "a", "product", UPDATE_PRICE )
-                .terminal("b", "cart", "a")
-                .build();
-        transactionMap.put(updatePriceDag.name, updatePriceDag);
+        if(transactions.contains(UPDATE_PRICE)) {
+            TransactionDAG updatePriceDag = TransactionBootstrap.name(UPDATE_PRICE)
+                    .input("a", "product", UPDATE_PRICE)
+                    .terminal("b", "cart", "a")
+                    .build();
+            transactionMap.put(updatePriceDag.name, updatePriceDag);
+        }
 
-        TransactionDAG updateProductDag = TransactionBootstrap.name(UPDATE_PRODUCT)
-                .input( "a", "product", UPDATE_PRODUCT )
-                .terminal("b", "stock", "a")
-                .terminal("c", "cart", "a")
-                // omit below if you want to skip batch commit info
+        if(transactions.contains(UPDATE_PRODUCT)) {
+            TransactionDAG updateProductDag = TransactionBootstrap.name(UPDATE_PRODUCT)
+                    .input("a", "product", UPDATE_PRODUCT)
+                    .terminal("b", "stock", "a")
+                    .terminal("c", "cart", "a")
+                    // omit below if you want to skip batch commit info
 //                .terminal("b", "product", "a")
-                .build();
-        transactionMap.put(updateProductDag.name, updateProductDag);
+                    .build();
+            transactionMap.put(updateProductDag.name, updateProductDag);
+        }
 
-        TransactionDAG updateDeliveryDag = TransactionBootstrap.name(UPDATE_DELIVERY)
-                .input("a", "shipment", UPDATE_DELIVERY)
-                .terminal("b", "order", "a")
-                .build();
-        transactionMap.put(updateDeliveryDag.name, updateDeliveryDag);
+        if(transactions.contains(UPDATE_DELIVERY)) {
+            TransactionDAG updateDeliveryDag = TransactionBootstrap.name(UPDATE_DELIVERY)
+                    .input("a", "shipment", UPDATE_DELIVERY)
+                    .terminal("b", "order", "a")
+                    .build();
+            transactionMap.put(updateDeliveryDag.name, updateDeliveryDag);
+        }
 
-        TransactionDAG checkoutDag = TransactionBootstrap.name(CUSTOMER_CHECKOUT)
-                .input("a", "cart", CUSTOMER_CHECKOUT)
-                .internal("b", "stock", RESERVE_STOCK, "a")
-                .internal("c", "order", STOCK_CONFIRMED, "b")
-                .internal("d", "payment", INVOICE_ISSUED, "c")
-                .terminal("e", "shipment",  "d" )
-                .build();
-        transactionMap.put(checkoutDag.name, checkoutDag);
+        if(transactions.contains(CUSTOMER_CHECKOUT)) {
+            TransactionDAG checkoutDag = TransactionBootstrap.name(CUSTOMER_CHECKOUT)
+                    .input("a", "cart", CUSTOMER_CHECKOUT)
+                    .internal("b", "stock", RESERVE_STOCK, "a")
+                    .internal("c", "order", STOCK_CONFIRMED, "b")
+                    .internal("d", "payment", INVOICE_ISSUED, "c")
+                    .terminal("e", "shipment", "d")
+                    .build();
+            transactionMap.put(checkoutDag.name, checkoutDag);
+        }
 
         return transactionMap;
     }
@@ -247,15 +252,14 @@ public final class Main {
         Map<Integer, ServerNode> serverMap = new HashMap<>();
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
-        Map<String, TransactionDAG> transactionMap = buildTransactionDAGs();
+        String transactionsRaw = properties.getProperty("transactions");
+        String[] transactions = transactionsRaw.split(",");
+        Map<String, TransactionDAG> transactionMap = buildTransactionDAGs(transactions);
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         Map<Integer, IdentifiableNode> starterVMSs;
-
-        String transactionsRaw = properties.getProperty("transactions");
-        String[] transactions = transactionsRaw.split(",");
-        if(Arrays.stream(transactions).anyMatch(p->p.contentEquals("checkout"))) {
+        if(Arrays.stream(transactions).anyMatch(p->p.contentEquals(CUSTOMER_CHECKOUT))) {
             starterVMSs = buildStarterVMSsFull(properties);
         } else {
             if(transactions.length == 1) {
@@ -285,7 +289,7 @@ public final class Main {
                         .withNetworkBufferSize(definiteBufferSize)
                         .withNetworkSendTimeout(networkSendTimeout)
                         .withOsBufferSize(osBufferSize)
-                        .withTaskThreadPoolSize(task_thread_pool_size > 0 ? task_thread_pool_size : NUM_CPUS),
+                        .withTaskThreadPoolSize(task_thread_pool_size > 0 ? task_thread_pool_size : NUM_CPUS/2),
                 STARTING_BATCH_ID,
                 STARTING_TID,
                 serdes

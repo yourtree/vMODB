@@ -231,49 +231,21 @@ public final class Coordinator extends StoppableRunnable {
 
         // setup asynchronous listener for new connections
         this.serverSocket.accept(null, new AcceptCompletionHandler());
+
         // connect to all virtual microservices
         this.setupStarterVMSs();
 
+        // setup background worker for collecting commit messages from VMSs
         Thread.ofPlatform().factory().newThread(this::processEventsSentByVmsWorkers).start();
 
-        LOGGER.log(DEBUG,"Leader: Waiting for all starter VMSs to connect");
-        // process all VMS_IDENTIFIER first before submitting transactions
-        for(;;){
-            if(this.vmsMetadataMap.size() >= this.starterVMSs.size())
-                break;
-        }
+        this.waitForAllStarterVMSs();
 
-        int taskThreadPoolSize = this.options.getTaskThreadPoolSize();
-        LOGGER.log(DEBUG,"Leader: Preprocessing transaction DAGs");
-        Set<String> inputVMSsSeen = new HashSet<>();
-        // build list of VmsIdentifier per transaction DAG
-        for(var dag : this.transactionMap.entrySet()){
-            this.vmsIdentifiersPerDAG.put(dag.getKey(), BatchAlgo.buildTransactionDagVmsList( dag.getValue(), this.vmsMetadataMap ));
-
-            // set up additional connection with vms that start transactions
-            for(var inputVms : dag.getValue().inputEvents.entrySet()){
-                var vmsNode = this.vmsMetadataMap.get(inputVms.getValue().targetVms);
-                if(inputVMSsSeen.contains(vmsNode.identifier)){
-                    continue;
-                }
-                inputVMSsSeen.add(vmsNode.identifier);
-                for(int i = 1; i < taskThreadPoolSize; i++){
-                    if(this.vmsWorkerContainer.containsKey(inputVms.getValue().targetVms)) {
-                        VmsWorker newWorker = VmsWorker.build(this.me, vmsNode, this.coordinatorQueue,
-                                this.group, this.networkBufferSize, this.networkSendTimeout, this.serdesProxy);
-                        this.vmsWorkerContainer.get(inputVms.getValue().targetVms).addWorker(newWorker);
-                        Thread vmsWorkerThread = Thread.ofPlatform().factory().newThread(newWorker);
-                        vmsWorkerThread.setName("vms-worker-" + vmsNode.identifier + "-" + (i));
-                        vmsWorkerThread.start();
-                    }
-                }
-            }
-        }
+        this.preprocessDAGs();
 
         LOGGER.log(DEBUG,"Leader: Transaction processing starting now... ");
         long start = System.currentTimeMillis();
         long end = start + this.options.getBatchWindow();
-
+        int dequeSize = this.options.getTaskThreadPoolSize();
         int dequeIdx = 0;
         ConcurrentLinkedDeque<TransactionInput> deque;
         TransactionInput data;
@@ -286,7 +258,7 @@ public final class Coordinator extends StoppableRunnable {
                         this.transactionRequests.add(data);
                     }
                     dequeIdx++;
-                } while (dequeIdx < taskThreadPoolSize && System.currentTimeMillis() < end);
+                } while (dequeIdx < dequeSize && System.currentTimeMillis() < end);
                 dequeIdx = 0;
                 this.processTransactionInputEvents();
             } while(System.currentTimeMillis() < end);
@@ -297,6 +269,48 @@ public final class Coordinator extends StoppableRunnable {
 
         this.failSafeClose();
         LOGGER.log(INFO,"Leader: Finished execution.");
+    }
+
+    private void waitForAllStarterVMSs() {
+        LOGGER.log(DEBUG,"Leader: Waiting for all starter VMSs to connect");
+        // process all VMS_IDENTIFIER first before submitting transactions
+        for(;;){
+            if(this.vmsMetadataMap.size() >= this.starterVMSs.size())
+                break;
+        }
+    }
+
+    private void preprocessDAGs() {
+        int taskThreadPoolSize = this.options.getTaskThreadPoolSize();
+        LOGGER.log(DEBUG,"Leader: Preprocessing transaction DAGs");
+        Set<String> inputVMSsSeen = new HashSet<>();
+        // build list of VmsIdentifier per transaction DAG
+        for(var dag : this.transactionMap.entrySet()){
+            this.vmsIdentifiersPerDAG.put(dag.getKey(), BatchAlgo.buildTransactionDagVmsList( dag.getValue(), this.vmsMetadataMap ));
+
+            // set up additional connection with vms that start transactions
+            for(var inputVms : dag.getValue().inputEvents.entrySet()){
+                var vmsNode = this.vmsMetadataMap.get(inputVms.getValue().targetVms);
+                if(vmsNode == null || inputVMSsSeen.contains(vmsNode.identifier)){
+                    continue;
+                }
+                inputVMSsSeen.add(vmsNode.identifier);
+                for(int i = 1; i < taskThreadPoolSize; i++){
+                    if(this.vmsWorkerContainer.containsKey(inputVms.getValue().targetVms)) {
+                        try {
+                            VmsWorker newWorker = VmsWorker.build(this.me, vmsNode, this.coordinatorQueue,
+                                    this.group, this.networkBufferSize, this.networkSendTimeout, this.serdesProxy);
+                            this.vmsWorkerContainer.get(inputVms.getValue().targetVms).addWorker(newWorker);
+                            Thread vmsWorkerThread = Thread.ofPlatform().factory().newThread(newWorker);
+                            vmsWorkerThread.setName("vms-worker-" + vmsNode.identifier + "-" + (i));
+                            vmsWorkerThread.start();
+                        } catch (Exception e) {
+                            LOGGER.log(WARNING, "Could not connect to VMS "+vmsNode.identifier, e);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -345,17 +359,22 @@ public final class Coordinator extends StoppableRunnable {
      * later mapped to the respective vms identifier by the thread
      */
     private void setupStarterVMSs() {
-        for(IdentifiableNode vmsNode : this.starterVMSs.values()){
-            // coordinator will later keep track of this thread when the connection with the VMS is fully established
-            final VmsWorker vmsWorker = VmsWorker.buildAsStarter(this.me, vmsNode, this.coordinatorQueue,
-                    this.group, this.networkBufferSize, this.networkSendTimeout, this.serdesProxy);
-            // a cached thread pool would be ok in this case
-            Thread vmsWorkerThread = Thread.ofPlatform().factory().newThread(vmsWorker);
-            vmsWorkerThread.setName("vms-worker-"+vmsNode.identifier+"-0");
-            vmsWorkerThread.start();
-            this.vmsWorkerContainer.put(vmsNode.identifier,
-                    new VmsWorkerContainer(vmsWorker)
-            );
+        try {
+            for (IdentifiableNode vmsNode : this.starterVMSs.values()) {
+                // coordinator will later keep track of this thread when the connection with the VMS is fully established
+                VmsWorker vmsWorker = VmsWorker.buildAsStarter(this.me, vmsNode, this.coordinatorQueue,
+                        this.group, this.networkBufferSize, this.networkSendTimeout, this.serdesProxy);
+                // a cached thread pool would be ok in this case
+                Thread vmsWorkerThread = Thread.ofPlatform().factory().newThread(vmsWorker);
+                vmsWorkerThread.setName("vms-worker-" + vmsNode.identifier + "-0");
+                vmsWorkerThread.start();
+                this.vmsWorkerContainer.put(vmsNode.identifier,
+                        new VmsWorkerContainer(vmsWorker)
+                );
+            }
+        }catch (Exception e){
+            LOGGER.log(ERROR, "It was not possible to connect to one of the starter VMSs: " + e.getMessage());
+            e.printStackTrace(System.out);
         }
     }
 
@@ -515,10 +534,10 @@ public final class Coordinator extends StoppableRunnable {
 
             // check whether this server is known... maybe it has crashed... then we only need to update the respective channel
             if(servers.get(newServer.hashCode()) != null){
-                LockConnectionMetadata connectionMetadata = serverConnectionMetadataMap.get( newServer.hashCode() );
+                // LockConnectionMetadata connectionMetadata = serverConnectionMetadataMap.get( newServer.hashCode() );
                 // update metadata of this node
                 servers.put( newServer.hashCode(), newServer );
-                connectionMetadata.channel = channel;
+                // connectionMetadata.channel = channel;
             } else { // no need for locking here
                 servers.put( newServer.hashCode(), newServer );
                 LockConnectionMetadata connectionMetadata = new LockConnectionMetadata(
@@ -769,6 +788,7 @@ public final class Coordinator extends StoppableRunnable {
             }
             LOGGER.log(DEBUG,"Leader: Adding event "+event.name+" to "+inputVms.identifier+" worker");
 
+            // push transaction to vms worker
             this.vmsWorkerContainer.get(inputVms.identifier).queue(txEvent);
 
             /*

@@ -24,6 +24,8 @@ import java.util.*;
  */
 public final class VmsApplication {
 
+    private final String name;
+
     private final VmsRuntimeMetadata vmsRuntimeMetadata;
 
     private final Map<String, Table> catalog;
@@ -34,11 +36,13 @@ public final class VmsApplication {
 
     private final IVmsInternalChannels internalChannels;
 
-    private VmsApplication(VmsRuntimeMetadata vmsRuntimeMetadata,
+    private VmsApplication(String name,
+                           VmsRuntimeMetadata vmsRuntimeMetadata,
                            Map<String, Table> catalog,
                            VmsEventHandler eventHandler,
                            StoppableRunnable transactionScheduler,
                            IVmsInternalChannels internalChannels) {
+        this.name = name;
         this.vmsRuntimeMetadata = vmsRuntimeMetadata;
         this.catalog = catalog;
         this.eventHandler = eventHandler;
@@ -114,7 +118,7 @@ public final class VmsApplication {
         VmsEventHandler eventHandler = VmsEventHandler.build(
                 vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, serdes,
                 options.networkBufferSize(), options.osBufferSize(),
-                options.networkThreadPoolSize(), options.networkSendTimeout());
+                options.networkThreadPoolSize(), options.networkSendTimeout(), options.vmsThreadPoolSize());
 
 //        VmsComplexTransactionScheduler scheduler =
 //                VmsComplexTransactionScheduler.build(
@@ -134,7 +138,7 @@ public final class VmsApplication {
                 eventHandler.schedulerHandler(),
                 threadPoolSize );
 
-        return new VmsApplication( vmsMetadata, catalog, eventHandler, transactionScheduler, vmsInternalPubSubService );
+        return new VmsApplication( vmsName, vmsMetadata, catalog, eventHandler, transactionScheduler, vmsInternalPubSubService );
     }
 
     /**
@@ -142,10 +146,10 @@ public final class VmsApplication {
      */
     public void start(){
         Thread eventHandlerThread = new Thread(this.eventHandler);
-//        eventHandlerThread.setPriority(Thread.MAX_PRIORITY);
+        eventHandlerThread.setName("vms-event-handler-"+this.name);
         eventHandlerThread.start();
         Thread transactionSchedulerThread = new Thread(this.transactionScheduler);
-//        transactionSchedulerThread.setPriority(Thread.MAX_PRIORITY);
+        eventHandlerThread.setName("vms-transaction-scheduler-"+this.name);
         transactionSchedulerThread.start();
     }
 
@@ -167,12 +171,12 @@ public final class VmsApplication {
     }
 
     public long lastTidFinished() {
-        return ((VmsTransactionScheduler)transactionScheduler).lastTidFinished();
+        return ((VmsTransactionScheduler)this.transactionScheduler).lastTidFinished();
     }
 
     public Object getService() {
-        var service = this.vmsRuntimeMetadata.loadedVmsInstances().entrySet().stream().findFirst();
-        if(service.isPresent()) return service.get();
+        var service = this.vmsRuntimeMetadata.loadedVmsInstances().get(this.name);
+        if(service != null) return service;
         throw new RuntimeException("Service not loaded");
     }
 

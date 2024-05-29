@@ -159,10 +159,7 @@ final class LeaderWorker extends StoppableRunnable {
     }
 
     public void queueMessage(Object message) {
-        boolean sent = this.leaderWorkerQueue.offer(message);
-        while(!sent) {
-            sent = this.leaderWorkerQueue.offer(message);
-        }
+        this.leaderWorkerQueue.add(message);
     }
 
 }

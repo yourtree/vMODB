@@ -332,7 +332,7 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
                     } else {
                         // update channel if not active
                         if(!connMeta.channel.isOpen()) {
-                            connMeta.channel = channel;
+                            // connMeta.channel = channel;
                             servers.get( key ).on();
                         } else {
 
@@ -653,14 +653,6 @@ public final class ElectionWorker extends SignalingStoppableRunnable {
 
     public ServerNode getLeader(){
         return this.leader;
-    }
-
-    /**
-     * To reuse connections already established and buffers
-     * @return connection metadata
-     */
-    public Map<Integer, LockConnectionMetadata> getServerConnectionMetadata() {
-        return this.connectionMetadataMap;
     }
 
 }

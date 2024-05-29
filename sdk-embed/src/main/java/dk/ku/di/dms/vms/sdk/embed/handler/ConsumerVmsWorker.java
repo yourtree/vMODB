@@ -1,19 +1,26 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
+import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
+import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
-import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
+import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousChannelGroup;
+import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.*;
 
+import static dk.ku.di.dms.vms.sdk.embed.handler.ConsumerVmsWorker.State.*;
 import static java.lang.System.Logger.Level.*;
 import static java.lang.Thread.sleep;
 
@@ -32,12 +39,14 @@ import static java.lang.Thread.sleep;
 @SuppressWarnings("SequencedCollectionMethodCanBeUsed")
 final class ConsumerVmsWorker extends StoppableRunnable {
 
-    private static final System.Logger logger = System.getLogger(ConsumerVmsWorker.class.getName());
+    private static final System.Logger LOGGER = System.getLogger(ConsumerVmsWorker.class.getName());
     
     private final VmsNode me;
+    private final IdentifiableNode consumerVms;
     
-    private final ConsumerVms consumerVms;
-    private final ConnectionMetadata connectionMetadata;
+    private final AsynchronousSocketChannel channel;
+
+    private final IVmsSerdesProxy serdesProxy;
 
     private final Deque<ByteBuffer> writeBufferPool;
 
@@ -46,15 +55,28 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     private static final Byte DUMB = 1;
 
     private final int networkBufferSize;
-
+    private final int osBufferSize;
     private final int networkSendTimeout;
 
     private final BlockingQueue<ByteBuffer> PENDING_WRITES_BUFFER = new LinkedBlockingQueue<>();
 
-    public ConsumerVmsWorker(VmsNode me, ConsumerVms consumerVms, ConnectionMetadata connectionMetadata, int networkBufferSize, int networkSendTimeout){
+    private final BlockingDeque<TransactionEvent.PayloadRaw> transactionEvents;
+
+    private State state;
+
+    public ConsumerVmsWorker(VmsNode me, IdentifiableNode consumerVms,
+                             AsynchronousChannelGroup group, IVmsSerdesProxy serdesProxy,
+                             int networkBufferSize, int osBufferSize, int networkSendTimeout) {
         this.me = me;
         this.consumerVms = consumerVms;
-        this.connectionMetadata = connectionMetadata;
+        try {
+            this.channel = AsynchronousSocketChannel.open(group);
+        } catch (IOException e) {
+            LOGGER.log(ERROR, "Failed to open AsynchronousSocketChannel", e);
+            throw new RuntimeException(e);
+        }
+        this.serdesProxy = serdesProxy;
+
         this.writeBufferPool = new ConcurrentLinkedDeque<>();
         this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(networkBufferSize) );
         this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(networkBufferSize) );
@@ -63,8 +85,15 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         this.WRITE_SYNCHRONIZER.add(DUMB);
 
         this.networkBufferSize = networkBufferSize;
+        this.osBufferSize = osBufferSize;
         this.networkSendTimeout = networkSendTimeout;
+        
+        this.transactionEvents = new LinkedBlockingDeque<>();
+
+        this.state = NEW;
     }
+
+    protected enum State { NEW, CONNECTED, PRESENTATION_SENT, READY }
 
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
 
@@ -74,8 +103,11 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
     @Override
     public void run() {
-
-        logger.log(INFO, this.me.identifier+ ": Starting worker for consumer VMS: "+this.consumerVms.identifier);
+        LOGGER.log(INFO, this.me.identifier+ ": Starting worker for consumer VMS: "+this.consumerVms.identifier);
+        if(!this.connect()) {
+            LOGGER.log(WARNING, this.me.identifier+ "Finishing worker for consumer VMS: "+this.consumerVms.identifier+" because connection failed");
+            return;
+        }
 
         List<TransactionEvent.PayloadRaw> events = new ArrayList<>(1024);
         int pollTimeout = 1;
@@ -83,9 +115,9 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         while(this.isRunning()){
             try {
                 if(BLOCKING){
-                    payloadRaw = this.consumerVms.transactionEvents.take();
+                    payloadRaw = this.transactionEvents.take();
                 } else {
-                    payloadRaw = this.consumerVms.transactionEvents.poll(pollTimeout, TimeUnit.MILLISECONDS);
+                    payloadRaw = this.transactionEvents.poll(pollTimeout, TimeUnit.MILLISECONDS);
                     if (payloadRaw == null) {
                         pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
                         // guarantees pending writes will be retired even though there is no new event to process
@@ -98,30 +130,74 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 this.processPendingWrites();
 
                 events.add(payloadRaw);
-                this.consumerVms.transactionEvents.drainTo(events);
+                this.transactionEvents.drainTo(events);
                 this.sendBatchOfEvents(events);
 
             } catch (Exception e) {
-                logger.log(ERROR, this.me.identifier+ ": Error captured in event loop \n"+e);
+                LOGGER.log(ERROR, this.me.identifier+ ": Error captured in event loop \n"+e);
             }
         }
-        logger.log(INFO, this.me.identifier+ "Finishing worker for consumer VMS: "+this.consumerVms.identifier);
+        LOGGER.log(INFO, this.me.identifier+ "Finishing worker for consumer VMS: "+this.consumerVms.identifier);
+    }
+
+    /**
+     * Responsible for making sure the handshake protocol is
+     * successfully performed with a consumer VMS
+     */
+    private boolean connect() {
+        ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(this.networkBufferSize);
+        try{
+            NetworkUtils.configure(this.channel, this.osBufferSize);
+            this.channel.connect(this.consumerVms.asInetSocketAddress()).get();
+
+            this.state = CONNECTED;
+            LOGGER.log(DEBUG,this.me.identifier+ ": The node "+ this.consumerVms.host+" "+ this.consumerVms.port+" status = "+this.state);
+
+            String dataSchema = this.serdesProxy.serializeDataSchema(this.me.dataSchema);
+            String inputEventSchema = this.serdesProxy.serializeEventSchema(this.me.inputEventSchema);
+            String outputEventSchema = this.serdesProxy.serializeEventSchema(this.me.outputEventSchema);
+
+            buffer.clear();
+            Presentation.writeVms( buffer, this.me, this.me.identifier, this.me.batch, 0, this.me.previousBatch, dataSchema, inputEventSchema, outputEventSchema );
+            buffer.flip();
+
+            channel.write(buffer).get();
+
+            this.state = PRESENTATION_SENT;
+
+            LOGGER.log(DEBUG,me.identifier+ ": The node "+ this.consumerVms.host+" "+ this.consumerVms.port+" status = "+this.state);
+
+            this.returnByteBuffer(buffer);
+
+            LOGGER.log(INFO,me.identifier+ " setting up worker to send transactions to consumer VMS: "+this.consumerVms.identifier);
+
+        } catch (Exception e) {
+            // check if connection is still online. if so, try again
+            // otherwise, retry connection in a few minutes
+            LOGGER.log(ERROR, me.identifier + "caught an error while trying to connect to consumer VMS: " + this.consumerVms.identifier);
+            return false;
+        } finally {
+            buffer.clear();
+            MemoryManager.releaseTemporaryDirectBuffer(buffer);
+        }
+        this.state = READY;
+        return true;
     }
 
     private void processPendingWrites() {
         // do we have pending writes?
         ByteBuffer bb = this.PENDING_WRITES_BUFFER.poll();
         if (bb != null) {
-            logger.log(INFO, me.identifier+": Retrying sending failed buffer to "+consumerVms.identifier);
+            LOGGER.log(INFO, me.identifier+": Retrying sending failed buffer to "+consumerVms.identifier);
             try {
                 // sleep with the intention to let the OS flush the previous buffer
                 try { sleep(100); } catch (InterruptedException ignored) { }
                 this.WRITE_SYNCHRONIZER.take();
-                this.connectionMetadata.channel.write(bb, networkSendTimeout, TimeUnit.MILLISECONDS, bb, this.writeCompletionHandler);
+                this.channel.write(bb, networkSendTimeout, TimeUnit.MILLISECONDS, bb, this.writeCompletionHandler);
             } catch (Exception e) {
-                logger.log(ERROR, me.identifier+": ERROR on retrying to send failed buffer to "+consumerVms.identifier+": \n"+e);
+                LOGGER.log(ERROR, me.identifier+": ERROR on retrying to send failed buffer to "+consumerVms.identifier+": \n"+e);
                 if(e instanceof IllegalStateException){
-                    logger.log(INFO, me.identifier+": Connection to "+consumerVms.identifier+" is open? "+connectionMetadata.channel.isOpen());
+                    LOGGER.log(INFO, me.identifier+": Connection to "+consumerVms.identifier+" is open? "+this.channel.isOpen());
                     // probably comes from the class {@AsynchronousSocketChannelImpl}:
                     // "Writing not allowed due to timeout or cancellation"
                     stop();
@@ -132,10 +208,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 }
 
                 bb.clear();
-                boolean sent = this.PENDING_WRITES_BUFFER.offer(bb);
-                while(!sent){
-                    sent = this.PENDING_WRITES_BUFFER.offer(bb);
-                }
+                this.PENDING_WRITES_BUFFER.add(bb);
             }
         }
     }
@@ -149,7 +222,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 writeBuffer = this.retrieveByteBuffer();
                 remaining = BatchUtils.assembleBatchPayload(remaining, events, writeBuffer);
 
-                logger.log(DEBUG, this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
+                LOGGER.log(DEBUG, this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
                 count = remaining;
 
                 // the flip will allow the underlying network stack to break the message into two or more deliveries
@@ -159,18 +232,18 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 writeBuffer.flip();
 
                 this.WRITE_SYNCHRONIZER.take();
-                this.connectionMetadata.channel.write(writeBuffer, this.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
+                this.channel.write(writeBuffer, this.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
 
             } catch (Exception e) {
-                logger.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier+"\n"+e);
+                LOGGER.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier+"\n"+e);
                 // return non-processed events to original location or what?
-                if (!this.connectionMetadata.channel.isOpen()) {
-                    logger.log(WARNING, "The "+this.consumerVms.identifier+" VMS is offline");
+                if (!this.channel.isOpen()) {
+                    LOGGER.log(WARNING, "The "+this.consumerVms.identifier+" VMS is offline");
                 }
 
                 // return events to the deque
                 while(!events.isEmpty()) {
-                    if(this.consumerVms.transactionEvents.offerFirst(events.get(0))){
+                    if(this.transactionEvents.offerFirst(events.get(0))){
                         events.remove(0);
                     }
                 }
@@ -210,11 +283,11 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
-            logger.log(DEBUG, me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
+            LOGGER.log(DEBUG, me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
             if(byteBuffer.hasRemaining()){
-                logger.log(WARNING, me.identifier + ": Remaining bytes will be sent to: " + consumerVms.identifier);
+                LOGGER.log(WARNING, me.identifier + ": Remaining bytes will be sent to: " + consumerVms.identifier);
                 // keep the lock and send the remaining
-                connectionMetadata.channel.write(byteBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, byteBuffer, this);
+                channel.write(byteBuffer, networkSendTimeout, TimeUnit.MILLISECONDS, byteBuffer, this);
             } else {
                 WRITE_SYNCHRONIZER.add(DUMB);
                 returnByteBuffer(byteBuffer);
@@ -224,13 +297,15 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         @Override
         public void failed(Throwable exc, ByteBuffer byteBuffer) {
             WRITE_SYNCHRONIZER.add(DUMB);
-            logger.log(ERROR, me.identifier+": ERROR on writing batch of events to "+consumerVms.identifier+": \n"+exc);
+            LOGGER.log(ERROR, me.identifier+": ERROR on writing batch of events to "+consumerVms.identifier+": \n"+exc);
             byteBuffer.clear();
-            boolean sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
-            while(!sent){
-                sent = PENDING_WRITES_BUFFER.offer(byteBuffer);
-            }
-            logger.log(INFO, me.identifier + ": Byte buffer added to pending queue. #pending: "+PENDING_WRITES_BUFFER.size());
+            PENDING_WRITES_BUFFER.add(byteBuffer);
+            LOGGER.log(INFO, me.identifier + ": Byte buffer added to pending queue. #pending: "+PENDING_WRITES_BUFFER.size());
         }
     }
+
+    public void queueTransactionEvent(TransactionEvent.PayloadRaw eventPayload){
+        this.transactionEvents.offerLast(eventPayload);
+    }
+    
 }

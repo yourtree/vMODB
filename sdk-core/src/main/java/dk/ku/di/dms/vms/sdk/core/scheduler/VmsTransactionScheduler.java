@@ -148,10 +148,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             var resultToQueue = new VmsTransactionResult(
                     outboundEventResult.tid(),
                     outboundEventResult);
-            boolean sent = vmsChannels.transactionOutputQueue().offer(resultToQueue);
-            while(!sent) {
-                sent = vmsChannels.transactionOutputQueue().offer(resultToQueue);
-            }
+            vmsChannels.transactionOutputQueue().add(resultToQueue);
 
             if(executionMode == ExecutionModeEnum.SINGLE_THREADED)
                 singleThreadTaskRunning.set(false);

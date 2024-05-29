@@ -22,7 +22,7 @@ import static java.lang.System.Logger.Level.WARNING;
  * In this case, the claim must be updated accordingly in order
  * to better benefit from this class
  * -
- * Get a portion of memory. Partition in small buckets online (per request basis, from the operators)
+ * Get a portion of memory. Partition in small buckets online (per-request basis, from the operators)
  * If runs out, allocates direct byte buffer.
  *
  */
@@ -101,10 +101,9 @@ public final class MemoryManager {
 
     public static ByteBuffer getTemporaryDirectBuffer(int size) {
         ByteBuffer bb = bufferCache.get(size);
+        // newBB.order(ByteOrder.nativeOrder());
         if(bb == null){
-            ByteBuffer newBB = ByteBuffer.allocateDirect(size);
-            // newBB.order(ByteOrder.nativeOrder());
-            return newBB;
+            return ByteBuffer.allocateDirect(size);
         }
         return bb;
     }
