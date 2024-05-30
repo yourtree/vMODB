@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.transaction;
 
+import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
@@ -15,6 +16,12 @@ public final class TransactionEvent {
     private static final int FIXED_LENGTH = (2 * Long.BYTES) + (3 *  Integer.BYTES);
 
     public static void write(ByteBuffer buffer, PayloadRaw payload){
+        buffer.put(Constants.EVENT);
+        buffer.putInt(payload.totalSize());
+        writeWithinBatch(buffer, payload);
+    }
+
+    public static void writeWithinBatch(ByteBuffer buffer, PayloadRaw payload){
         buffer.putLong( payload.tid );
         buffer.putLong( payload.batch );
         buffer.putInt( payload.event.length );
@@ -34,7 +41,7 @@ public final class TransactionEvent {
         String payload = ByteUtils.extractStringFromByteBuffer( buffer, payloadSize );
         int precedenceSize = buffer.getInt();
         String precedenceMap = ByteUtils.extractStringFromByteBuffer( buffer, precedenceSize );
-        return new Payload( tid, batch, event, payload, precedenceMap, (Long.BYTES * 3) + eventSize + payloadSize + precedenceSize );
+        return new Payload(tid, batch, event, payload, precedenceMap);
     }
 
     /**
@@ -57,7 +64,7 @@ public final class TransactionEvent {
 
     //
     public record Payload(
-            long tid, long batch, String event, String payload, String precedenceMap, int totalSize
+            long tid, long batch, String event, String payload, String precedenceMap
     ){
         @Override
         public String toString() {

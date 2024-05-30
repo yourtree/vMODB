@@ -10,15 +10,11 @@ import static java.net.StandardSocketOptions.*;
 public final class NetworkUtils {
 
     public static void configure(AsynchronousSocketChannel channel, int osBufferSize) throws IOException {
-        channel.setOption(TCP_NODELAY, true);
+        channel.setOption(TCP_NODELAY, false);
         channel.setOption(SO_KEEPALIVE, true);
 
         if(channel.supportedOptions().contains(ExtendedSocketOptions.TCP_QUICKACK)) {
-            channel.setOption(ExtendedSocketOptions.TCP_QUICKACK, true);
-        }
-
-        if(channel.supportedOptions().contains(ExtendedSocketOptions.IP_DONTFRAGMENT)) {
-            channel.setOption(ExtendedSocketOptions.IP_DONTFRAGMENT, true);
+            channel.setOption(ExtendedSocketOptions.TCP_QUICKACK, false);
         }
 
         if(osBufferSize > 0) {

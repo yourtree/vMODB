@@ -85,7 +85,7 @@ public final class Main {
             httpServer.setExecutor(Executors.newFixedThreadPool(http_thread_pool_size));
         } else {
             // do not use cached thread pool here
-            httpServer.setExecutor(Executors.newWorkStealingPool(NUM_CPUS-1));
+            httpServer.setExecutor(Executors.newWorkStealingPool(NUM_CPUS));
         }
         httpServer.createContext("/", new ProxyHttpHandler(coordinator));
         httpServer.start();
@@ -236,6 +236,7 @@ public final class Main {
                     .internal("b", "stock", RESERVE_STOCK, "a")
                     .internal("c", "order", STOCK_CONFIRMED, "b")
                     .internal("d", "payment", INVOICE_ISSUED, "c")
+                    //.terminal("any", "customer", "b")
                     .terminal("e", "shipment", "d")
                     .build();
             transactionMap.put(checkoutDag.name, checkoutDag);
@@ -289,7 +290,7 @@ public final class Main {
                         .withNetworkBufferSize(definiteBufferSize)
                         .withNetworkSendTimeout(networkSendTimeout)
                         .withOsBufferSize(osBufferSize)
-                        .withTaskThreadPoolSize(task_thread_pool_size > 0 ? task_thread_pool_size : NUM_CPUS/2),
+                        .withTaskThreadPoolSize(task_thread_pool_size > 0 ? task_thread_pool_size : NUM_CPUS / 2),
                 STARTING_BATCH_ID,
                 STARTING_TID,
                 serdes

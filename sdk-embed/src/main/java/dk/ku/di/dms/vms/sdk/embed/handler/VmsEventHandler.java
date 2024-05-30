@@ -213,10 +213,6 @@ public final class VmsEventHandler extends StoppableRunnable {
         this.vmsThreadPoolSize = vmsThreadPoolSize;
     }
 
-    private static final int MAX_TIMEOUT = 1000;
-
-    private static final boolean BLOCKING = false;
-
     @Override
     public void run() {
         LOGGER.log(INFO,this.me.identifier+": Event handler has started");
@@ -269,6 +265,8 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     }
 
+    private static final int MAX_TIMEOUT = 1000;
+
     /**
      * A thread that basically writes events to other VMSs and the Leader
      * Retrieves data from all output queues
@@ -284,20 +282,16 @@ public final class VmsEventHandler extends StoppableRunnable {
         IVmsTransactionResult txResult_;
         while(this.isRunning()){
             // can acknowledge batch completion even though no event from next batch has arrived
-            // but if BLOCKING, only upon a new event such method will be invoked
+            // but if blocking, only upon a new event such method will be invoked
             // that will jeopardize the batch process
             this.moveBatchIfNecessary();
             try {
-                if(BLOCKING){
-                    txResult_ = this.vmsInternalChannels.transactionOutputQueue().take();
-                } else {
-                    txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll(pollTimeout, TimeUnit.MILLISECONDS);
-                    if (txResult_ == null) {
-                        pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
-                        continue;
-                    }
-                    pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+                txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll(pollTimeout, TimeUnit.MILLISECONDS);
+                if (txResult_ == null) {
+                    pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
+                    continue;
                 }
+                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
 
                 LOGGER.log(DEBUG,this.me.identifier+": New transaction result in event handler. TID = "+txResult_.tid());
 
@@ -330,7 +324,6 @@ public final class VmsEventHandler extends StoppableRunnable {
             } catch (Exception e) {
                 LOGGER.log(ERROR, this.me.identifier+": Problem on handling event\n"+e);
             }
-
         }
     }
 
@@ -540,21 +533,21 @@ public final class VmsEventHandler extends StoppableRunnable {
             switch (messageType) {
                 //noinspection DuplicatedCode
                 case (BATCH_OF_EVENTS) -> {
-                    int bufferSize = Integer.MAX_VALUE;
-                    // check if we can read an integer
-                    if(this.readBuffer.remaining() > Integer.BYTES) {
-                        // size of the batch
-                        bufferSize = this.readBuffer.getInt();
-                        // discard message type and size of batch from the total size since it has already been read
-                        bufferSize -= 1 + Integer.BYTES;
-                    }
+                    int bufferSize = this.getBufferSize();
                     if(this.readBuffer.remaining() < bufferSize){
                         this.fetchMoreBytes(startPos);
                         return;
                     }
                     this.processBatchOfEvents(this.readBuffer);
                 }
-                case (EVENT) -> this.processSingleEvent(readBuffer);
+                case (EVENT) -> {
+                    int bufferSize = this.getBufferSize();
+                    if(this.readBuffer.remaining() < bufferSize){
+                        this.fetchMoreBytes(startPos);
+                        return;
+                    }
+                    this.processSingleEvent(readBuffer);
+                }
                 default -> LOGGER.log(ERROR,me.identifier+": Unknown message type "+messageType+" received from: "+node.identifier);
             }
 
@@ -563,6 +556,18 @@ public final class VmsEventHandler extends StoppableRunnable {
             } else {
                 this.setUpNewRead();
             }
+        }
+
+        private int getBufferSize() {
+            int bufferSize = Integer.MAX_VALUE;
+            // check if we can read an integer
+            if(this.readBuffer.remaining() > Integer.BYTES) {
+                // size of the batch
+                bufferSize = this.readBuffer.getInt();
+                // discard message type and size of batch from the total size since it has already been read
+                bufferSize -= 1 + Integer.BYTES;
+            }
+            return bufferSize;
         }
 
         private void fetchMoreBytes(Integer startPos) {
@@ -725,7 +730,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             );
 
             // what if a vms is both producer to and consumer from this vms?
-            if(consumerVmsContainerMap.containsKey(producerVms.hashCode())){
+            if(consumerVmsContainerMap.containsKey(producerVms)){
                 LOGGER.log(WARNING,me.identifier+": The node "+producerVms.host+" "+producerVms.port+" already contains a connection as a consumer");
             }
 
@@ -953,16 +958,17 @@ public final class VmsEventHandler extends StoppableRunnable {
 
             try {
                 switch (messageType) {
+                    case (EVENT) -> {
+                        int bufferSize = this.getBufferSize();
+                        if(this.readBuffer.remaining() < bufferSize){
+                            this.fetchMoreBytes(startPos);
+                            return;
+                        }
+                        this.processSingleEvent(readBuffer);
+                    }
                     //noinspection DuplicatedCode
                     case (BATCH_OF_EVENTS) -> {
-                        int bufferSize = Integer.MAX_VALUE;
-                        // check if we can read an integer
-                        if(this.readBuffer.remaining() > Integer.BYTES) {
-                            // size of the batch
-                            bufferSize = this.readBuffer.getInt();
-                            // discard message type and size of batch from the total size since it has already been read
-                            bufferSize -= 1 + Integer.BYTES;
-                        }
+                        int bufferSize = this.getBufferSize();
                         if(this.readBuffer.remaining() < bufferSize){
                             this.fetchMoreBytes(startPos);
                             return;
@@ -990,7 +996,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                         LOGGER.log(DEBUG, me.identifier + ": Batch (" + payload.batch() + ") commit command received from the leader");
                         this.processNewBatchCommand(payload);
                     }
-                    // case (EVENT) -> processSingleEvent(readBuffer);
                     case (TX_ABORT) -> {
                         if(this.readBuffer.remaining() < TransactionAbort.SIZE){
                             this.fetchMoreBytes(startPos);
@@ -1043,6 +1048,18 @@ public final class VmsEventHandler extends StoppableRunnable {
             } else {
                 this.setUpNewRead();
             }
+        }
+
+        private int getBufferSize() {
+            int bufferSize = Integer.MAX_VALUE;
+            // check if we can read an integer
+            if(this.readBuffer.remaining() > Integer.BYTES) {
+                // size of the batch
+                bufferSize = this.readBuffer.getInt();
+                // discard message type and size of batch from the total size since it has already been read
+                bufferSize -= 1 + Integer.BYTES;
+            }
+            return bufferSize;
         }
 
         /**
@@ -1103,7 +1120,6 @@ public final class VmsEventHandler extends StoppableRunnable {
             }
         }
 
-        /**
         private void processSingleEvent(ByteBuffer readBuffer) {
             try {
                 LOGGER.log(WARNING,me.identifier + ": 1 event received from the leader");
@@ -1111,10 +1127,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 // send to scheduler.... drop if the event cannot be processed (not an input event in this vms)
                 if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
                     InboundEvent event = buildInboundEvent(payload);
-                    boolean sent = vmsInternalChannels.transactionInputQueue().offer(event);
-                    while (!sent){
-                        sent = vmsInternalChannels.transactionInputQueue().offer(event);
-                    }
+                    vmsInternalChannels.transactionInputQueue().add(event);
                 }
             } catch (Exception e) {
                 if(e instanceof BufferUnderflowException)
@@ -1123,7 +1136,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                     LOGGER.log(ERROR,me.identifier + ": Unknown exception: " + e);
             }
         }
-        */
 
         private void processNewBatchInfo(BatchCommitInfo.Payload batchCommitInfo){
             BatchContext batchContext = BatchContext.build(batchCommitInfo);

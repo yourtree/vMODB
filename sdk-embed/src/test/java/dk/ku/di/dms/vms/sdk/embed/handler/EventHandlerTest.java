@@ -358,7 +358,7 @@ public class EventHandlerTest {
         precedenceMap.put("example1", 0L);
 
         TransactionEvent.PayloadRaw eventInput = TransactionEvent.of(1,1,"in", inputPayload, serdes.serializeMap(precedenceMap));
-        TransactionEvent.write(buffer, eventInput);
+        TransactionEvent.writeWithinBatch(buffer, eventInput);
         buffer.flip();
         channel.write(buffer).get(); // no need to wait
         buffer.clear();
@@ -561,7 +561,7 @@ public class EventHandlerTest {
         precedenceMap.put("example1", 0L);
 
         TransactionEvent.PayloadRaw eventInput = TransactionEvent.of(1,0,"in", inputPayload, serdes.serializeMap(precedenceMap));
-        TransactionEvent.write(buffer, eventInput);
+        TransactionEvent.writeWithinBatch(buffer, eventInput);
         buffer.flip();
         channel.write(buffer).get(); // no need to wait
 

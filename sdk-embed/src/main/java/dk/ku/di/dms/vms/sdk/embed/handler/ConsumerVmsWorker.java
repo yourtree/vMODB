@@ -18,6 +18,7 @@ import java.nio.channels.CompletionHandler;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.*;
 
 import static dk.ku.di.dms.vms.sdk.embed.handler.ConsumerVmsWorker.State.*;
@@ -58,9 +59,9 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     private final int osBufferSize;
     private final int networkSendTimeout;
 
-    private final BlockingQueue<ByteBuffer> PENDING_WRITES_BUFFER = new LinkedBlockingQueue<>();
+    private final Deque<ByteBuffer> PENDING_WRITES_BUFFER = new ConcurrentLinkedDeque<>();
 
-    private final BlockingDeque<TransactionEvent.PayloadRaw> transactionEvents;
+    private final Queue<TransactionEvent.PayloadRaw> transactionEventQueue;
 
     private State state;
 
@@ -88,7 +89,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         this.osBufferSize = osBufferSize;
         this.networkSendTimeout = networkSendTimeout;
         
-        this.transactionEvents = new LinkedBlockingDeque<>();
+        this.transactionEventQueue = new ConcurrentLinkedQueue<>();
 
         this.state = NEW;
     }
@@ -97,9 +98,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
 
-    private static final int MAX_TIMEOUT = 1000;
-
-    private static final boolean BLOCKING = true;
+    private static final int MAX_SLEEP = 1000;
 
     @Override
     public void run() {
@@ -109,35 +108,41 @@ final class ConsumerVmsWorker extends StoppableRunnable {
             return;
         }
 
-        List<TransactionEvent.PayloadRaw> events = new ArrayList<>(1024);
+        this.eventLoop();
+        LOGGER.log(INFO, this.me.identifier+ "Finishing worker for consumer VMS: "+this.consumerVms.identifier);
+    }
+
+    @SuppressWarnings("BusyWait")
+    private void eventLoop() {
         int pollTimeout = 1;
         TransactionEvent.PayloadRaw payloadRaw;
         while(this.isRunning()){
             try {
-                if(BLOCKING){
-                    payloadRaw = this.transactionEvents.take();
+                payloadRaw = this.transactionEventQueue.poll();
+                if (payloadRaw == null) {
+                    pollTimeout = Math.min(pollTimeout * 2, MAX_SLEEP);
+                    // guarantees pending writes will be retired even though there is no new event to process
+                    this.processPendingWrites();
+                    sleep(pollTimeout);
+                    continue;
+                }
+                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+
+                if(!this.transactionEventQueue.isEmpty()){
+                    do {
+                        this.transactionEvents.add(payloadRaw);
+                    } while ((payloadRaw = this.transactionEventQueue.poll()) != null);
+                    this.sendBatchOfEvents();
                 } else {
-                    payloadRaw = this.transactionEvents.poll(pollTimeout, TimeUnit.MILLISECONDS);
-                    if (payloadRaw == null) {
-                        pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
-                        // guarantees pending writes will be retired even though there is no new event to process
-                        this.processPendingWrites();
-                        continue;
-                    }
-                    pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+                    this.sendEvent(payloadRaw);
                 }
 
                 this.processPendingWrites();
-
-                events.add(payloadRaw);
-                this.transactionEvents.drainTo(events);
-                this.sendBatchOfEvents(events);
 
             } catch (Exception e) {
                 LOGGER.log(ERROR, this.me.identifier+ ": Error captured in event loop \n"+e);
             }
         }
-        LOGGER.log(INFO, this.me.identifier+ "Finishing worker for consumer VMS: "+this.consumerVms.identifier);
     }
 
     /**
@@ -213,14 +218,24 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         }
     }
 
-    private void sendBatchOfEvents(List<TransactionEvent.PayloadRaw> events) {
-        int remaining = events.size();
+    private void sendEvent(TransactionEvent.PayloadRaw payload) throws InterruptedException {
+        ByteBuffer writeBuffer = this.retrieveByteBuffer();
+        TransactionEvent.write( writeBuffer, payload );
+        writeBuffer.flip();
+        this.WRITE_SYNCHRONIZER.take();
+        this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
+    }
+
+    private final List<TransactionEvent.PayloadRaw> transactionEvents = new ArrayList<>(1024);
+
+    private void sendBatchOfEvents() {
+        int remaining = this.transactionEvents.size();
         int count = remaining;
         ByteBuffer writeBuffer = null;
         while(remaining > 0){
             try {
                 writeBuffer = this.retrieveByteBuffer();
-                remaining = BatchUtils.assembleBatchPayload(remaining, events, writeBuffer);
+                remaining = BatchUtils.assembleBatchPayload(remaining, this.transactionEvents, writeBuffer);
 
                 LOGGER.log(DEBUG, this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
                 count = remaining;
@@ -242,9 +257,9 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 }
 
                 // return events to the deque
-                while(!events.isEmpty()) {
-                    if(this.transactionEvents.offerFirst(events.get(0))){
-                        events.remove(0);
+                while(!this.transactionEvents.isEmpty()) {
+                    if(this.transactionEventQueue.offer(this.transactionEvents.get(0))){
+                        this.transactionEvents.remove(0);
                     }
                 }
 
@@ -265,7 +280,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 remaining = 0;
             }
         }
-        events.clear();
+        this.transactionEvents.clear();
     }
 
     private ByteBuffer retrieveByteBuffer(){
@@ -305,7 +320,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     }
 
     public void queueTransactionEvent(TransactionEvent.PayloadRaw eventPayload){
-        this.transactionEvents.offerLast(eventPayload);
+        this.transactionEventQueue.offer(eventPayload);
     }
     
 }

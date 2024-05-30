@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
-import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
@@ -34,8 +33,6 @@ final class LeaderWorker extends StoppableRunnable {
     
     private final ByteBuffer writeBuffer;
 
-    // private final BlockingDeque<TransactionEvent.PayloadRaw> eventsToSendToLeader;
-
     private final BlockingQueue<Object> leaderWorkerQueue;
 
     private final VmsNode vmsNode;
@@ -57,7 +54,7 @@ final class LeaderWorker extends StoppableRunnable {
 
     @Override
     public void run() {
-        LOGGER.log(INFO, vmsNode.identifier+": Leader worker started!");
+        LOGGER.log(INFO, this.vmsNode.identifier+": Leader worker started!");
         int pollTimeout = 50;
         Object msg;
         while (this.isRunning()){
@@ -73,7 +70,7 @@ final class LeaderWorker extends StoppableRunnable {
                     pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
                 }
 
-                LOGGER.log(DEBUG, vmsNode.identifier+": Leader worker will send message type: "+ msg.getClass().getName());
+                LOGGER.log(DEBUG, this.vmsNode.identifier+": Leader worker will send message type: "+ msg.getClass().getName());
                 try {
                     switch (msg) {
                         case BatchComplete.Payload o -> this.sendBatchComplete(o);
@@ -81,14 +78,14 @@ final class LeaderWorker extends StoppableRunnable {
                         case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
                         case TransactionEvent.PayloadRaw o -> this.sendEvent(o);
                         default ->
-                                LOGGER.log(WARNING, vmsNode.identifier + ": Leader worker do not recognize message type: " + msg.getClass().getName());
+                                LOGGER.log(WARNING, this.vmsNode.identifier + ": Leader worker do not recognize message type: " + msg.getClass().getName());
                     }
                 } catch (Exception e){
-                    LOGGER.log(ERROR, vmsNode.identifier+": Error on processing message. \n Payload: \n " +e + "\n Error message \n"+ e.getMessage());
+                    LOGGER.log(ERROR, this.vmsNode.identifier+": Error on processing message. \n Payload: \n " +e + "\n Error message \n"+ e.getMessage());
                     this.queueMessage(msg);
                 }
             } catch (Exception e) {
-                LOGGER.log(ERROR, vmsNode.identifier+": Error on taking message from worker queue: "+e.getCause().getMessage());
+                LOGGER.log(ERROR, this.vmsNode.identifier+": Error on taking message from worker queue: "+e.getCause().getMessage());
             }
         }
     }
@@ -123,8 +120,8 @@ final class LeaderWorker extends StoppableRunnable {
             // queue to try insert again
             this.queueMessage(object);
             this.writeBuffer.clear();
-            if(!channel.isOpen()) {
-                leader.off();
+            if(!this.channel.isOpen()) {
+                this.leader.off();
                 this.stop();
             }
         }
@@ -138,24 +135,23 @@ final class LeaderWorker extends StoppableRunnable {
      * the acknowledgment arrives
      */
     private void sendEvent(TransactionEvent.PayloadRaw payload) {
-        this.writeBuffer.put( Constants.EVENT );
         TransactionEvent.write( this.writeBuffer, payload );
-        write(payload);
+        this.write(payload);
     }
 
     private void sendBatchComplete(BatchComplete.Payload payload) {
         BatchComplete.write( this.writeBuffer, payload );
-        write(payload);
+        this.write(payload);
     }
 
     private void sendBatchCommitAck(BatchCommitAck.Payload payload) {
         BatchCommitAck.write( writeBuffer, payload );
-        write(payload);
+        this.write(payload);
     }
 
     private void sendTransactionAbort(TransactionAbort.Payload payload) {
         TransactionAbort.write( writeBuffer, payload );
-        write(payload);
+        this.write(payload);
     }
 
     public void queueMessage(Object message) {

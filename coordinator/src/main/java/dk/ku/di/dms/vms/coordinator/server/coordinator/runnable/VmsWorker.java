@@ -24,7 +24,9 @@ import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.*;
 
 import static dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.VmsWorker.State.*;
@@ -52,7 +54,7 @@ public final class VmsWorker extends StoppableRunnable {
 
     private final ByteBuffer readBuffer;
 
-    private final BlockingDeque<ByteBuffer> writeBufferPool;
+    private final Deque<ByteBuffer> writeBufferPool;
 
     /**
      * Queues to inform coordinator about an event
@@ -64,7 +66,9 @@ public final class VmsWorker extends StoppableRunnable {
     // DTs particular to this vms worker
     // private final BlockingDeque<TransactionEvent.PayloadRaw> transactionEventQueue;
 
-    private final BlockingDeque<Object> messageQueue;
+    private final Queue<TransactionEvent.PayloadRaw> transactionEventQueue;
+
+    private final Queue<Object> pendingMessages;
 
     // could be switched by a semaphore
     private final BlockingQueue<Byte> WRITE_SYNCHRONIZER = new ArrayBlockingQueue<>(1);
@@ -125,7 +129,7 @@ public final class VmsWorker extends StoppableRunnable {
         this.networkSendTimeout = networkSendTimeout;
 
         // initialize the write buffer
-        this.writeBufferPool = new LinkedBlockingDeque<>();
+        this.writeBufferPool = new ConcurrentLinkedDeque<>();
         // populate buffer pool
         this.writeBufferPool.addFirst( retrieveByteBuffer() );
         this.writeBufferPool.addFirst( retrieveByteBuffer() );
@@ -137,7 +141,8 @@ public final class VmsWorker extends StoppableRunnable {
         this.WRITE_SYNCHRONIZER.add(DUMB);
 
         // in
-        this.messageQueue = new LinkedBlockingDeque<>();
+        this.pendingMessages = new ConcurrentLinkedQueue<>();
+        this.transactionEventQueue = new ConcurrentLinkedQueue<>();
 
         // out - shared by many vms workers
         this.coordinatorQueue = coordinatorQueue;
@@ -230,55 +235,36 @@ public final class VmsWorker extends StoppableRunnable {
 
     private static final int MAX_SLEEP = 1000;
 
-    private static final boolean BLOCKING = true;
-
     /**
      * Event loop performs two tasks:
      * (a) get and process batch-tracking messages from coordinator
      * (b) process transaction input events
      */
+    @SuppressWarnings("BusyWait")
     private void eventLoop() {
         int pollTimeout = 1;
-        Object message;
-        List<Object> messages = new ArrayList<>(1024);
+        TransactionEvent.PayloadRaw payloadRaw;
         while (this.isRunning()){
             try {
-                if(BLOCKING){
-                    message = this.messageQueue.take();
+                payloadRaw = this.transactionEventQueue.poll();
+                if(payloadRaw == null){
+                    pollTimeout = Math.min(pollTimeout * 2, MAX_SLEEP);
+                    this.processPendingTasks();
+                    sleep(pollTimeout);
+                    continue;
+                }
+                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+
+                if(!this.transactionEventQueue.isEmpty()){
+                    do {
+                        this.transactionEvents.add(payloadRaw);
+                    } while ((payloadRaw = this.transactionEventQueue.poll()) != null);
+                    this.sendBatchOfEvents();
                 } else {
-                    message = this.messageQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
-                    if(message == null){
-                        pollTimeout = Math.min(pollTimeout * 2, MAX_SLEEP);
-                        this.processPendingWrites();
-                        continue;
-                    }
-                    pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+                    this.sendEvent(payloadRaw);
                 }
 
-                messages.add(message);
-                this.messageQueue.drainTo(messages);
-
-                for(Object message_ : messages) {
-                    // in order of usual recurrence
-                    switch (message_) {
-                        case TransactionEvent.PayloadRaw o -> this.transactionEvents.add(o);
-                        case BatchCommitCommand.Payload o -> this.sendBatchCommitCommand(o);
-                        case BatchCommitInfo.Payload o -> this.sendBatchCommitInfo(o);
-                        case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
-                        case String o -> this.sendConsumerSet(o);
-                        default ->
-                                LOGGER.log(WARNING, "Leader: VMS worker for " + this.consumerVms.identifier + " has unknown message type: " + message.getClass().getName());
-                    }
-                }
-
-                // clear messages for next round
-                messages.clear();
-
-                if(!this.transactionEvents.isEmpty()){
-                    this.sendBatchedEvents();
-                }
-
-                this.processPendingWrites();
+                this.processPendingTasks();
 
             } catch (InterruptedException e) {
                 LOGGER.log(ERROR, "Leader: VMS worker for "+this.consumerVms.identifier+" has been interrupted: "+e);
@@ -289,7 +275,13 @@ public final class VmsWorker extends StoppableRunnable {
         }
     }
 
-    private void processPendingWrites() {
+    private void processPendingTasks() {
+
+        Object msg;
+        while((msg = this.pendingMessages.poll()) != null){
+            this.sendMessage(msg);
+        }
+
         ByteBuffer bb = this.PENDING_WRITES_BUFFER.poll();
         if(bb != null){
             LOGGER.log(INFO, "Leader: Retrying sending failed buffer send");
@@ -301,7 +293,8 @@ public final class VmsWorker extends StoppableRunnable {
                 if(e instanceof IllegalStateException){
                     // probably comes from the class {@AsynchronousSocketChannelImpl}:
                     // "Writing not allowed due to timeout or cancellation"
-                    try { sleep(100); } catch (InterruptedException ignored) { }
+                    // stop thread since there is no way to write to this channel anymore
+                    this.stop();
                 }
 
                 if(this.WRITE_SYNCHRONIZER.isEmpty()){
@@ -313,10 +306,34 @@ public final class VmsWorker extends StoppableRunnable {
 
             }
         }
+
+    }
+
+    public void queueTransactionEvent(TransactionEvent.PayloadRaw payloadRaw) {
+        this.transactionEventQueue.offer(payloadRaw);
+    }
+
+    private void sendEvent(TransactionEvent.PayloadRaw payload) throws InterruptedException {
+        ByteBuffer writeBuffer = this.retrieveByteBuffer();
+        TransactionEvent.write( writeBuffer, payload );
+        writeBuffer.flip();
+        this.WRITE_SYNCHRONIZER.take();
+        this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
     }
 
     public void queueMessage(Object message) {
-        this.messageQueue.offerLast(message);
+        this.pendingMessages.offer(message);
+    }
+
+    private void sendMessage(Object message) {
+        switch (message) {
+            case BatchCommitCommand.Payload o -> this.sendBatchCommitCommand(o);
+            case BatchCommitInfo.Payload o -> this.sendBatchCommitInfo(o);
+            case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
+            case String o -> this.sendConsumerSet(o);
+            default ->
+                    LOGGER.log(WARNING, "Leader: VMS worker for " + this.consumerVms.identifier + " has unknown message type: " + message.getClass().getName());
+        }
     }
 
     private void sendTransactionAbort(TransactionAbort.Payload tidToAbort) {
@@ -329,11 +346,11 @@ public final class VmsWorker extends StoppableRunnable {
             LOGGER.log(WARNING,"Leader: Transaction abort sent to: " + this.consumerVms.identifier);
         } catch (InterruptedException e){
             LOGGER.log(ERROR,"Leader: Transaction abort write has failed:\n"+e.getMessage());
-            if(!channel.isOpen()){
+            if(!this.channel.isOpen()){
                 LOGGER.log(WARNING,"Leader: Channel with "+this.consumerVms.identifier+" is closed");
                 this.stop(); // no reason to continue the loop
             }
-            this.queueMessage(tidToAbort);
+            this.pendingMessages.add(tidToAbort);
         }
     }
 
@@ -344,14 +361,14 @@ public final class VmsWorker extends StoppableRunnable {
             writeBuffer.flip();
             this.WRITE_SYNCHRONIZER.take();
             this.channel.write(writeBuffer, this.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
-            LOGGER.log(INFO, "Leader: Batch commit command sent to: " + this.consumerVms.identifier);
+            LOGGER.log(INFO, "Leader: Batch ("+batchCommitCommand.batch()+") commit command sent to: " + this.consumerVms.identifier);
         } catch (Exception e){
-            LOGGER.log(ERROR,"Leader: Batch commit command write has failed:\n"+e.getMessage());
+            LOGGER.log(ERROR,"Leader: Batch ("+batchCommitCommand.batch()+") commit command write has failed:\n"+e.getMessage());
             if(!this.channel.isOpen()){
                 LOGGER.log(WARNING,"Leader: Channel with "+this.consumerVms.identifier+"is closed");
                 this.stop(); // no reason to continue the loop
             }
-            this.queueMessage(batchCommitCommand);
+            this.pendingMessages.add(batchCommitCommand);
             if(this.WRITE_SYNCHRONIZER.isEmpty()){
                 this.WRITE_SYNCHRONIZER.add(DUMB);
             }
@@ -380,19 +397,13 @@ public final class VmsWorker extends StoppableRunnable {
             }
         } catch (InterruptedException e){
             this.state = CONSUMER_SET_SENDING_FAILED;
-            if (channel.isOpen()) {
-                LOGGER.log(WARNING,"Write has failed but channel is open. Trying to write again to: " + consumerVms + " in a while");
-                // just queue again
-                this.messageQueue.add(vmsConsumerSet);
-            } else {
-                LOGGER.log(WARNING,"Write has failed and channel is closed: " + consumerVms);
-                this.stop(); // no reason to continue the loop
-            }
+            LOGGER.log(WARNING,"Write has failed", e);
+            this.stop(); // no reason to continue the loop
         } catch (IOException | BufferOverflowException e){
             this.state = CONSUMER_SET_SENDING_FAILED;
-            LOGGER.log(WARNING,"Write has failed and the VMS worker will undergo an unknown state: " + consumerVms);
+            LOGGER.log(WARNING,"Write has failed and the VMS worker will undergo an unknown state: " + consumerVms, e);
+            this.stop(); // no reason to continue the loop
         }
-
     }
 
     /**
@@ -518,7 +529,7 @@ public final class VmsWorker extends StoppableRunnable {
             this.WRITE_SYNCHRONIZER.take();
             this.channel.write(writeBuffer, this.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
         } catch (Exception e) {
-            this.queueMessage(batchCommitInfo);
+            this.pendingMessages.add(batchCommitInfo);
             if(this.WRITE_SYNCHRONIZER.isEmpty()){
                 this.WRITE_SYNCHRONIZER.add(DUMB);
             }
@@ -546,8 +557,7 @@ public final class VmsWorker extends StoppableRunnable {
     /**
      * While a write operation is in progress, it must wait for completion and then submit the next write.
      */
-    private void sendBatchedEvents(){
-        // this.transactionEventQueue.drainTo(this.transactionEvents);
+    private void sendBatchOfEvents(){
         int remaining = this.transactionEvents.size();
         int count = remaining;
         ByteBuffer writeBuffer;
@@ -570,7 +580,7 @@ public final class VmsWorker extends StoppableRunnable {
                 LOGGER.log(ERROR, "Leader: Error on submitting ["+count+"] events to "+this.consumerVms.identifier+":"+e);
                 // return events to the deque
                 while(!this.transactionEvents.isEmpty()) {
-                    if(this.messageQueue.offerFirst(this.transactionEvents.get(0))){
+                    if(this.transactionEventQueue.offer(this.transactionEvents.get(0))){
                         this.transactionEvents.remove(0);
                     }
                 }
@@ -587,7 +597,7 @@ public final class VmsWorker extends StoppableRunnable {
         this.transactionEvents.clear();
     }
 
-    private final BlockingDeque<ByteBuffer> PENDING_WRITES_BUFFER = new LinkedBlockingDeque<>();
+    private final Deque<ByteBuffer> PENDING_WRITES_BUFFER = new ConcurrentLinkedDeque<>();
 
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
 
