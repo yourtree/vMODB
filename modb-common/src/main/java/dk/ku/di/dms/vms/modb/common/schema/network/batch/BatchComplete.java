@@ -14,13 +14,6 @@ import java.nio.charset.StandardCharsets;
  */
 public final class BatchComplete {
 
-    public static void write(ByteBuffer buffer, long batch, VmsNode vmsIdentifier){
-        buffer.put(Constants.BATCH_COMPLETE);
-        buffer.putLong( batch );
-        buffer.putInt( vmsIdentifier.identifier.length() );
-        buffer.put( vmsIdentifier.identifier.getBytes(StandardCharsets.UTF_8) );
-    }
-
     public static Payload read(ByteBuffer buffer){
         long batch = buffer.getLong();
         int size = buffer.getInt();

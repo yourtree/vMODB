@@ -686,7 +686,10 @@ public final class VmsEventHandler extends StoppableRunnable {
             this.buffer.position(2);
 
             switch (nodeTypeIdentifier) {
-                case (Presentation.SERVER_TYPE) -> this.processServerPresentation();
+                case (Presentation.SERVER_TYPE) -> {
+                    NetworkUtils.configureForFastAck(this.channel);
+                    this.processServerPresentation();
+                }
                 case (Presentation.VMS_TYPE) -> this.processVmsPresentation();
                 default -> this.processUnknownNodeType(nodeTypeIdentifier);
             }
@@ -976,7 +979,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                         this.processBatchOfEvents(this.readBuffer);
                     }
                     case (BATCH_COMMIT_INFO) -> {
-                        if(this.readBuffer.remaining() < BatchCommitInfo.SIZE){
+                        if(this.readBuffer.remaining() < (BatchCommitInfo.SIZE - 1)){
                             this.fetchMoreBytes(startPos);
                             return;
                         }
@@ -987,7 +990,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                         this.processNewBatchInfo(bPayload);
                     }
                     case (BATCH_COMMIT_COMMAND) -> {
-                        if(this.readBuffer.remaining() < BatchCommitCommand.SIZE){
+                        if(this.readBuffer.remaining() < (BatchCommitCommand.SIZE - 1)){
                             this.fetchMoreBytes(startPos);
                             return;
                         }
@@ -997,7 +1000,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                         this.processNewBatchCommand(payload);
                     }
                     case (TX_ABORT) -> {
-                        if(this.readBuffer.remaining() < TransactionAbort.SIZE){
+                        if(this.readBuffer.remaining() < (TransactionAbort.SIZE - 1)){
                             this.fetchMoreBytes(startPos);
                             return;
                         }
@@ -1006,7 +1009,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                         vmsInternalChannels.transactionAbortInputQueue().add(txAbortPayload);
                     }
                     case (BATCH_ABORT_REQUEST) -> {
-                        if(this.readBuffer.remaining() < BatchAbortRequest.SIZE){
+                        if(this.readBuffer.remaining() < (BatchAbortRequest.SIZE - 1)){
                             this.fetchMoreBytes(startPos);
                             return;
                         }

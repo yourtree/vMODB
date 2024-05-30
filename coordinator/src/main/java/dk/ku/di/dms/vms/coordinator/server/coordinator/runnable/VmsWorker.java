@@ -480,7 +480,7 @@ public final class VmsWorker extends StoppableRunnable {
                 channel.read( readBuffer, startPos, this );
                 return;
             } catch (Exception e){
-                LOGGER.log(ERROR, "Leader: Unknown error captured \n"+e);
+                LOGGER.log(ERROR, "Leader: Unknown error captured:"+e.getMessage(), e);
                 e.printStackTrace(System.out);
                 return;
             }

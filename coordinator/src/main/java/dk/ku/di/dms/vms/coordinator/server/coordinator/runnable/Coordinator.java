@@ -917,7 +917,7 @@ public final class Coordinator extends StoppableRunnable {
                             // it must check the batch context match to see whether it is completed
                             if(batchContext.batchOffset == this.batchOffsetPendingCommit){
                                 // ack driver earlier
-                                this.batchSignalQueue.put(batchContext.lastTid);
+                                this.batchSignalQueue.offer(batchContext.lastTid);
                                 this.sendCommitRequestToVMSs(batchContext);
                                 this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
                             } else {

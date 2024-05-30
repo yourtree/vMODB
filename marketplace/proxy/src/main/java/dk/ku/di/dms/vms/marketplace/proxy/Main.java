@@ -29,8 +29,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
-import static java.lang.System.Logger.Level.ERROR;
-import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.*;
 import static java.lang.Thread.sleep;
 
 /**
@@ -102,7 +101,7 @@ public final class Main {
             LOGGER.log(INFO,"Proxy: Polling for new batch completion signal started");
             for(;;) {
                 long lastTid = signalQueue.take();
-                LOGGER.log(INFO,"Proxy: New batch completion signal received. Last TID executed: "+lastTid);
+                LOGGER.log(DEBUG,"Proxy: New batch completion signal received. Last TID executed: "+lastTid);
                 // upon a batch completion, send result to driver
                 try {
                     HttpRequest httpReq = HttpRequest.newBuilder()
