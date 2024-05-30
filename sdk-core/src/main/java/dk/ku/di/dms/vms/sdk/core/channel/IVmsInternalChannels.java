@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
 
-import java.util.concurrent.BlockingQueue;
+import java.util.Queue;
 
 /**
  * In a virtual microservice paradigm, internal components exchange a lot of internal events.
@@ -31,13 +31,13 @@ public interface IVmsInternalChannels {
     /**
      * It represents events ready for scheduler consumption
      */
-    BlockingQueue<InboundEvent> transactionInputQueue();
+    Queue<InboundEvent> transactionInputQueue();
 
     /**
      *  It represents events ready for delivery
      *  The payload handler thread consumes from (and never inserts into!) this queue
      */
-    BlockingQueue<IVmsTransactionResult> transactionOutputQueue();
+    Queue<IVmsTransactionResult> transactionOutputQueue();
 
     /**
      * BATCH COMMIT, ABORT EVENTS
@@ -48,10 +48,10 @@ public interface IVmsInternalChannels {
 
     // abort a specific transaction from the batch and restart state from there
     // should maintain an MV scheme to avoid rolling back to the last committed state
-    BlockingQueue<TransactionAbort.Payload> transactionAbortInputQueue();
+    Queue<TransactionAbort.Payload> transactionAbortInputQueue();
 
     //
-    BlockingQueue<TransactionAbort.Payload> transactionAbortOutputQueue();
+    Queue<TransactionAbort.Payload> transactionAbortOutputQueue();
 
     /*
      *  This is sent by the leader by all non-terminal VMSs involved in the last batch commit

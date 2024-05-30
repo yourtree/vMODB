@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
-import dk.ku.di.dms.vms.sdk.core.channel.VmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.example.InputEventExample1;
 import dk.ku.di.dms.vms.sdk.core.example.MicroserviceExample2;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;

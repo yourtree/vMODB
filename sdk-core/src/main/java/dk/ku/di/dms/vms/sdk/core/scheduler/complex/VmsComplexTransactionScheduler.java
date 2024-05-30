@@ -302,7 +302,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
         }
          */
 
-        this.vmsChannels.transactionInputQueue().drainTo(this.inputEvents);
+        // this.vmsChannels.transactionInputQueue().drainTo(this.inputEvents);
 
         for(InboundEvent input : this.inputEvents){
             this.processNewEvent(input);

@@ -28,10 +28,10 @@ import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.TimeUnit;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static java.lang.System.Logger.Level.*;
+import static java.lang.Thread.sleep;
 
 /**
  * This default event handler connects direct to the coordinator
@@ -286,9 +286,10 @@ public final class VmsEventHandler extends StoppableRunnable {
             // that will jeopardize the batch process
             this.moveBatchIfNecessary();
             try {
-                txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll(pollTimeout, TimeUnit.MILLISECONDS);
+                txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll();
                 if (txResult_ == null) {
                     pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
+                    sleep(pollTimeout);
                     continue;
                 }
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
@@ -296,8 +297,9 @@ public final class VmsEventHandler extends StoppableRunnable {
                 LOGGER.log(DEBUG,this.me.identifier+": New transaction result in event handler. TID = "+txResult_.tid());
 
                 // it is better to get all the results of a given transaction instead of one by one.
-                transactionResults.add(txResult_);
-                this.vmsInternalChannels.transactionOutputQueue().drainTo(transactionResults);
+                do {
+                    transactionResults.add(txResult_);
+                } while((txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll())!=null);
 
                 for(IVmsTransactionResult txResult : transactionResults) {
                     // assuming is a simple transaction result, not complex, so no need to iterate
@@ -350,8 +352,8 @@ public final class VmsEventHandler extends StoppableRunnable {
      * the current code is not incorporating that
      */
     private void moveBatchIfNecessary(){
-        // update if current batch is done AND the next batch has already arrived
-        if(this.currentBatch.isCommitted() && this.batchToNextBatchMap.containsKey( this.currentBatch.batch )){
+        // update if current batch is completed AND the next batch has already arrived
+        if(this.currentBatch.isCompleted() && this.batchToNextBatchMap.containsKey( this.currentBatch.batch )){
             long nextBatchOffset = this.batchToNextBatchMap.get( this.currentBatch.batch );
             this.currentBatch = this.batchContextMap.get(nextBatchOffset);
         }
@@ -582,9 +584,9 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
 
         private void processSingleEvent(ByteBuffer readBuffer) {
-            LOGGER.log(DEBUG,me.identifier+": 1 event received from "+node.identifier);
             try {
                 TransactionEvent.Payload payload = TransactionEvent.read(readBuffer);
+                LOGGER.log(DEBUG,me.identifier+": 1 event received from "+node.identifier+"\n"+payload);
                 // send to scheduler
                 if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
                     InboundEvent inboundEvent = buildInboundEvent(payload);
@@ -961,14 +963,6 @@ public final class VmsEventHandler extends StoppableRunnable {
 
             try {
                 switch (messageType) {
-                    case (EVENT) -> {
-                        int bufferSize = this.getBufferSize();
-                        if(this.readBuffer.remaining() < bufferSize){
-                            this.fetchMoreBytes(startPos);
-                            return;
-                        }
-                        this.processSingleEvent(readBuffer);
-                    }
                     //noinspection DuplicatedCode
                     case (BATCH_OF_EVENTS) -> {
                         int bufferSize = this.getBufferSize();
@@ -977,6 +971,14 @@ public final class VmsEventHandler extends StoppableRunnable {
                             return;
                         }
                         this.processBatchOfEvents(this.readBuffer);
+                    }
+                    case (EVENT) -> {
+                        int bufferSize = this.getBufferSize();
+                        if(this.readBuffer.remaining() < bufferSize){
+                            this.fetchMoreBytes(startPos);
+                            return;
+                        }
+                        this.processSingleEvent(readBuffer);
                     }
                     case (BATCH_COMMIT_INFO) -> {
                         if(this.readBuffer.remaining() < (BatchCommitInfo.SIZE - 1)){
@@ -1024,6 +1026,8 @@ public final class VmsEventHandler extends StoppableRunnable {
                             Map<String, List<IdentifiableNode>> receivedConsumerVms = ConsumerSet.read(this.readBuffer, serdesProxy);
                             if (!receivedConsumerVms.isEmpty()) {
                                 connectToReceivedConsumerSet(receivedConsumerVms);
+                            } else {
+                                LOGGER.log(WARNING, me.identifier + ": Consumer set is empty");
                             }
                         } catch (IOException e) {
                             LOGGER.log(ERROR, me.identifier + ": IOException while reading consumer set: " + e);
@@ -1037,11 +1041,9 @@ public final class VmsEventHandler extends StoppableRunnable {
                 }
             } catch (Exception e){
                 if(e instanceof BufferUnderflowException) {
-                    LOGGER.log(ERROR, "Leader: Buffer underflow caught\n"+e);
-                    // this is for cases other than the batch of events
-                    // this.fetchMoreBytes(startPos);
+                    LOGGER.log(ERROR, "Leader: Buffer underflow caught\n"+e.getMessage(), e);
                 } else {
-                    LOGGER.log(ERROR, "Leader: Unknown error caught\n"+e);
+                    LOGGER.log(ERROR, "Leader: Unknown error caught\n"+e.getMessage(), e);
                 }
                 e.printStackTrace(System.out);
             }
@@ -1125,8 +1127,8 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         private void processSingleEvent(ByteBuffer readBuffer) {
             try {
-                LOGGER.log(WARNING,me.identifier + ": 1 event received from the leader");
                 TransactionEvent.Payload payload = TransactionEvent.read(readBuffer);
+                LOGGER.log(DEBUG,me.identifier + ": 1 event received from the leader \n"+payload);
                 // send to scheduler.... drop if the event cannot be processed (not an input event in this vms)
                 if (vmsMetadata.queueToEventMap().containsKey(payload.event())) {
                     InboundEvent event = buildInboundEvent(payload);

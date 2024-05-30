@@ -198,7 +198,7 @@ public class EventHandlerTest {
         InboundEvent event = new InboundEvent(1,0,1,"in", InputEventExample1.class, eventExample);
         channelForAddingInput.transactionInputQueue().add(event);
 
-        var input1ForVms2 = channelForAddingInput.transactionOutputQueue().poll(5, TimeUnit.SECONDS);
+        var input1ForVms2 = channelForAddingInput.transactionOutputQueue().poll();
         assert input1ForVms2 != null;
 
         for(var res : input1ForVms2.getOutboundEventResults()){
@@ -208,7 +208,7 @@ public class EventHandlerTest {
         }
 
         // subscribe to output event out3
-        IVmsTransactionResult result = channelForGettingOutput.transactionOutputQueue().poll(5, TimeUnit.SECONDS);
+        IVmsTransactionResult result = channelForGettingOutput.transactionOutputQueue().poll();
 
         assert result != null && result.getOutboundEventResults() != null && !result.getOutboundEventResults().isEmpty();
 

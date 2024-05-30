@@ -128,14 +128,15 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 }
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
 
-                if(!this.transactionEventQueue.isEmpty()){
+                // FIXME sending single event is buggy
+//                if(!this.transactionEventQueue.isEmpty()){
                     do {
                         this.transactionEvents.add(payloadRaw);
                     } while ((payloadRaw = this.transactionEventQueue.poll()) != null);
                     this.sendBatchOfEvents();
-                } else {
-                    this.sendEvent(payloadRaw);
-                }
+//                } else {
+//                    this.sendEvent(payloadRaw);
+//                }
 
                 this.processPendingWrites();
 

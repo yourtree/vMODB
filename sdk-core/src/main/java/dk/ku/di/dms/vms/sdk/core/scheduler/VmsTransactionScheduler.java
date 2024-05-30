@@ -17,11 +17,11 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.System.Logger.Level.*;
+import static java.lang.Thread.sleep;
 
 /**
  * A transaction scheduler aware of partitioned and parallel tasks.
@@ -76,6 +76,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                                                 ITransactionalHandler transactionalHandler,
                                                 ICheckpointEventHandler checkpointHandler,
                                                 int vmsThreadPoolSize){
+        LOGGER.log(INFO, "Building VmsTransactionScheduler with thread pool size of "+ vmsThreadPoolSize);
         return new VmsTransactionScheduler(
                 vmsIdentifier,
                 Executors.newWorkStealingPool(vmsThreadPoolSize),
@@ -108,7 +109,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         this.transactionTaskMap.put( 0L, vmsTransactionTaskBuilder.buildFinished(0) );
         this.lastTidToTidMap = new HashMap<>();
 
-        this.localInputEvents = new ArrayList<>(50);
+        this.localInputEvents = new ArrayList<>(100000);
 
         this.checkpointHandler = checkpointHandler;
     }
@@ -127,9 +128,10 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             try{
                 this.checkForNewEvents();
                 this.executeReadyTasks();
-                if( this.checkpointHandler.mustCheckpoint() ) {
-                    this.checkpointHandler.checkpoint();
-                }
+                // FIXME hiding for now
+//                if( this.checkpointHandler.mustCheckpoint() ) {
+//                    this.checkpointHandler.checkpoint();
+//                }
             } catch(Exception e){
                 LOGGER.log(WARNING, this.vmsIdentifier+": Error on scheduler loop: "+e.getCause().getMessage());
             }
@@ -293,17 +295,17 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     }
 
     private static final int MAX_SLEEP = 1000;
+    InboundEvent e = null;
 
     private void checkForNewEvents() throws InterruptedException {
 
         if(this.vmsChannels.transactionInputQueue().isEmpty()){
             if(this.BLOCKING) {
-                InboundEvent e = null;
                 int pollTimeout = 1;
-                while(e == null) {
+                while((e = this.vmsChannels.transactionInputQueue().poll()) == null) {
                     pollTimeout = Math.min(pollTimeout * 2, MAX_SLEEP);
                     LOGGER.log(DEBUG,this.vmsIdentifier+": Transaction scheduler going to sleep for "+pollTimeout+" until new event arrives");
-                    e = this.vmsChannels.transactionInputQueue().poll(pollTimeout, TimeUnit.MILLISECONDS);
+                    sleep(pollTimeout);
                 }
                 this.localInputEvents.add(e);
                 // disable block
@@ -313,7 +315,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             }
         }
 
-        this.vmsChannels.transactionInputQueue().drainTo(this.localInputEvents);
+        while((e = this.vmsChannels.transactionInputQueue().poll()) != null) {
+            this.localInputEvents.add(e);
+        }
 
         for (InboundEvent input : this.localInputEvents) {
             this.processNewEvent(input);
@@ -321,7 +325,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         // clear previous round
         this.localInputEvents.clear();
-
     }
 
     private void processNewEvent(InboundEvent inboundEvent) {

@@ -10,10 +10,8 @@ import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.CompletionHandler;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.TimeUnit;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static java.lang.System.Logger.Level.*;
 
@@ -33,7 +31,7 @@ final class LeaderWorker extends StoppableRunnable {
     
     private final ByteBuffer writeBuffer;
 
-    private final BlockingQueue<Object> leaderWorkerQueue;
+    private final Queue<Object> leaderWorkerQueue;
 
     private final VmsNode vmsNode;
 
@@ -45,80 +43,59 @@ final class LeaderWorker extends StoppableRunnable {
         this.leader = leader;
         this.channel = channel;
         this.writeBuffer = writeBuffer;
-        this.leaderWorkerQueue = new LinkedBlockingDeque<>();
+        this.leaderWorkerQueue = new ConcurrentLinkedQueue<>();
     }
 
-    private static final boolean BLOCKING = true;
-
-    private static final int MAX_TIMEOUT = 5000;
+    private static final int MAX_TIMEOUT = 1000;
 
     @Override
     public void run() {
         LOGGER.log(INFO, this.vmsNode.identifier+": Leader worker started!");
-        int pollTimeout = 50;
-        Object msg;
+        int pollTimeout = 1;
+        Object message = null;
         while (this.isRunning()){
             try {
-                if(BLOCKING){
-                    msg = this.leaderWorkerQueue.take();
-                } else {
-                    msg = this.leaderWorkerQueue.poll(pollTimeout, TimeUnit.MILLISECONDS);
-                    if (msg == null) {
-                        pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
-                        continue;
-                    }
-                    pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+                message = this.leaderWorkerQueue.poll();
+                if (message == null) {
+                    pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
+                    continue;
+                }
+                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+
+                LOGGER.log(DEBUG, this.vmsNode.identifier+": Leader worker will send message type: "+ message.getClass().getName());
+
+                switch (message) {
+                    case BatchComplete.Payload o -> this.sendBatchComplete(o);
+                    case BatchCommitAck.Payload o -> this.sendBatchCommitAck(o);
+                    case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
+                    case TransactionEvent.PayloadRaw o -> this.sendEvent(o);
+                    default ->
+                            LOGGER.log(WARNING, this.vmsNode.identifier + ": Leader worker do not recognize message type: " + message.getClass().getName());
                 }
 
-                LOGGER.log(DEBUG, this.vmsNode.identifier+": Leader worker will send message type: "+ msg.getClass().getName());
-                try {
-                    switch (msg) {
-                        case BatchComplete.Payload o -> this.sendBatchComplete(o);
-                        case BatchCommitAck.Payload o -> this.sendBatchCommitAck(o);
-                        case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
-                        case TransactionEvent.PayloadRaw o -> this.sendEvent(o);
-                        default ->
-                                LOGGER.log(WARNING, this.vmsNode.identifier + ": Leader worker do not recognize message type: " + msg.getClass().getName());
-                    }
-                } catch (Exception e){
-                    LOGGER.log(ERROR, this.vmsNode.identifier+": Error on processing message. \n Payload: \n " +e + "\n Error message \n"+ e.getMessage());
-                    this.queueMessage(msg);
-                }
             } catch (Exception e) {
                 LOGGER.log(ERROR, this.vmsNode.identifier+": Error on taking message from worker queue: "+e.getCause().getMessage());
+                if(message != null){
+                    this.queueMessage(message);
+                }
             }
         }
     }
 
-    private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
-
-    private final class WriteCompletionHandler implements CompletionHandler<Integer, Integer> {
-        @Override
-        public void completed(Integer result, Integer remaining) {
-            int newRemaining = remaining - result;
-            if(newRemaining > 0) {
-                LOGGER.log(WARNING, vmsNode.identifier+": Leader worker will send remaining bytes: "+newRemaining);
-                channel.write(writeBuffer, newRemaining, this);
-            } else {
-                writeBuffer.clear();
-            }
-        }
-
-        @Override
-        public void failed(Throwable exc, Integer remaining) {
-            LOGGER.log(ERROR, vmsNode.identifier+": Leader worker found an error: \n"+exc);
-            writeBuffer.clear();
-        }
+    public void queueMessage(Object message) {
+        this.leaderWorkerQueue.offer(message);
     }
 
-    private void write(Object object) {
-        this.writeBuffer.flip();
-        int remaining = this.writeBuffer.limit();
+    private void write(Object message) {
         try {
-            this.channel.write(this.writeBuffer, remaining, this.writeCompletionHandler);
+            this.writeBuffer.flip();
+            this.channel.write(this.writeBuffer).get();
+            this.writeBuffer.clear();
         } catch (Exception e){
             // queue to try insert again
-            this.queueMessage(object);
+            LOGGER.log(ERROR, "Error on writing message to worker queue: "+e.getCause().getMessage(), e);
+            e.printStackTrace(System.out);
+            this.queueMessage(message);
             this.writeBuffer.clear();
             if(!this.channel.isOpen()) {
                 this.leader.off();
@@ -152,10 +129,6 @@ final class LeaderWorker extends StoppableRunnable {
     private void sendTransactionAbort(TransactionAbort.Payload payload) {
         TransactionAbort.write( writeBuffer, payload );
         this.write(payload);
-    }
-
-    public void queueMessage(Object message) {
-        this.leaderWorkerQueue.add(message);
     }
 
 }

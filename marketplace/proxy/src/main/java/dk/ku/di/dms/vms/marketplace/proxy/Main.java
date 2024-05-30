@@ -213,10 +213,9 @@ public final class Main {
         if(transactions.contains(UPDATE_PRODUCT)) {
             TransactionDAG updateProductDag = TransactionBootstrap.name(UPDATE_PRODUCT)
                     .input("a", "product", UPDATE_PRODUCT)
-                    .terminal("b", "stock", "a")
-                    .terminal("c", "cart", "a")
-                    // omit below if you want to skip batch commit info
-//                .terminal("b", "product", "a")
+//                    .terminal("b", "stock", "a")
+//                    .terminal("c", "cart", "a")
+                .terminal("b", "product", "a")
                     .build();
             transactionMap.put(updateProductDag.name, updateProductDag);
         }

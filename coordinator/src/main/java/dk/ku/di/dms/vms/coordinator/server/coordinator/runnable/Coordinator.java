@@ -768,8 +768,10 @@ public final class Coordinator extends StoppableRunnable {
             // this way, we need to send in this event the precedence info for all downstream VMSs of this event
             // having this info avoids having to contact all internal/terminal nodes to inform the precedence of events
             List<VmsNode> vmsList = this.vmsIdentifiersPerDAG.get( transactionDAG.name );
-            Map<String, Long> previousBatchPerVms = vmsList.stream()
-                    .collect(Collectors.toMap( VmsNode::getIdentifier, VmsNode::getLastTidOfBatch) );
+            Map<String, Long> previousBatchPerVms = new HashMap<>(vmsList.size());
+            for(var vms : vmsList){
+                previousBatchPerVms.put(vms.getIdentifier(), vms.getLastTidOfBatch());
+            }
             String precedenceMapStr = this.serdesProxy.serializeMap(previousBatchPerVms);
 
             // write. think about failures/atomicity later
@@ -793,6 +795,8 @@ public final class Coordinator extends StoppableRunnable {
                 vms_.lastTidOfBatch = tid_;
                 this.updateVmsBatchAndPrecedenceIfNecessary(vms_);
                 vms_.numberOfTIDsCurrentBatch++;
+                // FIXME THIS MUST BE REMOVED. ONLY FOR TESTING SCALABILITY OF VMS!!!
+                break;
             }
 
             // add terminal to the set... so cannot be immutable when the batch context is created...
@@ -916,7 +920,7 @@ public final class Coordinator extends StoppableRunnable {
                             // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes,
                             // it must check the batch context match to see whether it is completed
                             if(batchContext.batchOffset == this.batchOffsetPendingCommit){
-                                // ack driver earlier
+                                // force ack batch thread to wake up
                                 this.batchSignalQueue.offer(batchContext.lastTid);
                                 this.sendCommitRequestToVMSs(batchContext);
                                 this.batchOffsetPendingCommit = batchContext.batchOffset + 1;

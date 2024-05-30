@@ -220,7 +220,7 @@ public final class VmsWorker extends StoppableRunnable {
 
     private boolean initSimpleConnection() {
         // only connect. the presentation has already been sent
-        LOGGER.log(INFO, Thread.currentThread().getName()+": Attempting additional connection to to VMS: " + this.consumerVms.identifier);
+        LOGGER.log(DEBUG, Thread.currentThread().getName()+": Attempting additional connection to to VMS: " + this.consumerVms.identifier);
         try {
             this.connect();
             ByteBuffer writeBuffer = this.retrieveByteBuffer();
@@ -255,14 +255,15 @@ public final class VmsWorker extends StoppableRunnable {
                 }
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
 
-                if(!this.transactionEventQueue.isEmpty()){
+                // FIXME sending single event is buggy
+//                if(!this.transactionEventQueue.isEmpty()){
                     do {
                         this.transactionEvents.add(payloadRaw);
                     } while ((payloadRaw = this.transactionEventQueue.poll()) != null);
                     this.sendBatchOfEvents();
-                } else {
-                    this.sendEvent(payloadRaw);
-                }
+//                } else {
+//                    this.sendEvent(payloadRaw);
+//                }
 
                 this.processPendingTasks();
 

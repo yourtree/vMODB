@@ -66,6 +66,10 @@ public final class BatchContext {
         return this.status == BATCH_COMMITTED;
     }
 
+    public boolean isCompleted(){
+        return this.status > 0;
+    }
+
     public void setStatus(int status){
         this.status = status;
     }
