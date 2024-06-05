@@ -49,7 +49,6 @@ public final class Main {
         } catch (Exception e){
             throw new RuntimeException(e);
         }
-
     }
 
     private static class ProductHttpHandler implements HttpHandler {
@@ -89,11 +88,10 @@ public final class Main {
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(200, 0);
                         outputStream.write( entity.toString().getBytes(StandardCharsets.UTF_8) );
-                        exchange.close();
+                        outputStream.close();
                     } catch(RuntimeException e) {
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(404, 0);
-                        outputStream.flush();
                         outputStream.close();
                     }
                     break;
@@ -111,14 +109,13 @@ public final class Main {
 
                     // response
                     exchange.sendResponseHeaders(200, 0);
-                    exchange.close();
+                    exchange.getResponseBody().close();
                     break;
                 }
                 default : {
                     // failed response
                     OutputStream outputStream = exchange.getResponseBody();
                     exchange.sendResponseHeaders(404, 0);
-                    outputStream.flush();
                     outputStream.close();
                 }
             }
