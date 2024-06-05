@@ -17,7 +17,10 @@ public final class TransactionEvent {
 
     public static void write(ByteBuffer buffer, PayloadRaw payload){
         buffer.put(Constants.EVENT);
-        buffer.putInt(payload.totalSize());
+        // since the original {@PayloadRaw} goes into a batch,
+        // it does not take into account the event type and the size of the payload correctly
+        // for individual events, both must be included in the total size
+        buffer.putInt(payload.totalSize() + 1 + Integer.BYTES);
         writeWithinBatch(buffer, payload);
     }
 

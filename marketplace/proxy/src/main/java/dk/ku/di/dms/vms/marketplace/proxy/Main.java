@@ -9,6 +9,7 @@ import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
+import dk.ku.di.dms.vms.marketplace.proxy.http.HttpServerBuilder;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
@@ -19,17 +20,14 @@ import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
-import static java.lang.System.Logger.Level.*;
+import static java.lang.System.Logger.Level.ERROR;
+import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
 /**
@@ -37,29 +35,24 @@ import static java.lang.Thread.sleep;
  * Via the proxy, we configure the transactional DAGs and
  * other important configuration properties of the system.
  */
-@SuppressWarnings("InfiniteLoopStatement")
 public final class Main {
 
     private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
-
-    private static final int NUM_CPUS = Runtime.getRuntime().availableProcessors();
-
-    private static final int STARTING_TID = 1;
-    private static final int STARTING_BATCH_ID = 1;
-
-    private static final int SLEEP = 1000;
-
-    // private static final BlockingQueue<TransactionInput> TRANSACTION_INPUTS = new LinkedBlockingDeque<>();
 
     public static void main(String[] ignoredArgs) throws IOException, InterruptedException {
         Properties properties = ConfigUtils.loadProperties();
         Coordinator coordinator = loadCoordinator(properties);
         initHttpServer(properties, coordinator);
-        ackBatchCompletionLoop(properties, coordinator.getBatchSignalQueue());
+    }
+
+    private static void initHttpServer(Properties properties, Coordinator coordinator) throws IOException, InterruptedException {
+        waitForAllStarterVMSs(coordinator);
+        HttpServerBuilder.build(properties, coordinator);
     }
 
     @SuppressWarnings("BusyWait")
     private static void waitForAllStarterVMSs(Coordinator coordinator) throws InterruptedException {
+        final int SLEEP = 1000;
         var starterVMSs = coordinator.getStarterVMSs();
         int starterSize = starterVMSs.size();
         do {
@@ -68,134 +61,7 @@ public final class Main {
             LOGGER.log(INFO, "Proxy: Waiting for all starter VMSs to come online. Sleeping for "+SLEEP+" ms...");
         } while (true);
 
-        LOGGER.log(INFO,"Proxy: All starter VMSs have connected to the coordinator \nProxy: Initializing the HTTP Server to receive transaction inputs...");
-    }
-
-    private static void initHttpServer(Properties properties, Coordinator coordinator) throws IOException, InterruptedException {
-
-        waitForAllStarterVMSs(coordinator);
-
-        int http_port = Integer.parseInt( properties.getProperty("http_port") );
-        int http_thread_pool_size = Integer.parseInt( properties.getProperty("http_thread_pool_size") );
-        int backlog = Integer.parseInt( properties.getProperty("backlog") );
-
-        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", http_port), backlog);
-        if(http_thread_pool_size > 0) {
-            httpServer.setExecutor(Executors.newFixedThreadPool(http_thread_pool_size));
-        } else {
-            // do not use cached thread pool here
-            httpServer.setExecutor(Executors.newWorkStealingPool(NUM_CPUS));
-        }
-        httpServer.createContext("/", new ProxyHttpHandler(coordinator));
-        httpServer.start();
-    }
-
-    private static void ackBatchCompletionLoop(Properties properties, BlockingQueue<Long> signalQueue) throws InterruptedException {
-
-        boolean driverAlive = Boolean.parseBoolean(properties.getProperty("driver_alive"));
-        if(!driverAlive) { return; }
-        String driverUrl = properties.getProperty("driver_url");
-
-        long initTid = STARTING_TID;
-        try (HttpClient httpClient = HttpClient.newHttpClient()) {
-            LOGGER.log(INFO,"Proxy: Polling for new batch completion signal started");
-            for(;;) {
-                long lastTid = signalQueue.take();
-                LOGGER.log(DEBUG,"Proxy: New batch completion signal received. Last TID executed: "+lastTid);
-                // upon a batch completion, send result to driver
-                try {
-                    HttpRequest httpReq = HttpRequest.newBuilder()
-                            .uri(URI.create(driverUrl))
-                            .header("Content-Type", "application/text")
-                            .version(HttpClient.Version.HTTP_2)
-                            .header("keep-alive", "true")
-                            .POST(HttpRequest.BodyPublishers.ofString(initTid+"-"+lastTid))
-                            .build();
-                    httpClient.send(httpReq, HttpResponse.BodyHandlers.discarding());
-                    initTid = lastTid + 1;
-                } catch (Exception e) {
-                    LOGGER.log(ERROR,"Proxy: Error while sending HTTP request: \n" +
-                            (e.getStackTrace().length > 0 ? e.getStackTrace()[0] : e));
-                }
-            }
-        }
-    }
-
-    private static class ProxyHttpHandler implements HttpHandler {
-
-        private final Coordinator coordinator;
-
-        public ProxyHttpHandler(Coordinator coordinator){
-            this.coordinator = coordinator;
-        }
-
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            String payload = new String( exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            String[] uriSplit = exchange.getRequestURI().toString().split("/");
-            switch(uriSplit[1]){
-                case "cart": {
-                    if(exchange.getRequestMethod().equalsIgnoreCase("POST")){
-                        TransactionInput.Event eventPayload = new TransactionInput.Event(CUSTOMER_CHECKOUT, payload);
-                        TransactionInput txInput = new TransactionInput(CUSTOMER_CHECKOUT, eventPayload);
-                        if(this.coordinator.queueTransactionInput(txInput))
-                            break;
-                    }
-                    reportError("cart", exchange);
-                    return;
-                }
-                case "product" : {
-                    switch (exchange.getRequestMethod()) {
-                        // price update
-                        case "PATCH": {
-                            TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRICE, payload);
-                            TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);
-                            if(this.coordinator.queueTransactionInput(txInput))
-                                break;
-                        }
-                        // product update
-                        case "PUT": {
-                            TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRODUCT, payload);
-                            TransactionInput txInput = new TransactionInput(UPDATE_PRODUCT, eventPayload);
-                            if(this.coordinator.queueTransactionInput(txInput))
-                                break;
-                        }
-                        default: {
-                            reportError("product", exchange);
-                            return;
-                        }
-                    }
-                    break;
-                }
-                case "shipment" : {
-                    if(exchange.getRequestMethod().equalsIgnoreCase("PATCH")){
-                        TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_DELIVERY, payload);
-                        TransactionInput txInput = new TransactionInput(UPDATE_DELIVERY, eventPayload);
-                        if(this.coordinator.queueTransactionInput(txInput))
-                            break;
-                    }
-                    reportError("shipment", exchange);
-                    return;
-                }
-                default : {
-                    reportError("", exchange);
-                    return;
-                }
-            }
-            endExchange(exchange, 200);
-        }
-
-        private static void reportError(String service, HttpExchange exchange) throws IOException {
-            LOGGER.log(ERROR,"Proxy: Unsupported "+service+" HTTP method: " + exchange.getRequestMethod());
-            endExchange(exchange, 500);
-        }
-
-        private static void endExchange(HttpExchange exchange, int rCode) throws IOException {
-            OutputStream outputStream = exchange.getResponseBody();
-            exchange.sendResponseHeaders(rCode, 0);
-            outputStream.flush();
-            outputStream.close();
-        }
+        LOGGER.log(INFO,"Proxy: All starter VMSs have connected to the coordinator");
     }
 
     private static Map<String, TransactionDAG> buildTransactionDAGs(String[] transactionList){
@@ -245,6 +111,9 @@ public final class Main {
 
     private static Coordinator loadCoordinator(Properties properties) throws IOException {
 
+        final int STARTING_TID = 1;
+        final int STARTING_BATCH_ID = 1;
+
         int tcpPort = Integer.parseInt( properties.getProperty("tcp_port") );
         ServerNode serverIdentifier = new ServerNode( "localhost", tcpPort );
 
@@ -270,10 +139,14 @@ public final class Main {
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         int osBufferSize = Integer.parseInt( properties.getProperty("os_buffer_size") );
-        long batchSendRate = Long.parseLong( properties.getProperty("batch_send_rate") );
+        int batchSendRate = Integer.parseInt( properties.getProperty("batch_send_rate") );
+        int batchMaxTransactions = Integer.parseInt( properties.getProperty("batch_max_transactions") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
         int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
-        int task_thread_pool_size = Integer.parseInt( properties.getProperty("task_thread_pool_size") );
+        int numWorkersPerVms = Integer.parseInt( properties.getProperty("num_workers_per_vms") );
+        boolean singleThreadEmitter = Boolean.parseBoolean( properties.getProperty("single_thread_emitter"));
+        boolean multiThreaded = Boolean.parseBoolean( properties.getProperty("multi_threaded"));
+        int numInputQueues = Integer.parseInt( properties.getProperty("num_input_queues") );
 
         int definiteBufferSize = networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize;
 
@@ -283,12 +156,16 @@ public final class Main {
                 transactionMap,
                 serverIdentifier,
                 new CoordinatorOptions()
+                        .withSingleThreadEmitter(singleThreadEmitter)
+                        // .withMultiThread(multiThreaded)
+                        .withNumInputQueues(numInputQueues)
                         .withBatchWindow(batchSendRate)
-                        .withGroupThreadPoolSize(groupPoolSize)
+                        .withMaxTransactionsPerBatch(batchMaxTransactions)
+                        .withNetworkThreadPoolSize(groupPoolSize)
                         .withNetworkBufferSize(definiteBufferSize)
                         .withNetworkSendTimeout(networkSendTimeout)
                         .withOsBufferSize(osBufferSize)
-                        .withTaskThreadPoolSize(task_thread_pool_size > 0 ? task_thread_pool_size : NUM_CPUS / 2),
+                        .withNumWorkersPerVms(numWorkersPerVms),
                 STARTING_BATCH_ID,
                 STARTING_TID,
                 serdes

@@ -262,7 +262,6 @@ public final class VmsEventHandler extends StoppableRunnable {
         public String identifier(){
             return this.node.identifier;
         }
-
     }
 
     private static final int MAX_TIMEOUT = 1000;
@@ -276,6 +275,7 @@ public final class VmsEventHandler extends StoppableRunnable {
      * A batch strategy for sending would involve sleeping until the next timeout for batch,
      * send and set up the next. Do that iteratively
      */
+    @SuppressWarnings({"BusyWait"})
     private void eventLoop(){
         List<IVmsTransactionResult> transactionResults = new ArrayList<>(1024);
         int pollTimeout = 1;
@@ -299,7 +299,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 // it is better to get all the results of a given transaction instead of one by one.
                 do {
                     transactionResults.add(txResult_);
-                } while((txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll())!=null);
+                } while((txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll()) != null);
 
                 for(IVmsTransactionResult txResult : transactionResults) {
                     // assuming is a simple transaction result, not complex, so no need to iterate
@@ -369,7 +369,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
             // if terminal, must send batch complete
             if(this.currentBatch.terminal) {
-                LOGGER.log(DEBUG,this.me.identifier+": Informing coordinator the current batch ("+this.currentBatch.batch+") completion since I am a terminal node");
+                LOGGER.log(INFO,this.me.identifier+": Request leader worker to send batch ("+this.currentBatch.batch+") complete");
                 // must be queued in case leader is off and comes back online
                 this.leaderWorker.queueMessage(BatchComplete.of(this.currentBatch.batch, this.me.identifier));
             }
@@ -663,7 +663,6 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         @Override
         public void completed(Integer result, Void void_) {
-
             if(result == 0){
                 LOGGER.log(WARNING,me.identifier+": A node is trying to connect with an empty message!");
                 try { this.channel.close(); } catch (IOException ignored) {}
@@ -673,7 +672,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                 try { this.channel.close(); } catch (IOException ignored) {}
                 return;
             }
-
             // message identifier
             byte messageIdentifier = this.buffer.get(0);
             if(messageIdentifier != PRESENTATION){
@@ -683,15 +681,10 @@ public final class VmsEventHandler extends StoppableRunnable {
                 try { this.channel.close(); } catch (IOException ignored) {}
                 return;
             }
-
             byte nodeTypeIdentifier = this.buffer.get(1);
             this.buffer.position(2);
-
             switch (nodeTypeIdentifier) {
-                case (Presentation.SERVER_TYPE) -> {
-                    NetworkUtils.configureForFastAck(this.channel);
-                    this.processServerPresentation();
-                }
+                case (Presentation.SERVER_TYPE) -> this.processServerPresentation();
                 case (Presentation.VMS_TYPE) -> this.processVmsPresentation();
                 default -> this.processUnknownNodeType(nodeTypeIdentifier);
             }
@@ -843,9 +836,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                 leaderWorker = new LeaderWorker(me, leader,
                         leaderConnectionMetadata.channel,
                         MemoryManager.getTemporaryDirectBuffer(networkBufferSize));
-                Thread leaderWorkerThread = Thread.ofPlatform().factory().newThread(leaderWorker);
-                leaderWorkerThread.setName("leader-worker-"+me.identifier);
-                leaderWorkerThread.start();
                 LOGGER.log(INFO,me.identifier+": Leader worker set up");
                 buffer.clear();
                 channel.read(buffer, 0, new LeaderReadCompletionHandler(leaderConnectionMetadata, buffer) );
@@ -956,6 +946,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             if(startPos == 0){
                 // sets the position to 0 and sets the limit to the current position
                 this.readBuffer.flip();
+                LOGGER.log(DEBUG,me.identifier+": Leader has sent "+readBuffer.limit()+" bytes");
             }
 
             // guaranteed we always have at least one byte to read
@@ -988,7 +979,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                         // events of this batch from VMSs may arrive before the batch commit info
                         // it means this VMS is a terminal node for the batch
                         BatchCommitInfo.Payload bPayload = BatchCommitInfo.read(this.readBuffer);
-                        LOGGER.log(DEBUG, me.identifier + ": Batch (" + bPayload.batch() + ") commit info received from the leader");
+                        LOGGER.log(INFO, me.identifier + ": Batch (" + bPayload.batch() + ") commit info received from the leader");
                         this.processNewBatchInfo(bPayload);
                     }
                     case (BATCH_COMMIT_COMMAND) -> {

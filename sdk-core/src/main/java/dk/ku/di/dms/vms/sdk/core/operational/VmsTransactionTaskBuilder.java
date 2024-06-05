@@ -108,10 +108,6 @@ public final class VmsTransactionTaskBuilder {
             return this.tid;
         }
 
-        public long lastTid() {
-            return this.lastTid;
-        }
-
         public VmsTransactionSignature signature(){
             return this.signature;
         }

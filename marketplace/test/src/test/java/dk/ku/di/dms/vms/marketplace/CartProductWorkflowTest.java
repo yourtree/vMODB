@@ -84,7 +84,7 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
         VMSs.put(cartAddress.hashCode(), cartAddress);
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
-        long batchSendRate = Long.parseLong( properties.getProperty("batch_send_rate") );
+        int batchSendRate = Integer.parseInt( properties.getProperty("batch_send_rate") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
 
         return Coordinator.build(
@@ -94,7 +94,7 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
                 serverIdentifier,
                 new CoordinatorOptions()
                         .withBatchWindow(batchSendRate)
-                        .withGroupThreadPoolSize(groupPoolSize)
+                        .withNetworkThreadPoolSize(groupPoolSize)
                         .withNetworkBufferSize(networkBufferSize),
                 1,
                 1,

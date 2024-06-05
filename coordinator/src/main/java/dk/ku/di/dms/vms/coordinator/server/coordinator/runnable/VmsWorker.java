@@ -59,7 +59,7 @@ public final class VmsWorker extends StoppableRunnable {
     /**
      * Queues to inform coordinator about an event
      */
-    private final BlockingQueue<Object> coordinatorQueue;
+    private final Queue<Object> coordinatorQueue;
 
     private final AsynchronousSocketChannel channel;
 
@@ -68,7 +68,7 @@ public final class VmsWorker extends StoppableRunnable {
 
     private final Queue<TransactionEvent.PayloadRaw> transactionEventQueue;
 
-    private final Queue<Object> pendingMessages;
+    private final Deque<Object> messageQueue;
 
     // could be switched by a semaphore
     private final BlockingQueue<Byte> WRITE_SYNCHRONIZER = new ArrayBlockingQueue<>(1);
@@ -82,7 +82,7 @@ public final class VmsWorker extends StoppableRunnable {
                                     // the vms this thread is responsible for
                                     IdentifiableNode consumerVms,
                                     // shared data structure to communicate messages to coordinator
-                                    BlockingQueue<Object> coordinatorQueue,
+                                    Queue<Object> coordinatorQueue,
                                     // the group for the socket channel
                                     AsynchronousChannelGroup group,
                                     int networkBufferSize,
@@ -96,7 +96,7 @@ public final class VmsWorker extends StoppableRunnable {
 
     static VmsWorker build(ServerNode me,
                             IdentifiableNode consumerVms,
-                            BlockingQueue<Object> coordinatorQueue,
+                            Queue<Object> coordinatorQueue,
                             AsynchronousChannelGroup group,
                             int networkBufferSize,
                             int networkSendTimeout,
@@ -112,7 +112,7 @@ public final class VmsWorker extends StoppableRunnable {
                       // the vms this thread is responsible for
                       IdentifiableNode consumerVms,
                       // events to share with coordinator
-                      BlockingQueue<Object> coordinatorQueue,
+                      Queue<Object> coordinatorQueue,
                       AsynchronousSocketChannel channel,
                       ByteBuffer readBuffer,
                       int networkBufferSize,
@@ -141,7 +141,7 @@ public final class VmsWorker extends StoppableRunnable {
         this.WRITE_SYNCHRONIZER.add(DUMB);
 
         // in
-        this.pendingMessages = new ConcurrentLinkedQueue<>();
+        this.messageQueue = new ConcurrentLinkedDeque<>();
         this.transactionEventQueue = new ConcurrentLinkedQueue<>();
 
         // out - shared by many vms workers
@@ -208,14 +208,14 @@ public final class VmsWorker extends StoppableRunnable {
 
     @Override
     public void run() {
-        LOGGER.log(INFO, "VmsWorker starting for consumer VMS: \n"+consumerVms);
+        LOGGER.log(INFO, "VmsWorker starting for consumer VMS: "+consumerVms);
         if(this.initHandshake) {
             this.initHandshakeProtocol();
         } else {
             if (this.initSimpleConnection()) return;
         }
         this.eventLoop();
-        LOGGER.log(INFO, "VmsWorker finished for consumer VMS: \n"+consumerVms);
+        LOGGER.log(INFO, "VmsWorker finished for consumer VMS: "+consumerVms);
     }
 
     private boolean initSimpleConnection() {
@@ -233,7 +233,7 @@ public final class VmsWorker extends StoppableRunnable {
         return false;
     }
 
-    private static final int MAX_SLEEP = 1000;
+    private static final int MAX_SLEEP = 500;
 
     /**
      * Event loop performs two tasks:
@@ -254,7 +254,6 @@ public final class VmsWorker extends StoppableRunnable {
                     continue;
                 }
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
-
                 // FIXME sending single event is buggy
 //                if(!this.transactionEventQueue.isEmpty()){
                     do {
@@ -264,9 +263,7 @@ public final class VmsWorker extends StoppableRunnable {
 //                } else {
 //                    this.sendEvent(payloadRaw);
 //                }
-
                 this.processPendingTasks();
-
             } catch (InterruptedException e) {
                 LOGGER.log(ERROR, "Leader: VMS worker for "+this.consumerVms.identifier+" has been interrupted: "+e);
                 this.stop();
@@ -277,12 +274,10 @@ public final class VmsWorker extends StoppableRunnable {
     }
 
     private void processPendingTasks() {
-
         Object msg;
-        while((msg = this.pendingMessages.poll()) != null){
+        while((msg = this.messageQueue.pollFirst()) != null){
             this.sendMessage(msg);
         }
-
         ByteBuffer bb = this.PENDING_WRITES_BUFFER.poll();
         if(bb != null){
             LOGGER.log(INFO, "Leader: Retrying sending failed buffer send");
@@ -297,17 +292,13 @@ public final class VmsWorker extends StoppableRunnable {
                     // stop thread since there is no way to write to this channel anymore
                     this.stop();
                 }
-
                 if(this.WRITE_SYNCHRONIZER.isEmpty()){
                     this.WRITE_SYNCHRONIZER.add(DUMB);
                 }
-
                 bb.clear();
                 this.PENDING_WRITES_BUFFER.offer(bb);
-
             }
         }
-
     }
 
     public void queueTransactionEvent(TransactionEvent.PayloadRaw payloadRaw) {
@@ -323,7 +314,7 @@ public final class VmsWorker extends StoppableRunnable {
     }
 
     public void queueMessage(Object message) {
-        this.pendingMessages.offer(message);
+        this.messageQueue.offerLast(message);
     }
 
     private void sendMessage(Object message) {
@@ -351,7 +342,7 @@ public final class VmsWorker extends StoppableRunnable {
                 LOGGER.log(WARNING,"Leader: Channel with "+this.consumerVms.identifier+" is closed");
                 this.stop(); // no reason to continue the loop
             }
-            this.pendingMessages.add(tidToAbort);
+            this.messageQueue.offerFirst(tidToAbort);
         }
     }
 
@@ -369,7 +360,7 @@ public final class VmsWorker extends StoppableRunnable {
                 LOGGER.log(WARNING,"Leader: Channel with "+this.consumerVms.identifier+"is closed");
                 this.stop(); // no reason to continue the loop
             }
-            this.pendingMessages.add(batchCommitCommand);
+            this.messageQueue.offerFirst(batchCommitCommand);
             if(this.WRITE_SYNCHRONIZER.isEmpty()){
                 this.WRITE_SYNCHRONIZER.add(DUMB);
             }
@@ -439,7 +430,7 @@ public final class VmsWorker extends StoppableRunnable {
                         // we could do better removing this concept of "unknown" and simply check the state
                         if (state == LEADER_PRESENTATION_SENT) {
                             state = VMS_PRESENTATION_RECEIVED;// for the first time
-                            processVmsIdentifier();
+                            this.processVmsIdentifier();
                             state = VMS_PRESENTATION_PROCESSED;
                         } else {
                             // in the future it can be an update of the vms schema or crash recovery
@@ -509,34 +500,34 @@ public final class VmsWorker extends StoppableRunnable {
             readBuffer.clear();
             channel.read(readBuffer, 0, this);
         }
-    }
 
-    private void processVmsIdentifier() {
-        // always a vms
-        this.readBuffer.position(2);
-        this.consumerVms = Presentation.readVms(readBuffer, serdesProxy);
-        this.state = State.VMS_PRESENTATION_PROCESSED;
-        // let coordinator aware this vms worker already has the vms identifier
-        this.coordinatorQueue.add(this.consumerVms);
+        private void processVmsIdentifier() {
+            // always a vms
+            readBuffer.position(2);
+            consumerVms = Presentation.readVms(readBuffer, serdesProxy);
+            state = State.VMS_PRESENTATION_PROCESSED;
+            // let coordinator aware this vms worker already has the vms identifier
+            coordinatorQueue.add(consumerVms);
+        }
     }
 
     private void sendBatchCommitInfo(BatchCommitInfo.Payload batchCommitInfo){
         // then send only the batch commit info
-        LOGGER.log(DEBUG, "Leader: Batch ("+batchCommitInfo.batch()+") commit info will be sent to " + this.consumerVms.identifier);
+        LOGGER.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info will be sent to " + this.consumerVms.identifier);
         try {
             ByteBuffer writeBuffer = this.retrieveByteBuffer();
             BatchCommitInfo.write(writeBuffer, batchCommitInfo);
             writeBuffer.flip();
             this.WRITE_SYNCHRONIZER.take();
             this.channel.write(writeBuffer, this.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
+            LOGGER.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info sent to " + this.consumerVms.identifier+"\n"+batchCommitInfo);
         } catch (Exception e) {
-            this.pendingMessages.add(batchCommitInfo);
+            LOGGER.log(ERROR, "Leader: Error on sending a batch commit info to VMS: " + e.getMessage());
+            this.messageQueue.offerFirst(batchCommitInfo);
             if(this.WRITE_SYNCHRONIZER.isEmpty()){
                 this.WRITE_SYNCHRONIZER.add(DUMB);
             }
-            return;
         }
-        LOGGER.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info sent to " + this.consumerVms.identifier+"\n"+batchCommitInfo);
     }
 
     private ByteBuffer retrieveByteBuffer() {
@@ -569,7 +560,7 @@ public final class VmsWorker extends StoppableRunnable {
 
                 // without this async handler, the bytebuffer arriving in the VMS can be corrupted
                 // relying on future.get() yields corrupted buffer in the consumer
-                LOGGER.log(INFO, "Leader: Submitting ["+(count - remaining)+"] events to "+consumerVms.identifier);
+                LOGGER.log(DEBUG, "Leader: Submitting ["+(count - remaining)+"] events to "+consumerVms.identifier);
                 count = remaining;
 
                 writeBuffer.flip();

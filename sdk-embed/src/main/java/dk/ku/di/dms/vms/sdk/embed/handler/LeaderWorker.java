@@ -11,9 +11,12 @@ import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Future;
 
 import static java.lang.System.Logger.Level.*;
+import static java.lang.Thread.sleep;
 
 /**
  * This class is responsible for all writes to the leader.
@@ -46,9 +49,10 @@ final class LeaderWorker extends StoppableRunnable {
         this.leaderWorkerQueue = new ConcurrentLinkedQueue<>();
     }
 
-    private static final int MAX_TIMEOUT = 1000;
+    private static final int MAX_TIMEOUT = 500;
 
     @Override
+    @SuppressWarnings("BusyWait")
     public void run() {
         LOGGER.log(INFO, this.vmsNode.identifier+": Leader worker started!");
         int pollTimeout = 1;
@@ -58,20 +62,14 @@ final class LeaderWorker extends StoppableRunnable {
                 message = this.leaderWorkerQueue.poll();
                 if (message == null) {
                     pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
+                    sleep(pollTimeout);
                     continue;
                 }
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
 
                 LOGGER.log(DEBUG, this.vmsNode.identifier+": Leader worker will send message type: "+ message.getClass().getName());
 
-                switch (message) {
-                    case BatchComplete.Payload o -> this.sendBatchComplete(o);
-                    case BatchCommitAck.Payload o -> this.sendBatchCommitAck(o);
-                    case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
-                    case TransactionEvent.PayloadRaw o -> this.sendEvent(o);
-                    default ->
-                            LOGGER.log(WARNING, this.vmsNode.identifier + ": Leader worker do not recognize message type: " + message.getClass().getName());
-                }
+                this.sendMessage(message);
 
             } catch (Exception e) {
                 LOGGER.log(ERROR, this.vmsNode.identifier+": Error on taking message from worker queue: "+e.getCause().getMessage());
@@ -82,18 +80,35 @@ final class LeaderWorker extends StoppableRunnable {
         }
     }
 
-    public void queueMessage(Object message) {
-        this.leaderWorkerQueue.offer(message);
+    private void sendMessage(Object message) {
+        switch (message) {
+            case BatchComplete.Payload o -> this.sendBatchComplete(o);
+            case BatchCommitAck.Payload o -> this.sendBatchCommitAck(o);
+            case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
+            case TransactionEvent.PayloadRaw o -> this.sendEvent(o);
+            default ->
+                    LOGGER.log(WARNING, this.vmsNode.identifier + ": Leader worker do not recognize message type: " + message.getClass().getName());
+        }
     }
+
+    public void queueMessage(Object message) {
+        //this.leaderWorkerQueue.offer(message);
+        while(!this.promise.isDone());
+        // only after done one can clear the buffer
+        this.writeBuffer.clear();
+        this.sendMessage(message);
+    }
+
+    Future<Integer> promise = CompletableFuture.completedFuture(0);
 
     private void write(Object message) {
         try {
             this.writeBuffer.flip();
-            this.channel.write(this.writeBuffer).get();
-            this.writeBuffer.clear();
+            this.promise = this.channel.write(this.writeBuffer);
+            // this.writeBuffer.clear();
         } catch (Exception e){
             // queue to try insert again
-            LOGGER.log(ERROR, "Error on writing message to worker queue: "+e.getCause().getMessage(), e);
+            LOGGER.log(ERROR, this.vmsNode.identifier+": Error on writing message to Leader\n"+e.getCause().getMessage(), e);
             e.printStackTrace(System.out);
             this.queueMessage(message);
             this.writeBuffer.clear();

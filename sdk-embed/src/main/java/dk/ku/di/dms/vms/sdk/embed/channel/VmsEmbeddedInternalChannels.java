@@ -21,20 +21,15 @@ public final class VmsEmbeddedInternalChannels implements IVmsInternalChannels {
     private final Queue<Object> batchCommitCommandQueue;
 
     public VmsEmbeddedInternalChannels() {
-
         // linked blocking queue because method size is a constant time operation
-
         /* transaction **/
         this.transactionInputQueue = new ConcurrentLinkedQueue<>();
         this.transactionOutputQueue = new ConcurrentLinkedQueue<>();
-
         /* abort **/
         this.transactionAbortInputQueue = new ConcurrentLinkedQueue<>();
         this.transactionAbortOutputQueue = new ConcurrentLinkedQueue<>();
-
         /* batch */
         this.batchCommitCommandQueue = new ConcurrentLinkedQueue<>();
-
     }
 
     @Override

@@ -11,10 +11,12 @@ public final class CoordinatorOptions {
     private static final int NUM_CPUS = Runtime.getRuntime().availableProcessors();
 
     // the batch window. a minute by default
-    private long batchWindow = 60000;
+    private int batchWindow = 60000;
+
+    private int maxTransactionsPerBatch = Integer.MAX_VALUE;
 
     // thread pool to execute tasks, e.g., batch replication to replicas
-    private int taskThreadPoolSize = NUM_CPUS / 2;
+    private int numWorkersPerVms = 1;
 
     private int networkBufferSize = MemoryUtils.DEFAULT_PAGE_SIZE;
 
@@ -26,17 +28,23 @@ public final class CoordinatorOptions {
      * thread pool for handling network events.
      * default is number of cores divided by 2
      */
-    private int groupThreadPoolSize = NUM_CPUS / 2;
+    private int networkThreadPoolSize = NUM_CPUS;
 
     // defines how the batch metadata is replicated across servers
     private BatchReplicationStrategy batchReplicationStrategy = BatchReplicationStrategy.NONE;
 
-    public int getGroupThreadPoolSize() {
-        return this.groupThreadPoolSize;
+    private boolean singleThreadEmitter = false;
+
+    private boolean multiThreaded = true;
+
+    private int numInputQueues = 1;
+
+    public int getNetworkThreadPoolSize() {
+        return this.networkThreadPoolSize;
     }
 
-    public CoordinatorOptions withGroupThreadPoolSize(int groupThreadPoolSize) {
-        this.groupThreadPoolSize = groupThreadPoolSize;
+    public CoordinatorOptions withNetworkThreadPoolSize(int networkThreadPoolSize) {
+        this.networkThreadPoolSize = networkThreadPoolSize;
         return this;
     }
 
@@ -76,22 +84,57 @@ public final class CoordinatorOptions {
         return this;
     }
 
-    public CoordinatorOptions withTaskThreadPoolSize(int scheduledTasksThreadPoolSize){
-        this.taskThreadPoolSize = scheduledTasksThreadPoolSize;
+    public CoordinatorOptions withNumWorkersPerVms(int numWorkersPerVms){
+        this.numWorkersPerVms = numWorkersPerVms;
         return this;
     }
 
-    public int getTaskThreadPoolSize() {
-        return this.taskThreadPoolSize;
+    public int getNumWorkersPerVms() {
+        return this.numWorkersPerVms;
     }
 
-    public long getBatchWindow() {
+    public int getBatchWindow() {
         return this.batchWindow;
     }
 
-    public CoordinatorOptions withBatchWindow(long batchWindow) {
+    public CoordinatorOptions withBatchWindow(int batchWindow) {
         this.batchWindow = batchWindow;
         return this;
     }
 
+    public CoordinatorOptions withMaxTransactionsPerBatch(int maxTransactionsPerBatch) {
+        this.maxTransactionsPerBatch = maxTransactionsPerBatch;
+        return this;
+    }
+
+    public int getMaxTransactionsPerBatch() {
+        return this.maxTransactionsPerBatch;
+    }
+
+    public CoordinatorOptions withMultiThread(boolean multiThreaded) {
+        this.multiThreaded = multiThreaded;
+        return this;
+    }
+
+    public boolean isMultiThreaded() {
+        return this.multiThreaded;
+    }
+
+    public CoordinatorOptions withSingleThreadEmitter(boolean singleThreadEmitter) {
+        this.singleThreadEmitter = singleThreadEmitter;
+        return this;
+    }
+
+    public boolean isSingleThreadEmitter() {
+        return this.singleThreadEmitter;
+    }
+
+    public CoordinatorOptions withNumInputQueues(int numInputQueues) {
+        this.numInputQueues = numInputQueues;
+        return this;
+    }
+
+    public int getNumInputQueues() {
+        return this.numInputQueues;
+    }
 }

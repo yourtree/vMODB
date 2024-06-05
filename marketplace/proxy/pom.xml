@@ -14,6 +14,20 @@
 
     <dependencies>
 
+        <!-- vertx http server -->
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-web</artifactId>
+            <version>4.5.8</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-resolver-dns-native-macos</artifactId>
+            <classifier>osx-aarch_64</classifier>
+            <version>4.1.72.Final</version>
+        </dependency>
+
         <dependency>
             <groupId>dk.ku.di.dms.vms.marketplace</groupId>
             <artifactId>common</artifactId>

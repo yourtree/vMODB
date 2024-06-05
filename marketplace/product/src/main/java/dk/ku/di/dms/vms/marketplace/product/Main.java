@@ -80,8 +80,8 @@ public final class Main {
 
                     /*
                     // the statement won't work because this is not part of transaction
-                    Product.ProductId id = new Product.ProductId(sellerId, productId);
-                    var entity = this.repository.lookupByKey(id);
+                    // Product.ProductId id = new Product.ProductId(sellerId, productId);
+                    // var entity = this.repository.lookupByKey(id);
                     */
 
                     try{
@@ -89,7 +89,7 @@ public final class Main {
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(200, 0);
                         outputStream.write( entity.toString().getBytes(StandardCharsets.UTF_8) );
-                        outputStream.close();
+                        exchange.close();
                     } catch(RuntimeException e) {
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(404, 0);
@@ -110,10 +110,8 @@ public final class Main {
                     this.table.underlyingPrimaryKeyIndex().insert(key, obj);
 
                     // response
-                    OutputStream outputStream = exchange.getResponseBody();
                     exchange.sendResponseHeaders(200, 0);
-                    outputStream.flush();
-                    outputStream.close();
+                    exchange.close();
                     break;
                 }
                 default : {

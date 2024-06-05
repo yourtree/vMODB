@@ -130,7 +130,7 @@ if `echo "$*" | grep -q proxy`; then
         echo "Proxy already running"
     else
         echo "Waiting 3 sec for microservices before setting up the proxy (coordinator)..."
-        sleep 3
+        sleep 2
         echo "Initializing Proxy..."
         xfce4-terminal -e 'bash -c "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/proxy/target/proxy-1.0-SNAPSHOT-jar-with-dependencies.jar"' -T "Proxy"
     fi

@@ -27,7 +27,7 @@ public final class ProductService {
     @Transactional(type=W)
     @PartitionBy(clazz = UpdateProduct.class, method = "getId")
     public ProductUpdated updateProduct(UpdateProduct updateEvent) {
-        LOGGER.log(INFO,"APP: Product received a product update event with version: "+updateEvent.version);
+        LOGGER.log(INFO,"APP-"+Thread.currentThread().threadId()+": Product received a product update event with version: "+updateEvent.version);
 
         // can use issue statement for faster update
         Product product = new Product(updateEvent.seller_id, updateEvent.product_id, updateEvent.name, updateEvent.sku, updateEvent.category,

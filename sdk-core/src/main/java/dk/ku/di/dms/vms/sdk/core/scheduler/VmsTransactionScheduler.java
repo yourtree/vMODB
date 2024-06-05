@@ -4,10 +4,7 @@ import dk.ku.di.dms.vms.modb.api.enums.ExecutionModeEnum;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
 import dk.ku.di.dms.vms.sdk.core.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
-import dk.ku.di.dms.vms.sdk.core.operational.ISchedulerCallback;
-import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
-import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
-import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder;
+import dk.ku.di.dms.vms.sdk.core.operational.*;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder.VmsTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
@@ -106,7 +103,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         this.transactionTaskMap = new ConcurrentHashMap<>();
         SchedulerCallback callback = new SchedulerCallback();
         this.vmsTransactionTaskBuilder = new VmsTransactionTaskBuilder(transactionalHandler, callback);
-        this.transactionTaskMap.put( 0L, vmsTransactionTaskBuilder.buildFinished(0) );
+        this.transactionTaskMap.put( 0L, this.vmsTransactionTaskBuilder.buildFinished(0) );
         this.lastTidToTidMap = new HashMap<>();
 
         this.localInputEvents = new ArrayList<>(100000);
@@ -217,6 +214,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         Long nextTid = this.lastTidToTidMap.get(this.lastTidFinished);
         // if nextTid == null then the scheduler must block until a new event arrive to progress
         if(nextTid == null) {
+            // keep scheduler sleeping since next tid is unknown
             this.BLOCKING = true;
             return;
         }
@@ -226,6 +224,12 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         while(true) {
 
             if(task.isScheduled()){
+                return;
+            }
+
+            // noop
+            if(task.status() == 3){
+                this.updateLastFinishedTid(nextTid);
                 return;
             }
 
@@ -271,7 +275,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     } else {
                         return;
                     }
-
                 }
             }
 
@@ -295,10 +298,10 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     }
 
     private static final int MAX_SLEEP = 1000;
-    InboundEvent e = null;
 
+    @SuppressWarnings("BusyWait")
     private void checkForNewEvents() throws InterruptedException {
-
+        InboundEvent e;
         if(this.vmsChannels.transactionInputQueue().isEmpty()){
             if(this.BLOCKING) {
                 int pollTimeout = 1;
@@ -315,6 +318,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             }
         }
 
+        // drain all
         while((e = this.vmsChannels.transactionInputQueue().poll()) != null) {
             this.localInputEvents.add(e);
         }
@@ -333,15 +337,21 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             return;
         }
 
-        this.transactionTaskMap.put(inboundEvent.tid(), this.vmsTransactionTaskBuilder.build(
-                inboundEvent.tid(),
-                inboundEvent.lastTid(),
-                inboundEvent.batch(),
-                this.transactionMetadataMap
-                        .get(inboundEvent.event())
-                        .signatures.getFirst().object(),
-                inboundEvent.input()
-        ));
+        // just a fast way to have it. must be incorporated by vms loader class
+        if(inboundEvent.event().equalsIgnoreCase("noop")){
+            this.transactionTaskMap.put(inboundEvent.tid(),
+                    this.vmsTransactionTaskBuilder.buildFinished(inboundEvent.tid()) );
+        } else {
+            this.transactionTaskMap.put(inboundEvent.tid(), this.vmsTransactionTaskBuilder.build(
+                    inboundEvent.tid(),
+                    inboundEvent.lastTid(),
+                    inboundEvent.batch(),
+                    this.transactionMetadataMap
+                            .get(inboundEvent.event())
+                            .signatures.getFirst().object(),
+                    inboundEvent.input()
+            ));
+        }
 
         // mark the last tid, so we can get the next to execute when appropriate
         this.lastTidToTidMap.put( inboundEvent.lastTid(), inboundEvent.tid() );
