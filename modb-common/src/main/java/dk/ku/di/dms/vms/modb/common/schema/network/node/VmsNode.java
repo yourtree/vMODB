@@ -24,7 +24,7 @@ public final class VmsNode extends IdentifiableNode {
     public long batch;
 
     // last tid of current batch. may not participate in all TIDs of the batch
-    public long lastTidOfBatch;
+    public long lastTid;
 
     /**
      * A vms may not participate in all possible batches
@@ -45,13 +45,13 @@ public final class VmsNode extends IdentifiableNode {
     public final Map<String, VmsEventSchema> outputEventSchema;
 
     public VmsNode(String host, int port, String vmsIdentifier,
-                   long batch, long lastTidOfBatch, long previousBatch,
+                   long batch, long lastTid, long previousBatch,
                    Map<String, VmsDataModel> dataSchema,
                    Map<String, VmsEventSchema> inputEventSchema,
                    Map<String, VmsEventSchema> outputEventSchema) {
         super(vmsIdentifier, host, port);
         this.batch = batch;
-        this.lastTidOfBatch = lastTidOfBatch;
+        this.lastTid = lastTid;
         this.previousBatch = previousBatch;
         this.dataSchema = dataSchema;
         this.inputEventSchema = inputEventSchema;
@@ -59,8 +59,8 @@ public final class VmsNode extends IdentifiableNode {
         this.numberOfTIDsCurrentBatch = 0;
     }
 
-    public long getLastTidOfBatch(){
-        return this.lastTidOfBatch;
+    public long getLastTid(){
+        return this.lastTid;
     }
 
     public long getPreviousBatch(){
@@ -82,7 +82,7 @@ public final class VmsNode extends IdentifiableNode {
                 ", port=" + port +
                 ", identifier='" + identifier + '\'' +
                 ", batch=" + batch +
-                ", lastTidOfBatch=" + lastTidOfBatch +
+                ", lastTidOfBatch=" + lastTid +
                 ", previousBatch=" + previousBatch +
                 ", numberOfTIDsCurrentBatch=" + numberOfTIDsCurrentBatch +
                 '}';

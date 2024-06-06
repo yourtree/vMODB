@@ -5,7 +5,6 @@ import dk.ku.di.dms.vms.marketplace.proxy.Main;
 
 import java.io.IOException;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 
 import static java.lang.System.Logger.Level.INFO;
 
@@ -24,7 +23,7 @@ public final class HttpServerBuilder {
             return;
         }
         if(httpServer.equalsIgnoreCase("jdk")){
-            LOGGER.log(INFO,"Proxy: Initializing JDK9 HTTP Server to receive transaction inputs...");
+            LOGGER.log(INFO,"Proxy: Initializing JDK HTTP Server to receive transaction inputs...");
             buildJdk(properties, coordinator);
             return;
         }
@@ -32,11 +31,7 @@ public final class HttpServerBuilder {
     }
 
     private static void buildVertx(Properties properties, Coordinator coordinator){
-        try {
-            HttpServerVertx.init(properties, coordinator);
-        } catch (ExecutionException | InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+        HttpServerVertx.init(properties, coordinator);
     }
 
     private static void buildJdk(Properties properties, Coordinator coordinator) throws IOException {

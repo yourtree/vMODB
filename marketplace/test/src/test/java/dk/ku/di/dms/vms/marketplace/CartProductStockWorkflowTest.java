@@ -93,7 +93,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
         Map<Integer, IdentifiableNode> VMSs = getIdentifiableNodeMap(productHost, cartHost, stockHost);
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
-        int batchSendRate = Integer.parseInt( properties.getProperty("batch_send_rate") );
+        int batchSendRate = Integer.parseInt( properties.getProperty("batch_window_ms") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
 
         return Coordinator.build(

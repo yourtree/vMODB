@@ -1,11 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.proxy;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
-import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
@@ -18,15 +14,9 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
-import static java.lang.System.Logger.Level.ERROR;
 import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
@@ -139,14 +129,12 @@ public final class Main {
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         int osBufferSize = Integer.parseInt( properties.getProperty("os_buffer_size") );
-        int batchSendRate = Integer.parseInt( properties.getProperty("batch_send_rate") );
-        int batchMaxTransactions = Integer.parseInt( properties.getProperty("batch_max_transactions") );
+        int batchWindow = Integer.parseInt( properties.getProperty("batch_window_ms") );
+        int batchMaxTransactions = Integer.parseInt( properties.getProperty("num_max_transactions_batch") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
         int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
-        int numWorkersPerVms = Integer.parseInt( properties.getProperty("num_workers_per_vms") );
-        boolean singleThreadEmitter = Boolean.parseBoolean( properties.getProperty("single_thread_emitter"));
-        boolean multiThreaded = Boolean.parseBoolean( properties.getProperty("multi_threaded"));
-        int numInputQueues = Integer.parseInt( properties.getProperty("num_input_queues") );
+        int numWorkersPerVms = Integer.parseInt( properties.getProperty("num_vms_workers") );
+        int numTransactionWorkers = Integer.parseInt( properties.getProperty("num_transaction_workers") );
 
         int definiteBufferSize = networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize;
 
@@ -156,16 +144,14 @@ public final class Main {
                 transactionMap,
                 serverIdentifier,
                 new CoordinatorOptions()
-                        .withSingleThreadEmitter(singleThreadEmitter)
-                        // .withMultiThread(multiThreaded)
-                        .withNumInputQueues(numInputQueues)
-                        .withBatchWindow(batchSendRate)
+                        .withNumTransactionWorkers(numTransactionWorkers)
+                        .withBatchWindow(batchWindow)
                         .withMaxTransactionsPerBatch(batchMaxTransactions)
+                        .withNumWorkersPerVms(numWorkersPerVms)
                         .withNetworkThreadPoolSize(groupPoolSize)
                         .withNetworkBufferSize(definiteBufferSize)
                         .withNetworkSendTimeout(networkSendTimeout)
-                        .withOsBufferSize(osBufferSize)
-                        .withNumWorkersPerVms(numWorkersPerVms),
+                        .withOsBufferSize(osBufferSize),
                 STARTING_BATCH_ID,
                 STARTING_TID,
                 serdes

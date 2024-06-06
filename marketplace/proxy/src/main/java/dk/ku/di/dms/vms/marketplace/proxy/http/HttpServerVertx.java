@@ -14,14 +14,13 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 
 import static io.vertx.core.Future.await;
-import static java.lang.Thread.sleep;
 
 public final class HttpServerVertx extends AbstractVerticle {
 
     static Coordinator COORD;
 
     // https://github.com/vert-x3/vertx-examples/blob/4.x/virtual-threads-examples/src/main/java/io/vertx/example/virtualthreads/HttpClientExample.java
-    public static void init(Properties properties, Coordinator coordinator) throws ExecutionException, InterruptedException {
+    static void init(Properties properties, Coordinator coordinator) {
         COORD = coordinator;
         String executor = properties.getProperty("executor");
         int http_port = Integer.parseInt( properties.getProperty("http_port") );
@@ -36,7 +35,8 @@ public final class HttpServerVertx extends AbstractVerticle {
             threadingModel = ThreadingModel.EVENT_LOOP;
         }
 
-        Vertx vertx = Vertx.vertx();
+        Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(true));
+        try {
         vertx.deployVerticle(HttpServerVertx.class,
                         new DeploymentOptions().setThreadingModel(threadingModel)
                                 .setConfig(json)
@@ -44,29 +44,35 @@ public final class HttpServerVertx extends AbstractVerticle {
                 .toCompletionStage()
                 .toCompletableFuture()
                 .get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    @SuppressWarnings("BusyWait")
     @Override
     public void start() {
         HttpServerOptions options = new HttpServerOptions();
-        JsonObject config = vertx.getOrCreateContext().config();
+        JsonObject config = this.vertx.getOrCreateContext().config();
         options.setPort(config.getInteger("http_port"));
 
         options.setHost("localhost");
         options.setTcpKeepAlive(true);
 
-        HttpServer server = vertx.createHttpServer(options);
+        HttpServer server = this.vertx.createHttpServer(options);
 
         // only linux native transport
+        // does not improve considering a single driver worker
         // options.setTcpQuickAck(true);
+        // need to study about
+        // options.setTcpCork()
 
         server.requestHandler(new VertxHandler(COORD));
-        if(vertx.getOrCreateContext().isEventLoopContext()){
-            // wait
-            do {
-                try { sleep(10); } catch (InterruptedException ignored) { }
-            } while(!server.listen().isComplete());
+        if(this.vertx.getOrCreateContext().isEventLoopContext()){
+            try {
+                server.listen().toCompletionStage()
+                        .toCompletableFuture()
+                        .get();
+            } catch (InterruptedException | ExecutionException ignored) { }
         } else {
             await(server.listen());
         }
@@ -99,10 +105,10 @@ public final class HttpServerVertx extends AbstractVerticle {
             }
 
             exchange.bodyHandler(buff -> {
+                String payload = buff.toString(StandardCharsets.UTF_8);
                 switch (uriSplit[1]) {
                     case "cart": {
                         // assert exchange.getRequestMethod().equals("POST");
-                        String payload = buff.toString(StandardCharsets.UTF_8);
                         this.submitCustomerCheckout(payload);
                         break;
                     }
@@ -110,13 +116,11 @@ public final class HttpServerVertx extends AbstractVerticle {
                         switch (exchange.method().name()) {
                             // price update
                             case "PATCH": {
-                                String payload = buff.toString(StandardCharsets.UTF_8);
                                 this.submitUpdatePrice(payload);
                                 break;
                             }
                             // product update
                             case "PUT": {
-                                String payload = buff.toString(StandardCharsets.UTF_8);
                                 this.submitUpdateProduct(payload);
                                 break;
                             }
@@ -129,7 +133,6 @@ public final class HttpServerVertx extends AbstractVerticle {
                     }
                     case "shipment": {
                         // assert exchange.getRequestMethod().equals("PATCH");
-                        String payload = buff.toString(StandardCharsets.UTF_8);
                         this.submitUpdateDelivery(payload);
                         break;
                     }

@@ -33,11 +33,7 @@ public final class CoordinatorOptions {
     // defines how the batch metadata is replicated across servers
     private BatchReplicationStrategy batchReplicationStrategy = BatchReplicationStrategy.NONE;
 
-    private boolean singleThreadEmitter = false;
-
-    private boolean multiThreaded = true;
-
-    private int numInputQueues = 1;
+    private int numTransactionWorkers = 1;
 
     public int getNetworkThreadPoolSize() {
         return this.networkThreadPoolSize;
@@ -111,30 +107,13 @@ public final class CoordinatorOptions {
         return this.maxTransactionsPerBatch;
     }
 
-    public CoordinatorOptions withMultiThread(boolean multiThreaded) {
-        this.multiThreaded = multiThreaded;
+    public CoordinatorOptions withNumTransactionWorkers(int numTransactionWorkers) {
+        this.numTransactionWorkers = numTransactionWorkers;
         return this;
     }
 
-    public boolean isMultiThreaded() {
-        return this.multiThreaded;
+    public int getNumTransactionWorkers() {
+        return this.numTransactionWorkers;
     }
 
-    public CoordinatorOptions withSingleThreadEmitter(boolean singleThreadEmitter) {
-        this.singleThreadEmitter = singleThreadEmitter;
-        return this;
-    }
-
-    public boolean isSingleThreadEmitter() {
-        return this.singleThreadEmitter;
-    }
-
-    public CoordinatorOptions withNumInputQueues(int numInputQueues) {
-        this.numInputQueues = numInputQueues;
-        return this;
-    }
-
-    public int getNumInputQueues() {
-        return this.numInputQueues;
-    }
 }

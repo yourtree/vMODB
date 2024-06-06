@@ -1,31 +1,72 @@
-package dk.ku.di.dms.vms.coordinator.coordinator;
+package dk.ku.di.dms.vms.coordinator.server.coordinator;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchAlgo;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.IVmsWorker;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.TransactionWorker;
+import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
+import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
  * 1. test starters VMSs with active and non-active VMSs
  * 2. test VMS inactive after the first barrier. what to do with the metadata?
  * 3.
  */
-public class CoordinatorTest {
+public final class CoordinatorTest {
 
     private static final System.Logger logger = System.getLogger("CoordinatorTest");
 
+    private static class NoOpVmsWorker implements IVmsWorker {
+        @Override
+        public void queueTransactionEvent(TransactionEvent.PayloadRaw payloadRaw) { }
+        @Override
+        public void queueMessage(Object message) { }
+    }
+
     @Test
-    public void test(){
+    public void singleTransactionWorkerTest(){
+
+        var vmsMetadataMap = new HashMap<String, VmsNode>();
+        vmsMetadataMap.put( "product", new VmsNode("localhost", 8080, "product", 0, 0, 0, null, null, null));
+
+        Map<String, TransactionDAG> transactionMap = new HashMap<>();
+        TransactionDAG updateProductDag = TransactionBootstrap.name("test")
+                .input("a", "product", "test")
+                .terminal("b", "product", "a")
+                .build();
+        transactionMap.put(updateProductDag.name, updateProductDag);
+        Map<String, VmsNode[]> vmsIdentifiersPerDAG = new HashMap<>();
+        for(var dag : transactionMap.entrySet()) {
+            vmsIdentifiersPerDAG.put(dag.getKey(), BatchAlgo.buildTransactionDagVmsList(dag.getValue(), vmsMetadataMap));
+        }
+
+        Map<String,IVmsWorker> workers = new HashMap<>();
+        workers.put("product", new NoOpVmsWorker());
+
+        var inputTxQueue = new ConcurrentLinkedDeque<TransactionInput>();
+        var precedenceMapQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+
+        var txWorker = TransactionWorker.build(1, inputTxQueue, 1, 10, 1000, 1, precedenceMapQueue, precedenceMapQueue, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+
+        var txWorkerThread = Thread.ofPlatform().factory().newThread(txWorker);
+        txWorkerThread.start();
+
+        //
+        // while(txWorker)
 
         // 1 - thread to generate input transactions
         // 2 - start creating artificial transactions
 
         // 3 - spawn a vms to receive input and output 2 results
-        // https://hackingsaas.substack.com/p/hacking-saas-12-collection-of-data?utm_source=twitter&utm_campaign=auto_share&r=1mrckf
+        //
 
     }
 

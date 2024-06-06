@@ -44,12 +44,12 @@ public final class BatchAlgo {
 
         // input and internal nodes first, since they have children
         if(transactionDAG.internalNodes.contains( event.targetVms ) || transactionDAG.inputEvents.get( event.getName() ) != null){
-            listToBuildMap.put(event.targetVms, vmsMetadata.get(event.targetVms).getLastTidOfBatch());
+            listToBuildMap.put(event.targetVms, vmsMetadata.get(event.targetVms).getLastTid());
             for(EventIdentifier child : event.children){
                 listToBuildMap.putAll(buildPrecedenceRecursive(child, transactionDAG, vmsMetadata));
             }
         } else if(transactionDAG.terminalNodes.contains( event.targetVms )){
-                listToBuildMap.put(event.targetVms, vmsMetadata.get(event.targetVms).getLastTidOfBatch());
+                listToBuildMap.put(event.targetVms, vmsMetadata.get(event.targetVms).getLastTid());
         }
 
         return listToBuildMap;

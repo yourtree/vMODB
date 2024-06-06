@@ -35,7 +35,7 @@ import static java.lang.System.Logger.Level.*;
 import static java.lang.Thread.sleep;
 
 @SuppressWarnings("SequencedCollectionMethodCanBeUsed")
-public final class VmsWorker extends StoppableRunnable {
+final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private static final System.Logger LOGGER = System.getLogger(VmsWorker.class.getName());
     
@@ -77,7 +77,7 @@ public final class VmsWorker extends StoppableRunnable {
 
     private final boolean initHandshake;
 
-    static VmsWorker buildAsStarter(// coordinator reference
+    public static VmsWorker buildAsStarter(// coordinator reference
                                     ServerNode me,
                                     // the vms this thread is responsible for
                                     IdentifiableNode consumerVms,
@@ -301,6 +301,7 @@ public final class VmsWorker extends StoppableRunnable {
         }
     }
 
+    @Override
     public void queueTransactionEvent(TransactionEvent.PayloadRaw payloadRaw) {
         this.transactionEventQueue.offer(payloadRaw);
     }
@@ -313,6 +314,7 @@ public final class VmsWorker extends StoppableRunnable {
         this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
     }
 
+    @Override
     public void queueMessage(Object message) {
         this.messageQueue.offerLast(message);
     }

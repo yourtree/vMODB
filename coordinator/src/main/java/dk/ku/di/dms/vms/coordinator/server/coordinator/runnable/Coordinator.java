@@ -5,14 +5,12 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchAlgo;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchContext;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
-import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
@@ -179,7 +177,7 @@ public final class Coordinator extends StoppableRunnable {
 
         // shared data structure with http handler
         this.transactionInputDeques = new ArrayList<>();
-        for(int i = 0; i < options.getNumInputQueues(); i++){
+        for(int i = 0; i < options.getNumTransactionWorkers(); i++){
             this.transactionInputDeques.add(new ConcurrentLinkedDeque<>());
         }
 
@@ -235,102 +233,17 @@ public final class Coordinator extends StoppableRunnable {
 
         this.preprocessDAGs();
 
-        this.eventLoop();
+        this.setUpTransactionWorkers();
 
         this.failSafeClose();
         LOGGER.log(INFO,"Leader: Finished execution.");
     }
 
-    private void eventLoop() {
-//        if(this.options.isMultiThreaded()){
-//            LOGGER.log(INFO,"Leader: Transaction processing starting with event loop multithreaded");
-//            for(int i = 0; i < this.options.getNumInputQueues(); i++){
-//
-//            }
-//        }
-        if(this.options.isSingleThreadEmitter()){
-           this.eventLoopPolling();
-        } else {
-            if (this.options.getMaxTransactionsPerBatch() == 0) {
-                LOGGER.log(INFO, "Leader: no max event loop selected");
-                this.eventLoopNoMaxTxPerBatch();
-            } else {
-                LOGGER.log(INFO, "Leader: max event loop selected");
-                this.eventLoopWithMaxTxPerBatch();
-            }
-        }
-    }
+    private void setUpTransactionWorkers() {
+        //
 
-    private void eventLoopPolling() {
-        LOGGER.log(INFO,"Leader: Transaction processing starting with event loop polling");
-        long end = System.currentTimeMillis() + this.options.getBatchWindow();
-        int dequeSize = this.options.getNumInputQueues();
-        int dequeIdx = 0;
-        ConcurrentLinkedDeque<TransactionInput> deque;
-        TransactionInput data;
-        Object msg;
-        while (this.isRunning()) {
-            // iterate over deques and drain transaction inputs
-            do {
-                deque = this.transactionInputDeques.get(dequeIdx);
-                // drain deque
-                while ((data = deque.poll()) != null) {
-                    this.queueTransactionInput_(data);
-                }
-
-                // do we have messages? drain them
-                while((msg = this.coordinatorQueue.poll()) != null){
-                    this.processVmsMessage(msg);
-                }
-
-                dequeIdx++;
-                if (dequeIdx == dequeSize) dequeIdx = 0;
-            } while (System.currentTimeMillis() < end);
-            this.advanceCurrentBatch();
-            end = System.currentTimeMillis() + this.options.getBatchWindow();
-        }
-    }
-
-    private void eventLoopWithMaxTxPerBatch(){
-        final int maxTxPerBatch = this.options.getMaxTransactionsPerBatch();
-        final int batchWindow = this.options.getBatchWindow();
-        LOGGER.log(INFO,"Leader: Transaction processing starting with: \n max transactions per batch="+maxTxPerBatch+"\n batch window="+batchWindow);
-        long end = System.currentTimeMillis() + batchWindow;
-        long nextTidToSignalBatch = maxTxPerBatch;
-        Object msg;
-        while(this.isRunning()){
-            // could loop through vms workers and trigger send messages based on a strategy
-            // until reaches packet size or a given time limit (e.g., batch size)
-            while (this.tid < nextTidToSignalBatch ||
-                    System.currentTimeMillis() < end) {
-                // do work inside the batch to better utilize the cpu time
-                if((msg = this.coordinatorQueue.poll()) != null){
-                    this.processVmsMessage(msg);
-                }
-            }
-            if(this.advanceCurrentBatch()){
-                // tid at this point may have already been increment by a thread
-                nextTidToSignalBatch = this.tid + maxTxPerBatch;
-            }
-            end = System.currentTimeMillis() + batchWindow;
-        }
-    }
-
-    private void eventLoopNoMaxTxPerBatch(){
-        final int maxTxPerBatch = this.options.getMaxTransactionsPerBatch();
-        final int batchWindow = this.options.getBatchWindow();
-        LOGGER.log(INFO,"Leader: Transaction processing starting with: \n max transactions per batch="+maxTxPerBatch+"\n batch window="+batchWindow);
-        long end = System.currentTimeMillis() + batchWindow;
-        Object msg;
-        while(this.isRunning()){
-             do {
-                if((msg = this.coordinatorQueue.poll()) != null){
-                    this.processVmsMessage(msg);
-                }
-            } while (System.currentTimeMillis() < end);
-            this.advanceCurrentBatch();
-            end = System.currentTimeMillis() + batchWindow;
-        }
+        // can block waiting for messages from vms workers.
+        // let transaction workers only deal with submission of transactions
     }
 
     /**
@@ -381,7 +294,7 @@ public final class Coordinator extends StoppableRunnable {
      * Make a circular buffer. so events are spread among the workers (i.e., channels)
      */
     @SuppressWarnings("SequencedCollectionMethodCanBeUsed")
-    static final class VmsWorkerContainer {
+    static final class VmsWorkerContainer implements IVmsWorker {
 
         private final List<VmsWorker> vmsWorkers;
         private static final Random random = new Random();
@@ -395,10 +308,12 @@ public final class Coordinator extends StoppableRunnable {
             this.vmsWorkers.add(vmsWorker);
         }
 
+        @Override
         public void queueMessage(Object object){
             this.vmsWorkers.get(0).queueMessage(object);
         }
 
+        @Override
         public void queueTransactionEvent(TransactionEvent.PayloadRaw payload){
             int pos = random.nextInt(0, this.vmsWorkers.size());
             this.vmsWorkers.get(pos).queueTransactionEvent(payload);
@@ -590,86 +505,6 @@ public final class Coordinator extends StoppableRunnable {
         }
     }
 
-    /**
-     * Given a set of VMSs involved in the last batch
-     * (for easiness can send to all of them for now)
-     * send a batch request.
-     * For logging, must store the transaction inputs in disk before sending
-     */
-    private boolean advanceCurrentBatch(){
-        BatchContext previousBatch = this.batchContextMap.get( this.currentBatchOffset - 1 );
-        // have we processed any input event since the start of this coordinator thread?
-        if(this.tid - previousBatch.lastTid <= 0){
-            LOGGER.log(DEBUG,"Leader: No new transaction since last batch generation. Current batch "+this.currentBatchOffset+" won't be spawned this time.");
-            return false;
-        }
-        // why do I need to replicate vmsTidMap? to restart from this point if the leader fails
-        final long generateBatch = this.currentBatchOffset;
-        final long nextBatch = generateBatch+1;
-        BatchContext currBatchContext = this.batchContextMap.get(generateBatch);
-        Map<String, Long> previousBatchPerVms = new HashMap<>();
-        Map<String, Integer> numberOfTIDsPerVms = new HashMap<>();
-        long lastTidBatch;
-        // define new batch context so by the time it leaves the mutual exclusion block
-        // the http thread will be able to find the next batch context to add terminal VMSs
-        BatchContext newBatchContext = new BatchContext(nextBatch);
-        this.batchContextMap.put(nextBatch, newBatchContext );
-
-        Map<String,BatchCommitInfo.Payload> messagesToSend = new HashMap<>();
-
-        if(this.options.isSingleThreadEmitter()){
-            lastTidBatch = this.advanceCurrentBatch_(nextBatch, generateBatch, previousBatchPerVms, numberOfTIDsPerVms, currBatchContext, messagesToSend);
-        } else {
-            // get number of tid is also updated by http threads
-            synchronized (lock_) {
-                lastTidBatch = this.advanceCurrentBatch_(nextBatch, generateBatch, previousBatchPerVms, numberOfTIDsPerVms, currBatchContext, messagesToSend);
-            }
-        }
-
-        LOGGER.log(INFO, "Leader: Batch commit task for batch offset " + generateBatch + " and last tid " + lastTidBatch + " is starting...");
-
-        // make sure we have set the missing votes map before sending the messages to VMSs
-        currBatchContext.seal(lastTidBatch, previousBatchPerVms, numberOfTIDsPerVms);
-
-        // now send
-        for(var entry : messagesToSend.entrySet()) {
-            this.vmsWorkerContainerMap.get(entry.getKey()).queueMessage(entry.getValue());
-        }
-
-        LOGGER.log(DEBUG,"Leader: Next batch offset is "+this.currentBatchOffset);
-
-        // the batch commit only has progress (a safety property) the way it is implemented now when future events
-        // touch the same VMSs that have been touched by transactions in the last batch.
-        // how can we guarantee progress?
-        this.replicateBatchWithReplicas(currBatchContext);
-
-        return true;
-    }
-
-    private long advanceCurrentBatch_(long nextBatch, long generateBatch, Map<String, Long> previousBatchPerVms, Map<String, Integer> numberOfTIDsPerVms, BatchContext currBatchContext, Map<String, BatchCommitInfo.Payload> messagesToSend) {
-        long lastTidBatch;
-        // increment batch offset. inside lock because http thread is relying on this variable to add terminals to the batch
-        this.currentBatchOffset = nextBatch;
-        lastTidBatch = this.tid;
-        for(var vmsEntry : this.vmsMetadataMap.entrySet()) {
-            if(vmsEntry.getValue().batch != generateBatch) continue;
-            VmsNode vms = vmsEntry.getValue();
-            previousBatchPerVms.put(vms.identifier, vms.previousBatch);
-            numberOfTIDsPerVms.put(vms.identifier, vms.numberOfTIDsCurrentBatch);
-            // this can work outside this block if snapshot the vms object state
-            // snapshot is necessary because the line below will "move" the batch, that is, reset the counter
-            if(currBatchContext.terminalVMSs.contains(vms.identifier)){
-                messagesToSend.put(vms.identifier,
-                        BatchCommitInfo.of(vms.batch, vms.previousBatch, vms.numberOfTIDsCurrentBatch)
-                );
-            } else {
-                LOGGER.log(ERROR, "dededededd");
-            }
-            vms.numberOfTIDsCurrentBatch = 0;
-        }
-        return lastTidBatch;
-    }
-
     private void replicateBatchWithReplicas(BatchContext batchContext) {
         if (this.options.getBatchReplicationStrategy() == NONE) return;
 
@@ -782,19 +617,6 @@ public final class Coordinator extends StoppableRunnable {
      * Local list of requests to be processed
      * Must be cleaned after use
      */
-//    private final List<TransactionInput> transactionRequests = new ArrayList<>(100000);
-
-    /**
-     * Should read in a proportion that matches the batch and heartbeat window, otherwise
-     * how long does it take to process a batch of input transactions?
-     * instead of trying to match the rate of processing, perhaps we can create read tasks
-     * -
-     * processing the transaction input and creating the
-     * corresponding events
-     * the network buffering will send
-     */
-
-    private final Object lock_ = new Object();
 
     /**
      * a vms, although receiving an event from a "next" batch, cannot yet commit, since
@@ -806,77 +628,8 @@ public final class Coordinator extends StoppableRunnable {
      * having this info avoids having to contact all internal/terminal nodes to inform the precedence of events
      */
     public void queueTransactionInput(TransactionInput transactionInput){
-        if(this.options.isSingleThreadEmitter()){
-            int idx = ThreadLocalRandom.current().nextInt(0, this.options.getNumInputQueues());
-            this.transactionInputDeques.get(idx).offerLast(transactionInput);
-            return;
-        }
-        this.queueTransactionInput_(transactionInput);
-    }
-
-    private void queueTransactionInput_(TransactionInput transactionInput) {
-        TransactionDAG transactionDAG = this.transactionMap.get( transactionInput.name );
-        EventIdentifier event = transactionDAG.inputEvents.get(transactionInput.event.name);
-        // get the vms
-        VmsNode inputVms = this.vmsMetadataMap.get(event.targetVms);
-        VmsNode[] vmsList = this.vmsIdentifiersPerDAG.get( transactionDAG.name );
-        Map<String, Long> previousTidPerVms = new HashMap<>(vmsList.length);
-        long tid_;
-        long currentBatchOffset_;
-        if(this.options.isSingleThreadEmitter()){
-            tid_ = ++this.tid;
-            currentBatchOffset_ = this.currentBatchOffset;
-            for (var vms_ : vmsList) {
-                previousTidPerVms.put(vms_.identifier, vms_.lastTidOfBatch);
-                if(vms_.batch != this.currentBatchOffset){
-                    vms_.previousBatch = vms_.batch;
-                    vms_.batch = currentBatchOffset_;
-                }
-                vms_.lastTidOfBatch = tid_;
-                vms_.numberOfTIDsCurrentBatch++;
-                break;
-            }
-            this.batchContextMap.get(currentBatchOffset_).terminalVMSs.addAll( transactionDAG.terminalNodes );
-        } else {
-            synchronized (lock_) {
-                // if ++ after, variable returns the value before incrementing
-                tid_ = ++this.tid;
-                currentBatchOffset_ = this.currentBatchOffset;
-                // update for next transaction. this is to ensure VMS do not wait for a tid that will never come.
-                // TIDs processed by a vms may not be sequential
-                for (var vms_ : vmsList) {
-                    previousTidPerVms.put(vms_.identifier, vms_.lastTidOfBatch);
-                    if (vms_.batch != this.currentBatchOffset) {
-                        vms_.previousBatch = vms_.batch;
-                        vms_.batch = currentBatchOffset_;
-                    }
-                    vms_.lastTidOfBatch = tid_;
-                    vms_.numberOfTIDsCurrentBatch++;
-                    // FIXME break MUST BE REMOVED. ONLY FOR TESTING SCALABILITY OF VMS!!!
-                    break;
-                }
-                // add terminal to the set
-                this.batchContextMap.get(currentBatchOffset_).terminalVMSs.addAll(transactionDAG.terminalNodes);
-            }
-        }
-
-        String precedenceMapStr = this.serdesProxy.serializeMap(previousTidPerVms);
-
-        // this write can be outside the mutual exlcusion block
-        TransactionEvent.PayloadRaw txEvent = TransactionEvent.of(tid_, currentBatchOffset_,
-                transactionInput.event.name, transactionInput.event.payload, precedenceMapStr);
-
-        // assign this event, so... what? try to send later? if a vms fail, the last event is useless, we need to send the whole batch generated so far...
-
-        /*
-         *   if(!event.targetVms.equalsIgnoreCase(inputVms.identifier)){
-                LOGGER.log(ERROR,"Leader: The event was going to be queued to the incorrect VMS worker!");
-            }
-         */
-        LOGGER.log(DEBUG,"Leader: Adding event "+event.name+" to "+inputVms.identifier+" worker:\n"+txEvent);
-
-        // push transaction to vms worker
-        this.vmsWorkerContainerMap.get(inputVms.identifier).queueTransactionEvent(txEvent);
+        int idx = ThreadLocalRandom.current().nextInt(0, this.options.getNumTransactionWorkers());
+        this.transactionInputDeques.get(idx).offerLast(transactionInput);
     }
 
     /**
