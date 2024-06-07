@@ -15,6 +15,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
+import static java.lang.Thread.sleep;
+
 /**
  * 1. test starters VMSs with active and non-active VMSs
  * 2. test VMS inactive after the first barrier. what to do with the metadata?
@@ -22,7 +24,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
  */
 public final class CoordinatorTest {
 
-    private static final System.Logger logger = System.getLogger("CoordinatorTest");
+    private static final System.Logger LOGGER = System.getLogger("CoordinatorTest");
 
     private static class NoOpVmsWorker implements IVmsWorker {
         @Override
@@ -32,7 +34,7 @@ public final class CoordinatorTest {
     }
 
     @Test
-    public void singleTransactionWorkerTest(){
+    public void singleTransactionWorkerTest() throws InterruptedException {
 
         var vmsMetadataMap = new HashMap<String, VmsNode>();
         vmsMetadataMap.put( "product", new VmsNode("localhost", 8080, "product", 0, 0, 0, null, null, null));
@@ -51,22 +53,27 @@ public final class CoordinatorTest {
         Map<String,IVmsWorker> workers = new HashMap<>();
         workers.put("product", new NoOpVmsWorker());
 
-        var inputTxQueue = new ConcurrentLinkedDeque<TransactionInput>();
+        var txInputQueue = new ConcurrentLinkedDeque<TransactionInput>();
         var precedenceMapQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
 
-        var txWorker = TransactionWorker.build(1, inputTxQueue, 1, 10, 1000, 1, precedenceMapQueue, precedenceMapQueue, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+        var txWorker = TransactionWorker.build(1, txInputQueue, 1, 10, 1000, 1, precedenceMapQueue, precedenceMapQueue, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
 
         var txWorkerThread = Thread.ofPlatform().factory().newThread(txWorker);
         txWorkerThread.start();
 
-        //
-        // while(txWorker)
+        Map<String, TransactionWorker.PrecendenceInfo> precedenceMap = new HashMap<>();
+        precedenceMap.put("product", new TransactionWorker.PrecendenceInfo(0,0,0));
+        precedenceMapQueue.add(precedenceMap);
 
-        // 1 - thread to generate input transactions
-        // 2 - start creating artificial transactions
+        for(int i = 1; i <= 10; i++){
+            txInputQueue.add(new TransactionInput("test", new TransactionInput.Event("test", "")));
+        }
 
-        // 3 - spawn a vms to receive input and output 2 results
-        //
+        sleep(100);
+
+        txWorker.stop();
+
+        assert txWorker.getTid() == 11;
 
     }
 
@@ -94,8 +101,8 @@ public final class CoordinatorTest {
         Map<String, Long> dependenceMap = BatchAlgo.buildPrecedenceMap( dag.inputEvents.get("input1"), dag, vmsMetadataMap );
 
         assert dependenceMap.get("vms1") == 1 && dependenceMap.get("vms2") == 2;
-
     }
+
     @Test
     public void testComplexDependenceMap(){
 

@@ -9,12 +9,25 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.*;
 
 import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.INFO;
 
 public class TransactionWorker extends StoppableRunnable {
+
+    private static final VarHandle TID_COUNT;
+
+    static {
+        try {
+            MethodHandles.Lookup l = MethodHandles.lookup();
+            TID_COUNT = l.findVarHandle(TransactionWorker.class, "tid", long.class);
+        } catch (Exception e) {
+            throw new InternalError(e);
+        }
+    }
 
     private static final System.Logger LOGGER = System.getLogger(TransactionWorker.class.getName());
 
@@ -59,21 +72,22 @@ public class TransactionWorker extends StoppableRunnable {
 
     private record PendingTransactionInput (long tid, TransactionInput input){}
 
+    @SuppressWarnings("ToArrayCallWithZeroLengthArrayArgument")
     public static TransactionWorker build(int id, Deque<TransactionInput> deque, long startingTid, int maxNumberOfTIDsBatch, int batchWindow, int numWorkers, Queue<Map<String, PrecendenceInfo>> precedenceMapInputQueue, Queue<Map<String, PrecendenceInfo>> precedenceMapOutputQueue, Map<String, TransactionDAG> transactionMap, Map<String, VmsNode[]> vmsIdentifiersPerDAG, Map<String, IVmsWorker> vmsWorkerContainerMap, IVmsSerdesProxy serdesProxy){
 
         // build private VmsTracking objects
         Map<String, VmsTracking> vmsTrackingMap = new HashMap<>();
         Map<String, VmsTracking[]> vmsPerTransactionMap = new HashMap<>(vmsIdentifiersPerDAG.size());
         for(var txEntry : vmsIdentifiersPerDAG.entrySet()){
-            var array = new VmsTracking[txEntry.getValue().length];
-            vmsPerTransactionMap.put(txEntry.getKey(), array);
-            int idx = 0;
+            var list = new ArrayList<VmsTracking>();
             for(VmsNode vmsNode : txEntry.getValue()){
-                array[idx] = vmsTrackingMap.putIfAbsent(vmsNode.identifier, new VmsTracking(vmsNode));
-                idx++;
+                var vms = vmsTrackingMap.putIfAbsent(vmsNode.identifier, new VmsTracking(vmsNode));
+                if(vms != null){
+                    list.add(vms);
+                }
             }
+            vmsPerTransactionMap.put(txEntry.getKey(), list.toArray(new VmsTracking[list.size()]));
         }
-
         return new TransactionWorker(id, deque, startingTid, maxNumberOfTIDsBatch, batchWindow, numWorkers, precedenceMapInputQueue, precedenceMapOutputQueue, transactionMap, vmsPerTransactionMap, vmsTrackingMap, vmsWorkerContainerMap, serdesProxy);
     }
 
@@ -95,6 +109,10 @@ public class TransactionWorker extends StoppableRunnable {
 
         this.pendingInputMap = new TreeMap<>();
         this.precedenceMapCache = new HashMap<>();
+
+        // define first batch context based on data from constructor
+        long startingBatchOffset = (this.startingTidBatch + maxNumberOfTIDsBatch - 1) / maxNumberOfTIDsBatch;
+        this.batchContext = new BatchContext(startingBatchOffset);
     }
 
     @Override
@@ -110,13 +128,13 @@ public class TransactionWorker extends StoppableRunnable {
                 // drain transaction inputs
                 while ((data = this.deque.poll()) != null &&
                         // avoid calling currentTime for every item
-                        this.tid < lastTidBatch) {
+                        this.tid <= lastTidBatch) {
                     // process precedence from previous worker in the ring
                     // we could do it in advance current batch, but can lead to higher wait in vms
-                    this.processPendingInput();
                     this.queueTransactionInput(data);
+                    this.processPendingInput();
                 }
-            } while (this.tid < lastTidBatch || System.currentTimeMillis() < end);
+            } while (this.tid <= lastTidBatch || System.currentTimeMillis() < end);
             while(!this.advanceCurrentBatch() && this.isRunning()){
                 this.processPendingInput();
             }
@@ -208,22 +226,24 @@ public class TransactionWorker extends StoppableRunnable {
 
     private boolean advanceCurrentBatch() {
 
-        // for easiness of implementation
-        if(!this.precedenceMapCache.containsKey(this.batchContext.batchOffset))
+        if(!this.precedenceMapCache.containsKey(this.batchContext.batchOffset - 1)) {
             return false;
+        }
 
-        var precedenceMap = this.precedenceMapCache.get(this.batchContext.batchOffset);
+        var precedenceMap = this.precedenceMapCache.get(this.batchContext.batchOffset - 1);
 
         // cannot issue a batch if we don't know the last batch of each VMS in this batch
         // the last batch might have been updated by previous workers in the ring
         // update for those vms that have not participated in this batch
         for(var vmsEntry : precedenceMap.entrySet()){
             VmsTracking inputVms = this.vmsTrackingMap.get(vmsEntry.getKey());
-            // should not update last tid... only need it for the transaction input precedence map
             if(inputVms.batch != this.batchContext.batchOffset){
                 inputVms.previousBatch = vmsEntry.getValue().previousToLastBatch;
                 inputVms.batch = vmsEntry.getValue().lastBatch;
+                inputVms.lastTid = vmsEntry.getValue().lastTid;
             } else {
+                // should not update last tid here.
+                // only need the last tid coming from a worker for the transaction input precedence map
                 inputVms.previousBatch = vmsEntry.getValue().lastBatch;
             }
         }
@@ -231,15 +251,19 @@ public class TransactionWorker extends StoppableRunnable {
         // iterate over all vms in the last batch, filter those which last tid != this.tid
         // after filtering, send a map containing the vms (identifier) and their corresponding last tids to the next transaction worker in the ring
         // must save this in a batch context map?
-        this.batchContext = new BatchContext(this.batchContext.batchOffset+1);
+        this.batchContext = new BatchContext(this.batchContext.batchOffset + 1);
         // build batch precedence map for next worker in the ring
-        Map<String,PrecendenceInfo> precedenceInfoPerVms = new HashMap<>(this.vmsTrackingMap.size());
+        Map<String, PrecendenceInfo> precedenceInfoPerVms = new HashMap<>(this.vmsTrackingMap.size());
         for (var vms_ : this.vmsTrackingMap.values()) {
             precedenceInfoPerVms.put(vms_.identifier, new PrecendenceInfo(vms_.lastTid, vms_.batch, vms_.previousBatch));
         }
         this.precedenceMapOutputQueue.add(precedenceInfoPerVms);
 
         return true;
+    }
+
+    public long getTid(){
+        return (long) TID_COUNT.getVolatile(this);
     }
 
 }

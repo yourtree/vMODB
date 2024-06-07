@@ -36,6 +36,8 @@ public final class HttpServerVertx extends AbstractVerticle {
         }
 
         Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(true));
+        boolean usingNative = vertx.isNativeTransportEnabled();
+        System.out.println("Vertx is running with native: " + usingNative);
         try {
         vertx.deployVerticle(HttpServerVertx.class,
                         new DeploymentOptions().setThreadingModel(threadingModel)
@@ -60,7 +62,7 @@ public final class HttpServerVertx extends AbstractVerticle {
 
         HttpServer server = this.vertx.createHttpServer(options);
 
-        // only linux native transport
+        // only with linux native transport
         // does not improve considering a single driver worker
         // options.setTcpQuickAck(true);
         // need to study about
@@ -100,7 +102,7 @@ public final class HttpServerVertx extends AbstractVerticle {
                 // b.length always equals to 8
                 //Buffer finalBuf = buf;
                 exchange.response().setStatusCode(200);
-                exchange.response().end(buf).onComplete(_ -> BUFFER_POOL.add(buf));
+                exchange.response().end(buf).onComplete(ignored -> BUFFER_POOL.add(buf));
                 return;
             }
 
