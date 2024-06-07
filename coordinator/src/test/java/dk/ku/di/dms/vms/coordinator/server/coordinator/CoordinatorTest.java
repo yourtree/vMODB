@@ -26,6 +26,8 @@ public final class CoordinatorTest {
 
     private static final System.Logger LOGGER = System.getLogger("CoordinatorTest");
 
+    private static final int MAX_NUM_TID_BATCH = 10;
+
     private static class NoOpVmsWorker implements IVmsWorker {
         @Override
         public void queueTransactionEvent(TransactionEvent.PayloadRaw payloadRaw) { }
@@ -34,36 +36,175 @@ public final class CoordinatorTest {
     }
 
     @Test
-    public void singleTransactionWorkerTest() throws InterruptedException {
+    public void testParamTransactionWorkers() throws InterruptedException {
+        int param = 3;
 
-        var vmsMetadataMap = new HashMap<String, VmsNode>();
-        vmsMetadataMap.put( "product", new VmsNode("localhost", 8080, "product", 0, 0, 0, null, null, null));
+        var vmsMetadataMap = buildTestVmsMetadataMap();
+        Map<String, TransactionDAG> transactionMap = buildTestTransactionDAGMap();
+        Map<String, VmsNode[]> vmsIdentifiersPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
+        Map<String, IVmsWorker> workers = buildTestVmsWorker();
 
-        Map<String, TransactionDAG> transactionMap = new HashMap<>();
-        TransactionDAG updateProductDag = TransactionBootstrap.name("test")
-                .input("a", "product", "test")
-                .terminal("b", "product", "a")
-                .build();
-        transactionMap.put(updateProductDag.name, updateProductDag);
-        Map<String, VmsNode[]> vmsIdentifiersPerDAG = new HashMap<>();
-        for(var dag : transactionMap.entrySet()) {
-            vmsIdentifiersPerDAG.put(dag.getKey(), BatchAlgo.buildTransactionDagVmsList(dag.getValue(), vmsMetadataMap));
+        // generic algorithm to handle N number of transaction workers
+        int idx = 1;
+        long initTid = 1;
+        var txInputQueue = new ConcurrentLinkedDeque<TransactionInput>();
+        var firstPrecedenceInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        var precedenceMapInputQueue = firstPrecedenceInputQueue;
+        ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>> precedenceMapOutputQueue;
+        buildAndQueueStarterPrecedenceMap(precedenceMapInputQueue);
+        var serdesProxy = VmsSerdesProxyBuilder.build();
+        do {
+            if(idx < param){
+                precedenceMapOutputQueue = new ConcurrentLinkedDeque<>();
+            } else {
+                precedenceMapOutputQueue = firstPrecedenceInputQueue;
+            }
+
+            var txWorker = TransactionWorker.build(idx, txInputQueue, initTid, MAX_NUM_TID_BATCH, 1000, param, precedenceMapInputQueue, precedenceMapOutputQueue, transactionMap, vmsIdentifiersPerDAG, workers, serdesProxy);
+
+            var txWorkerThread = Thread.ofPlatform().factory().newThread(txWorker);
+            txWorkerThread.start();
+
+            initTid = initTid + MAX_NUM_TID_BATCH;
+
+            precedenceMapInputQueue = precedenceMapOutputQueue;
+
+            idx++;
+        } while (idx <= param);
+
+        // TODO in this test, switch the noopworker to a worker that stores the batch complete messages received
+        //  then, check whether the last tids in each batch are correct
+
+    }
+
+    @Test
+    public void testTwoTransactionWorkersWithOneHalfMaxBatch() throws InterruptedException {
+        var vmsMetadataMap = buildTestVmsMetadataMap();
+        Map<String, TransactionDAG> transactionMap = buildTestTransactionDAGMap();
+        Map<String, VmsNode[]> vmsIdentifiersPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
+        Map<String, IVmsWorker> workers = buildTestVmsWorker();
+
+        var txInputQueue1 = new ConcurrentLinkedDeque<TransactionInput>();
+        var precedenceMapQueue1 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+
+        var txInputQueue2 = new ConcurrentLinkedDeque<TransactionInput>();
+        var precedenceMapQueue2 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+
+        var txWorker1 = TransactionWorker.build(1, txInputQueue1, 1, MAX_NUM_TID_BATCH, 1000, 2, precedenceMapQueue1, precedenceMapQueue2, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+
+        var txWorker2 = TransactionWorker.build(2, txInputQueue2, 11, MAX_NUM_TID_BATCH, 1000, 2, precedenceMapQueue2, precedenceMapQueue1, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+
+        buildAndQueueStarterPrecedenceMap(precedenceMapQueue1);
+
+        var txWorkerThread1 = Thread.ofPlatform().factory().newThread(txWorker1);
+        txWorkerThread1.start();
+        var txWorkerThread2 = Thread.ofPlatform().factory().newThread(txWorker2);
+        txWorkerThread2.start();
+
+        for(int i = 1; i <= 10; i++){
+            var input = new TransactionInput("test", new TransactionInput.Event("test", ""));
+            if(i<=5) txInputQueue1.add(input);
+            txInputQueue2.add(input);
         }
 
-        Map<String,IVmsWorker> workers = new HashMap<>();
-        workers.put("product", new NoOpVmsWorker());
+        sleep(100);
+
+        // could measure how long it takes for the tid to move on...
+        long txWorker1Tid;
+        do{
+            txWorker1Tid = txWorker1.getLastTidCompleted();
+        } while(txWorker1Tid == 0);
+
+        long txWorker2Tid;
+        do {
+            txWorker2Tid = txWorker2.getLastTidCompleted();
+        } while(txWorker2Tid == 0);
+
+        txWorker1.stop();
+        txWorker2.stop();
+
+        LOGGER.log(System.Logger.Level.INFO, " Tx worker #1 TID: "+txWorker1Tid);
+        LOGGER.log(System.Logger.Level.INFO, " Tx worker #2 TID: "+txWorker2Tid);
+
+        assert txWorker1Tid == 5;
+        assert txWorker2Tid == 20;
+    }
+
+    @Test
+    public void testTwoTransactionWorkers() throws InterruptedException {
+        var vmsMetadataMap = buildTestVmsMetadataMap();
+        Map<String, TransactionDAG> transactionMap = buildTestTransactionDAGMap();
+        Map<String, VmsNode[]> vmsIdentifiersPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
+        Map<String, IVmsWorker> workers = buildTestVmsWorker();
+
+        var txInputQueue1 = new ConcurrentLinkedDeque<TransactionInput>();
+        var precedenceMapQueue1 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+
+        var txInputQueue2 = new ConcurrentLinkedDeque<TransactionInput>();
+        var precedenceMapQueue2 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+
+        var txWorker1 = TransactionWorker.build(1, txInputQueue1, 1, MAX_NUM_TID_BATCH, 1000, 2, precedenceMapQueue1, precedenceMapQueue2, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+
+        var txWorker2 = TransactionWorker.build(2, txInputQueue2, 11, MAX_NUM_TID_BATCH, 1000, 2, precedenceMapQueue2, precedenceMapQueue1, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+
+        buildAndQueueStarterPrecedenceMap(precedenceMapQueue1);
+
+        var txWorkerThread1 = Thread.ofPlatform().factory().newThread(txWorker1);
+        txWorkerThread1.start();
+        var txWorkerThread2 = Thread.ofPlatform().factory().newThread(txWorker2);
+        txWorkerThread2.start();
+
+        for(int i = 1; i <= 10; i++){
+            var input = new TransactionInput("test", new TransactionInput.Event("test", ""));
+            txInputQueue1.add(input);
+            txInputQueue2.add(input);
+        }
+
+        sleep(100);
+
+        // could measure how long it takes for the tid to move on...
+        long txWorker1Tid;
+        do{
+            txWorker1Tid = txWorker1.getLastTidCompleted();
+        } while(txWorker1Tid == 0);
+
+        long txWorker2Tid;
+        do {
+            txWorker2Tid = txWorker2.getLastTidCompleted();
+        } while(txWorker2Tid == 0);
+
+        txWorker1.stop();
+        txWorker2.stop();
+
+        LOGGER.log(System.Logger.Level.INFO, " Tx worker #1 TID: "+txWorker1Tid);
+        LOGGER.log(System.Logger.Level.INFO, " Tx worker #2 TID: "+txWorker2Tid);
+
+        assert txWorker1Tid == 10;
+        assert txWorker2Tid == 20;
+    }
+
+    private static void buildAndQueueStarterPrecedenceMap(ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>> precedenceMapQueue1) {
+        Map<String, TransactionWorker.PrecendenceInfo> precedenceMap = new HashMap<>();
+        precedenceMap.put("product", new TransactionWorker.PrecendenceInfo(0,0,0));
+        precedenceMapQueue1.add(precedenceMap);
+    }
+
+    @Test
+    public void testSingleTransactionWorker() throws InterruptedException {
+        var vmsMetadataMap = buildTestVmsMetadataMap();
+        Map<String, TransactionDAG> transactionMap = buildTestTransactionDAGMap();
+        Map<String, VmsNode[]> vmsIdentifiersPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
+        Map<String, IVmsWorker> workers = buildTestVmsWorker();
 
         var txInputQueue = new ConcurrentLinkedDeque<TransactionInput>();
         var precedenceMapQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
 
-        var txWorker = TransactionWorker.build(1, txInputQueue, 1, 10, 1000, 1, precedenceMapQueue, precedenceMapQueue, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+        var txWorker = TransactionWorker.build(1, txInputQueue, 1, MAX_NUM_TID_BATCH, 1000, 1, precedenceMapQueue, precedenceMapQueue, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+
+        buildAndQueueStarterPrecedenceMap(precedenceMapQueue);
 
         var txWorkerThread = Thread.ofPlatform().factory().newThread(txWorker);
         txWorkerThread.start();
-
-        Map<String, TransactionWorker.PrecendenceInfo> precedenceMap = new HashMap<>();
-        precedenceMap.put("product", new TransactionWorker.PrecendenceInfo(0,0,0));
-        precedenceMapQueue.add(precedenceMap);
 
         for(int i = 1; i <= 10; i++){
             txInputQueue.add(new TransactionInput("test", new TransactionInput.Event("test", "")));
@@ -73,8 +214,43 @@ public final class CoordinatorTest {
 
         txWorker.stop();
 
-        assert txWorker.getTid() == 11;
+        long txWorker1Tid;
+        do{
+            txWorker1Tid = txWorker.getLastTidCompleted();
+        } while(txWorker1Tid == 0);
+        LOGGER.log(System.Logger.Level.INFO, " Tx worker #1 TID: "+txWorker1Tid);
 
+        assert txWorker1Tid == 10;
+    }
+
+    private static Map<String, IVmsWorker> buildTestVmsWorker() {
+        Map<String,IVmsWorker> workers = new HashMap<>();
+        workers.put("product", new NoOpVmsWorker());
+        return workers;
+    }
+
+    private static HashMap<String, VmsNode> buildTestVmsMetadataMap() {
+        var vmsMetadataMap = new HashMap<String, VmsNode>();
+        vmsMetadataMap.put( "product", new VmsNode("localhost", 8080, "product", 0, 0, 0, null, null, null));
+        return vmsMetadataMap;
+    }
+
+    private static Map<String, VmsNode[]> buildTestVmsPerDagMap(Map<String, TransactionDAG> transactionMap, HashMap<String, VmsNode> vmsMetadataMap) {
+        Map<String, VmsNode[]> vmsIdentifiersPerDAG = new HashMap<>();
+        for(var dag : transactionMap.entrySet()) {
+            vmsIdentifiersPerDAG.put(dag.getKey(), BatchAlgo.buildTransactionDagVmsList(dag.getValue(), vmsMetadataMap));
+        }
+        return vmsIdentifiersPerDAG;
+    }
+
+    private static Map<String, TransactionDAG> buildTestTransactionDAGMap() {
+        Map<String, TransactionDAG> transactionMap = new HashMap<>();
+        TransactionDAG updateProductDag = TransactionBootstrap.name("test")
+                .input("a", "product", "test")
+                .terminal("b", "product", "a")
+                .build();
+        transactionMap.put(updateProductDag.name, updateProductDag);
+        return transactionMap;
     }
 
     /**
@@ -107,18 +283,7 @@ public final class CoordinatorTest {
     public void testComplexDependenceMap(){
 
         // build VMSs
-        VmsNode vms1 =  new VmsNode("",0,"customer",1,1,0,null,null,null);
-        VmsNode vms2 =  new VmsNode("",0,"item",2,2,1,null,null,null);
-        VmsNode vms3 =  new VmsNode("",0,"stock",3,3,2,null,null,null);
-        VmsNode vms4 =  new VmsNode("",0,"warehouse",4,4,3,null,null,null);
-        VmsNode vms5 =  new VmsNode("",0,"order",5,5,4,null,null,null);
-
-        Map<String, VmsNode> vmsMetadataMap = new HashMap<>(5);
-        vmsMetadataMap.put(vms1.getIdentifier(), vms1);
-        vmsMetadataMap.put(vms2.getIdentifier(), vms2);
-        vmsMetadataMap.put(vms3.getIdentifier(), vms3);
-        vmsMetadataMap.put(vms4.getIdentifier(), vms4);
-        vmsMetadataMap.put(vms5.getIdentifier(), vms5);
+        Map<String, VmsNode> vmsMetadataMap = getStringVmsNodeMap();
 
         // new order transaction
         TransactionDAG dag =  TransactionBootstrap.name("new-order")
@@ -138,6 +303,22 @@ public final class CoordinatorTest {
 
         assert dependenceMap.get("customer") == 1 && dependenceMap.get("item") == 2 && dependenceMap.get("stock") == 3
                 && dependenceMap.get("warehouse") == 4 && dependenceMap.get("order") == 5;
+    }
+
+    private static Map<String, VmsNode> getStringVmsNodeMap() {
+        VmsNode vms1 =  new VmsNode("",0,"customer",1,1,0,null,null,null);
+        VmsNode vms2 =  new VmsNode("",0,"item",2,2,1,null,null,null);
+        VmsNode vms3 =  new VmsNode("",0,"stock",3,3,2,null,null,null);
+        VmsNode vms4 =  new VmsNode("",0,"warehouse",4,4,3,null,null,null);
+        VmsNode vms5 =  new VmsNode("",0,"order",5,5,4,null,null,null);
+
+        Map<String, VmsNode> vmsMetadataMap = new HashMap<>(5);
+        vmsMetadataMap.put(vms1.getIdentifier(), vms1);
+        vmsMetadataMap.put(vms2.getIdentifier(), vms2);
+        vmsMetadataMap.put(vms3.getIdentifier(), vms3);
+        vmsMetadataMap.put(vms4.getIdentifier(), vms4);
+        vmsMetadataMap.put(vms5.getIdentifier(), vms5);
+        return vmsMetadataMap;
     }
 
     // test correctness of a batch... are all dependence maps correct?

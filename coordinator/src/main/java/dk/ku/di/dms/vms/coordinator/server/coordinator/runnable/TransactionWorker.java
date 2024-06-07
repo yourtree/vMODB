@@ -9,25 +9,13 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.INFO;
 
 public class TransactionWorker extends StoppableRunnable {
-
-    private static final VarHandle TID_COUNT;
-
-    static {
-        try {
-            MethodHandles.Lookup l = MethodHandles.lookup();
-            TID_COUNT = l.findVarHandle(TransactionWorker.class, "tid", long.class);
-        } catch (Exception e) {
-            throw new InternalError(e);
-        }
-    }
 
     private static final System.Logger LOGGER = System.getLogger(TransactionWorker.class.getName());
 
@@ -53,6 +41,7 @@ public class TransactionWorker extends StoppableRunnable {
     private final Queue<Map<String, PrecendenceInfo>> precedenceMapInputQueue;
     private final Queue<Map<String, PrecendenceInfo>> precedenceMapOutputQueue;
     private final Map<Long, Map<String, PrecendenceInfo>> precedenceMapCache;
+    private final Queue<Long> lastTidQueue;
 
     private static class VmsTracking {
         public final String identifier;
@@ -113,11 +102,13 @@ public class TransactionWorker extends StoppableRunnable {
         // define first batch context based on data from constructor
         long startingBatchOffset = (this.startingTidBatch + maxNumberOfTIDsBatch - 1) / maxNumberOfTIDsBatch;
         this.batchContext = new BatchContext(startingBatchOffset);
+
+        this.lastTidQueue = new ConcurrentLinkedQueue<>();
     }
 
     @Override
     public void run() {
-        LOGGER.log(INFO, "Starting transaction worker #" + id);
+        LOGGER.log(INFO, "Starting transaction worker #" + this.id);
         TransactionInput data;
         long lastTidBatch;
         long end;
@@ -134,13 +125,33 @@ public class TransactionWorker extends StoppableRunnable {
                     this.queueTransactionInput(data);
                     this.processPendingInput();
                 }
-            } while (this.tid <= lastTidBatch || System.currentTimeMillis() < end);
+            } while (this.tid <= lastTidBatch && System.currentTimeMillis() < end);
             while(!this.advanceCurrentBatch() && this.isRunning()){
                 this.processPendingInput();
+                // LOGGER.log(INFO, "Worker #" + id+" looping..."+this.tid);
             }
-            this.tid = (lastTidBatch * numWorkers) + 1;
+
+            // issue a batch complete signal
+            this.signalLastTidCompleted(this.tid - 1);
+
+            this.tid = this.getTidNextBatch();
+            LOGGER.log(DEBUG, "Worker #" + id+" assigning TID "+this.tid);
             this.startingTidBatch = this.tid;
         }
+    }
+
+    private void signalLastTidCompleted(long tid) {
+        this.lastTidQueue.add(tid);
+    }
+
+    public long getLastTidCompleted(){
+        Long tid = this.lastTidQueue.poll();
+        if(tid == null) return 0;
+        return tid;
+    }
+
+    private long getTidNextBatch() {
+        return (this.startingTidBatch + ((long) this.numWorkers * this.maxNumberOfTIDsBatch));
     }
 
     private void queueTransactionInput(TransactionInput transactionInput) {
@@ -260,10 +271,6 @@ public class TransactionWorker extends StoppableRunnable {
         this.precedenceMapOutputQueue.add(precedenceInfoPerVms);
 
         return true;
-    }
-
-    public long getTid(){
-        return (long) TID_COUNT.getVolatile(this);
     }
 
 }
