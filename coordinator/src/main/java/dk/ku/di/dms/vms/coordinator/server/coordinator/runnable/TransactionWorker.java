@@ -36,7 +36,7 @@ public class TransactionWorker extends StoppableRunnable {
     private final IVmsSerdesProxy serdesProxy;
 
     private BatchContext batchContext;
-    private final TreeMap<Long, PendingTransactionInput> pendingInputMap;
+    private final TreeMap<Long, List<PendingTransactionInput>> pendingInputMap;
 
     private final Queue<Map<String, PrecendenceInfo>> precedenceMapInputQueue;
     private final Queue<Map<String, PrecendenceInfo>> precedenceMapOutputQueue;
@@ -62,18 +62,25 @@ public class TransactionWorker extends StoppableRunnable {
     private record PendingTransactionInput (long tid, TransactionInput input){}
 
     @SuppressWarnings("ToArrayCallWithZeroLengthArrayArgument")
-    public static TransactionWorker build(int id, Deque<TransactionInput> deque, long startingTid, int maxNumberOfTIDsBatch, int batchWindow, int numWorkers, Queue<Map<String, PrecendenceInfo>> precedenceMapInputQueue, Queue<Map<String, PrecendenceInfo>> precedenceMapOutputQueue, Map<String, TransactionDAG> transactionMap, Map<String, VmsNode[]> vmsIdentifiersPerDAG, Map<String, IVmsWorker> vmsWorkerContainerMap, IVmsSerdesProxy serdesProxy){
-
+    public static TransactionWorker build(int id, Deque<TransactionInput> deque,
+                                          long startingTid, int maxNumberOfTIDsBatch,
+                                          int batchWindow, int numWorkers,
+                                          Queue<Map<String, PrecendenceInfo>> precedenceMapInputQueue,
+                                          Queue<Map<String, PrecendenceInfo>> precedenceMapOutputQueue,
+                                          Map<String, TransactionDAG> transactionMap,
+                                          Map<String, VmsNode[]> vmsIdentifiersPerDAG,
+                                          Map<String, IVmsWorker> vmsWorkerContainerMap,
+                                          IVmsSerdesProxy serdesProxy){
         // build private VmsTracking objects
         Map<String, VmsTracking> vmsTrackingMap = new HashMap<>();
         Map<String, VmsTracking[]> vmsPerTransactionMap = new HashMap<>(vmsIdentifiersPerDAG.size());
         for(var txEntry : vmsIdentifiersPerDAG.entrySet()){
             var list = new ArrayList<VmsTracking>();
             for(VmsNode vmsNode : txEntry.getValue()){
-                var vms = vmsTrackingMap.putIfAbsent(vmsNode.identifier, new VmsTracking(vmsNode));
-                if(vms != null){
-                    list.add(vms);
+                if(!vmsTrackingMap.containsKey(vmsNode.identifier)){
+                    vmsTrackingMap.putIfAbsent(vmsNode.identifier, new VmsTracking(vmsNode));
                 }
+                list.add(vmsTrackingMap.get(vmsNode.identifier));
             }
             vmsPerTransactionMap.put(txEntry.getKey(), list.toArray(new VmsTracking[list.size()]));
         }
@@ -123,13 +130,11 @@ public class TransactionWorker extends StoppableRunnable {
                     // process precedence from previous worker in the ring
                     // we could do it in advance current batch, but can lead to higher wait in vms
                     this.queueTransactionInput(data);
-                    this.processPendingInput();
                 }
             } while (this.tid <= lastTidBatch && System.currentTimeMillis() < end);
-            while(!this.advanceCurrentBatch() && this.isRunning()){
+            do {
                 this.processPendingInput();
-                // LOGGER.log(INFO, "Worker #" + id+" looping..."+this.tid);
-            }
+            } while(!this.advanceCurrentBatch() && this.isRunning());
 
             // issue a batch complete signal
             this.signalLastTidCompleted(this.tid - 1);
@@ -151,7 +156,7 @@ public class TransactionWorker extends StoppableRunnable {
     }
 
     private long getTidNextBatch() {
-        return (this.startingTidBatch + ((long) this.numWorkers * this.maxNumberOfTIDsBatch));
+        return this.startingTidBatch + ((long) this.numWorkers * this.maxNumberOfTIDsBatch);
     }
 
     private void queueTransactionInput(TransactionInput transactionInput) {
@@ -167,37 +172,70 @@ public class TransactionWorker extends StoppableRunnable {
         // if any vms in the dag shows a previous batch offset, then this input must be marked as pending
         // until we get the precedence from the transaction worker that precedes this one in the ring,
         // we cannot submit this input
+        boolean markAsPending = false;
         for (var vms_ : vmsList) {
             previousTidPerVms.put(vms_.identifier, vms_.lastTid);
             if(vms_.batch != this.batchContext.batchOffset){
                 // previous batch will be updated later, when precedence map is received from another worker
                 // vms_.previousBatch = vms_.batch;
                 vms_.batch = this.batchContext.batchOffset;
+                markAsPending = true;
             }
             vms_.lastTid = this.tid;
             vms_.numberOfTIDsCurrentBatch++;
-            break;
+            // ONLY SET BREAK IF TESTING A DAG WITH A SINGLE VMS
+            // break;
         }
 
         this.batchContext.terminalVMSs.addAll( transactionDAG.terminalNodes );
 
-        if(this.tid == startingTidBatch){
+        if(markAsPending){
             // this has to be emmitted when batch info from previous worker in the ring arrives
-            this.pendingInputMap.put(this.batchContext.batchOffset - 1,
-                    new PendingTransactionInput(this.tid, transactionInput));
+            long lastBatchOffset = this.batchContext.batchOffset - 1;
+            List<PendingTransactionInput> list;
+            if(this.pendingInputMap.containsKey(lastBatchOffset)){
+                list = this.pendingInputMap.get(lastBatchOffset);
+            } else {
+                list = new ArrayList<>();
+                this.pendingInputMap.put(lastBatchOffset, list);
+            }
+            list.add(new PendingTransactionInput(this.tid, transactionInput));
         } else {
             String precedenceMapStr = this.serdesProxy.serializeMap(previousTidPerVms);
             TransactionEvent.PayloadRaw txEvent = TransactionEvent.of(this.tid, this.batchContext.batchOffset,
                     transactionInput.event.name, transactionInput.event.payload, precedenceMapStr);
-               /*
-                *   if(!event.targetVms.equalsIgnoreCase(inputVms.identifier)){
-                        LOGGER.log(ERROR,"Leader: The event was going to be queued to the incorrect VMS worker!");
-                    }
-                */
+           /*
+            *   if(!event.targetVms.equalsIgnoreCase(inputVms.identifier)){
+                    LOGGER.log(ERROR,"Leader: The event was going to be queued to the incorrect VMS worker!");
+                }
+            */
             LOGGER.log(DEBUG,"Leader: Transaction worker "+id+" adding event "+event.name+" to "+inputVms.identifier+" worker:\n"+txEvent);
             this.vmsWorkerContainerMap.get(inputVms.identifier).queueTransactionEvent(txEvent);
         }
         this.tid++;
+    }
+
+    public static class PrecendenceInfo {
+        long lastTid;
+        final long lastBatch;
+        final long previousToLastBatch;
+        public PrecendenceInfo(long lastTid, long lastBatch, long previousToLastBatch) {
+            this.lastBatch = lastBatch;
+            this.lastTid = lastTid;
+            this.previousToLastBatch = previousToLastBatch;
+        }
+
+        public long lastTid() {
+            return lastTid;
+        }
+
+        public long lastBatch() {
+            return lastBatch;
+        }
+
+        public long previousToLastBatch() {
+            return previousToLastBatch;
+        }
     }
 
     private void processPendingInput() {
@@ -207,24 +245,30 @@ public class TransactionWorker extends StoppableRunnable {
 
         var entry = this.pendingInputMap.firstEntry();
         long batchOffset = entry.getKey();
+        List<PendingTransactionInput> list = entry.getValue();
 
-        // building map only those VMSs that participate in the transaction
-        TransactionDAG transactionDAG = this.transactionMap.get( entry.getValue().input.name );
-        VmsTracking[] vmsList = this.vmsPerTransactionMap.get( transactionDAG.name );
-        Map<String, Long> previousTidPerVms = new HashMap<>(vmsList.length);
+        for(PendingTransactionInput pendingInput : list) {
+            // building map only those VMSs that participate in the transaction
+            TransactionDAG transactionDAG = this.transactionMap.get(pendingInput.input.name);
+            VmsTracking[] vmsList = this.vmsPerTransactionMap.get(transactionDAG.name);
+            Map<String, Long> previousTidPerVms = new HashMap<>(vmsList.length);
 
-        for (var vms_ : vmsList) {
-            var precedenceInfo = precedenceMap.get(vms_.identifier);
-            previousTidPerVms.put(vms_.identifier, precedenceInfo.lastTid());
-            break;
+            for (VmsTracking vms_ : vmsList) {
+                PrecendenceInfo precedenceInfo = precedenceMap.get(vms_.identifier);
+                previousTidPerVms.put(vms_.identifier, precedenceInfo.lastTid);
+                // update precedence info for next pending input
+                precedenceInfo.lastTid = pendingInput.tid;
+                // ONLY SET BREAK IF DAG CONTAINS A SINGLE VMS
+                // break;
+            }
+            String precedenceMapStr = this.serdesProxy.serializeMap(previousTidPerVms);
+
+            EventIdentifier event = transactionDAG.inputEvents.get(pendingInput.input.event.name);
+            VmsTracking inputVms = this.vmsTrackingMap.get(event.targetVms);
+            TransactionEvent.PayloadRaw txEvent = TransactionEvent.of(pendingInput.tid, batchOffset,
+                    pendingInput.input.event.name, pendingInput.input.event.payload, precedenceMapStr);
+            this.vmsWorkerContainerMap.get(inputVms.identifier).queueTransactionEvent(txEvent);
         }
-        String precedenceMapStr = this.serdesProxy.serializeMap(previousTidPerVms);
-
-        EventIdentifier event = transactionDAG.inputEvents.get( entry.getValue().input.event.name);
-        VmsTracking inputVms = this.vmsTrackingMap.get(event.targetVms);
-        TransactionEvent.PayloadRaw txEvent = TransactionEvent.of(entry.getValue().tid, batchOffset,
-                entry.getValue().input.event.name, entry.getValue().input.event.payload, precedenceMapStr);
-        this.vmsWorkerContainerMap.get(inputVms.identifier).queueTransactionEvent(txEvent);
 
         this.pendingInputMap.remove(entry.getKey());
 
@@ -232,8 +276,6 @@ public class TransactionWorker extends StoppableRunnable {
         // store for batch completion time
         this.precedenceMapCache.put(batchOffset, precedenceMap);
     }
-
-    public record PrecendenceInfo(long lastTid, long lastBatch, long previousToLastBatch){}
 
     private boolean advanceCurrentBatch() {
 
@@ -247,15 +289,16 @@ public class TransactionWorker extends StoppableRunnable {
         // the last batch might have been updated by previous workers in the ring
         // update for those vms that have not participated in this batch
         for(var vmsEntry : precedenceMap.entrySet()){
+            PrecendenceInfo precedenceInfo = vmsEntry.getValue();
             VmsTracking inputVms = this.vmsTrackingMap.get(vmsEntry.getKey());
             if(inputVms.batch != this.batchContext.batchOffset){
-                inputVms.previousBatch = vmsEntry.getValue().previousToLastBatch;
-                inputVms.batch = vmsEntry.getValue().lastBatch;
-                inputVms.lastTid = vmsEntry.getValue().lastTid;
+                inputVms.previousBatch = precedenceInfo.previousToLastBatch;
+                inputVms.batch = precedenceInfo.lastBatch;
+                inputVms.lastTid = precedenceInfo.lastTid;
             } else {
                 // should not update last tid here.
                 // only need the last tid coming from a worker for the transaction input precedence map
-                inputVms.previousBatch = vmsEntry.getValue().lastBatch;
+                inputVms.previousBatch = precedenceInfo.lastBatch;
             }
         }
 
@@ -266,7 +309,8 @@ public class TransactionWorker extends StoppableRunnable {
         // build batch precedence map for next worker in the ring
         Map<String, PrecendenceInfo> precedenceInfoPerVms = new HashMap<>(this.vmsTrackingMap.size());
         for (var vms_ : this.vmsTrackingMap.values()) {
-            precedenceInfoPerVms.put(vms_.identifier, new PrecendenceInfo(vms_.lastTid, vms_.batch, vms_.previousBatch));
+            precedenceInfoPerVms.put(vms_.identifier, new PrecendenceInfo(
+                    vms_.lastTid, vms_.batch, vms_.previousBatch));
         }
         this.precedenceMapOutputQueue.add(precedenceInfoPerVms);
 

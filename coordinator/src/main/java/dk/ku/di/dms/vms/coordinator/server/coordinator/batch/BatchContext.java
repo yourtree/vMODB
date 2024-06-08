@@ -15,7 +15,7 @@ public final class BatchContext {
     public final long batchOffset;
 
     // set of terminal VMSs that has not voted yet
-    public Set<String> missingVotes;
+    public final Set<String> missingVotes;
 
     public final Set<String> terminalVMSs;
 
@@ -30,6 +30,7 @@ public final class BatchContext {
     public BatchContext(long batchOffset) {
         this.batchOffset = batchOffset;
         this.terminalVMSs = new HashSet<>();
+        this.missingVotes = new HashSet<>();
     }
 
     // called when the batch is over
@@ -40,7 +41,7 @@ public final class BatchContext {
         this.previousBatchPerVms = previousBatchPerVms;
         this.numberOfTIDsPerVms = numberOfTIDsPerVms;
         // must be a modifiable hash set because the set will be modified upon BATCH_COMPLETE messages received
-        this.missingVotes = new HashSet<>(this.terminalVMSs);
+        this.missingVotes.addAll(this.terminalVMSs);
     }
 
 }

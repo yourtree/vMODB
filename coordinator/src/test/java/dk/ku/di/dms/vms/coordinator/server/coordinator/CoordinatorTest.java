@@ -8,12 +8,15 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
+import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static java.lang.Thread.sleep;
 
@@ -35,8 +38,106 @@ public final class CoordinatorTest {
         public void queueMessage(Object message) { }
     }
 
+    private static class StorePayloadVmsWorker implements IVmsWorker {
+
+        private final IVmsSerdesProxy serdesProxy;
+        public final ConcurrentLinkedQueue<Map<String,Long>> queue;
+
+        public StorePayloadVmsWorker(IVmsSerdesProxy serdesProxy) {
+            this.serdesProxy = serdesProxy;
+            this.queue = new ConcurrentLinkedQueue<>();
+        }
+
+        @Override
+        public void queueTransactionEvent(TransactionEvent.PayloadRaw payloadRaw) {
+            String str = new String(payloadRaw.precedenceMap(), StandardCharsets.UTF_8);
+            var map = serdesProxy.deserializeDependenceMap(str);
+            this.queue.add(map);
+        }
+        @Override
+        public void queueMessage(Object message) { }
+    }
+
+    @SuppressWarnings("BusyWait")
     @Test
-    public void testParamTransactionWorkers() throws InterruptedException {
+    public void testTwoPendingTransactionInput() throws InterruptedException {
+
+        HashMap<String, VmsNode> vmsMetadataMap = new HashMap<>();
+        vmsMetadataMap.put( "product", new VmsNode("localhost", 8080, "product", 0, 0, 0, null, null, null));
+        vmsMetadataMap.put( "cart", new VmsNode("localhost", 8081, "cart", 0, 0, 0, null, null, null));
+        vmsMetadataMap.put( "stock", new VmsNode("localhost", 8082, "stock", 0, 0, 0, null, null, null));
+
+        Map<String,IVmsWorker> workers = new HashMap<>();
+        var productWorker = new StorePayloadVmsWorker(VmsSerdesProxyBuilder.build());
+        workers.put("product", productWorker);
+        workers.put("cart", new NoOpVmsWorker());
+        workers.put("stock", new NoOpVmsWorker());
+
+        Map<String, TransactionDAG> transactionMap = new HashMap<>();
+        TransactionDAG updateProductDag = TransactionBootstrap.name("update_product")
+                .input("a", "product", "update_product")
+                    .terminal("b", "stock", "a")
+                    .terminal("c", "cart", "a")
+                .build();
+        transactionMap.put(updateProductDag.name, updateProductDag);
+        TransactionDAG updatePriceDag = TransactionBootstrap.name("update_price")
+                .input("a", "product", "update_price")
+                .terminal("b", "cart", "a")
+                .build();
+        transactionMap.put(updatePriceDag.name, updatePriceDag);
+
+        var vmsNodePerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
+
+        var txInputQueue = new ConcurrentLinkedDeque<TransactionInput>();
+        var precedenceMapInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        var precedenceMapOutputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        Map<String, TransactionWorker.PrecendenceInfo> precedenceMap = new HashMap<>();
+        precedenceMap.put("product", new TransactionWorker.PrecendenceInfo(10, 1, 0));
+        precedenceMap.put("cart", new TransactionWorker.PrecendenceInfo(10, 1, 0));
+        precedenceMap.put("stock", new TransactionWorker.PrecendenceInfo(1, 1, 0));
+        precedenceMapInputQueue.add(precedenceMap);
+
+        var txWorker = TransactionWorker.build(1, txInputQueue, 11, MAX_NUM_TID_BATCH, 1000, 1, precedenceMapInputQueue, precedenceMapOutputQueue, transactionMap, vmsNodePerDAG, workers, VmsSerdesProxyBuilder.build() );
+
+        // queue two pending inputs
+        var input1 = new TransactionInput("update_price", new TransactionInput.Event("update_price", ""));
+        txInputQueue.add(input1);
+
+        var input2 = new TransactionInput("update_product", new TransactionInput.Event("update_product", ""));
+        txInputQueue.add(input2);
+
+        var txWorkerThread = Thread.ofPlatform().factory().newThread(txWorker);
+        txWorkerThread.start();
+
+        // check if the last tid was generated correctly
+        Map<String, TransactionWorker.PrecendenceInfo> precedenceInfo;
+        while((precedenceInfo = precedenceMapOutputQueue.poll()) == null){
+            // do nothing
+            sleep(10);
+        }
+
+        assert precedenceInfo.get("product").lastTid() == 12 &&
+                precedenceInfo.get("cart").lastTid() == 12 &&
+                precedenceInfo.get("stock").lastTid() == 12;
+
+        assert precedenceInfo.get("product").lastBatch() == 2 &&
+                precedenceInfo.get("cart").lastBatch() == 2 &&
+                precedenceInfo.get("stock").lastBatch() == 2;
+
+        assert precedenceInfo.get("product").previousToLastBatch() == 1 &&
+                precedenceInfo.get("cart").previousToLastBatch() == 1 &&
+                precedenceInfo.get("stock").previousToLastBatch() == 1;
+
+        var map = productWorker.queue.poll();
+
+        assert map != null && map.get("cart") == 10 && map.get("product") == 10;
+
+        map = productWorker.queue.poll();
+        assert map != null && map.get("cart") == 11 && map.get("product") == 11 && map.get("stock") == 1;
+    }
+
+    @Test
+    public void testParamTransactionWorkers() {
         int param = 3;
 
         var vmsMetadataMap = buildTestVmsMetadataMap();
@@ -185,7 +286,7 @@ public final class CoordinatorTest {
 
     private static void buildAndQueueStarterPrecedenceMap(ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>> precedenceMapQueue1) {
         Map<String, TransactionWorker.PrecendenceInfo> precedenceMap = new HashMap<>();
-        precedenceMap.put("product", new TransactionWorker.PrecendenceInfo(0,0,0));
+        precedenceMap.put("product", new TransactionWorker.PrecendenceInfo(0, 0, 0));
         precedenceMapQueue1.add(precedenceMap);
     }
 
@@ -235,12 +336,13 @@ public final class CoordinatorTest {
         return vmsMetadataMap;
     }
 
-    private static Map<String, VmsNode[]> buildTestVmsPerDagMap(Map<String, TransactionDAG> transactionMap, HashMap<String, VmsNode> vmsMetadataMap) {
-        Map<String, VmsNode[]> vmsIdentifiersPerDAG = new HashMap<>();
+    private static Map<String, VmsNode[]> buildTestVmsPerDagMap(Map<String, TransactionDAG> transactionMap,
+                                                                HashMap<String, VmsNode> vmsMetadataMap) {
+        Map<String, VmsNode[]> vmsNodePerDAG = new HashMap<>();
         for(var dag : transactionMap.entrySet()) {
-            vmsIdentifiersPerDAG.put(dag.getKey(), BatchAlgo.buildTransactionDagVmsList(dag.getValue(), vmsMetadataMap));
+            vmsNodePerDAG.put(dag.getKey(), BatchAlgo.buildTransactionDagVmsList(dag.getValue(), vmsMetadataMap));
         }
-        return vmsIdentifiersPerDAG;
+        return vmsNodePerDAG;
     }
 
     private static Map<String, TransactionDAG> buildTestTransactionDAGMap() {
@@ -329,21 +431,13 @@ public final class CoordinatorTest {
      */
     @Test
     public void testBasicCommitProtocol(){
-
         // need a transaction dag and corresponding VMSs
         // need a producer of transaction inputs (a separate thread or this thread)
         // need the coordinator to assemble the batch
         // need vms workers
         // no need of a scheduler
-
         // need of custom VMSs to respond to the batch protocol correctly
-
-
-
         // it would be nice to decouple the network from the batch algorithm...
-
-
-
     }
 
     // with a source, an internal, and a terminal
