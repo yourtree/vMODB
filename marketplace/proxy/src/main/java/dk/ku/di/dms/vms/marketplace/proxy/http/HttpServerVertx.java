@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 
 import static io.vertx.core.Future.await;
+import static java.lang.Thread.sleep;
 
 public final class HttpServerVertx extends AbstractVerticle {
 
@@ -39,7 +40,7 @@ public final class HttpServerVertx extends AbstractVerticle {
         boolean usingNative = vertx.isNativeTransportEnabled();
         System.out.println("Vertx is running with native: " + usingNative);
         try {
-        vertx.deployVerticle(HttpServerVertx.class,
+            vertx.deployVerticle(HttpServerVertx.class,
                         new DeploymentOptions().setThreadingModel(threadingModel)
                                 .setConfig(json)
                 )
@@ -47,12 +48,13 @@ public final class HttpServerVertx extends AbstractVerticle {
                 .toCompletableFuture()
                 .get();
         } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace(System.out);
             throw new RuntimeException(e);
         }
     }
 
     @Override
-    public void start() {
+    public void start(Promise<Void> startPromise) {
         HttpServerOptions options = new HttpServerOptions();
         JsonObject config = this.vertx.getOrCreateContext().config();
         options.setPort(config.getInteger("http_port"));
@@ -70,11 +72,13 @@ public final class HttpServerVertx extends AbstractVerticle {
 
         server.requestHandler(new VertxHandler(COORD));
         if(this.vertx.getOrCreateContext().isEventLoopContext()){
-            try {
-                server.listen().toCompletionStage()
-                        .toCompletableFuture()
-                        .get();
-            } catch (InterruptedException | ExecutionException ignored) { }
+            server.listen(res -> {
+                if (res.succeeded()) {
+                    startPromise.complete();
+                } else {
+                    startPromise.fail(res.cause());
+                }
+            });
         } else {
             await(server.listen());
         }

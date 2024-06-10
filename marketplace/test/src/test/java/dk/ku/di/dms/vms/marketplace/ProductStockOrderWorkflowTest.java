@@ -68,7 +68,7 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
 
         assert coordinator.getCurrentBatchOffset() == 2;
         assert coordinator.getBatchOffsetPendingCommit() == 2;
-        assert coordinator.getTid() == 21;
+        assert coordinator.getLastTidOfLastCompletedBatch() == 21;
     }
 
     private class InputProducer implements Runnable {

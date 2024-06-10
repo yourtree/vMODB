@@ -1,11 +1,13 @@
 package dk.ku.di.dms.vms.coordinator.server.coordinator;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchAlgo;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchContext;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.IVmsWorker;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.TransactionWorker;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -13,8 +15,7 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -39,7 +40,6 @@ public final class CoordinatorTest {
     }
 
     private static class StorePayloadVmsWorker implements IVmsWorker {
-
         private final IVmsSerdesProxy serdesProxy;
         public final ConcurrentLinkedQueue<Map<String,Long>> queue;
 
@@ -97,7 +97,9 @@ public final class CoordinatorTest {
         precedenceMap.put("stock", new TransactionWorker.PrecendenceInfo(1, 1, 0));
         precedenceMapInputQueue.add(precedenceMap);
 
-        var txWorker = TransactionWorker.build(1, txInputQueue, 11, MAX_NUM_TID_BATCH, 1000, 1, precedenceMapInputQueue, precedenceMapOutputQueue, transactionMap, vmsNodePerDAG, workers, VmsSerdesProxyBuilder.build() );
+        var txWorker = TransactionWorker.build(1, txInputQueue, 11, MAX_NUM_TID_BATCH, 1000,
+                1, precedenceMapInputQueue, precedenceMapOutputQueue, transactionMap, vmsNodePerDAG,
+                workers, new ConcurrentLinkedQueue<>(), VmsSerdesProxyBuilder.build() );
 
         // queue two pending inputs
         var input1 = new TransactionInput("update_price", new TransactionInput.Event("update_price", ""));
@@ -137,8 +139,8 @@ public final class CoordinatorTest {
     }
 
     @Test
-    public void testParamTransactionWorkers() {
-        int param = 3;
+    public void testParamTransactionWorkers() throws InterruptedException {
+        int numWorkers = 2;
 
         var vmsMetadataMap = buildTestVmsMetadataMap();
         Map<String, TransactionDAG> transactionMap = buildTestTransactionDAGMap();
@@ -148,38 +150,62 @@ public final class CoordinatorTest {
         // generic algorithm to handle N number of transaction workers
         int idx = 1;
         long initTid = 1;
-        var txInputQueue = new ConcurrentLinkedDeque<TransactionInput>();
+
         var firstPrecedenceInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
         var precedenceMapInputQueue = firstPrecedenceInputQueue;
         ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>> precedenceMapOutputQueue;
         buildAndQueueStarterPrecedenceMap(precedenceMapInputQueue);
         var serdesProxy = VmsSerdesProxyBuilder.build();
+        List<Tuple<TransactionWorker,Thread>> txWorkers = new ArrayList<>();
+        Queue<Object> coordinatorQueue = new ConcurrentLinkedDeque<>();
         do {
-            if(idx < param){
+            if(idx < numWorkers){
                 precedenceMapOutputQueue = new ConcurrentLinkedDeque<>();
             } else {
                 precedenceMapOutputQueue = firstPrecedenceInputQueue;
             }
 
-            var txWorker = TransactionWorker.build(idx, txInputQueue, initTid, MAX_NUM_TID_BATCH, 1000, param, precedenceMapInputQueue, precedenceMapOutputQueue, transactionMap, vmsIdentifiersPerDAG, workers, serdesProxy);
+            var txInputQueue = new ConcurrentLinkedDeque<TransactionInput>();
 
+            for(int i = 1; i <= 10; i++){
+                var input = new TransactionInput("test", new TransactionInput.Event("test", ""));
+                txInputQueue.add(input);
+            }
+
+            var txWorker = TransactionWorker.build(idx, txInputQueue, initTid, MAX_NUM_TID_BATCH, 1000,
+                    numWorkers, precedenceMapInputQueue, precedenceMapOutputQueue, transactionMap,
+                    vmsIdentifiersPerDAG, workers, coordinatorQueue, serdesProxy);
             var txWorkerThread = Thread.ofPlatform().factory().newThread(txWorker);
-            txWorkerThread.start();
 
             initTid = initTid + MAX_NUM_TID_BATCH;
 
             precedenceMapInputQueue = precedenceMapOutputQueue;
 
             idx++;
-        } while (idx <= param);
 
-        // TODO in this test, switch the noopworker to a worker that stores the batch complete messages received
-        //  then, check whether the last tids in each batch are correct
+            txWorkers.add(Tuple.of( txWorker, txWorkerThread ));
+        } while (idx <= numWorkers);
 
+        // in this test check whether the last tids in each batch are correct
+        txWorkers.get(0).t2().start();
+        txWorkers.get(1).t2().start();
+
+        sleep(100);
+
+        var lastTid1 = ((BatchContext)coordinatorQueue.poll()).lastTid;
+        var lastTid2 = ((BatchContext)coordinatorQueue.poll()).lastTid;
+
+        assert lastTid1 == 10 && lastTid2 == 20;
+
+        txWorkers.get(0).t1().stop();
+        txWorkers.get(1).t1().stop();
     }
 
     @Test
     public void testTwoTransactionWorkersWithOneHalfMaxBatch() throws InterruptedException {
+
+        int batchWindow = 100;
+
         var vmsMetadataMap = buildTestVmsMetadataMap();
         Map<String, TransactionDAG> transactionMap = buildTestTransactionDAGMap();
         Map<String, VmsNode[]> vmsIdentifiersPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
@@ -191,16 +217,17 @@ public final class CoordinatorTest {
         var txInputQueue2 = new ConcurrentLinkedDeque<TransactionInput>();
         var precedenceMapQueue2 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
 
-        var txWorker1 = TransactionWorker.build(1, txInputQueue1, 1, MAX_NUM_TID_BATCH, 1000, 2, precedenceMapQueue1, precedenceMapQueue2, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+        Queue<Object> coordinatorQueue = new ConcurrentLinkedDeque<>();
 
-        var txWorker2 = TransactionWorker.build(2, txInputQueue2, 11, MAX_NUM_TID_BATCH, 1000, 2, precedenceMapQueue2, precedenceMapQueue1, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+        var txWorker1 = TransactionWorker.build(1, txInputQueue1, 1, MAX_NUM_TID_BATCH, batchWindow,
+                2, precedenceMapQueue1, precedenceMapQueue2, transactionMap, vmsIdentifiersPerDAG, workers,
+                coordinatorQueue, VmsSerdesProxyBuilder.build() );
+
+        var txWorker2 = TransactionWorker.build(2, txInputQueue2, 11, MAX_NUM_TID_BATCH, batchWindow,
+                2, precedenceMapQueue2, precedenceMapQueue1, transactionMap, vmsIdentifiersPerDAG, workers,
+                coordinatorQueue, VmsSerdesProxyBuilder.build() );
 
         buildAndQueueStarterPrecedenceMap(precedenceMapQueue1);
-
-        var txWorkerThread1 = Thread.ofPlatform().factory().newThread(txWorker1);
-        txWorkerThread1.start();
-        var txWorkerThread2 = Thread.ofPlatform().factory().newThread(txWorker2);
-        txWorkerThread2.start();
 
         for(int i = 1; i <= 10; i++){
             var input = new TransactionInput("test", new TransactionInput.Event("test", ""));
@@ -208,17 +235,23 @@ public final class CoordinatorTest {
             txInputQueue2.add(input);
         }
 
-        sleep(100);
+        var txWorkerThread1 = Thread.ofPlatform().factory().newThread(txWorker1);
+        txWorkerThread1.start();
+        var txWorkerThread2 = Thread.ofPlatform().factory().newThread(txWorker2);
+        txWorkerThread2.start();
+
+        // must be higher than window because worker 1 will only close batch in batch window timeout
+        sleep(batchWindow*2);
 
         // could measure how long it takes for the tid to move on...
         long txWorker1Tid;
         do{
-            txWorker1Tid = txWorker1.getLastTidCompleted();
+            txWorker1Tid = ((BatchContext)coordinatorQueue.poll()).lastTid;
         } while(txWorker1Tid == 0);
 
         long txWorker2Tid;
         do {
-            txWorker2Tid = txWorker2.getLastTidCompleted();
+            txWorker2Tid = ((BatchContext)coordinatorQueue.poll()).lastTid;
         } while(txWorker2Tid == 0);
 
         txWorker1.stop();
@@ -244,9 +277,15 @@ public final class CoordinatorTest {
         var txInputQueue2 = new ConcurrentLinkedDeque<TransactionInput>();
         var precedenceMapQueue2 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
 
-        var txWorker1 = TransactionWorker.build(1, txInputQueue1, 1, MAX_NUM_TID_BATCH, 1000, 2, precedenceMapQueue1, precedenceMapQueue2, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+        Queue<Object> coordinatorQueue = new ConcurrentLinkedDeque<>();
 
-        var txWorker2 = TransactionWorker.build(2, txInputQueue2, 11, MAX_NUM_TID_BATCH, 1000, 2, precedenceMapQueue2, precedenceMapQueue1, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+        var txWorker1 = TransactionWorker.build(1, txInputQueue1, 1, MAX_NUM_TID_BATCH, 1000,
+                2, precedenceMapQueue1, precedenceMapQueue2, transactionMap, vmsIdentifiersPerDAG, workers,
+                coordinatorQueue, VmsSerdesProxyBuilder.build() );
+
+        var txWorker2 = TransactionWorker.build(2, txInputQueue2, 11, MAX_NUM_TID_BATCH, 1000,
+                2, precedenceMapQueue2, precedenceMapQueue1, transactionMap, vmsIdentifiersPerDAG, workers,
+                coordinatorQueue, VmsSerdesProxyBuilder.build() );
 
         buildAndQueueStarterPrecedenceMap(precedenceMapQueue1);
 
@@ -266,12 +305,12 @@ public final class CoordinatorTest {
         // could measure how long it takes for the tid to move on...
         long txWorker1Tid;
         do{
-            txWorker1Tid = txWorker1.getLastTidCompleted();
+            txWorker1Tid = ((BatchContext)coordinatorQueue.poll()).lastTid;
         } while(txWorker1Tid == 0);
 
         long txWorker2Tid;
         do {
-            txWorker2Tid = txWorker2.getLastTidCompleted();
+            txWorker2Tid = ((BatchContext)coordinatorQueue.poll()).lastTid;
         } while(txWorker2Tid == 0);
 
         txWorker1.stop();
@@ -299,8 +338,10 @@ public final class CoordinatorTest {
 
         var txInputQueue = new ConcurrentLinkedDeque<TransactionInput>();
         var precedenceMapQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
-
-        var txWorker = TransactionWorker.build(1, txInputQueue, 1, MAX_NUM_TID_BATCH, 1000, 1, precedenceMapQueue, precedenceMapQueue, transactionMap, vmsIdentifiersPerDAG, workers, VmsSerdesProxyBuilder.build() );
+        Queue<Object> coordinatorQueue = new ConcurrentLinkedDeque<>();
+        var txWorker = TransactionWorker.build(1, txInputQueue, 1, MAX_NUM_TID_BATCH, 1000,
+                1, precedenceMapQueue, precedenceMapQueue, transactionMap, vmsIdentifiersPerDAG, workers,
+                coordinatorQueue, VmsSerdesProxyBuilder.build() );
 
         buildAndQueueStarterPrecedenceMap(precedenceMapQueue);
 
@@ -317,7 +358,7 @@ public final class CoordinatorTest {
 
         long txWorker1Tid;
         do{
-            txWorker1Tid = txWorker.getLastTidCompleted();
+            txWorker1Tid = ((BatchContext)coordinatorQueue.poll()).lastTid;
         } while(txWorker1Tid == 0);
         LOGGER.log(System.Logger.Level.INFO, " Tx worker #1 TID: "+txWorker1Tid);
 

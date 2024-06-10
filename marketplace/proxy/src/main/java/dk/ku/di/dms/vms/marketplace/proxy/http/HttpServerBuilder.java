@@ -18,13 +18,13 @@ public final class HttpServerBuilder {
             throw new RuntimeException("http_server property is missing");
         }
         if(httpServer.equalsIgnoreCase("vertx")){
-            LOGGER.log(INFO,"Proxy: Initializing Vertx HTTP Server to receive transaction inputs...");
             buildVertx(properties, coordinator);
+            LOGGER.log(INFO,"Proxy: Vertx HTTP Server started");
             return;
         }
         if(httpServer.equalsIgnoreCase("jdk")){
-            LOGGER.log(INFO,"Proxy: Initializing JDK HTTP Server to receive transaction inputs...");
             buildJdk(properties, coordinator);
+            LOGGER.log(INFO,"Proxy: JDK HTTP Server started");
             return;
         }
         throw new RuntimeException("http_server property is unknown: "+ httpServer);

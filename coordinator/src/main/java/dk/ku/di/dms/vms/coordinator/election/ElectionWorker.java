@@ -36,11 +36,10 @@ import static java.lang.System.Logger.Level.WARNING;
  * while election is not defined and election timeout has not timed out, continue
  * -
  * We assume the nodes are fixed. Later we revisit this choice.
- * TODO Cluster membership management (e.g., removing nodes, replacing nodes)
+ * Desirable feature: Cluster membership management (e.g., removing nodes, replacing nodes)
  * -
  * Protocol SCTP is maybe a better fit for leader election since it is message-oriented, rather than stream oriented
- * On the other hand, the UDP allows multicast, which is good for leader election (sending messages to all nodes
- * by design instead of iterating over the nodes to send individual messages)
+ * SCTP also allows multicast, preventing UDP usage
  */
 public final class ElectionWorker extends SignalingStoppableRunnable {
 

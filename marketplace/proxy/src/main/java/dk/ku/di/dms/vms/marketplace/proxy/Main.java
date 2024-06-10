@@ -71,7 +71,8 @@ public final class Main {
                     .input("a", "product", UPDATE_PRODUCT)
 //                    .terminal("b", "stock", "a")
 //                    .terminal("c", "cart", "a")
-                .terminal("b", "product", "a")
+                    // necessary statement in order to finish batches
+                    .terminal("b", "product", "a")
                     .build();
             transactionMap.put(updateProductDag.name, updateProductDag);
         }

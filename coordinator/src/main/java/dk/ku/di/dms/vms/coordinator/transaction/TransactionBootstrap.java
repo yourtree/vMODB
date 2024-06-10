@@ -70,7 +70,10 @@ public final class TransactionBootstrap {
         EventIdentifier terminal = new EventIdentifier(alias, vms);
         this.terminalNodes.add(terminal.targetVms);
         EventIdentifier id = this.inputEventToInternalVMSsMap.get(dep);
-        id.addChildren( terminal );
+        // "hack" to allow testing with a single VMS
+        if(!vms.contentEquals(id.targetVms)){
+            id.addChildren( terminal );
+        }
         return this;
     }
 

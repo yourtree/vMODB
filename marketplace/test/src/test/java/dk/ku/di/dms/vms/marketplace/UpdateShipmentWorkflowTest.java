@@ -58,7 +58,7 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
 
         assert coordinator.getCurrentBatchOffset() == 3;
         assert coordinator.getBatchOffsetPendingCommit() == 3;
-        assert coordinator.getTid() == 12;
+        assert coordinator.getLastTidOfLastCompletedBatch() == 12;
     }
 
     private static class UpdateShipmentProducer implements Runnable {

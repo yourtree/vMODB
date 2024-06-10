@@ -53,7 +53,7 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
 
         sleep(BATCH_WINDOW_INTERVAL * 3);
 
-        assert coordinator.getTid() == 11;
+        assert coordinator.getLastTidOfLastCompletedBatch() == 11;
     }
 
     private Coordinator loadCoordinator(Properties properties) throws IOException {

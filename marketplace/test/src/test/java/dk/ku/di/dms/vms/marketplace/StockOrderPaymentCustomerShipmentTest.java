@@ -50,7 +50,7 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
 
         assert coordinator.getCurrentBatchOffset() == 2;
         assert coordinator.getBatchOffsetPendingCommit() == 2;
-        assert coordinator.getTid() == 11;
+        assert coordinator.getLastTidOfLastCompletedBatch() == 11;
     }
 
     protected void triggerCheckoutWorkflow(Coordinator coordinator) throws Exception {

@@ -151,15 +151,28 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     }
 
     private void connect() throws IOException, InterruptedException, ExecutionException {
-        NetworkUtils.configure(this.channel, networkBufferSize);
+        NetworkUtils.configure(this.channel, this.networkBufferSize);
         this.channel.connect(this.consumerVms.asInetSocketAddress()).get();
     }
 
+    @SuppressWarnings("BusyWait")
     public void initHandshakeProtocol(){
-        try{
-            LOGGER.log(INFO, "Leader: Attempting connection to "+this.consumerVms.identifier);
-            this.connect();
+        LOGGER.log(INFO, "Leader: Attempting connection to "+this.consumerVms.identifier);
+        while(true) {
+            try {
+                this.connect();
+                LOGGER.log(INFO, "Leader: Connection established to "+this.consumerVms.identifier);
+                break;
+            } catch (IOException | InterruptedException | ExecutionException e) {
+                LOGGER.log(WARNING, "Leader: Connection attempt to " + this.consumerVms.identifier + " failed. Retrying in 5 seconds...");
+                try {
+                    sleep(5000);
+                } catch (InterruptedException ignored) { }
+            }
+        }
 
+        try {
+            LOGGER.log(INFO, "Leader: Sending presentation to "+this.consumerVms.identifier);
             this.state = CONNECTION_ESTABLISHED;
             ByteBuffer writeBuffer = this.retrieveByteBuffer();
             this.sendLeaderPresentationToVms(writeBuffer);
@@ -167,7 +180,6 @@ final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
             // set read handler here
             this.channel.read( this.readBuffer, 0, new VmsReadCompletionHandler() );
-
         } catch (Exception e) {
             LOGGER.log(WARNING,"Failed to connect to a known VMS: " + this.consumerVms.identifier);
 

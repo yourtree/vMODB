@@ -45,7 +45,8 @@ public final class CoordinatorOptions {
     }
 
     public CoordinatorOptions withNetworkBufferSize(int networkBufferSize) {
-        this.networkBufferSize = networkBufferSize;
+        if(networkBufferSize > 0)
+            this.networkBufferSize = networkBufferSize;
         return this;
     }
 

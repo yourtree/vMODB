@@ -20,34 +20,12 @@
     <!-- to use each profile, put -P <profile_name> in the mvn command -->
     <profiles>
         <profile>
-            <id>macos</id>
-            <dependencies>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-resolver-dns-native-macos</artifactId>
-                    <classifier>osx-aarch_64</classifier>
-                    <version>${netty.version}</version>
-                </dependency>
-            </dependencies>
-        </profile>
-        <profile>
             <id>io_uring</id>
             <dependencies>
                 <dependency>
                     <groupId>io.vertx</groupId>
                     <artifactId>vertx-io_uring-incubator</artifactId>
                     <version>${vertx.version}</version>
-                </dependency>
-            </dependencies>
-        </profile>
-        <profile>
-            <id>linux</id>
-            <dependencies>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-transport-native-epoll</artifactId>
-                    <classifier>linux-x86_64</classifier>
-                    <version>${netty.version}</version>
                 </dependency>
             </dependencies>
         </profile>
@@ -60,6 +38,20 @@
             <groupId>io.vertx</groupId>
             <artifactId>vertx-web</artifactId>
             <version>${vertx.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-resolver-dns-native-macos</artifactId>
+            <classifier>osx-aarch_64</classifier>
+            <version>${netty.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport-native-epoll</artifactId>
+            <classifier>linux-x86_64</classifier>
+            <version>${netty.version}</version>
         </dependency>
 
         <dependency>
