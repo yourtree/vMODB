@@ -144,7 +144,7 @@ public final class CoordinatorTest {
 
         var vmsMetadataMap = buildTestVmsMetadataMap();
         Map<String, TransactionDAG> transactionMap = buildTestTransactionDAGMap();
-        Map<String, VmsNode[]> vmsIdentifiersPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
+        Map<String, VmsNode[]> vmsNodesPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
         Map<String, IVmsWorker> workers = buildTestVmsWorker();
 
         // generic algorithm to handle N number of transaction workers
@@ -174,7 +174,7 @@ public final class CoordinatorTest {
 
             var txWorker = TransactionWorker.build(idx, txInputQueue, initTid, MAX_NUM_TID_BATCH, 1000,
                     numWorkers, precedenceMapInputQueue, precedenceMapOutputQueue, transactionMap,
-                    vmsIdentifiersPerDAG, workers, coordinatorQueue, serdesProxy);
+                    vmsNodesPerDAG, workers, coordinatorQueue, serdesProxy);
             var txWorkerThread = Thread.ofPlatform().factory().newThread(txWorker);
 
             initTid = initTid + MAX_NUM_TID_BATCH;
@@ -208,7 +208,7 @@ public final class CoordinatorTest {
 
         var vmsMetadataMap = buildTestVmsMetadataMap();
         Map<String, TransactionDAG> transactionMap = buildTestTransactionDAGMap();
-        Map<String, VmsNode[]> vmsIdentifiersPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
+        Map<String, VmsNode[]> vmsNodesPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
         Map<String, IVmsWorker> workers = buildTestVmsWorker();
 
         var txInputQueue1 = new ConcurrentLinkedDeque<TransactionInput>();
@@ -220,11 +220,11 @@ public final class CoordinatorTest {
         Queue<Object> coordinatorQueue = new ConcurrentLinkedDeque<>();
 
         var txWorker1 = TransactionWorker.build(1, txInputQueue1, 1, MAX_NUM_TID_BATCH, batchWindow,
-                2, precedenceMapQueue1, precedenceMapQueue2, transactionMap, vmsIdentifiersPerDAG, workers,
+                2, precedenceMapQueue1, precedenceMapQueue2, transactionMap, vmsNodesPerDAG, workers,
                 coordinatorQueue, VmsSerdesProxyBuilder.build() );
 
         var txWorker2 = TransactionWorker.build(2, txInputQueue2, 11, MAX_NUM_TID_BATCH, batchWindow,
-                2, precedenceMapQueue2, precedenceMapQueue1, transactionMap, vmsIdentifiersPerDAG, workers,
+                2, precedenceMapQueue2, precedenceMapQueue1, transactionMap, vmsNodesPerDAG, workers,
                 coordinatorQueue, VmsSerdesProxyBuilder.build() );
 
         buildAndQueueStarterPrecedenceMap(precedenceMapQueue1);
@@ -268,7 +268,7 @@ public final class CoordinatorTest {
     public void testTwoTransactionWorkers() throws InterruptedException {
         var vmsMetadataMap = buildTestVmsMetadataMap();
         Map<String, TransactionDAG> transactionMap = buildTestTransactionDAGMap();
-        Map<String, VmsNode[]> vmsIdentifiersPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
+        Map<String, VmsNode[]> vmsNodesPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
         Map<String, IVmsWorker> workers = buildTestVmsWorker();
 
         var txInputQueue1 = new ConcurrentLinkedDeque<TransactionInput>();
@@ -280,11 +280,11 @@ public final class CoordinatorTest {
         Queue<Object> coordinatorQueue = new ConcurrentLinkedDeque<>();
 
         var txWorker1 = TransactionWorker.build(1, txInputQueue1, 1, MAX_NUM_TID_BATCH, 1000,
-                2, precedenceMapQueue1, precedenceMapQueue2, transactionMap, vmsIdentifiersPerDAG, workers,
+                2, precedenceMapQueue1, precedenceMapQueue2, transactionMap, vmsNodesPerDAG, workers,
                 coordinatorQueue, VmsSerdesProxyBuilder.build() );
 
         var txWorker2 = TransactionWorker.build(2, txInputQueue2, 11, MAX_NUM_TID_BATCH, 1000,
-                2, precedenceMapQueue2, precedenceMapQueue1, transactionMap, vmsIdentifiersPerDAG, workers,
+                2, precedenceMapQueue2, precedenceMapQueue1, transactionMap, vmsNodesPerDAG, workers,
                 coordinatorQueue, VmsSerdesProxyBuilder.build() );
 
         buildAndQueueStarterPrecedenceMap(precedenceMapQueue1);
@@ -333,14 +333,14 @@ public final class CoordinatorTest {
     public void testSingleTransactionWorker() throws InterruptedException {
         var vmsMetadataMap = buildTestVmsMetadataMap();
         Map<String, TransactionDAG> transactionMap = buildTestTransactionDAGMap();
-        Map<String, VmsNode[]> vmsIdentifiersPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
+        Map<String, VmsNode[]> vmsNodesPerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
         Map<String, IVmsWorker> workers = buildTestVmsWorker();
 
         var txInputQueue = new ConcurrentLinkedDeque<TransactionInput>();
         var precedenceMapQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
         Queue<Object> coordinatorQueue = new ConcurrentLinkedDeque<>();
         var txWorker = TransactionWorker.build(1, txInputQueue, 1, MAX_NUM_TID_BATCH, 1000,
-                1, precedenceMapQueue, precedenceMapQueue, transactionMap, vmsIdentifiersPerDAG, workers,
+                1, precedenceMapQueue, precedenceMapQueue, transactionMap, vmsNodesPerDAG, workers,
                 coordinatorQueue, VmsSerdesProxyBuilder.build() );
 
         buildAndQueueStarterPrecedenceMap(precedenceMapQueue);

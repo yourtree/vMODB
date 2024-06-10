@@ -13,7 +13,7 @@ import java.util.*;
 
 import static java.lang.System.Logger.Level.*;
 
-public class TransactionWorker extends StoppableRunnable {
+public final class TransactionWorker extends StoppableRunnable {
 
     private static final System.Logger LOGGER = System.getLogger(TransactionWorker.class.getName());
 

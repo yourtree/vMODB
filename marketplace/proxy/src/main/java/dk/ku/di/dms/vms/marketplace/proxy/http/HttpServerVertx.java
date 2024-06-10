@@ -14,7 +14,6 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 
 import static io.vertx.core.Future.await;
-import static java.lang.Thread.sleep;
 
 public final class HttpServerVertx extends AbstractVerticle {
 
@@ -25,6 +24,7 @@ public final class HttpServerVertx extends AbstractVerticle {
         COORD = coordinator;
         String executor = properties.getProperty("executor");
         int http_port = Integer.parseInt( properties.getProperty("http_port") );
+        int num_vertices = Integer.parseInt( properties.getProperty("num_vertices") );
         JsonObject json = new JsonObject();
         json.put("http_port", http_port);
 
@@ -36,13 +36,24 @@ public final class HttpServerVertx extends AbstractVerticle {
             threadingModel = ThreadingModel.EVENT_LOOP;
         }
 
-        Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(true));
+        boolean nativeTransport = Boolean.parseBoolean( properties.getProperty("native_transport") );
+        Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(nativeTransport));
         boolean usingNative = vertx.isNativeTransportEnabled();
         System.out.println("Vertx is running with native: " + usingNative);
+
+        var deploymentOptions = new DeploymentOptions()
+                                    .setThreadingModel(threadingModel)
+                                    .setConfig(json);
+
+        // https://vertx.io/docs/vertx-core/java/#_specifying_number_of_verticle_instances
+        if(num_vertices > 1){
+            // deploymentOptions.setWorkerPoolSize(num_http_workers);
+            deploymentOptions.setInstances(num_vertices);
+        }
+
         try {
             vertx.deployVerticle(HttpServerVertx.class,
-                        new DeploymentOptions().setThreadingModel(threadingModel)
-                                .setConfig(json)
+                        deploymentOptions
                 )
                 .toCompletionStage()
                 .toCompletableFuture()
@@ -70,6 +81,7 @@ public final class HttpServerVertx extends AbstractVerticle {
         // need to study about
         // options.setTcpCork()
 
+        // https://vertx.io/docs/vertx-core/java/#_asynchronous_verticle_start_and_stop
         server.requestHandler(new VertxHandler(COORD));
         if(this.vertx.getOrCreateContext().isEventLoopContext()){
             server.listen(res -> {

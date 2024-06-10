@@ -4,7 +4,6 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
-import static dk.ku.di.dms.vms.marketplace.common.Constants.UPDATE_PRODUCT;
 
 public abstract class AbstractHttpHandler {
 

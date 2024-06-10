@@ -25,15 +25,19 @@ public final class ProductService {
     @Inbound(values = {UPDATE_PRODUCT})
     @Outbound(PRODUCT_UPDATED)
     @Transactional(type=W)
-    @PartitionBy(clazz = UpdateProduct.class, method = "getId")
+    @Parallel
     public ProductUpdated updateProduct(UpdateProduct updateEvent) {
         LOGGER.log(INFO,"APP-"+Thread.currentThread().threadId()+": Product received a product update event with version: "+updateEvent.version);
 
         // can use issue statement for faster update
+
+        /* only for testing
+        @PartitionBy(clazz = UpdateProduct.class, method = "getId")
         Product product = new Product(updateEvent.seller_id, updateEvent.product_id, updateEvent.name, updateEvent.sku, updateEvent.category,
                 updateEvent.description, updateEvent.price, updateEvent.freight_value, updateEvent.status, updateEvent.version);
 
         this.productRepository.update(product);
+        */
 
         return new ProductUpdated( updateEvent.seller_id, updateEvent.product_id, updateEvent.name, updateEvent.sku, updateEvent.category, updateEvent.description, updateEvent.price, updateEvent.freight_value, updateEvent.status, updateEvent.version);
     }
