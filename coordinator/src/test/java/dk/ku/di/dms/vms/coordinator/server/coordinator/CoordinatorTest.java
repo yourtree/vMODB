@@ -192,13 +192,17 @@ public final class CoordinatorTest {
 
         sleep(100);
 
-        var lastTid1 = ((BatchContext)coordinatorQueue.poll()).lastTid;
-        var lastTid2 = ((BatchContext)coordinatorQueue.poll()).lastTid;
+        var lastTid1 = safePoll(coordinatorQueue).lastTid;
+        var lastTid2 = safePoll(coordinatorQueue).lastTid;
 
         assert lastTid1 == 10 && lastTid2 == 20;
 
         txWorkers.get(0).t1().stop();
         txWorkers.get(1).t1().stop();
+    }
+
+    private static BatchContext safePoll(Queue<Object> coordinatorQueue) {
+        return (BatchContext) coordinatorQueue.poll();
     }
 
     @Test
@@ -246,12 +250,12 @@ public final class CoordinatorTest {
         // could measure how long it takes for the tid to move on...
         long txWorker1Tid;
         do{
-            txWorker1Tid = ((BatchContext)coordinatorQueue.poll()).lastTid;
+            txWorker1Tid = safePoll(coordinatorQueue).lastTid;
         } while(txWorker1Tid == 0);
 
         long txWorker2Tid;
         do {
-            txWorker2Tid = ((BatchContext)coordinatorQueue.poll()).lastTid;
+            txWorker2Tid = safePoll(coordinatorQueue).lastTid;
         } while(txWorker2Tid == 0);
 
         txWorker1.stop();
@@ -305,12 +309,12 @@ public final class CoordinatorTest {
         // could measure how long it takes for the tid to move on...
         long txWorker1Tid;
         do{
-            txWorker1Tid = ((BatchContext)coordinatorQueue.poll()).lastTid;
+            txWorker1Tid = safePoll(coordinatorQueue).lastTid;
         } while(txWorker1Tid == 0);
 
         long txWorker2Tid;
         do {
-            txWorker2Tid = ((BatchContext)coordinatorQueue.poll()).lastTid;
+            txWorker2Tid = safePoll(coordinatorQueue).lastTid;
         } while(txWorker2Tid == 0);
 
         txWorker1.stop();
@@ -358,7 +362,7 @@ public final class CoordinatorTest {
 
         long txWorker1Tid;
         do{
-            txWorker1Tid = ((BatchContext)coordinatorQueue.poll()).lastTid;
+            txWorker1Tid = safePoll(coordinatorQueue).lastTid;
         } while(txWorker1Tid == 0);
         LOGGER.log(System.Logger.Level.INFO, " Tx worker #1 TID: "+txWorker1Tid);
 

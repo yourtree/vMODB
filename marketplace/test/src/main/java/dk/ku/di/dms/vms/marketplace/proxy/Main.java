@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.proxy;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchAlgo;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchContext;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.IVmsWorker;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.TransactionWorker;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
@@ -15,6 +14,7 @@ import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static java.lang.Thread.sleep;
 
@@ -28,17 +28,21 @@ public final class Main {
 
     public static void main(String[] ignoredArgs) throws IOException, InterruptedException {
         Properties properties = ConfigUtils.loadProperties();
+        // must ideally scale together
+        int num_vms_workers = Integer.parseInt( properties.getProperty("num_vms_workers") );
         int num_transaction_workers = Integer.parseInt( properties.getProperty("num_transaction_workers") );
+        // can potentially hide the wait time introduced by the "ring"
         int num_max_transactions_batch = Integer.parseInt( properties.getProperty("num_max_transactions_batch") );
         int max_time = Integer.parseInt( properties.getProperty("max_time") );
 
         System.out.println("Experiment config: \n"+
+                " Num vms workers "+ (num_transaction_workers)+"\n"+
                 " Num transaction workers "+ (num_transaction_workers)+"\n"+
                 " Num max transaction batch "+ (num_max_transactions_batch)+"\n"+
                 " Max time "+ (max_time)+"\n"
         );
 
-        int NUM_QUEUED_TRANSACTIONS = 4000000;
+        int NUM_QUEUED_TRANSACTIONS = 5000000;
 
         List<ConcurrentLinkedDeque<TransactionInput>> txInputQueues = new ArrayList<>(num_transaction_workers);
 
@@ -46,46 +50,114 @@ public final class Main {
         for (int i = 1; i <= num_transaction_workers; i++) {
            var inputQueue = new ConcurrentLinkedDeque<TransactionInput>();
            txInputQueues.add(inputQueue);
-            System.out.println("Generaitng "+NUM_QUEUED_TRANSACTIONS+" transactions for worker # "+i);
+           System.out.println("Generating "+NUM_QUEUED_TRANSACTIONS+" transactions for worker # "+i);
            for(int j = 1; j <= NUM_QUEUED_TRANSACTIONS; j++) {
                inputQueue.add(new TransactionInput("update_product",
                        new TransactionInput.Event("update_product", String.valueOf(i))));
-
            }
         }
 
         Deque<Object> coordinatorQueue = new ConcurrentLinkedDeque<>();
-        List<TransactionWorker> workers = setupTransactionWorkers(num_transaction_workers, num_max_transactions_batch,
-                coordinatorQueue, txInputQueues);
 
+        BaseMicroBenchVmsWorker vmsWorker;
+        if(num_vms_workers > 1) {
+            vmsWorker = new ComplexMicroBenchVmsWorker(num_vms_workers);
+        } else {
+            vmsWorker = new SimpleMicroBenchVmsWorker();
+        }
+
+        System.out.println("Setting up "+num_transaction_workers+" workers");
+        List<TransactionWorker> workers = setupTransactionWorkers(num_transaction_workers, num_max_transactions_batch,
+                vmsWorker, coordinatorQueue, txInputQueues);
+
+        System.out.println("Initializing "+num_transaction_workers+" worker threads");
         var threadFactory = Thread.ofPlatform().factory();
         for (TransactionWorker worker : workers) {
             threadFactory.newThread(worker).start();
         }
 
-        // 10 seconds
-        sleep(max_time);
+        // 10 seconds - 1 second
+        sleep(max_time-1000);
 
         for (TransactionWorker worker : workers) {
             worker.stop();
         }
 
-        // cannot poll last because the batches from different workers may have interleaved
-        Object obj;
-        long lastTid = 0;
-        while ((obj = coordinatorQueue.poll()) != null) {
-            if (obj instanceof BatchContext batchContext) {
-                if (batchContext.lastTid > lastTid)
-                    lastTid = batchContext.lastTid;
+        long numPayloads = vmsWorker.getNumPayloads();
+        long numBatches = coordinatorQueue.size();
+
+        //  add batches per second. count num of batches in the queue
+        System.out.println("Experiment finished: \n"+
+                " Payloads per second: "+ (numPayloads/(max_time/1000))+"\n"+
+                " Batches per second: "+ (numBatches/(max_time/1000))
+        );
+    }
+
+    private static abstract class BaseMicroBenchVmsWorker implements IVmsWorker {
+        abstract int getNumPayloads();
+    }
+
+    private static class ComplexMicroBenchVmsWorker extends BaseMicroBenchVmsWorker {
+
+        private final List<Queue<TransactionEvent.PayloadRaw>> payloadQueues;
+        private final Queue<Object> messageQueue = new ConcurrentLinkedDeque<>();
+        private final int numVmsWorkers;
+
+        public ComplexMicroBenchVmsWorker(int numVmsWorkers){
+            this.numVmsWorkers = numVmsWorkers;
+            this.payloadQueues = new ArrayList<>(numVmsWorkers);
+            for (int i = 0; i < numVmsWorkers; i++) {
+                payloadQueues.add(new ConcurrentLinkedDeque<>());
             }
         }
 
-        System.out.println("Experiment finished: \n"+
-                " Throughput (tx/s) "+ (lastTid/(max_time/1000)));
+        @Override
+        int getNumPayloads() {
+            int sum = 0;
+            for (Queue<TransactionEvent.PayloadRaw> queue: payloadQueues) {
+                sum += queue.size();
+            }
+            return sum;
+        }
+
+        @Override
+        public void queueTransactionEvent(TransactionEvent.PayloadRaw payloadRaw) {
+            int idx = ThreadLocalRandom.current().nextInt(0, this.numVmsWorkers);
+            this.payloadQueues.get(idx).add(payloadRaw);
+        }
+
+        @Override
+        public void queueMessage(Object message) {
+            this.messageQueue.add(message);
+        }
+    }
+
+    /**
+     * Queuing payloads can lead to contention for multiple transaction workers
+     */
+    private static class SimpleMicroBenchVmsWorker extends BaseMicroBenchVmsWorker {
+
+        private final Queue<TransactionEvent.PayloadRaw> payloadQueue = new ConcurrentLinkedDeque<>();
+        private final Queue<Object> messageQueue = new ConcurrentLinkedDeque<>();
+
+        @Override
+        public void queueTransactionEvent(TransactionEvent.PayloadRaw payloadRaw) {
+            // must add the overhead of adding to vms worker queue at least
+            this.payloadQueue.add(payloadRaw);
+        }
+        @Override
+        public void queueMessage(Object message) {
+            this.messageQueue.add(message);
+        }
+
+        public int getNumPayloads(){
+            return this.payloadQueue.size();
+        }
 
     }
 
     private static List<TransactionWorker> setupTransactionWorkers(int numWorkers, int maxNumTidBatch,
+                                                                   IVmsWorker vmsWorker,
                                                                    Queue<Object> coordinatorQueue,
                                                                    List<ConcurrentLinkedDeque<TransactionInput>> txInputQueues){
         List<TransactionWorker> txWorkers = new ArrayList<>();
@@ -105,7 +177,7 @@ public final class Main {
         }
 
         Map<String,IVmsWorker> workers = new HashMap<>();
-        workers.put("product", new NoOpVmsWorker());
+        workers.put("product", vmsWorker);
 
         // generic algorithm to handle N number of transaction workers
         int idx = 1;
@@ -135,13 +207,6 @@ public final class Main {
             txWorkers.add(txWorker);
         } while (idx <= numWorkers);
         return txWorkers;
-    }
-
-    private static class NoOpVmsWorker implements IVmsWorker {
-        @Override
-        public void queueTransactionEvent(TransactionEvent.PayloadRaw payloadRaw) { }
-        @Override
-        public void queueMessage(Object message) { }
     }
 
 }
