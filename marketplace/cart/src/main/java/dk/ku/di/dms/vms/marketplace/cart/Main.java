@@ -23,6 +23,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ForkJoinPool;
 
 import static java.lang.System.Logger.Level.INFO;
 
@@ -47,8 +48,10 @@ public final class Main {
             vms.start();
 
             // initialize HTTP server for data ingestion
+            System.setProperty("sun.net.httpserver.nodelay","true");
             httpServer = HttpServer.create(new InetSocketAddress("localhost", Constants.CART_HTTP_PORT), 0);
             httpServer.createContext("/cart", new CartHttpHandler(vms));
+            httpServer.setExecutor(ForkJoinPool.commonPool());
             httpServer.start();
 
             LOGGER.log(INFO, "Cart HTTP Server initialized");
@@ -68,7 +71,7 @@ public final class Main {
 
         private final Table table;
         private final AbstractProxyRepository<CartItem.CartItemId, CartItem> repository;
-        private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+        private static final IVmsSerdesProxy SERDES = VmsSerdesProxyBuilder.build();
         private final NonUniqueSecondaryIndex customerIdx;
         private final VmsApplication vms;
 
@@ -124,7 +127,7 @@ public final class Main {
 
                         String str = new String(exchange.getRequestBody().readAllBytes());
                         dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
-                                serdes.deserialize(str, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
+                                SERDES.deserialize(str, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
 
                         // bypass repository. use api object directly to transform payload
                         Object[] obj = new Object[]{
@@ -139,7 +142,7 @@ public final class Main {
                                 cartItemAPI.Version
                         };
 
-                        IKey key = KeyUtils.buildRecordKey(table.schema().getPrimaryKeyColumns(), obj);
+                        IKey key = KeyUtils.buildRecordKey(this.table.schema().getPrimaryKeyColumns(), obj);
 
                         // get last tid executed to bypass transaction scheduler
                         long tid = this.vms.lastTidFinished();
@@ -153,7 +156,6 @@ public final class Main {
                         // response
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(200, 0);
-                        outputStream.flush();
                         outputStream.close();
                     } catch(Exception e){
                         returnFailed(exchange);
@@ -170,7 +172,6 @@ public final class Main {
             // failed response
             OutputStream outputStream = exchange.getResponseBody();
             exchange.sendResponseHeaders(HttpURLConnection.HTTP_INTERNAL_ERROR, 0);
-            outputStream.flush();
             outputStream.close();
         }
 

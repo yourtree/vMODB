@@ -29,6 +29,6 @@ public final class UpdatePrice {
         return new ProductId(this.sellerId, this.productId);
     }
 
-    public record ProductId( int sellerId, int productId){}
+    public record ProductId(int sellerId, int productId){}
 
 }

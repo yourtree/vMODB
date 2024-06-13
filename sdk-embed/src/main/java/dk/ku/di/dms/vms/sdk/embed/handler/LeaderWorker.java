@@ -86,13 +86,13 @@ final class LeaderWorker extends StoppableRunnable {
             case BatchCommitAck.Payload o -> this.sendBatchCommitAck(o);
             case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
             case TransactionEvent.PayloadRaw o -> this.sendEvent(o);
-            default ->
-                    LOGGER.log(WARNING, this.vmsNode.identifier + ": Leader worker do not recognize message type: " + message.getClass().getName());
+            default -> LOGGER.log(WARNING, this.vmsNode.identifier +
+                    ": Leader worker do not recognize message type: " + message.getClass().getName());
         }
     }
 
+    @SuppressWarnings("StatementWithEmptyBody")
     public void queueMessage(Object message) {
-        //this.leaderWorkerQueue.offer(message);
         while(!this.promise.isDone());
         // only after done one can clear the buffer
         this.writeBuffer.clear();

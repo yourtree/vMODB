@@ -76,7 +76,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                                                 ITransactionalHandler transactionalHandler,
                                                 ICheckpointEventHandler checkpointHandler,
                                                 int vmsThreadPoolSize){
-        LOGGER.log(INFO, "Building VmsTransactionScheduler with thread pool size of "+ vmsThreadPoolSize);
+        LOGGER.log(INFO, vmsIdentifier+ ": Building transaction scheduler with thread pool size of "+ vmsThreadPoolSize);
         return new VmsTransactionScheduler(
                 vmsIdentifier,
                 Executors.newWorkStealingPool(vmsThreadPoolSize),

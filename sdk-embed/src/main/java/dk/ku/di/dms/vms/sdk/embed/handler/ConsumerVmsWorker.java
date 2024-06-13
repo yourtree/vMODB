@@ -137,9 +137,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
 //                } else {
 //                    this.sendEvent(payloadRaw);
 //                }
-
                 this.processPendingWrites();
-
             } catch (Exception e) {
                 LOGGER.log(ERROR, this.me.identifier+ ": Error captured in event loop \n"+e);
             }

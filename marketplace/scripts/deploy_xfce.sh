@@ -41,7 +41,7 @@ if `echo "$*" | grep -q cart`; then
         echo "Cart already running"
     else
         echo "Initializing Cart..."
-        java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/cart/target/cart-1.0-SNAPSHOT-jar-with-dependencies.jar
+        xfce4-terminal -e 'bash -c "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/cart/target/cart-1.0-SNAPSHOT-jar-with-dependencies.jar"' -T "Cart"
         
     fi
 fi
@@ -53,7 +53,7 @@ if `echo "$*" | grep -q product`; then
         echo "Product already running"
     else
         echo "Initializing Product..."
-        java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/product/target/product-1.0-SNAPSHOT-jar-with-dependencies.jar
+        xfce4-terminal -e 'bash -c "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/product/target/product-1.0-SNAPSHOT-jar-with-dependencies.jar"' -T "Product"
     fi
 fi
 
@@ -64,7 +64,7 @@ if `echo "$*" | grep -q stock`; then
         echo "Stock already running"
     else
         echo "Initializing Stock..."
-        java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/stock/target/stock-1.0-SNAPSHOT-jar-with-dependencies.jar
+        xfce4-terminal -e 'bash -c "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/stock/target/stock-1.0-SNAPSHOT-jar-with-dependencies.jar"' -T "Stock"
     fi
 fi
 
@@ -75,7 +75,7 @@ if `echo "$*" | grep -q order`; then
         echo "Order already running"
     else
         echo "Initializing Order..."
-        java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/order/target/order-1.0-SNAPSHOT-jar-with-dependencies.jar
+        xfce4-terminal -e 'bash -c "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/order/target/order-1.0-SNAPSHOT-jar-with-dependencies.jar"' -T "Order"
     fi
 fi
 
@@ -86,7 +86,7 @@ if `echo "$*" | grep -q payment`; then
         echo "Payment already running"
     else
         echo "Initializing Payment..."
-        java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/payment/target/payment-1.0-SNAPSHOT-jar-with-dependencies.jar
+        xfce4-terminal -e 'bash -c "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/payment/target/payment-1.0-SNAPSHOT-jar-with-dependencies.jar"' -T "Payment"
     fi
 fi
 
@@ -97,7 +97,7 @@ if `echo "$*" | grep -q shipment`; then
         echo "Shipment already running"
     else
         echo "Initializing Shipment..."
-        java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/shipment/target/shipment-1.0-SNAPSHOT-jar-with-dependencies.jar
+        xfce4-terminal -e 'bash -c "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/shipment/target/shipment-1.0-SNAPSHOT-jar-with-dependencies.jar"' -T "Shipment"
     fi
 fi
 
@@ -108,7 +108,7 @@ if `echo "$*" | grep -q seller`; then
         echo "Seller already running"
     else
         echo "Initializing Seller..."
-        java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/seller/target/seller-1.0-SNAPSHOT-jar-with-dependencies.jar
+        xfce4-terminal -e 'bash -c "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/seller/target/seller-1.0-SNAPSHOT-jar-with-dependencies.jar"' -T "Seller"
     fi
 fi
 
@@ -119,7 +119,7 @@ if `echo "$*" | grep -q customer`; then
         echo "Customer already running"
     else
         echo "Initializing Customer..."
-        java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/customer/target/customer-1.0-SNAPSHOT-jar-with-dependencies.jar
+        xfce4-terminal -e 'bash -c "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/customer/target/customer-1.0-SNAPSHOT-jar-with-dependencies.jar"' -T "Customer"
     fi
 fi
 
@@ -132,6 +132,6 @@ if `echo "$*" | grep -q proxy`; then
         echo "Waiting 2 sec for microservices before setting up the proxy (coordinator)..."
         sleep 2
         echo "Initializing Proxy..."
-        java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/proxy/target/proxy-1.0-SNAPSHOT-jar-with-dependencies.jar
+        xfce4-terminal -e 'bash -c "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/proxy/target/proxy-1.0-SNAPSHOT-jar-with-dependencies.jar"' -T "Proxy"
     fi
 fi

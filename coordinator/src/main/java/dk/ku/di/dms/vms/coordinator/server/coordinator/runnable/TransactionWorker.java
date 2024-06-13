@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.coordinator.server.coordinator.runnable;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchContext;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.vms.IVmsWorker;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
@@ -59,6 +60,9 @@ public final class TransactionWorker extends StoppableRunnable {
 
     private record PendingTransactionInput (long tid, TransactionInput input){}
 
+    /**
+     * Build private VmsTracking objects
+     */
     @SuppressWarnings("ToArrayCallWithZeroLengthArrayArgument")
     public static TransactionWorker build(int id, Deque<TransactionInput> inputQueue,
                                           long startingTid, int maxNumberOfTIDsBatch,
@@ -70,7 +74,6 @@ public final class TransactionWorker extends StoppableRunnable {
                                           Map<String, IVmsWorker> vmsWorkerContainerMap,
                                           Queue<Object> coordinatorQueue,
                                           IVmsSerdesProxy serdesProxy){
-        // build private VmsTracking objects
         Map<String, VmsTracking> vmsTrackingMap = new HashMap<>();
         Map<String, VmsTracking[]> vmsPerTransactionMap = new HashMap<>(vmsIdentifiersPerDAG.size());
         for(var txEntry : vmsIdentifiersPerDAG.entrySet()){
@@ -122,7 +125,7 @@ public final class TransactionWorker extends StoppableRunnable {
 
     @Override
     public void run() {
-        LOGGER.log(INFO, "Starting transaction worker #" + this.id);
+        LOGGER.log(INFO, "Starting transaction worker # " + this.id);
         TransactionInput data;
         long lastTidBatch = this.getLastTidNextBatch();
         long end;
@@ -131,7 +134,7 @@ public final class TransactionWorker extends StoppableRunnable {
             do {
                 // drain transaction inputs
                 while ((data = this.inputQueue.poll()) != null &&
-                        // avoid calling currentTime for every item
+                        // avoid calling currentTimeMillis for every item
                         this.tid <= lastTidBatch) {
                     // process precedence from previous worker in the ring
                     // we could do it in advance current batch, but can lead to higher wait in vms

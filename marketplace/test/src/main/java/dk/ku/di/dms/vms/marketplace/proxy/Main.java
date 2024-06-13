@@ -1,8 +1,8 @@
 package dk.ku.di.dms.vms.marketplace.proxy;
 
 import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchAlgo;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.IVmsWorker;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.TransactionWorker;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.vms.IVmsWorker;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
@@ -100,6 +100,7 @@ public final class Main {
     private static class ComplexMicroBenchVmsWorker extends BaseMicroBenchVmsWorker {
 
         private final List<Queue<TransactionEvent.PayloadRaw>> payloadQueues;
+        @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
         private final Queue<Object> messageQueue = new ConcurrentLinkedDeque<>();
         private final int numVmsWorkers;
 
@@ -138,6 +139,7 @@ public final class Main {
     private static class SimpleMicroBenchVmsWorker extends BaseMicroBenchVmsWorker {
 
         private final Queue<TransactionEvent.PayloadRaw> payloadQueue = new ConcurrentLinkedDeque<>();
+        @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
         private final Queue<Object> messageQueue = new ConcurrentLinkedDeque<>();
 
         @Override

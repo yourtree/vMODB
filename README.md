@@ -25,7 +25,13 @@ Developers can plug and play any microservice at any time, the MODB then adapt t
 ### <a name="prerequisites"></a>Prerequisites
 
 - JDK 21 (if you want to modify the source code)
+
+
+
 - Curl (if you want to play with the APIs)
+- Maven
+
+https://www.hostinger.com/tutorials/how-to-install-maven-on-ubuntu
 
 ## <a name="modb"></a>MODB
 

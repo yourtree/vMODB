@@ -18,6 +18,7 @@ import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
+import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.sdk.embed.events.InputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample2;
@@ -133,8 +134,9 @@ public class EventHandlerTest {
 
         VmsEventHandler eventHandler = VmsEventHandler.build(
                 vmsIdentifier, new DumbCheckpointAPI(),
-                vmsInternalPubSubService,  vmsMetadata, serdes,
-                4096,0, 1, 0, 1);
+                vmsInternalPubSubService, vmsMetadata,
+                VmsApplicationOptions.build(null, 0, null),
+                serdes);
 
         if(eventHandlerActive) {
             Thread eventHandlerThread = new Thread(eventHandler);

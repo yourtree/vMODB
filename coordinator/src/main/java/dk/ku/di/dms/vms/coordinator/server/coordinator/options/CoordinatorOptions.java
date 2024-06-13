@@ -117,4 +117,7 @@ public final class CoordinatorOptions {
         return this.numTransactionWorkers;
     }
 
+    public int getNumQueuesVmsWorker() {
+        return 0;
+    }
 }

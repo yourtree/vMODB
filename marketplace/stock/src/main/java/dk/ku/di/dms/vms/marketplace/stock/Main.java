@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ForkJoinPool;
 
 import static java.lang.System.Logger.Level.INFO;
 
@@ -25,7 +26,7 @@ public final class Main {
 
     private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] ignoredArgs) throws Exception {
 
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 "localhost",
@@ -37,8 +38,10 @@ public final class Main {
         VmsApplication vms = VmsApplication.build(options);
         vms.start();
 
+        System.setProperty("sun.net.httpserver.nodelay","true");
         HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", Constants.STOCK_HTTP_PORT), 0);
         httpServer.createContext("/stock", new StockHttpHandler(vms));
+        httpServer.setExecutor(ForkJoinPool.commonPool());
         httpServer.start();
     }
 
@@ -89,7 +92,7 @@ public final class Main {
 
                     StockItem stock = this.serdes.deserialize(str, StockItem.class);
                     Object[] obj = this.repository.extractFieldValuesFromEntityObject(stock);
-                    IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), obj );
+                    IKey key = KeyUtils.buildRecordKey( this.table.schema().getPrimaryKeyColumns(), obj );
                     this.table.underlyingPrimaryKeyIndex().insert(key, obj);
 
                     // response
@@ -103,7 +106,6 @@ public final class Main {
                     // failed response
                     OutputStream outputStream = exchange.getResponseBody();
                     exchange.sendResponseHeaders(404, 0);
-                    outputStream.flush();
                     outputStream.close();
                 }
             }

@@ -17,6 +17,8 @@ public final class VmsApplicationOptions {
 
     private final int networkThreadPoolSize;
 
+    private final int numVmsWorkers;
+
     private final int vmsThreadPoolSize;
 
     private final int networkSendTimeout;
@@ -30,25 +32,28 @@ public final class VmsApplicationOptions {
         int networkSendTimeout = Integer.parseInt(properties.getProperty("network_send_timeout"));
         int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
         int vmsThreadPoolSize = Integer.parseInt(properties.getProperty("vms_thread_pool_size"));
+        int numVmsWorkers = Integer.parseInt(properties.getProperty("num_vms_workers"));
         return new VmsApplicationOptions(
                 host,
                 port,
                 packages,
                 networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize,
                 networkThreadPoolSize,
+                numVmsWorkers,
                 vmsThreadPoolSize,
                 networkSendTimeout,
                 soBufferSize);
     }
 
     private VmsApplicationOptions(String host, int port, String[] packages,
-                                  int networkBufferSize, int networkThreadPoolSize,
+                                  int networkBufferSize, int networkThreadPoolSize, int numVmsWorkers,
                                   int vmsThreadPoolSize, int networkSendTimeout, int osBufferSize) {
         this.host = host;
         this.port = port;
         this.packages = packages;
         this.networkBufferSize = networkBufferSize;
         this.networkThreadPoolSize = networkThreadPoolSize;
+        this.numVmsWorkers = numVmsWorkers;
         this.vmsThreadPoolSize = vmsThreadPoolSize;
         this.networkSendTimeout = networkSendTimeout;
         this.osBufferSize = osBufferSize;
@@ -84,5 +89,9 @@ public final class VmsApplicationOptions {
 
     public int osBufferSize() {
         return this.osBufferSize;
+    }
+
+    public int numVmsWorkers() {
+        return this.numVmsWorkers;
     }
 }

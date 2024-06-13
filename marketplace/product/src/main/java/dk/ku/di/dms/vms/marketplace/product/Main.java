@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ForkJoinPool;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.PRODUCT_HTTP_PORT;
 import static java.lang.System.Logger.Level.INFO;
@@ -41,8 +42,10 @@ public final class Main {
             vms.start();
 
             // initialize HTTP server for data ingestion
+            System.setProperty("sun.net.httpserver.nodelay","true");
             HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", PRODUCT_HTTP_PORT), 0);
             httpServer.createContext("/product", new ProductHttpHandler(vms));
+            httpServer.setExecutor(ForkJoinPool.commonPool());
             httpServer.start();
 
             LOGGER.log(INFO,"Product HTTP Server initialized");
@@ -104,7 +107,7 @@ public final class Main {
                     Product product = serdes.deserialize(str, Product.class);
 
                     Object[] obj = this.repository.extractFieldValuesFromEntityObject(product);
-                    IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), obj );
+                    IKey key = KeyUtils.buildRecordKey( this.table.schema().getPrimaryKeyColumns(), obj );
                     this.table.underlyingPrimaryKeyIndex().insert(key, obj);
 
                     // response

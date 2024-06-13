@@ -17,6 +17,7 @@ import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
+import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
@@ -75,13 +76,7 @@ public final class VmsEventHandler extends StoppableRunnable {
     /** SERIALIZATION & DESERIALIZATION **/
     private final IVmsSerdesProxy serdesProxy;
 
-    private final int networkBufferSize;
-
-    private final int osBufferSize;
-
-    private final int networkSendTimeout;
-
-    private final int vmsThreadPoolSize;
+    private final VmsHandlerOptions options;
 
     /** COORDINATOR **/
     private ServerNode leader;
@@ -138,39 +133,41 @@ public final class VmsEventHandler extends StoppableRunnable {
                                         VmsEmbeddedInternalChannels vmsInternalChannels,
                                         // metadata about this vms
                                         VmsRuntimeMetadata vmsMetadata,
+                                        VmsApplicationOptions options,
                                         // serialization/deserialization of objects
-                                        IVmsSerdesProxy serdesProxy,
-                                        // network
-                                        int networkBufferSize,
-                                        int osBufferSize,
-                                        int networkThreadPoolSize,
-                                        int networkSendTimeout,
-                                        int vmsThreadPoolSize){
+                                        IVmsSerdesProxy serdesProxy
+                                        ){
         try {
             return new VmsEventHandler(me, vmsMetadata,
-                    transactionalHandler, vmsInternalChannels, serdesProxy,
-                    networkBufferSize, osBufferSize, networkThreadPoolSize, networkSendTimeout, vmsThreadPoolSize);
+                    transactionalHandler, vmsInternalChannels,
+                    new VmsEventHandler.VmsHandlerOptions( options.networkBufferSize(), options.osBufferSize(),
+                            options.networkThreadPoolSize(), options.networkSendTimeout(), options.vmsThreadPoolSize(), options.numVmsWorkers()),
+                    serdesProxy);
         } catch (IOException e){
             throw new RuntimeException("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
     }
 
+    private record VmsHandlerOptions(int networkBufferSize,
+                                    int osBufferSize,
+                                    int networkThreadPoolSize,
+                                    int networkSendTimeout,
+                                    int vmsThreadPoolSize,
+                                    int numVmsWorkers) {}
+
     private VmsEventHandler(VmsNode me,
                             VmsRuntimeMetadata vmsMetadata,
                             ITransactionalHandler transactionalHandler,
                             VmsEmbeddedInternalChannels vmsInternalChannels,
-                            IVmsSerdesProxy serdesProxy,
-                            int networkBufferSize,
-                            int osBufferSize,
-                            int networkThreadPoolSize,
-                            int networkSendTimeout,
-                            int vmsThreadPoolSize) throws IOException {
+                            VmsHandlerOptions options,
+                            IVmsSerdesProxy serdesProxy
+                            ) throws IOException {
         super();
 
         // network and executor
-        if(networkThreadPoolSize > 0){
+        if(options.networkThreadPoolSize > 0){
             // at least two, one for acceptor and one for new events
-            this.group = AsynchronousChannelGroup.withFixedThreadPool(networkThreadPoolSize, Thread.ofPlatform().factory());
+            this.group = AsynchronousChannelGroup.withFixedThreadPool(options.networkThreadPoolSize, Thread.ofPlatform().factory());
             this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
         } else {
             // by default, server socket creates a cached thread pool. better to avoid successive creation of threads
@@ -207,10 +204,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         this.queuesLeaderSubscribesTo = new HashSet<>();
 
-        this.networkBufferSize = networkBufferSize;
-        this.osBufferSize = osBufferSize;
-        this.networkSendTimeout = networkSendTimeout;
-        this.vmsThreadPoolSize = vmsThreadPoolSize;
+        this.options = options;
     }
 
     @Override
@@ -339,7 +333,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
         for( Map.Entry<IdentifiableNode,List<String>> consumerEntry : consumerToEventsMap.entrySet() ) {
             // connect to more consumers...
-            for(int i = 0; i < this.vmsThreadPoolSize; i++){
+            for(int i = 0; i < this.options.numVmsWorkers; i++){
                 this.initConsumerVmsWorker(consumerEntry.getKey(), consumerEntry.getValue(), i);
             }
         }
@@ -470,7 +464,8 @@ public final class VmsEventHandler extends StoppableRunnable {
             return;
         }
 
-        ConsumerVmsWorker consumerVmsWorker = new ConsumerVmsWorker(this.me, node, this.group, this.serdesProxy, this.networkBufferSize, this.osBufferSize, this.networkSendTimeout);
+        ConsumerVmsWorker consumerVmsWorker = new ConsumerVmsWorker(this.me, node, this.group, this.serdesProxy,
+                this.options.networkBufferSize, this.options.osBufferSize, this.options.networkSendTimeout);
         Thread thread = Thread.ofPlatform().factory().newThread(consumerVmsWorker);
         thread.setName("vms-consumer-"+node.identifier+"-"+identifier);
         thread.start();
@@ -768,9 +763,9 @@ public final class VmsEventHandler extends StoppableRunnable {
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
             LOGGER.log(INFO,me.identifier+": An unknown host has started a connection attempt.");
-            final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(networkBufferSize);
+            final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize);
             try {
-                NetworkUtils.configure(channel, osBufferSize);
+                NetworkUtils.configure(channel, options.osBufferSize);
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 channel.read(buffer, null, new UnknownNodeReadCompletionHandler(channel, buffer));
             } catch(Exception e){
@@ -835,7 +830,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 // set up leader worker
                 leaderWorker = new LeaderWorker(me, leader,
                         leaderConnectionMetadata.channel,
-                        MemoryManager.getTemporaryDirectBuffer(networkBufferSize));
+                        MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize));
                 LOGGER.log(INFO,me.identifier+": Leader worker set up");
                 buffer.clear();
                 channel.read(buffer, 0, new LeaderReadCompletionHandler(leaderConnectionMetadata, buffer) );

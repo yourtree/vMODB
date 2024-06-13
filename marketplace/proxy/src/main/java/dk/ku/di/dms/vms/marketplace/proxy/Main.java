@@ -69,10 +69,10 @@ public final class Main {
         if(transactions.contains(UPDATE_PRODUCT)) {
             TransactionDAG updateProductDag = TransactionBootstrap.name(UPDATE_PRODUCT)
                     .input("a", "product", UPDATE_PRODUCT)
-//                    .terminal("b", "stock", "a")
-//                    .terminal("c", "cart", "a")
+                    .terminal("b", "stock", "a")
+                    .terminal("c", "cart", "a")
                     // necessary statement in order to finish batches
-                    .terminal("b", "product", "a")
+//                    .terminal("b", "product", "a")
                     .build();
             transactionMap.put(updateProductDag.name, updateProductDag);
         }
@@ -121,11 +121,7 @@ public final class Main {
         if(Arrays.stream(transactions).anyMatch(p->p.contentEquals(CUSTOMER_CHECKOUT))) {
             starterVMSs = buildStarterVMSsFull(properties);
         } else {
-            if(transactions.length == 1) {
-                starterVMSs = buildStarterVMS(properties);
-            } else {
-                starterVMSs = buildStarterVMSsBasic(properties);
-            }
+            starterVMSs = buildStarterVMSsBasic(properties);
         }
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
@@ -163,7 +159,8 @@ public final class Main {
         return coordinator;
     }
 
-    private static Map<Integer, IdentifiableNode> buildStarterVMS(Properties properties){
+    /**
+    private static Map<Integer, IdentifiableNode> buildStarterProductVMS(Properties properties){
         String productHost = properties.getProperty("product_host");
         if(productHost == null) throw new RuntimeException("Product host is null");
         IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
@@ -171,6 +168,7 @@ public final class Main {
         starterVMSs.put(productAddress.hashCode(), productAddress);
         return starterVMSs;
     }
+    */
 
     private static Map<Integer, IdentifiableNode> buildStarterVMSsBasic(Properties properties){
         String cartHost = properties.getProperty("cart_host");

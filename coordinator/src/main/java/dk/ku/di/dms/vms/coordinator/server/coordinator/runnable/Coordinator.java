@@ -4,6 +4,8 @@ import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchAlgo;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchContext;
 import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.vms.IVmsWorker;
+import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.vms.VmsWorker;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
@@ -34,6 +36,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Consumer;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
 import static dk.ku.di.dms.vms.coordinator.server.coordinator.options.BatchReplicationStrategy.ALL;
@@ -302,8 +305,9 @@ public final class Coordinator extends StoppableRunnable {
                 for(int i = 1; i < numWorkersPerVms; i++){
                     if(this.vmsWorkerContainerMap.containsKey(inputVms.getValue().targetVms)) {
                         try {
-                            VmsWorker newWorker = VmsWorker.build(this.me, vmsNode, this.coordinatorQueue,
-                                    this.group, this.options.getNetworkBufferSize(), this.options.getNetworkSendTimeout(), this.serdesProxy);
+                            VmsWorker newWorker = VmsWorker.build(this.me, vmsNode, this.coordinatorQueue, this.group,
+                                    new VmsWorker.VmsWorkerOptions(this.options.getNetworkBufferSize(), this.options.getNetworkSendTimeout(), this.options.getNumQueuesVmsWorker()),
+                                    this.serdesProxy);
                             if(this.vmsWorkerContainerMap.get(inputVms.getValue().targetVms) instanceof VmsWorkerContainer o){
                                 o.addWorker(newWorker);
                                 Thread vmsWorkerThread = Thread.ofPlatform().factory().newThread(newWorker);
@@ -325,30 +329,41 @@ public final class Coordinator extends StoppableRunnable {
      * A container of vms workers for the same VMS
      * Make a circular buffer. so events are spread among the workers (i.e., channels)
      */
-    @SuppressWarnings("SequencedCollectionMethodCanBeUsed")
     static final class VmsWorkerContainer implements IVmsWorker {
+        private final int numVmsWorkers;
+        private final VmsWorker[] vmsWorkers;
+        private int nextPos;
+        private final Consumer<TransactionEvent.PayloadRaw> queueFunc;
 
-        private final List<VmsWorker> vmsWorkers;
-        private static final Random random = new Random();
-
-        VmsWorkerContainer(VmsWorker initialVmsWorker) {
-            this.vmsWorkers = new ArrayList<>();
-            this.vmsWorkers.add(initialVmsWorker);
+        VmsWorkerContainer(VmsWorker initialVmsWorker, int numVmsWorkers) {
+            this.numVmsWorkers = numVmsWorkers;
+            this.vmsWorkers = new VmsWorker[numVmsWorkers];
+            this.vmsWorkers[0] = initialVmsWorker;
+            this.nextPos = 1;
+            if(numVmsWorkers > 1){
+                this.queueFunc = (payload) -> {
+                    int pos = ThreadLocalRandom.current().nextInt(0, this.numVmsWorkers);
+                    this.vmsWorkers[pos].queueTransactionEvent(payload);
+                };
+            } else {
+                this.queueFunc = (payload) -> this.vmsWorkers[0].queueTransactionEvent(payload);
+            }
         }
 
         public void addWorker(VmsWorker vmsWorker) {
-            this.vmsWorkers.add(vmsWorker);
+            this.vmsWorkers[this.nextPos] = vmsWorker;
+            nextPos++;
         }
 
         @Override
         public void queueMessage(Object object){
-            this.vmsWorkers.get(0).queueMessage(object);
+            // always goes to first
+            this.vmsWorkers[0].queueMessage(object);
         }
 
         @Override
         public void queueTransactionEvent(TransactionEvent.PayloadRaw payload){
-            int pos = random.nextInt(0, this.vmsWorkers.size());
-            this.vmsWorkers.get(pos).queueTransactionEvent(payload);
+            this.queueFunc.accept(payload);
         }
     }
 
@@ -365,14 +380,14 @@ public final class Coordinator extends StoppableRunnable {
             for (IdentifiableNode vmsNode : this.starterVMSs.values()) {
                 // coordinator will later keep track of this thread when the connection with the VMS is fully established
                 VmsWorker vmsWorker = VmsWorker.buildAsStarter(this.me, vmsNode, this.coordinatorQueue,
-                        this.group, this.options.getNetworkBufferSize(), this.options.getNetworkSendTimeout(),
+                        this.group, new VmsWorker.VmsWorkerOptions(this.options.getNetworkBufferSize(), this.options.getNetworkSendTimeout(), this.options.getNumQueuesVmsWorker()),
                         this.serdesProxy);
                 // a cached thread pool would be ok in this case
                 Thread vmsWorkerThread = Thread.ofPlatform().factory().newThread(vmsWorker);
                 vmsWorkerThread.setName("vms-worker-" + vmsNode.identifier + "-0");
                 vmsWorkerThread.start();
                 this.vmsWorkerContainerMap.put(vmsNode.identifier,
-                        new VmsWorkerContainer(vmsWorker)
+                        new VmsWorkerContainer(vmsWorker, this.options.getNumWorkersPerVms())
                 );
             }
         } catch (Exception e){
@@ -456,7 +471,6 @@ public final class Coordinator extends StoppableRunnable {
         }
 
         /**
-         *
          * Process Accept connection request
          * Task for informing the server running for leader that a leader is already established
          * We would no longer need to establish connection in case the {@link dk.ku.di.dms.vms.coordinator.election.ElectionWorker}
@@ -755,7 +769,7 @@ public final class Coordinator extends StoppableRunnable {
         }
         // if all metadata, from all starter vms have arrived, then send the signal to them
 
-        LOGGER.log(INFO,"Leader: All VMS starter have sent their VMS_IDENTIFIER");
+        LOGGER.log(INFO,"Leader: All VMS starters have sent their VMS_IDENTIFIER");
 
         // new VMS may join, requiring updating the consumer set
         Map<String, List<IdentifiableNode>> vmsConsumerSet;
