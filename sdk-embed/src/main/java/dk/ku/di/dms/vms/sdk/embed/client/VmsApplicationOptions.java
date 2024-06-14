@@ -25,6 +25,8 @@ public final class VmsApplicationOptions {
 
     private final int osBufferSize;
 
+    private final int maxSleep;
+
     public static VmsApplicationOptions build(String host, int port, String[] packages) {
         Properties properties = ConfigUtils.loadProperties();
         int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
@@ -33,6 +35,7 @@ public final class VmsApplicationOptions {
         int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
         int vmsThreadPoolSize = Integer.parseInt(properties.getProperty("vms_thread_pool_size"));
         int numVmsWorkers = Integer.parseInt(properties.getProperty("num_vms_workers"));
+        int maxSleep = Integer.parseInt(properties.getProperty("max_sleep"));
         return new VmsApplicationOptions(
                 host,
                 port,
@@ -42,12 +45,13 @@ public final class VmsApplicationOptions {
                 numVmsWorkers,
                 vmsThreadPoolSize,
                 networkSendTimeout,
-                soBufferSize);
+                soBufferSize,
+                maxSleep);
     }
 
     private VmsApplicationOptions(String host, int port, String[] packages,
                                   int networkBufferSize, int networkThreadPoolSize, int numVmsWorkers,
-                                  int vmsThreadPoolSize, int networkSendTimeout, int osBufferSize) {
+                                  int vmsThreadPoolSize, int networkSendTimeout, int osBufferSize, int maxSleep) {
         this.host = host;
         this.port = port;
         this.packages = packages;
@@ -57,6 +61,7 @@ public final class VmsApplicationOptions {
         this.vmsThreadPoolSize = vmsThreadPoolSize;
         this.networkSendTimeout = networkSendTimeout;
         this.osBufferSize = osBufferSize;
+        this.maxSleep = maxSleep;
     }
 
     public String host() {
@@ -93,5 +98,9 @@ public final class VmsApplicationOptions {
 
     public int numVmsWorkers() {
         return this.numVmsWorkers;
+    }
+
+    public int maxSleep() {
+        return this.maxSleep;
     }
 }

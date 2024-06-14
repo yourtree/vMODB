@@ -140,7 +140,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         try {
             return new VmsEventHandler(me, vmsMetadata,
                     transactionalHandler, vmsInternalChannels,
-                    new VmsEventHandler.VmsHandlerOptions( options.networkBufferSize(), options.osBufferSize(),
+                    new VmsEventHandler.VmsHandlerOptions( options.maxSleep(), options.networkBufferSize(), options.osBufferSize(),
                             options.networkThreadPoolSize(), options.networkSendTimeout(), options.vmsThreadPoolSize(), options.numVmsWorkers()),
                     serdesProxy);
         } catch (IOException e){
@@ -148,12 +148,13 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
     }
 
-    private record VmsHandlerOptions(int networkBufferSize,
-                                    int osBufferSize,
-                                    int networkThreadPoolSize,
-                                    int networkSendTimeout,
-                                    int vmsThreadPoolSize,
-                                    int numVmsWorkers) {}
+    record VmsHandlerOptions(int maxSleep,
+                            int networkBufferSize,
+                            int osBufferSize,
+                            int networkThreadPoolSize,
+                            int networkSendTimeout,
+                            int vmsThreadPoolSize,
+                            int numVmsWorkers) {}
 
     private VmsEventHandler(VmsNode me,
                             VmsRuntimeMetadata vmsMetadata,
@@ -229,24 +230,26 @@ public final class VmsEventHandler extends StoppableRunnable {
     private static final class ConsumerVmsContainer {
 
         private final IdentifiableNode node;
-        private final List<ConsumerVmsWorker> consumerVmsWorkers;
+        private final ConsumerVmsWorker[] consumerVmsWorkers;
         private int next;
 
         // init a container with the initial consumer VMS
-        ConsumerVmsContainer(ConsumerVmsWorker initialConsumerVms, IdentifiableNode node) {
-            this.consumerVmsWorkers = new ArrayList<>();
-            this.consumerVmsWorkers.add(initialConsumerVms);
+        ConsumerVmsContainer(ConsumerVmsWorker initialConsumerVms, IdentifiableNode node, int numVmsWorkers) {
+            this.consumerVmsWorkers = new ConsumerVmsWorker[numVmsWorkers];
+            this.consumerVmsWorkers[0] = initialConsumerVms;
             this.next = 0;
             this.node = node;
         }
 
         public synchronized void addConsumerVms(ConsumerVmsWorker vmsWorker) {
-            this.consumerVmsWorkers.add(vmsWorker);
+            this.next++;
+            this.consumerVmsWorkers[this.next] = vmsWorker;
+            if(this.next == this.consumerVmsWorkers.length-1) this.next = 0;
         }
 
         public void queue(TransactionEvent.PayloadRaw payload){
-            this.consumerVmsWorkers.get(this.next).queueTransactionEvent(payload);
-            if(this.next == this.consumerVmsWorkers.size()-1){
+            this.consumerVmsWorkers[this.next].queueTransactionEvent(payload);
+            if(this.next == this.consumerVmsWorkers.length-1){
                 this.next = 0;
             } else {
                 this.next += 1;
@@ -258,14 +261,10 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
     }
 
-    private static final int MAX_TIMEOUT = 1000;
-
     /**
      * A thread that basically writes events to other VMSs and the Leader
      * Retrieves data from all output queues
-     * -
      * All output queues must be read in order to send their data
-     * -
      * A batch strategy for sending would involve sleeping until the next timeout for batch,
      * send and set up the next. Do that iteratively
      */
@@ -282,7 +281,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             try {
                 txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll();
                 if (txResult_ == null) {
-                    pollTimeout = Math.min(pollTimeout * 2, MAX_TIMEOUT);
+                    pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep);
                     sleep(pollTimeout);
                     continue;
                 }
@@ -363,14 +362,14 @@ public final class VmsEventHandler extends StoppableRunnable {
 
             // if terminal, must send batch complete
             if(this.currentBatch.terminal) {
-                LOGGER.log(INFO,this.me.identifier+": Request leader worker to send batch ("+this.currentBatch.batch+") complete");
+                // LOGGER.log(INFO,this.me.identifier+": Requesting leader worker to send batch ("+this.currentBatch.batch+") complete");
                 // must be queued in case leader is off and comes back online
                 this.leaderWorker.queueMessage(BatchComplete.of(this.currentBatch.batch, this.me.identifier));
             }
 
             // FIXME remove?
             // this is necessary to move the batch to committed and allow the batches to progress
-            this.vmsInternalChannels.batchCommitCommandQueue().add( DUMB_OBJECT );
+            // this.vmsInternalChannels.batchCommitCommandQueue().add( DUMB_OBJECT );
         }
     }
 
@@ -466,14 +465,14 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
 
         ConsumerVmsWorker consumerVmsWorker = new ConsumerVmsWorker(this.me, node, this.group, this.serdesProxy,
-                this.options.networkBufferSize, this.options.osBufferSize, this.options.networkSendTimeout);
+                this.options);
         Thread thread = Thread.ofPlatform().factory().newThread(consumerVmsWorker);
         thread.setName("vms-consumer-"+node.identifier+"-"+identifier);
         thread.start();
 
         ConsumerVmsContainer consumerVmsContainer;
         if(!this.consumerVmsContainerMap.containsKey(node)){
-            consumerVmsContainer = new ConsumerVmsContainer(consumerVmsWorker, node);
+            consumerVmsContainer = new ConsumerVmsContainer(consumerVmsWorker, node, this.options.numVmsWorkers);
             this.consumerVmsContainerMap.put(node, consumerVmsContainer);
             // add to tracked VMSs...
             for (String outputEvent : outputEvents) {

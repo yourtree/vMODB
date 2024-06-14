@@ -121,9 +121,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
      */
     @Override
     public void run() {
-
         LOGGER.log(INFO,this.vmsIdentifier+": Transaction scheduler has started");
-
         while(this.isRunning()) {
             try{
                 this.checkForNewEvents();
@@ -300,7 +298,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         return this.numParallelTasksRunning.get() == 0 && numPartitionedTasksRunning.get() == 0;
     }
 
-    private static final int MAX_SLEEP = 1000;
+    private static final int MAX_SLEEP = 500;
 
     @SuppressWarnings("BusyWait")
     private void checkForNewEvents() throws InterruptedException {

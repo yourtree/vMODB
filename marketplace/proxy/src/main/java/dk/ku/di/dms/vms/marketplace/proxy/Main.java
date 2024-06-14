@@ -70,9 +70,9 @@ public final class Main {
             TransactionDAG updateProductDag = TransactionBootstrap.name(UPDATE_PRODUCT)
                     .input("a", "product", UPDATE_PRODUCT)
 //                    .terminal("b", "stock", "a")
-//                    .terminal("c", "cart", "a")
+                    .terminal("c", "cart", "a")
                     // necessary statement in order to finish batches
-                    .terminal("b", "product", "a")
+//                    .terminal("b", "product", "a")
                     .build();
             transactionMap.put(updateProductDag.name, updateProductDag);
         }
@@ -184,7 +184,7 @@ public final class Main {
         IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, Constants.STOCK_VMS_PORT);
 
         Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>();
-//        starterVMSs.put(cartAddress.hashCode(), cartAddress);
+        starterVMSs.put(cartAddress.hashCode(), cartAddress);
         starterVMSs.put(productAddress.hashCode(), productAddress);
 //        starterVMSs.put(stockAddress.hashCode(), stockAddress);
         return starterVMSs;

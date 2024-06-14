@@ -624,13 +624,11 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 writeBuffer.flip();
 
                 this.channel.write(writeBuffer).get();
-
                 // drain buffer
                 while(writeBuffer.hasRemaining()){
                     // LOGGER.log(WARNING, "Here we gooooo");
                     this.channel.write(writeBuffer).get();
                 }
-
                 this.returnByteBuffer(writeBuffer);
 
                 // this.WRITE_SYNCHRONIZER.take();
