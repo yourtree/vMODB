@@ -152,6 +152,10 @@ public final class Coordinator extends StoppableRunnable {
             this.group = AsynchronousChannelGroup.withThreadPool(Executors.newWorkStealingPool(options.getNetworkThreadPoolSize()));
             this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
         } else {
+            /* may lead to better performance than default group
+            this.group = AsynchronousChannelGroup.withThreadPool(ForkJoinPool.commonPool());
+            this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+             */
             this.group = null;
             this.serverSocket = AsynchronousServerSocketChannel.open();
         }
@@ -382,10 +386,12 @@ public final class Coordinator extends StoppableRunnable {
                 VmsWorker vmsWorker = VmsWorker.buildAsStarter(this.me, vmsNode, this.coordinatorQueue,
                         this.group, new VmsWorker.VmsWorkerOptions(this.options.getNetworkBufferSize(), this.options.getNetworkSendTimeout(), this.options.getNumQueuesVmsWorker()),
                         this.serdesProxy);
-                // a cached thread pool would be ok in this case
+
+                // virtual thread leads to performance degradation
                 Thread vmsWorkerThread = Thread.ofPlatform().factory().newThread(vmsWorker);
                 vmsWorkerThread.setName("vms-worker-" + vmsNode.identifier + "-0");
                 vmsWorkerThread.start();
+
                 this.vmsWorkerContainerMap.put(vmsNode.identifier,
                         new VmsWorkerContainer(vmsWorker, this.options.getNumWorkersPerVms())
                 );

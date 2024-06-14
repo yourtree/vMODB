@@ -91,6 +91,13 @@ final class LeaderWorker extends StoppableRunnable {
         }
     }
 
+    /**
+     * This code is not correct
+     * There is a risk the total bytes are not written,
+     * which can make the leader to fail to process the message.
+     * However, the message is very short and most likely will
+     * be entirely written to the OS buffer
+     */
     @SuppressWarnings("StatementWithEmptyBody")
     public void queueMessage(Object message) {
         while(!this.promise.isDone());
@@ -99,13 +106,12 @@ final class LeaderWorker extends StoppableRunnable {
         this.sendMessage(message);
     }
 
-    Future<Integer> promise = CompletableFuture.completedFuture(0);
+    private Future<Integer> promise = CompletableFuture.completedFuture(0);
 
     private void write(Object message) {
         try {
             this.writeBuffer.flip();
             this.promise = this.channel.write(this.writeBuffer);
-            // this.writeBuffer.clear();
         } catch (Exception e){
             // queue to try insert again
             LOGGER.log(ERROR, this.vmsNode.identifier+": Error on writing message to Leader\n"+e.getCause().getMessage(), e);

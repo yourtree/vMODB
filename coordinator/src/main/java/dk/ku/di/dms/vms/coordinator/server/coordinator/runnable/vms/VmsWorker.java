@@ -623,8 +623,18 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
                 writeBuffer.flip();
 
-                this.WRITE_SYNCHRONIZER.take();
-                this.channel.write(writeBuffer, options.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.batchWriteCompletionHandler);
+                this.channel.write(writeBuffer).get();
+
+                // drain buffer
+                while(writeBuffer.hasRemaining()){
+                    // LOGGER.log(WARNING, "Here we gooooo");
+                    this.channel.write(writeBuffer).get();
+                }
+
+                this.returnByteBuffer(writeBuffer);
+
+                // this.WRITE_SYNCHRONIZER.take();
+                // this.channel.write(writeBuffer, options.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.batchWriteCompletionHandler);
 
             } catch (Exception e) {
                 LOGGER.log(ERROR, "Leader: Error on submitting ["+count+"] events to "+this.consumerVms.identifier+":"+e);

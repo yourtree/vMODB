@@ -368,6 +368,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 this.leaderWorker.queueMessage(BatchComplete.of(this.currentBatch.batch, this.me.identifier));
             }
 
+            // FIXME remove?
             // this is necessary to move the batch to committed and allow the batches to progress
             this.vmsInternalChannels.batchCommitCommandQueue().add( DUMB_OBJECT );
         }
@@ -1026,11 +1027,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                             LOGGER.log(ERROR, me.identifier + ": Message type sent by the leader cannot be identified: " + messageType);
                 }
             } catch (Exception e){
-                if(e instanceof BufferUnderflowException) {
-                    LOGGER.log(ERROR, "Leader: Buffer underflow caught\n"+e.getMessage(), e);
-                } else {
-                    LOGGER.log(ERROR, "Leader: Unknown error caught\n"+e.getMessage(), e);
-                }
+                LOGGER.log(ERROR, "Leader: Error caught\n"+e.getMessage(), e);
                 e.printStackTrace(System.out);
             }
 
@@ -1103,7 +1100,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 LOGGER.log(ERROR, me.identifier +": Error while processing a batch\n"+e);
                 // e.printStackTrace(System.out);
                 if(e instanceof BufferUnderflowException) {
-                    throw new BufferUnderflowException();
+                    throw new RuntimeException(e);
                 }
             } finally {
                 payloads.clear();
