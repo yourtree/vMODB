@@ -278,7 +278,6 @@ public final class Coordinator extends StoppableRunnable {
         for(var txWorker : txWorkers){
             txWorker.t2().start();
         }
-
     }
 
     /**
@@ -310,7 +309,12 @@ public final class Coordinator extends StoppableRunnable {
                     if(this.vmsWorkerContainerMap.containsKey(inputVms.getValue().targetVms)) {
                         try {
                             VmsWorker newWorker = VmsWorker.build(this.me, vmsNode, this.coordinatorQueue, this.group,
-                                    new VmsWorker.VmsWorkerOptions(this.options.getNetworkBufferSize(), this.options.getNetworkSendTimeout(), this.options.getNumQueuesVmsWorker()),
+                                    new VmsWorker.VmsWorkerOptions(
+                                            true,
+                                            this.options.getMaxVmsWorkerSleep(),
+                                            this.options.getNetworkBufferSize(),
+                                            this.options.getNetworkSendTimeout(),
+                                            this.options.getNumQueuesVmsWorker()),
                                     this.serdesProxy);
                             if(this.vmsWorkerContainerMap.get(inputVms.getValue().targetVms) instanceof VmsWorkerContainer o){
                                 o.addWorker(newWorker);
@@ -380,11 +384,30 @@ public final class Coordinator extends StoppableRunnable {
      * later mapped to the respective vms identifier by the thread
      */
     private void setupStarterVMSs() {
+
+        var inputsVMSs = new HashSet<String>();
+
+        for(var entry : this.transactionMap.entrySet()){
+            for(var input : entry.getValue().inputEvents.entrySet()){
+                inputsVMSs.add(input.getValue().targetVms);
+            }
+        }
+
         try {
             for (IdentifiableNode vmsNode : this.starterVMSs.values()) {
+
+                // is this a VMS that receives transaction input?
+                boolean active = inputsVMSs.contains(vmsNode.identifier);
+
                 // coordinator will later keep track of this thread when the connection with the VMS is fully established
                 VmsWorker vmsWorker = VmsWorker.buildAsStarter(this.me, vmsNode, this.coordinatorQueue,
-                        this.group, new VmsWorker.VmsWorkerOptions(this.options.getNetworkBufferSize(), this.options.getNetworkSendTimeout(), this.options.getNumQueuesVmsWorker()),
+                        this.group,
+                        new VmsWorker.VmsWorkerOptions(
+                                active,
+                                this.options.getMaxVmsWorkerSleep(),
+                                this.options.getNetworkBufferSize(),
+                                this.options.getNetworkSendTimeout(),
+                                this.options.getNumQueuesVmsWorker()),
                         this.serdesProxy);
 
                 // virtual thread leads to performance degradation
@@ -412,7 +435,7 @@ public final class Coordinator extends StoppableRunnable {
     private List<IdentifiableNode> findConsumerVMSs(String outputEvent){
         List<IdentifiableNode> list = new ArrayList<>(2);
         // can be the leader or a vms
-        for( VmsNode vms : this.vmsMetadataMap.values() ){
+        for(VmsNode vms : this.vmsMetadataMap.values()){
             if(vms.inputEventSchema.get(outputEvent) != null){
                 list.add(vms);
             }

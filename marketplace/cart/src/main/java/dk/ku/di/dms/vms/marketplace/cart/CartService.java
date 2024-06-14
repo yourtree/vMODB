@@ -31,6 +31,7 @@ public final class CartService {
         this.productReplicaRepository = productReplicaRepository;
     }
 
+    /* for testing purpose only
     @Inbound(values = {CUSTOMER_CHECKOUT})
     @Outbound(RESERVE_STOCK)
     @Transactional(type=RW)
@@ -62,6 +63,7 @@ public final class CartService {
     private static List<dk.ku.di.dms.vms.marketplace.common.entities.CartItem> convertCartItems(List<CartItem> cartItems){
         return cartItems.stream().map(f-> new dk.ku.di.dms.vms.marketplace.common.entities.CartItem( f.seller_id, f.product_id, f.product_name, f.unit_price, f.freight_value, f.quantity, f.voucher, f.version)).toList();
     }
+    */
 
     @Inbound(values = {PRICE_UPDATED})
     @Transactional(type=RW)

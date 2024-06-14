@@ -69,7 +69,7 @@ public final class Main {
         if(transactions.contains(UPDATE_PRODUCT)) {
             TransactionDAG updateProductDag = TransactionBootstrap.name(UPDATE_PRODUCT)
                     .input("a", "product", UPDATE_PRODUCT)
-//                    .terminal("b", "stock", "a")
+                    .terminal("b", "stock", "a")
                     .terminal("c", "cart", "a")
                     // necessary statement in order to finish batches
 //                    .terminal("b", "product", "a")
@@ -124,16 +124,22 @@ public final class Main {
             starterVMSs = buildStarterVMSsBasic(properties);
         }
 
+        // network
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         int osBufferSize = Integer.parseInt( properties.getProperty("os_buffer_size") );
-        int batchWindow = Integer.parseInt( properties.getProperty("batch_window_ms") );
-        int batchMaxTransactions = Integer.parseInt( properties.getProperty("num_max_transactions_batch") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
         int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
-        int numWorkersPerVms = Integer.parseInt( properties.getProperty("num_vms_workers") );
+        int definiteBufferSize = networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize;
+
+        // batch generation
+        int batchWindow = Integer.parseInt( properties.getProperty("batch_window_ms") );
+        int batchMaxTransactions = Integer.parseInt( properties.getProperty("num_max_transactions_batch") );
         int numTransactionWorkers = Integer.parseInt( properties.getProperty("num_transaction_workers") );
 
-        int definiteBufferSize = networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize;
+        // vms worker config
+        int numWorkersPerVms = Integer.parseInt( properties.getProperty("num_vms_workers") );
+        int numQueuesVmsWorker = Integer.parseInt( properties.getProperty("num_queues_vms_worker"));
+        int maxSleep = Integer.parseInt( properties.getProperty("max_sleep") );
 
         Coordinator coordinator = Coordinator.build(
                 serverMap,
@@ -141,14 +147,17 @@ public final class Main {
                 transactionMap,
                 serverIdentifier,
                 new CoordinatorOptions()
-                        .withNumTransactionWorkers(numTransactionWorkers)
+                        .withNetworkBufferSize(definiteBufferSize)
+                        .withOsBufferSize(osBufferSize)
+                        .withNetworkThreadPoolSize(groupPoolSize)
+                        .withNetworkSendTimeout(networkSendTimeout)
                         .withBatchWindow(batchWindow)
                         .withMaxTransactionsPerBatch(batchMaxTransactions)
+                        .withNumTransactionWorkers(numTransactionWorkers)
                         .withNumWorkersPerVms(numWorkersPerVms)
-                        .withNetworkThreadPoolSize(groupPoolSize)
-                        .withNetworkBufferSize(definiteBufferSize)
-                        .withNetworkSendTimeout(networkSendTimeout)
-                        .withOsBufferSize(osBufferSize),
+                        .withNumQueuesVmsWorker(numQueuesVmsWorker)
+                        .withMaxVmsWorkerSleep(maxSleep)
+                        ,
                 STARTING_BATCH_ID,
                 STARTING_TID,
                 serdes
@@ -186,7 +195,7 @@ public final class Main {
         Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>();
         starterVMSs.put(cartAddress.hashCode(), cartAddress);
         starterVMSs.put(productAddress.hashCode(), productAddress);
-//        starterVMSs.put(stockAddress.hashCode(), stockAddress);
+        starterVMSs.put(stockAddress.hashCode(), stockAddress);
         return starterVMSs;
     }
 

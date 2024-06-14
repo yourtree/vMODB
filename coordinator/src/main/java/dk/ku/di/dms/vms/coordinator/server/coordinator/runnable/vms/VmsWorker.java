@@ -38,7 +38,21 @@ import static java.lang.Thread.sleep;
 public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private static final System.Logger LOGGER = System.getLogger(VmsWorker.class.getName());
-    
+
+    enum State {
+        NEW,
+        CONNECTION_ESTABLISHED,
+        CONNECTION_FAILED,
+        LEADER_PRESENTATION_SENT,
+        LEADER_PRESENTATION_SEND_FAILED,
+        VMS_PRESENTATION_RECEIVED,
+        VMS_PRESENTATION_RECEIVE_FAILED,
+        VMS_PRESENTATION_PROCESSED,
+        CONSUMER_SET_READY_FOR_SENDING,
+        CONSUMER_SET_SENDING_FAILED,
+        CONSUMER_EXECUTING
+    }
+
     private final ServerNode me;
     
     private final VmsWorkerOptions options;
@@ -124,7 +138,9 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         }
     }
 
-    public record VmsWorkerOptions( int networkBufferSize,
+    public record VmsWorkerOptions(boolean active,
+                                   int maxSleep,
+                                   int networkBufferSize,
                                     int networkSendTimeout,
                                     int numQueuesVmsWorker) {}
     
@@ -200,6 +216,9 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private void connect() throws IOException, InterruptedException, ExecutionException {
         NetworkUtils.configure(this.channel, options.networkBufferSize);
+
+        // if not active, maybe set tcp_nodelay to true?
+
         this.channel.connect(this.consumerVms.asInetSocketAddress()).get();
     }
 
@@ -252,7 +271,6 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             } else {
                 LOGGER.log(WARNING,"Cannot find the root problem. Please have a look: "+e.getCause().getMessage());
             }
-
             // important for consistency of state (if debugging, good to see the code controls the thread state)
             this.stop();
         }
@@ -274,7 +292,9 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         } else {
             if (this.initSimpleConnection()) return;
         }
-        this.eventLoop();
+        if(options.active()) {
+            this.eventLoop();
+        }
         LOGGER.log(INFO, "VmsWorker finished for consumer VMS: "+consumerVms);
     }
 
@@ -293,8 +313,6 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         return false;
     }
 
-    private static final int MAX_SLEEP = 500;
-
     /**
      * Event loop performs two tasks:
      * (a) get and process batch-tracking messages from coordinator
@@ -307,7 +325,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             try {
                 this.transactionEventQueue.drain(this.transactionEvents);
                 if(this.transactionEvents.isEmpty()){
-                    pollTimeout = Math.min(pollTimeout * 2, MAX_SLEEP);
+                    pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep);
                     this.processPendingTasks();
                     sleep(pollTimeout);
                     continue;
@@ -372,7 +390,12 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     @Override
     public void queueMessage(Object message) {
-        this.messageQueue.offerLast(message);
+        if(this.options.active) {
+            this.messageQueue.offerLast(message);
+        } else {
+            // perform write directly
+            this.sendMessage(message);
+        }
     }
 
     private void sendMessage(Object message) {
@@ -703,20 +726,6 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             PENDING_WRITES_BUFFER.offer(byteBuffer);
             LOGGER.log(INFO,  "Leader: Byte buffer added to pending queue. #pending: "+PENDING_WRITES_BUFFER.size());
         }
-    }
-
-    enum State {
-        NEW,
-        CONNECTION_ESTABLISHED,
-        CONNECTION_FAILED,
-        LEADER_PRESENTATION_SENT,
-        LEADER_PRESENTATION_SEND_FAILED,
-        VMS_PRESENTATION_RECEIVED,
-        VMS_PRESENTATION_RECEIVE_FAILED,
-        VMS_PRESENTATION_PROCESSED,
-        CONSUMER_SET_READY_FOR_SENDING,
-        CONSUMER_SET_SENDING_FAILED,
-        CONSUMER_EXECUTING
     }
 
 }

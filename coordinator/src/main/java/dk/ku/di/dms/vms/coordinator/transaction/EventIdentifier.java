@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.coordinator.transaction;
 import java.util.ArrayList;
 import java.util.List;
 
-public class EventIdentifier {
+public final class EventIdentifier {
 
     public final String alias; // alias for fast identification in topology definition
 

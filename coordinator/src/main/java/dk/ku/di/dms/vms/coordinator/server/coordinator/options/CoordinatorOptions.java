@@ -35,6 +35,10 @@ public final class CoordinatorOptions {
 
     private int numTransactionWorkers = 1;
 
+    private int maxSleep = 1000;
+
+    private int numQueuesVmsWorker = 1;
+
     public int getNetworkThreadPoolSize() {
         return this.networkThreadPoolSize;
     }
@@ -118,6 +122,20 @@ public final class CoordinatorOptions {
     }
 
     public int getNumQueuesVmsWorker() {
-        return 0;
+        return this.numQueuesVmsWorker;
+    }
+
+    public CoordinatorOptions withNumQueuesVmsWorker(int numQueuesVmsWorker) {
+        this.numQueuesVmsWorker = numQueuesVmsWorker;
+        return this;
+    }
+
+    public CoordinatorOptions withMaxVmsWorkerSleep(int maxSleep) {
+        this.maxSleep = maxSleep;
+        return this;
+    }
+
+    public int getMaxVmsWorkerSleep() {
+        return this.maxSleep;
     }
 }
