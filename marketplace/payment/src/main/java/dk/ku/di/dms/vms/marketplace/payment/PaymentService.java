@@ -105,13 +105,12 @@ public final class PaymentService {
                     status
             );
 
-            orderPaymentRepository.insert(cardPaymentLine);
+            this.orderPaymentRepository.insert(cardPaymentLine);
 
             OrderPaymentCard card = new OrderPaymentCard(invoiceIssued.customer.CustomerId, orderId, seq, invoiceIssued.customer.CardNumber,
                     invoiceIssued.customer.CardHolderName, invoiceIssued.customer.CardExpiration, invoiceIssued.customer.CardBrand);
 
-            orderPaymentCardRepository.insert(card);
-
+            this.orderPaymentCardRepository.insert(card);
             seq++;
         } else if (invoiceIssued.customer.PaymentType.contentEquals(PaymentType.BOLETO.name())) {
             OrderPayment paymentSlip = new OrderPayment(
@@ -123,9 +122,7 @@ public final class PaymentService {
                     invoiceIssued.totalInvoice,
                     status
             );
-
             orderPaymentRepository.insert(paymentSlip);
-
             seq++;
         }
 
@@ -148,7 +145,6 @@ public final class PaymentService {
         }
 
         return new PaymentConfirmed(invoiceIssued.customer, invoiceIssued.orderId, invoiceIssued.totalInvoice, invoiceIssued.items, now, invoiceIssued.instanceId);
-
     }
 
 }

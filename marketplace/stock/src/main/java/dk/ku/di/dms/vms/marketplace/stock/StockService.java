@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.WARNING;
 
 @Microservice("stock")
 public final class StockService {
@@ -32,15 +33,19 @@ public final class StockService {
     @Inbound(values = {PRODUCT_UPDATED})
     @Transactional(type=RW)
     @PartitionBy(clazz = ProductUpdated.class, method = "getId")
-    public void updateProduct(ProductUpdated updateEvent) {
-        LOGGER.log(INFO,"APP: Stock received an update product event with version: "+updateEvent.version);
+    public void updateProduct(ProductUpdated productUpdated) {
+        LOGGER.log(INFO,"APP: Stock received an update product event with version: "+productUpdated.version);
 
         // can use issue statement for faster update
-        StockItem stock = this.stockRepository.lookupByKey(new StockItem.StockId(updateEvent.seller_id, updateEvent.product_id));
+        StockItem stockItem = this.stockRepository.lookupByKey(new StockItem.StockId(productUpdated.seller_id, productUpdated.product_id));
+        if (stockItem == null) {
+            throw new RuntimeException("Stock item not found: "+productUpdated.seller_id+"-"+productUpdated.product_id);
+        }
 
-        stock.version = updateEvent.version;
+        stockItem.version = productUpdated.version;
+        stockItem.updated_at = new Date();
 
-        this.stockRepository.update(stock);
+        this.stockRepository.update(stockItem);
     }
 
     /**
@@ -61,7 +66,7 @@ public final class StockService {
             throw new RuntimeException("No items found in private state");
         }
 
-        // List<CartItem> unavailableItems = new();
+        List<CartItem> unavailableItems = new ArrayList<>(reserveStock.items.size());
         List<CartItem> cartItemsReserved = new ArrayList<>(reserveStock.items.size());
 //        List<StockItem> stockItemsReserved = new(); // for bulk update
         var now = new Date();
@@ -69,27 +74,30 @@ public final class StockService {
         for(StockItem item : items){
 
             currId = new StockItem.StockId( item.seller_id, item.product_id );
-
             CartItem cartItem = cartItemMap.get( currId );
 
             if (item.version.compareTo(cartItem.Version) != 0) {
-                LOGGER.log(INFO,"The version is incorrect. Stock item: "+ item.version+ " Cart item: "+cartItem.Version);
+                LOGGER.log(INFO,"The stock item ("+item.seller_id+"-"+item.product_id+") version is incorrect.\nStock item: "+ item.version+ " Cart item: "+cartItem.Version);
+                unavailableItems.add(cartItem);
                 continue;
             }
 
             if(item.qty_reserved + cartItem.Quantity > item.qty_available){
+                unavailableItems.add(cartItem);
                 continue;
             }
 
             item.qty_reserved += cartItem.Quantity;
             item.updated_at = now;
-
             this.stockRepository.update( item );
-
             cartItemsReserved.add(cartItem);
-
         }
 
+        if(cartItemsReserved.isEmpty()){
+            LOGGER.log(WARNING, "No items were reserved for instanceId = "+reserveStock.instanceId);
+        }
+
+        // need to find a way to complete the transaction in the case it does not hit all virtual microservices
         return new StockConfirmed( reserveStock.timestamp, reserveStock.customerCheckout, cartItemsReserved, reserveStock.instanceId );
     }
 

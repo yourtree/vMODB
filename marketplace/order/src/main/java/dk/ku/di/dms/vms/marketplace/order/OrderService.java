@@ -60,6 +60,9 @@ public final class OrderService {
             Order order = this.orderRepository.lookupByKey( new Order.OrderId(
                     shipmentNotification.customerId, shipmentNotification.orderId
             ) );
+            if(order == null) {
+                throw new RuntimeException("Cannot find order "+shipmentNotification.customerId+"-"+shipmentNotification.orderId);
+            }
 
             OrderStatus status = OrderStatus.READY_FOR_SHIPMENT;
             if(shipmentNotification.status == ShipmentStatus.DELIVERY_IN_PROGRESS) {
@@ -76,8 +79,8 @@ public final class OrderService {
                     now,
                     status);
 
-            order.updated_at = now;
             order.status = status;
+            order.updated_at = now;
 
             this.orderRepository.update(order);
             this.orderHistoryRepository.insert( orderHistory );
@@ -109,7 +112,6 @@ public final class OrderService {
         for(var item : stockConfirmed.items)
         {
             float total_item = item.UnitPrice * item.Quantity;
-
             if (total_item - item.Voucher > 0)
             {
                 total_amount -= item.Voucher;
@@ -122,7 +124,6 @@ public final class OrderService {
                 total_incentive += total_item;
                 total_item = 0;
             }
-
             totalPerItem.put(item.ProductId, total_item);
         }
 
@@ -144,31 +145,29 @@ public final class OrderService {
                  invoiceNumber,
                  OrderStatus.INVOICED,
                  stockConfirmed.timestamp,
-                null,
-                null,
-                null,
-                null,
+                 null,
+                 null,
+                 null,
+                 null,
                  stockConfirmed.items.size(),
-                 now,
-                 now,
                  total_amount,
                  total_freight,
                  total_incentive,
                  total_amount + total_freight,
-                 total_items
-                 );
+                 total_items,
+                 now,
+                 now
+        );
         this.orderRepository.insert(order);
 
         Calendar cal = Calendar.getInstance();
         cal.setTime(now);
         cal.add(Calendar.DATE, 3);
 
-        List<OrderItem> orderItems = new ArrayList<>();
+        List<dk.ku.di.dms.vms.marketplace.common.entities.OrderItem> orderItems = new ArrayList<>();
         int item_id = 1;
-        float total_amount_item;
         for(var item : stockConfirmed.items)
         {
-            total_amount_item = item.UnitPrice * item.Quantity;
             OrderItem oim = new OrderItem
             (
                 customerOrder.customer_id,
@@ -181,14 +180,12 @@ public final class OrderService {
                 cal.getTime(),
                 item.FreightValue,
                 item.Quantity,
-                totalPerItem.get(item.ProductId),
-                total_amount_item,
-                    total_amount_item - totalPerItem.get(item.ProductId)
+                item.UnitPrice * item.Quantity,
+                totalPerItem.get(item.ProductId)
             );
 
-            orderItems.add(oim);
+            orderItems.add(oim.toCommonOrderItem(item.Voucher));
             this.orderItemRepository.insert(oim);
-
             item_id++;
         }
 
@@ -199,8 +196,7 @@ public final class OrderService {
                 OrderStatus.INVOICED);
         this.orderHistoryRepository.insert(oh);
 
-        return new InvoiceIssued( stockConfirmed.customerCheckout, customerOrder.next_order_id, invoiceNumber, now, order.total_invoice,
-               orderItems.stream().map(OrderItem::toCommonOrderItem).toList(), stockConfirmed.instanceId);
+        return new InvoiceIssued( stockConfirmed.customerCheckout, customerOrder.next_order_id, invoiceNumber, now, order.total_invoice, orderItems, stockConfirmed.instanceId);
     }
 
     private static final DateFormat df = new SimpleDateFormat("MM/dd/yyyy");

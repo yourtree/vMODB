@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.common.events;
 
-import dk.ku.di.dms.vms.marketplace.common.inputs.UpdatePrice;
+import dk.ku.di.dms.vms.marketplace.common.inputs.PriceUpdate;
 import dk.ku.di.dms.vms.modb.api.annotations.Event;
 
 @Event
@@ -26,8 +26,8 @@ public final class PriceUpdated {
         this.instanceId = instanceId;
     }
 
-    public UpdatePrice.ProductId getId(){
-        return new UpdatePrice.ProductId(this.sellerId, this.productId);
+    public PriceUpdate.ProductId getId(){
+        return new PriceUpdate.ProductId(this.sellerId, this.productId);
     }
 
     public record ProductId( int sellerId, int productId){}

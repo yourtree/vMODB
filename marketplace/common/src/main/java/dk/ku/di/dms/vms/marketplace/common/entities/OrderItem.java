@@ -28,8 +28,7 @@ public final class OrderItem {
 
     public float total_incentive;
 
-    public OrderItem() {
-    }
+    public OrderItem() { }
 
     public OrderItem(int order_id, int order_item_id, int product_id, String product_name, int seller_id, float unit_price, Date shipping_limit_date,
                      float freight_value, int quantity, float total_items, float total_amount, float total_incentive) {
@@ -48,8 +47,7 @@ public final class OrderItem {
     }
 
     public float getFreightValue() {
-        return freight_value;
+        return this.freight_value;
     }
-
 
 }

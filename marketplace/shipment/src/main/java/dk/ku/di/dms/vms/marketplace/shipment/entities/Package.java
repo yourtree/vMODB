@@ -32,11 +32,6 @@ public final class Package implements IEntity<Package.PackageId> {
 
     }
 
-    @Override
-    public PackageId getId(){
-        return new PackageId( this.customer_id, this.order_id, this.package_id );
-    }
-
     @Id
     @VmsForeignKey(table = Shipment.class, column = "customer_id")
     public int customer_id;
@@ -89,6 +84,11 @@ public final class Package implements IEntity<Package.PackageId> {
         this.delivery_date = delivery_date;
         this.quantity = quantity;
         this.status = status;
+    }
+
+    @Override
+    public PackageId getId(){
+        return new PackageId( this.customer_id, this.order_id, this.package_id );
     }
 
     public int getSellerId() {

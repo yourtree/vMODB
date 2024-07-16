@@ -7,6 +7,7 @@ import javax.persistence.Column;
 import javax.persistence.Id;
 import javax.persistence.IdClass;
 import java.io.Serializable;
+import java.util.Date;
 
 @VmsTable(name="products")
 @IdClass(Product.ProductId.class)
@@ -53,6 +54,12 @@ public final class Product implements IEntity<Product.ProductId> {
 
     @Column
     public String version;
+
+    @Column
+    public Date created_at;
+
+    @Column
+    public Date updated_at;
 
     public Product(){}
 

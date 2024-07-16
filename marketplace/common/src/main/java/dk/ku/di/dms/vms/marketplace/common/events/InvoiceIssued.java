@@ -38,6 +38,6 @@ public final class InvoiceIssued {
     }
 
     public List<OrderItem> getItems() {
-        return items;
+        return this.items;
     }
 }

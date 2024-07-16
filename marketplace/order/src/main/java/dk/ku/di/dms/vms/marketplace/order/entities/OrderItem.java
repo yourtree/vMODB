@@ -69,14 +69,14 @@ public final class OrderItem implements IEntity<OrderItem.OrderItemId> {
 
     // can be derived from total_items - total_amount
     // incentive of item is not of concern to the order
-    // the seller must compute 
-    public float total_incentive;
+    // the seller must compute
+    // public float total_incentive;
 
     public OrderItem() { }
 
     public OrderItem(int customer_id, int order_id, int order_item_id, int product_id, String product_name, int seller_id,
                      float unit_price, Date shipping_limit_date,
-                     float freight_value, int quantity, float total_items, float total_amount, float total_incentive) {
+                     float freight_value, int quantity, float total_items, float total_amount) {
         this.customer_id = customer_id;
         this.order_id = order_id;
         this.order_item_id = order_item_id;
@@ -89,13 +89,12 @@ public final class OrderItem implements IEntity<OrderItem.OrderItemId> {
         this.quantity = quantity;
         this.total_items = total_items;
         this.total_amount = total_amount;
-        this.total_incentive = total_incentive;
     }
 
-    public dk.ku.di.dms.vms.marketplace.common.entities.OrderItem toCommonOrderItem(){
-        return new dk.ku.di.dms.vms.marketplace.common.entities.OrderItem( order_id, order_item_id,
+    public dk.ku.di.dms.vms.marketplace.common.entities.OrderItem toCommonOrderItem(float voucher){
+        return new dk.ku.di.dms.vms.marketplace.common.entities.OrderItem(order_id, order_item_id,
                 product_id, product_name, seller_id, unit_price, shipping_limit_date, freight_value,
-                quantity, total_items, total_amount, total_incentive);
+                quantity, total_items, total_amount, voucher);
     }
 
 }

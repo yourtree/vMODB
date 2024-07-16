@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
 import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
-import dk.ku.di.dms.vms.marketplace.common.inputs.UpdatePrice;
+import dk.ku.di.dms.vms.marketplace.common.inputs.PriceUpdate;
 import dk.ku.di.dms.vms.marketplace.common.inputs.UpdateProduct;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
@@ -158,8 +158,8 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
         }
 
         private void producePriceUpdate(int val, IVmsSerdesProxy serdes) {
-            UpdatePrice priceUpdate = new UpdatePrice(1,1,10.0F, String.valueOf(val));
-            String payload = serdes.serialize(priceUpdate, UpdatePrice.class);
+            PriceUpdate priceUpdate = new PriceUpdate(1,1,10.0F, String.valueOf(val), String.valueOf(val));
+            String payload = serdes.serialize(priceUpdate, PriceUpdate.class);
             TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRICE, payload);
             TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);
             logger.log(INFO, "[Producer] New product price: "+ val);

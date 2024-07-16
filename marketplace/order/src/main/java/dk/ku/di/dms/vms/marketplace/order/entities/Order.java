@@ -58,12 +58,6 @@ public final class Order implements IEntity<Order.OrderId> {
     public int count_items;
 
     @Column
-    public Date created_at;
-
-    @Column
-    public Date updated_at;
-
-    @Column
     public float total_amount;
 
     @Column
@@ -77,13 +71,19 @@ public final class Order implements IEntity<Order.OrderId> {
 
     @Column
     public float total_items;
+
+    @Column
+    public Date created_at;
+
+    @Column
+    public Date updated_at;
     
     public Order(){}
 
     public Order(int customer_id, int order_id, String invoice_number, OrderStatus status, Date purchase_date,
                  Date payment_date, Date delivered_carrier_date, Date delivered_customer_date, Date estimated_delivery_date,
-                 int count_items, Date created_at, Date updated_at, float total_amount, float total_freight,
-                 float total_incentive, float total_invoice, float total_items) {
+                 int count_items, float total_amount, float total_freight,
+                 float total_incentive, float total_invoice, float total_items, Date created_at, Date updated_at) {
         this.customer_id = customer_id;
         this.order_id = order_id;
         this.invoice_number = invoice_number;
