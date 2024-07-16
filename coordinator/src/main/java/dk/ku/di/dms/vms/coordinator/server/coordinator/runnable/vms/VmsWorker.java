@@ -17,6 +17,8 @@ import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -38,6 +40,19 @@ import static java.lang.Thread.sleep;
 public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private static final System.Logger LOGGER = System.getLogger(VmsWorker.class.getName());
+
+    private static final VarHandle WRITE_SYNCHRONIZER;
+
+    static {
+        try {
+            MethodHandles.Lookup l = MethodHandles.lookup();
+            WRITE_SYNCHRONIZER = l.findVarHandle(VmsWorker.class, "writeSynchronizer", int.class);
+        } catch (Exception e) {
+            throw new InternalError(e);
+        }
+    }
+    @SuppressWarnings("unused")
+    private volatile int writeSynchronizer;
 
     enum State {
         NEW,
@@ -79,13 +94,6 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private final IVmsDeque transactionEventQueue;
 
     private final Deque<Object> messageQueue;
-
-    // could be switched by a semaphore
-    private final BlockingQueue<Byte> WRITE_SYNCHRONIZER = new ArrayBlockingQueue<>(1);
-
-    private static final Byte DUMB = 1;
-
-    private final boolean initHandshake;
 
     private interface IVmsDeque {
         void drain(List<TransactionEvent.PayloadRaw> list);
@@ -141,10 +149,11 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     public record VmsWorkerOptions(boolean active,
                                    int maxSleep,
                                    int networkBufferSize,
-                                    int networkSendTimeout,
-                                    int numQueuesVmsWorker) {}
+                                   int networkSendTimeout,
+                                   int numQueuesVmsWorker,
+                                   boolean initHandshake) {}
     
-    public static VmsWorker buildAsStarter(// coordinator reference
+    public static VmsWorker build(// coordinator reference
                                     ServerNode me,
                                     // the vms this thread is responsible for
                                     IdentifiableNode consumerVms,
@@ -155,18 +164,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                                     VmsWorkerOptions options,
                                     IVmsSerdesProxy serdesProxy) throws IOException {
         return new VmsWorker(me, consumerVms, coordinatorQueue,
-                AsynchronousSocketChannel.open(group), options, serdesProxy, true);
-    }
-
-    public static VmsWorker build(ServerNode me,
-                                  IdentifiableNode consumerVms,
-                                  Queue<Object> coordinatorQueue,
-                                  AsynchronousChannelGroup group,
-                                  VmsWorkerOptions options,
-                                  IVmsSerdesProxy serdesProxy) throws IOException {
-        // passing null is clearly not a good option. when it comes to support VMS node crashes, it will be necessary to rethink this design
-        return new VmsWorker(me, consumerVms, coordinatorQueue, AsynchronousSocketChannel.open(group),
-                options, serdesProxy, false);
+                AsynchronousSocketChannel.open(group), options, serdesProxy);
     }
 
     private VmsWorker(// coordinator reference
@@ -177,8 +175,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                       Queue<Object> coordinatorQueue,
                       AsynchronousSocketChannel channel,
                       VmsWorkerOptions options,
-                      IVmsSerdesProxy serdesProxy,
-                      boolean initHandshake) {
+                      IVmsSerdesProxy serdesProxy) {
         this.me = me;
         this.state = State.NEW;
         this.consumerVms = consumerVms;
@@ -196,10 +193,6 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.readBuffer = MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize);
         this.serdesProxy = serdesProxy;
 
-        // to allow the first thread to write
-        // TODO switch to write, get the future and store for the next write
-        this.WRITE_SYNCHRONIZER.add(DUMB);
-
         // in
         this.messageQueue = new ConcurrentLinkedDeque<>();
         if(options.numQueuesVmsWorker() > 1) {
@@ -210,15 +203,20 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
         // out - shared by many vms workers
         this.coordinatorQueue = coordinatorQueue;
+    }
 
-        this.initHandshake = initHandshake;
+    @SuppressWarnings("StatementWithEmptyBody")
+    public void acquireLock(){
+        while(! WRITE_SYNCHRONIZER.compareAndSet(this, 0, 1) );
+    }
+
+    public void releaseLock(){
+        WRITE_SYNCHRONIZER.setVolatile(this, 0);
     }
 
     private void connect() throws IOException, InterruptedException, ExecutionException {
         NetworkUtils.configure(this.channel, options.networkBufferSize);
-
         // if not active, maybe set tcp_nodelay to true?
-
         this.channel.connect(this.consumerVms.asInetSocketAddress()).get();
     }
 
@@ -249,11 +247,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             this.channel.read( this.readBuffer, 0, new VmsReadCompletionHandler() );
         } catch (Exception e) {
             LOGGER.log(WARNING,"Failed to connect to a known VMS: " + this.consumerVms.identifier);
-
-            if(this.WRITE_SYNCHRONIZER.isEmpty()){
-                this.WRITE_SYNCHRONIZER.add(DUMB);
-            }
-
+            this.releaseLock();
             if (this.state == State.NEW) {
                 // forget about it, let the vms connect then...
                 this.state = State.CONNECTION_FAILED;
@@ -277,22 +271,22 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     }
 
     // write presentation
-    private void sendLeaderPresentationToVms(ByteBuffer writeBuffer) throws InterruptedException {
+    private void sendLeaderPresentationToVms(ByteBuffer writeBuffer) {
         Presentation.writeServer(writeBuffer, this.me, true);
         writeBuffer.flip();
-        this.WRITE_SYNCHRONIZER.take();
+        WRITE_SYNCHRONIZER.setVolatile(this, 1);
         this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
     }
 
     @Override
     public void run() {
         LOGGER.log(INFO, "VmsWorker starting for consumer VMS: "+consumerVms);
-        if(this.initHandshake) {
+        if(this.options.initHandshake()) {
             this.initHandshakeProtocol();
         } else {
             if (this.initSimpleConnection()) return;
         }
-        if(options.active()) {
+        if(this.options.active()) {
             this.eventLoop();
         }
         LOGGER.log(INFO, "VmsWorker finished for consumer VMS: "+consumerVms);
@@ -356,8 +350,8 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         if(bb != null){
             LOGGER.log(INFO, "Leader: Retrying sending failed buffer send");
             try {
-                this.WRITE_SYNCHRONIZER.take();
-                this.channel.write(bb, options.networkSendTimeout, TimeUnit.MILLISECONDS, bb, this.batchWriteCompletionHandler);
+                this.acquireLock();
+                this.channel.write(bb, this.options.networkSendTimeout, TimeUnit.MILLISECONDS, bb, this.batchWriteCompletionHandler);
             } catch (Exception e){
                 LOGGER.log(ERROR, "Leader: ERROR on retrying to send failed buffer: \n"+e);
                 if(e instanceof IllegalStateException){
@@ -366,9 +360,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     // stop thread since there is no way to write to this channel anymore
                     this.stop();
                 }
-                if(this.WRITE_SYNCHRONIZER.isEmpty()){
-                    this.WRITE_SYNCHRONIZER.add(DUMB);
-                }
+                this.releaseLock();
                 bb.clear();
                 this.PENDING_WRITES_BUFFER.offer(bb);
             }
@@ -380,11 +372,11 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.transactionEventQueue.insert(payloadRaw);
     }
 
-    private void sendEvent(TransactionEvent.PayloadRaw payload) throws InterruptedException {
+    private void sendEvent(TransactionEvent.PayloadRaw payload) {
         ByteBuffer writeBuffer = this.retrieveByteBuffer();
         TransactionEvent.write( writeBuffer, payload );
         writeBuffer.flip();
-        this.WRITE_SYNCHRONIZER.take();
+        this.acquireLock();
         this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
     }
 
@@ -410,21 +402,12 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     }
 
     private void sendTransactionAbort(TransactionAbort.Payload tidToAbort) {
-        try {
-            ByteBuffer writeBuffer = retrieveByteBuffer();
-            TransactionAbort.write(writeBuffer, tidToAbort);
-            writeBuffer.flip();
-            this.WRITE_SYNCHRONIZER.take();
-            this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
-            LOGGER.log(WARNING,"Leader: Transaction abort sent to: " + this.consumerVms.identifier);
-        } catch (InterruptedException e){
-            LOGGER.log(ERROR,"Leader: Transaction abort write has failed:\n"+e.getMessage());
-            if(!this.channel.isOpen()){
-                LOGGER.log(WARNING,"Leader: Channel with "+this.consumerVms.identifier+" is closed");
-                this.stop(); // no reason to continue the loop
-            }
-            this.messageQueue.offerFirst(tidToAbort);
-        }
+        ByteBuffer writeBuffer = retrieveByteBuffer();
+        TransactionAbort.write(writeBuffer, tidToAbort);
+        writeBuffer.flip();
+        this.acquireLock();
+        this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
+        LOGGER.log(WARNING,"Leader: Transaction abort sent to: " + this.consumerVms.identifier);
     }
 
     private void sendBatchCommitCommand(BatchCommitCommand.Payload batchCommitCommand) {
@@ -432,7 +415,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             ByteBuffer writeBuffer = this.retrieveByteBuffer();
             BatchCommitCommand.write(writeBuffer, batchCommitCommand);
             writeBuffer.flip();
-            this.WRITE_SYNCHRONIZER.take();
+            this.acquireLock();
             this.channel.write(writeBuffer, options.networkSendTimeout(), TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
             LOGGER.log(INFO, "Leader: Batch ("+batchCommitCommand.batch()+") commit command sent to: " + this.consumerVms.identifier);
         } catch (Exception e){
@@ -442,9 +425,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 this.stop(); // no reason to continue the loop
             }
             this.messageQueue.offerFirst(batchCommitCommand);
-            if(this.WRITE_SYNCHRONIZER.isEmpty()){
-                this.WRITE_SYNCHRONIZER.add(DUMB);
-            }
+            this.releaseLock();
         }
     }
 
@@ -463,18 +444,15 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         try {
             ConsumerSet.write(writeBuffer, vmsConsumerSet);
             writeBuffer.flip();
-            this.WRITE_SYNCHRONIZER.take();
+            this.acquireLock();
             this.channel.write(writeBuffer, writeBuffer, this.writeCompletionHandler);
             if (this.state == CONSUMER_SET_READY_FOR_SENDING) {// or != CONSUMER_EXECUTING
                 this.state = CONSUMER_EXECUTING;
             }
-        } catch (InterruptedException e){
-            this.state = CONSUMER_SET_SENDING_FAILED;
-            LOGGER.log(WARNING,"Write has failed", e);
-            this.stop(); // no reason to continue the loop
         } catch (IOException | BufferOverflowException e){
             this.state = CONSUMER_SET_SENDING_FAILED;
             LOGGER.log(WARNING,"Write has failed and the VMS worker will undergo an unknown state: " + consumerVms, e);
+            this.releaseLock();
             this.stop(); // no reason to continue the loop
         }
     }
@@ -599,15 +577,13 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             ByteBuffer writeBuffer = this.retrieveByteBuffer();
             BatchCommitInfo.write(writeBuffer, batchCommitInfo);
             writeBuffer.flip();
-            this.WRITE_SYNCHRONIZER.take();
+            this.acquireLock();
             this.channel.write(writeBuffer, options.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
             LOGGER.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info sent to " + this.consumerVms.identifier+"\n"+batchCommitInfo);
         } catch (Exception e) {
             LOGGER.log(ERROR, "Leader: Error on sending a batch commit info to VMS: " + e.getMessage());
             this.messageQueue.offerFirst(batchCommitInfo);
-            if(this.WRITE_SYNCHRONIZER.isEmpty()){
-                this.WRITE_SYNCHRONIZER.add(DUMB);
-            }
+            this.releaseLock();
         }
     }
 
@@ -643,9 +619,9 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 // relying on future.get() yields corrupted buffer in the consumer
                 LOGGER.log(DEBUG, "Leader: Submitting ["+(count - remaining)+"] events to "+consumerVms.identifier);
                 count = remaining;
-
                 writeBuffer.flip();
 
+                /* blocking way
                 this.channel.write(writeBuffer).get();
                 // drain buffer
                 while(writeBuffer.hasRemaining()){
@@ -653,24 +629,19 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     this.channel.write(writeBuffer).get();
                 }
                 this.returnByteBuffer(writeBuffer);
+                */
 
-                // this.WRITE_SYNCHRONIZER.take();
-                // this.channel.write(writeBuffer, options.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.batchWriteCompletionHandler);
-
+                this.acquireLock();
+                this.channel.write(writeBuffer, options.networkSendTimeout, TimeUnit.MILLISECONDS, writeBuffer, this.batchWriteCompletionHandler);
             } catch (Exception e) {
                 LOGGER.log(ERROR, "Leader: Error on submitting ["+count+"] events to "+this.consumerVms.identifier+":"+e);
                 // return events to the deque
                 while(!this.transactionEvents.isEmpty()) {
                     this.transactionEventQueue.insert(this.transactionEvents.remove(0));
                 }
-
                 // force exit loop
                 remaining = 0;
-
-                if(this.WRITE_SYNCHRONIZER.isEmpty()){
-                    this.WRITE_SYNCHRONIZER.add(DUMB);
-                }
-
+                this.releaseLock();
             }
         }
         this.transactionEvents.clear();
@@ -691,13 +662,13 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 channel.write(byteBuffer, options.networkSendTimeout, TimeUnit.MILLISECONDS, byteBuffer, this);
                 return;
             }
-            WRITE_SYNCHRONIZER.add(DUMB);
+            releaseLock();
             returnByteBuffer(byteBuffer);
         }
 
         @Override
         public void failed(Throwable exc, ByteBuffer byteBuffer) {
-            WRITE_SYNCHRONIZER.add(DUMB);
+            releaseLock();
             LOGGER.log(ERROR, "Leader: ERROR on writing batch of events to "+consumerVms.identifier+": "+exc);
             returnByteBuffer(byteBuffer);
         }
@@ -713,14 +684,14 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 // keep the lock and send the remaining
                 channel.write(byteBuffer, options.networkSendTimeout, TimeUnit.MILLISECONDS, byteBuffer, this);
             } else {
-                WRITE_SYNCHRONIZER.add(DUMB);
+                releaseLock();
                 returnByteBuffer(byteBuffer);
             }
         }
 
         @Override
         public void failed(Throwable exc, ByteBuffer byteBuffer) {
-            WRITE_SYNCHRONIZER.add(DUMB);
+            releaseLock();
             LOGGER.log(ERROR, "Leader: ERROR on writing batch of events to "+consumerVms.identifier+": "+exc);
             byteBuffer.position(0);
             PENDING_WRITES_BUFFER.offer(byteBuffer);

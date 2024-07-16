@@ -15,7 +15,6 @@ import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
@@ -28,7 +27,6 @@ import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
@@ -39,8 +37,6 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
-import static dk.ku.di.dms.vms.coordinator.server.coordinator.options.BatchReplicationStrategy.ALL;
-import static dk.ku.di.dms.vms.coordinator.server.coordinator.options.BatchReplicationStrategy.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.PRESENTATION;
 import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.SERVER_TYPE;
 import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.SERVER;
@@ -314,7 +310,8 @@ public final class Coordinator extends StoppableRunnable {
                                             this.options.getMaxVmsWorkerSleep(),
                                             this.options.getNetworkBufferSize(),
                                             this.options.getNetworkSendTimeout(),
-                                            this.options.getNumQueuesVmsWorker()),
+                                            this.options.getNumQueuesVmsWorker(),
+                                            false),
                                     this.serdesProxy);
                             if(this.vmsWorkerContainerMap.get(inputVms.getValue().targetVms) instanceof VmsWorkerContainer o){
                                 o.addWorker(newWorker);
@@ -400,14 +397,15 @@ public final class Coordinator extends StoppableRunnable {
                 boolean active = inputsVMSs.contains(vmsNode.identifier);
 
                 // coordinator will later keep track of this thread when the connection with the VMS is fully established
-                VmsWorker vmsWorker = VmsWorker.buildAsStarter(this.me, vmsNode, this.coordinatorQueue,
+                VmsWorker vmsWorker = VmsWorker.build(this.me, vmsNode, this.coordinatorQueue,
                         this.group,
                         new VmsWorker.VmsWorkerOptions(
                                 active,
                                 this.options.getMaxVmsWorkerSleep(),
                                 this.options.getNetworkBufferSize(),
                                 this.options.getNetworkSendTimeout(),
-                                this.options.getNumQueuesVmsWorker()),
+                                this.options.getNumQueuesVmsWorker(),
+                                true),
                         this.serdesProxy);
 
                 // virtual thread leads to performance degradation
@@ -560,7 +558,6 @@ public final class Coordinator extends StoppableRunnable {
          */
         private void processServerPresentationMessage(AsynchronousSocketChannel channel, ByteBuffer buffer) {
             // server
-            // ....
             ServerNode newServer = Presentation.readServer(buffer);
 
             // check whether this server is known... maybe it has crashed... then we only need to update the respective channel
@@ -580,114 +577,6 @@ public final class Coordinator extends StoppableRunnable {
                 serverConnectionMetadataMap.put( newServer.hashCode(), connectionMetadata );
             }
         }
-    }
-
-    private void replicateBatchWithReplicas(BatchContext batchContext) {
-        if (this.options.getBatchReplicationStrategy() == NONE) return;
-
-        // to refrain the number of servers increasing concurrently, instead of
-        // synchronizing the operation, I can simply obtain the collection first
-        // but what happens if one of the servers in the list fails?
-        Collection<ServerNode> activeServers = this.servers.values();
-        int nServers = activeServers.size();
-
-        CompletableFuture<?>[] promises = new CompletableFuture[nServers];
-
-        Set<Integer> serverVotes = Collections.synchronizedSet(new HashSet<>(nServers));
-
-        // String lastTidOfBatchPerVmsJson = this.serdesProxy.serializeMap(batchContext.lastTidOfBatchPerVms);
-
-        int i = 0;
-        for (ServerNode server : activeServers) {
-
-            if (!server.isActive()) continue;
-            promises[i] = CompletableFuture.supplyAsync(() ->
-            {
-                // could potentially use another channel for writing commit-related messages...
-                // could also just open and close a new connection
-                // actually I need this since I must read from this thread instead of relying on the
-                // read completion handler
-                AsynchronousSocketChannel channel = null;
-                try {
-
-                    InetSocketAddress address = new InetSocketAddress(server.host, server.port);
-                    channel = AsynchronousSocketChannel.open(group);
-                    NetworkUtils.configure(channel, options.getOsBufferSize());
-                    channel.connect(address).get();
-
-                    ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(this.options.getNetworkBufferSize());
-                    // BatchReplication.write(buffer, batchContext.batchOffset, lastTidOfBatchPerVmsJson);
-                    channel.write(buffer).get();
-
-                    buffer.clear();
-
-                    // immediate read in the same channel
-                    channel.read(buffer).get();
-
-                    BatchReplication.Payload response = BatchReplication.read(buffer);
-
-                    buffer.clear();
-
-                    MemoryManager.releaseTemporaryDirectBuffer(buffer);
-
-                    // assuming the follower always accept
-                    if (batchContext.batchOffset == response.batch()) serverVotes.add(server.hashCode());
-
-                    return null;
-
-                } catch (InterruptedException | ExecutionException | IOException e) {
-                    // cannot connect to host
-                    LOGGER.log(WARNING,"Error connecting to host. I am " + me.host + ":" + me.port + " and the target is " + server.host + ":" + server.port);
-                    return null;
-                } finally {
-                    if (channel != null && channel.isOpen()) {
-                        try {
-                            channel.close();
-                        } catch (IOException ignored) {
-                        }
-                    }
-                }
-
-                // these threads need to block to wait for server response
-
-            });
-            i++;
-        }
-
-        // if none, do nothing
-        if ( this.options.getBatchReplicationStrategy() == AT_LEAST_ONE){
-            // asynchronous
-            // at least one is always necessary
-            int j = 0;
-            while (j < nServers && serverVotes.isEmpty()){
-                promises[i].join();
-                j++;
-            }
-            if(serverVotes.isEmpty()){
-                LOGGER.log(WARNING,"The system has entered in a state that data may be lost since there are no followers to replicate the current batch offset.");
-            }
-        } else if ( this.options.getBatchReplicationStrategy() == MAJORITY ){
-
-            int simpleMajority = ((nServers + 1) / 2);
-            // idea is to iterate through servers, "joining" them until we have enough
-            int j = 0;
-            while (j < nServers && serverVotes.size() <= simpleMajority){
-                promises[i].join();
-                j++;
-            }
-
-            if(serverVotes.size() < simpleMajority){
-                LOGGER.log(WARNING,"The system has entered in a state that data may be lost since a majority have not been obtained to replicate the current batch offset.");
-            }
-        } else if ( this.options.getBatchReplicationStrategy() == ALL ) {
-            CompletableFuture.allOf( promises ).join();
-            if ( serverVotes.size() < nServers ) {
-                LOGGER.log(WARNING,"The system has entered in a state that data may be lost since there are missing votes to replicate the current batch offset.");
-            }
-        }
-
-        // for now, we don't have a fallback strategy...
-
     }
 
     /**

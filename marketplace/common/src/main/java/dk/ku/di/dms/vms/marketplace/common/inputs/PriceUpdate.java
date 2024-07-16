@@ -25,6 +25,7 @@ public final class PriceUpdate {
         this.sellerId = sellerId;
         this.productId = productId;
         this.price = price;
+        this.version = version;
         this.instanceId = instanceId;
     }
 

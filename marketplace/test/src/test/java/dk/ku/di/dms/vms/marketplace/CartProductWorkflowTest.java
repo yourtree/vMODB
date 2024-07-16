@@ -119,7 +119,7 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
 
             while(val < 10) {
                 PriceUpdate priceUpdate = new PriceUpdate(
-                        1,1,10.0F, String.valueOf(val), String.valueOf(val)
+                        1,1,10.0F, String.valueOf(1), String.valueOf(val)
                 );
 
                 String payload = serdes.serialize(priceUpdate, PriceUpdate.class);
