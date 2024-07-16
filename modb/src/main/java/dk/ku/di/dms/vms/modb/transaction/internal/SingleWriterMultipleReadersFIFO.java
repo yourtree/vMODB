@@ -63,11 +63,12 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
         Entry<K,V> currFirst = this.first;
         Entry<K,V> newEntry;
 
-        if(!removedEntries.isEmpty())
-            newEntry = removedEntries.pop();
-        else
-            newEntry = new Entry<>(key, val);
-        newEntry.next = currFirst;
+        if(!this.removedEntries.isEmpty()) {
+            newEntry = this.removedEntries.pop();
+            newEntry.next = currFirst;
+        } else {
+            newEntry = new Entry<>(key, val, currFirst);
+        }
         this.first = newEntry;
     }
 
@@ -85,7 +86,6 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
      */
     public Entry<K,V> floorEntry(K key) {
         if(this.first == null) return null;
-
         Entry<K,V> curr = this.first;
         int cmp = curr.key.compareTo(key);
         while(cmp > 0){
@@ -104,9 +104,7 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
      * In other words, gets the immediate successor of key.
      */
     public Entry<K,V> getHigherEntry(K key) {
-
         if(this.first == null) return null;
-
         Entry<K,V> curr = this.first;
         Entry<K,V> prev = null;
         int cmp = curr.key.compareTo(key);
@@ -116,9 +114,7 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
             if(curr == null) break;
             cmp = curr.key.compareTo(key);
         }
-
         return prev;
-
     }
 
     /**
@@ -127,11 +123,8 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
      * @param key node identifier
      */
     public void removeUpToEntry(K key){
-
         Entry<K,V> currFloorEntry = getHigherEntry(key);
-
         if(currFloorEntry == null) return;
-
         Entry<K,V> auxEntry;
         try {
             auxEntry = currFloorEntry.clone();
@@ -139,46 +132,34 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
             throw new RuntimeException(e);
         }
         currFloorEntry.next = null;
-
         while(auxEntry != null){
-            removedEntries.add( auxEntry );
+            this.removedEntries.add( auxEntry );
             auxEntry = auxEntry.next;
         }
-
     }
 
     public void clear(){
-
         var current = this.first;
-
         if(current == null) return;
-
         var next = current.next;
-
         current.next = null;
-        removedEntries.add(current);
-
+        this.removedEntries.add(current);
         while (next != null){
             current = next;
             next = current.next;
             current.next = null;
-            removedEntries.add(current);
+            this.removedEntries.add(current);
         }
-
     }
 
     private final Deque<Entry<K,V>> removedEntries = new ArrayDeque<>();
 
     @Override
     public String toString(){
-
         var current = this.first;
         if(current == null) return "";
-
-        String lineSeparator = System.getProperty("line.separator");
-
+        String lineSeparator = System.lineSeparator();
         StringBuilder sb = new StringBuilder();
-
         while (current != null){
             sb.append( current.key.toString() )
                     .append(" : ")
@@ -186,9 +167,7 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
                     .append(lineSeparator);
             current = current.next;
         }
-
         return sb.toString();
-
     }
 
 }

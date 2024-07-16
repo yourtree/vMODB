@@ -59,8 +59,9 @@ public final class TransactionEvent {
         @Override
         public String toString() {
             return "{"
-                    + "\"batch\":\"" + batch + "\""
-                    + ",\"tid\":\"" + tid + "\""
+                    + "\"tid\":\"" + tid + "\""
+                    + ",\"batch\":\"" + batch + "\""
+                    + ",\"totalSize\":\"" + totalSize + "\""
                     + "}";
         }
     }

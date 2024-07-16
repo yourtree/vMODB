@@ -1,10 +1,7 @@
-package dk.ku.di.dms.vms.coordinator.server.coordinator.runnable;
+package dk.ku.di.dms.vms.coordinator.transaction;
 
-import dk.ku.di.dms.vms.coordinator.server.coordinator.batch.BatchContext;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.vms.IVmsWorker;
-import dk.ku.di.dms.vms.coordinator.server.schema.TransactionInput;
-import dk.ku.di.dms.vms.coordinator.transaction.EventIdentifier;
-import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.coordinator.batch.BatchContext;
+import dk.ku.di.dms.vms.coordinator.vms.IVmsWorker;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;

@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.proxy.http;
 
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
+import dk.ku.di.dms.vms.coordinator.Coordinator;
 import io.vertx.core.*;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServer;

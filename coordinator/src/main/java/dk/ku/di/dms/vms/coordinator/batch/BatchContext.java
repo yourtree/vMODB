@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.coordinator.batch;
+package dk.ku.di.dms.vms.coordinator.batch;
 
 import java.util.HashSet;
 import java.util.Map;

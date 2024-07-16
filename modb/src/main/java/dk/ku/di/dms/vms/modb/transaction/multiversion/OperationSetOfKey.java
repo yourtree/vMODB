@@ -32,6 +32,9 @@ public final class OperationSetOfKey {
      * to speed up the checking of constraints
      * Only used by on-flight RW/W tasks
      */
+    // TODO is it safe to assign it without being volatile? it was before due to the single-thread abstraction
+    //  but it no longer safe due to the new concurrent API
+    //  simple way to solve: make it final. instead of overwriting, copy fields to last version array positions
     public Object[] lastVersion;
 
     // version stored in main memory, from the last snapshot state

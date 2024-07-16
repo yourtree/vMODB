@@ -1,6 +1,6 @@
 package dk.ku.di.dms.vms.marketplace.proxy.http;
 
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
+import dk.ku.di.dms.vms.coordinator.Coordinator;
 import dk.ku.di.dms.vms.marketplace.proxy.Main;
 
 import java.io.IOException;

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.follower;
+package dk.ku.di.dms.vms.coordinator.options;
 
 /**
  * Initialized with default values

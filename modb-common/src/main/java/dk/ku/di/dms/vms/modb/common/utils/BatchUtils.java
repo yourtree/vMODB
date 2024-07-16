@@ -30,13 +30,10 @@ public final class BatchUtils {
             count++;
         }
 
-        // writeBuffer.mark();
         int position = writeBuffer.position();
-        // assert writeBuffer.position() == writeBuffer.capacity() - remainingBytes;
         writeBuffer.putInt(1, position);
         writeBuffer.putInt(5, count);
         writeBuffer.position(position);
-        // writeBuffer.reset();
 
         return remaining - count;
     }

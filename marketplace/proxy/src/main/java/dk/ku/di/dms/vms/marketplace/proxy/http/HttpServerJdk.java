@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.marketplace.proxy.http;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
+import dk.ku.di.dms.vms.coordinator.Coordinator;
 import dk.ku.di.dms.vms.marketplace.proxy.Main;
 
 import java.io.IOException;

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.coordinator.options;
+package dk.ku.di.dms.vms.coordinator.options;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 
@@ -38,6 +38,8 @@ public final class CoordinatorOptions {
     private int maxSleep = 1000;
 
     private int numQueuesVmsWorker = 1;
+
+    private boolean logging = false;
 
     public int getNetworkThreadPoolSize() {
         return this.networkThreadPoolSize;
@@ -138,4 +140,14 @@ public final class CoordinatorOptions {
     public int getMaxVmsWorkerSleep() {
         return this.maxSleep;
     }
+
+    public boolean logging() {
+        return this.logging;
+    }
+
+    public CoordinatorOptions withLogging() {
+        this.logging = true;
+        return this;
+    }
+
 }

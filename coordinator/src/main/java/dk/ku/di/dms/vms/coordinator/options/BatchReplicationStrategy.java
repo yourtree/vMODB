@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.coordinator.options;
+package dk.ku.di.dms.vms.coordinator.options;
 
 /**
  * Why do I need to replicate.

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.schema;
+package dk.ku.di.dms.vms.coordinator.transaction;
 
 /**
  * This is purely for parsing transaction requests coming from HTTP clients

@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.proxy;
 
-import dk.ku.di.dms.vms.coordinator.server.coordinator.options.CoordinatorOptions;
-import dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.Coordinator;
+import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
+import dk.ku.di.dms.vms.coordinator.Coordinator;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
@@ -101,7 +101,6 @@ public final class Main {
     }
 
     private static Coordinator loadCoordinator(Properties properties) throws IOException {
-
         final int STARTING_TID = 1;
         final int STARTING_BATCH_ID = 1;
 

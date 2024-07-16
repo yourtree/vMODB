@@ -1,3 +1,11 @@
+# Coordinator - A MODB submodule for processing and scheduling transaction inputs
+
+## How to use
+
+Coordinator is a library, thus, it must be embedded in an executable program
+
+## Description
+
 the input a new-order transaction
     a payload containing these 4 events
     "a", "customer", "customer-new-order-in" )
@@ -40,3 +48,6 @@ is that some microservice may require a lot of data processing.
 and increasing the number of tasks (sequencing) in the proxy, may be an overkill for the application,
 but you can have multiple proxies doing the work, one dbms proxy
 separate functionality among the proxies
+
+## Tests
+

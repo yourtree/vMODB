@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.server.coordinator.runnable.vms;
+package dk.ku.di.dms.vms.coordinator.vms;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 

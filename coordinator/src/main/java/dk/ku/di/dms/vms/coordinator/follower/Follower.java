@@ -1,8 +1,9 @@
-package dk.ku.di.dms.vms.coordinator.server.follower;
+package dk.ku.di.dms.vms.coordinator.follower;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
+import dk.ku.di.dms.vms.coordinator.options.FollowerOptions;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
