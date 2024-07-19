@@ -1,11 +1,11 @@
 package dk.ku.di.dms.vms.marketplace.proxy;
 
 import dk.ku.di.dms.vms.coordinator.batch.BatchAlgo;
-import dk.ku.di.dms.vms.coordinator.transaction.TransactionWorker;
-import dk.ku.di.dms.vms.coordinator.vms.IVmsWorker;
-import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionWorker;
+import dk.ku.di.dms.vms.coordinator.vms.IVmsWorker;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;

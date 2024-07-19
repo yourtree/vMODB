@@ -4,10 +4,9 @@ import dk.ku.di.dms.vms.marketplace.cart.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.cart.repositories.ICartItemRepository;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionContext;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
+import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
@@ -52,7 +51,7 @@ public final class CartTest {
         assert vms.lastTidFinished() == 1;
 
         // register tid 2 and query the state of customer 1 cart items to see if they are deleted
-        TransactionMetadata.registerTransactionStart( 2, 0, 1, true );
+        vms.getTransactionManager().beginTransaction( 2, 0, 1, true );
 
         ICartItemRepository cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
         List<CartItem> list = cartItemRepository.getCartItemsByCustomerId(1);
@@ -63,12 +62,16 @@ public final class CartTest {
     private static void insertCartItem(VmsApplication vms, Object[] cartItemRow) {
         var table = vms.getTable("cart_items");
 
+        vms.getTransactionManager()
+                .beginTransaction( 0, 0, -1, false );
+        var txCtx = ((TransactionManager)vms.getTransactionManager()).getTransactionContext();
+
         IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), cartItemRow );
-        table.primaryKeyIndex().insert(key, cartItemRow);
+        table.primaryKeyIndex().insert(txCtx, key, cartItemRow);
 
         // add to customer idx
         NonUniqueSecondaryIndex secIdx = table.secondaryIndexMap.get( KeyUtils.buildIndexKey( new int[]{2} ) );
-        secIdx.insert( key, cartItemRow );
+        secIdx.insert(txCtx, key, cartItemRow);
     }
 
     private static VmsApplication loadCartVms() throws Exception {
@@ -102,8 +105,10 @@ public final class CartTest {
                 "0"
         };
 
+
+
         for(int i = 1; i <= 2; i++) {
-            TransactionMetadata.TRANSACTION_CONTEXT.set( new TransactionContext(i-1,i-1,false) );
+            vms.getTransactionManager().beginTransaction(i-1, 0,i-1,false);
 
             System.out.println("Adding item " + i + " to the cart");
             insertCartItem(vms, cartItemRow);
@@ -126,7 +131,7 @@ public final class CartTest {
         assert vms.lastTidFinished() == 2;
 
         // register tid 2 and query the state of customer 1 cart items to see if they are deleted
-        TransactionMetadata.registerTransactionStart( 3, 0, 2, true );
+        vms.getTransactionManager().beginTransaction( 3, 0, 2, true );
 
         ICartItemRepository cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
         List<CartItem> list = cartItemRepository.getCartItemsByCustomerId(1);

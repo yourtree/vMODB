@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.common.transaction;
 /**
  * Interface to which client classes (i.e., event handler) can request a checkpoint of the state
  */
-public interface ITransactionalHandler {
+public interface ITransactionManager {
 
     void checkpoint();
 

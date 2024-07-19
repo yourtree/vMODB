@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.operational;
 
 import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
-import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 
 import java.util.concurrent.Callable;
 
@@ -18,7 +18,7 @@ public final class VmsComplexTransactionTask implements Callable<VmsTransactionT
 
     private final long batch;
 
-    private final ITransactionalHandler transactionalHandler;
+    private final ITransactionManager transactionalHandler;
 
     // the information necessary to run the method
     private final VmsTransactionSignature signature;
@@ -32,7 +32,7 @@ public final class VmsComplexTransactionTask implements Callable<VmsTransactionT
 
     private int remainingInputs;
 
-    public VmsComplexTransactionTask(ITransactionalHandler transactionalHandler, long tid, long lastTid, long batch, VmsTransactionSignature signature, int inputSize){
+    public VmsComplexTransactionTask(ITransactionManager transactionalHandler, long tid, long lastTid, long batch, VmsTransactionSignature signature, int inputSize){
         this.transactionalHandler = transactionalHandler;
         this.tid = tid;
         this.lastTid = lastTid;

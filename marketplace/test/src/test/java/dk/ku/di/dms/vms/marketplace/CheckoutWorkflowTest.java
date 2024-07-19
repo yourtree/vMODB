@@ -1,10 +1,10 @@
 package dk.ku.di.dms.vms.marketplace;
 
-import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.Coordinator;
-import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
+import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
@@ -79,7 +79,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
 
         @Override
         public void run() {
-            logger.log(INFO, "["+this.name+"] Starting...");
+            LOGGER.log(INFO, "["+this.name+"] Starting...");
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
             int val = 1;
             while(val <= 10) {
@@ -96,17 +96,17 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
                 String payload_ = serdes.serialize(reserveStockEvent, ReserveStock.class);
                 TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
                 TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
-                logger.log(INFO, "["+this.name+"] New reserve stock event with version: "+val);
+                LOGGER.log(INFO, "["+this.name+"] New reserve stock event with version: "+val);
                 coordinator.queueTransactionInput(txInput_);
 
                 val++;
             }
-            logger.log(INFO, "["+this.name+"] Going to bed definitely...");
+            LOGGER.log(INFO, "["+this.name+"] Going to bed definitely...");
         }
     }
 
     private Coordinator loadCoordinator() throws IOException {
-        ServerNode serverIdentifier = new ServerNode( "localhost", 8080 );
+        ServerNode serverIdentifier = new ServerNode( "localhost", 8091 );
 
         Map<Integer, ServerNode> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);

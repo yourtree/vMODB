@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterType;
+import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
 
 import java.util.Iterator;
 
@@ -12,21 +13,21 @@ public interface IMultiVersionIndex {
 
     boolean containsColumn(int columnPos);
 
-    void undoTransactionWrites();
+    void undoTransactionWrites(TransactionContext txCtx);
 
-    void installWrites();
+    void installWrites(TransactionContext txCtx);
 
-    boolean insert(IKey key, Object[] record);
+    boolean insert(TransactionContext txCtx, IKey key, Object[] record);
 
-    boolean update(IKey key, Object[] record);
+    boolean update(TransactionContext txCtx, IKey key, Object[] record);
 
-    boolean remove(IKey key);
+    boolean remove(TransactionContext txCtx, IKey key);
 
-    Object[] lookupByKey(IKey key);
+    Object[] lookupByKey(TransactionContext txCtx, IKey key);
 
-    Iterator<Object[]> iterator();
+    default Iterator<Object[]> iterator(TransactionContext txCtx) { throw new UnsupportedOperationException(); }
 
-    Iterator<Object[]> iterator(IKey[] keys);
+    Iterator<Object[]> iterator(TransactionContext txCtx, IKey[] keys);
 
     /**
      * This is the basic check condition. Does not take into consideration the
@@ -42,7 +43,7 @@ public interface IMultiVersionIndex {
 
         // the number of filters to apply
         int filterIdx = 0;
-        // the filter index on which a given param (e.g., literals, zero, 1, 'SURNAME', etc) should apply
+        // the filter index on which a given param (e.g., literals, zero, 1, 'SURNAME', etc.) should apply
         int biPredIdx = 0;
         // simple predicates, do not involve input params (i.e, NULL, NOT NULL, EXISTS?, etc)
         int predIdx = 0;

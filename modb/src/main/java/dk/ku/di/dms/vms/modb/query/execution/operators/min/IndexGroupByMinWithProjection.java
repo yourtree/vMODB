@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.query.execution.operators.scan.AbstractScan;
+import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 
 import java.util.*;
@@ -36,9 +37,9 @@ public final class IndexGroupByMinWithProjection extends AbstractScan {
         this.limit = limit;
     }
 
-    public List<Object[]> runAsEmbedded(){
+    public List<Object[]> runAsEmbedded(TransactionContext txCtx){
         Map<GroupByKey, Tuple<Comparable<?>,Object[]>> minMap = new HashMap<>();
-        Iterator<Object[]> iterator = this.index.iterator();
+        Iterator<Object[]> iterator = this.index.iterator(txCtx);
         // build hash with min per group (defined in group by)
         while(iterator.hasNext()){
             this.compute(iterator.next(), minMap);

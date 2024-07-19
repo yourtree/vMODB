@@ -15,7 +15,7 @@ import java.util.function.Function;
 
 public class AbstractWorkflowTest {
 
-    protected static final System.Logger logger = System.getLogger(AbstractWorkflowTest.class.getName());
+    protected static final System.Logger LOGGER = System.getLogger(AbstractWorkflowTest.class.getName());
 
     protected static final int BATCH_WINDOW_INTERVAL = 3000;
 

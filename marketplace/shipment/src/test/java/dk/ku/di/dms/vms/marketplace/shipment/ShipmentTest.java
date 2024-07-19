@@ -7,10 +7,10 @@ import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.common.inputs.UpdateDelivery;
 import dk.ku.di.dms.vms.marketplace.shipment.dtos.OldestSellerPackageEntry;
 import dk.ku.di.dms.vms.marketplace.shipment.repositories.IPackageRepository;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.Date;
@@ -32,6 +32,14 @@ public final class ShipmentTest {
         return VmsApplication.build(options);
     }
 
+    static VmsApplication vms;
+
+    @BeforeClass
+    public static void setUp() throws Exception {
+        vms = getVmsApplication();
+        vms.start();
+    }
+
     private static final BiFunction<Integer, String, CustomerCheckout> customerCheckoutBiFunction = (customerId, instanceId) -> new CustomerCheckout(
             customerId, "test", "test", "test", "test","test", "test", "test",
             "CREDIT_CARD","test","test","test", "test", "test", 1, instanceId);
@@ -43,16 +51,13 @@ public final class ShipmentTest {
 
     @Test
     public void testPackageQueryMultiVersionVisibility() throws Exception {
-        VmsApplication vms = getVmsApplication();
-        vms.start();
-
         for(int i = 1; i < 4; i++) {
             generatePaymentConfirmed(i, String.valueOf(i), i - 1, vms);
         }
 
         sleep(2000);
 
-        TransactionMetadata.registerTransactionStart( 4, 0, 3, true );
+        vms.getTransactionManager().beginTransaction( 4, 0, 3, true );
 
         IPackageRepository packageRepository = (IPackageRepository) vms.getRepositoryProxy("packages");
         List<dk.ku.di.dms.vms.marketplace.shipment.entities.Package> list =
@@ -63,9 +68,6 @@ public final class ShipmentTest {
 
     @Test
     public void testOldestPackagePerSeller() throws Exception {
-        VmsApplication vms = getVmsApplication();
-        vms.start();
-
         IPackageRepository packageRepository = (IPackageRepository) vms.getRepositoryProxy("packages");
 
         for(int i = 1; i <= 10; i++) {
@@ -74,7 +76,7 @@ public final class ShipmentTest {
 
         sleep(5000);
 
-        TransactionMetadata.registerTransactionStart( 11, 0, 10, true );
+        vms.getTransactionManager().beginTransaction( 11, 0, 10, true );
 
         List<OldestSellerPackageEntry> packages = packageRepository.query(
                 OLDEST_SHIPMENT_PER_SELLER, OldestSellerPackageEntry.class);
@@ -96,9 +98,6 @@ public final class ShipmentTest {
      */
     @Test
     public void testMixedParallelSingleThreadTasks() throws Exception {
-        VmsApplication vms = getVmsApplication();
-        vms.start();
-
         int numPayments = 10;
 
         for(int i = 1; i <= numPayments; i++) {

@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.modb.query.execution.operators.scan;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
+import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 
 import java.util.ArrayList;
@@ -38,9 +39,9 @@ public final class IndexScanWithProjection extends AbstractScan {
         return this;
     }
 
-    public List<Object[]> runAsEmbedded(){
+    public List<Object[]> runAsEmbedded(TransactionContext txCtx){
         // TODO return objects
-        Iterator<Object[]> iterator = this.index.iterator();
+        Iterator<Object[]> iterator = this.index.iterator(txCtx);
         while(iterator.hasNext()){
 
             iterator.next();
@@ -49,18 +50,18 @@ public final class IndexScanWithProjection extends AbstractScan {
         return null;
     }
 
-    public List<Object[]> runAsEmbedded(IKey[] keys){
+    public List<Object[]> runAsEmbedded(TransactionContext txCtx, IKey[] keys){
         List<Object[]> res = new ArrayList<>();
-        Iterator<Object[]> iterator = this.index.iterator(keys);
+        Iterator<Object[]> iterator = this.index.iterator(txCtx, keys);
         while(iterator.hasNext()){
             res.add( iterator.next() );
         }
         return res;
     }
 
-    public MemoryRefNode run(FilterContext filterContext, IKey... keys) {
+    public MemoryRefNode run(TransactionContext txCtx, FilterContext filterContext, IKey... keys) {
         // unifying in terms of iterator
-        Iterator<Object[]> iterator = index.iterator(keys);
+        Iterator<Object[]> iterator = index.iterator(txCtx, keys);
         while(iterator.hasNext()){
             Object[] record = iterator.next();
             if(index.checkCondition(filterContext, record)){

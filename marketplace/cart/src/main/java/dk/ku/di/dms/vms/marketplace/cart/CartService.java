@@ -1,21 +1,20 @@
 package dk.ku.di.dms.vms.marketplace.cart;
 
-import dk.ku.di.dms.vms.marketplace.cart.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.cart.entities.ProductReplica;
 import dk.ku.di.dms.vms.marketplace.cart.repositories.ICartItemRepository;
 import dk.ku.di.dms.vms.marketplace.cart.repositories.IProductReplicaRepository;
 import dk.ku.di.dms.vms.marketplace.common.events.PriceUpdated;
 import dk.ku.di.dms.vms.marketplace.common.events.ProductUpdated;
-import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
-import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
-import dk.ku.di.dms.vms.modb.api.annotations.*;
+import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
+import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.api.annotations.PartitionBy;
+import dk.ku.di.dms.vms.modb.api.annotations.Transactional;
 
-import java.util.Date;
-import java.util.List;
-
-import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.PRICE_UPDATED;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.PRODUCT_UPDATED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
-import static java.lang.System.Logger.Level.*;
+import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.WARNING;
 
 @Microservice("cart")
 public final class CartService {

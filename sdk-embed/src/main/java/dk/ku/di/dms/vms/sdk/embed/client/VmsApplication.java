@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
 import dk.ku.di.dms.vms.sdk.core.channel.IVmsInternalChannels;
@@ -32,6 +33,8 @@ public final class VmsApplication {
 
     private final VmsEventHandler eventHandler;
 
+    private final ITransactionManager transactionManager;
+
     private final StoppableRunnable transactionScheduler;
 
     private final IVmsInternalChannels internalChannels;
@@ -40,12 +43,14 @@ public final class VmsApplication {
                            VmsRuntimeMetadata vmsRuntimeMetadata,
                            Map<String, Table> catalog,
                            VmsEventHandler eventHandler,
+                           ITransactionManager transactionManager,
                            StoppableRunnable transactionScheduler,
                            IVmsInternalChannels internalChannels) {
         this.name = name;
         this.vmsRuntimeMetadata = vmsRuntimeMetadata;
         this.catalog = catalog;
         this.eventHandler = eventHandler;
+        this.transactionManager = transactionManager;
         this.transactionScheduler = transactionScheduler;
         this.internalChannels = internalChannels;
     }
@@ -136,7 +141,7 @@ public final class VmsApplication {
                 eventHandler.schedulerHandler(),
                 threadPoolSize );
 
-        return new VmsApplication( vmsName, vmsMetadata, catalog, eventHandler, transactionScheduler, vmsInternalPubSubService );
+        return new VmsApplication( vmsName, vmsMetadata, catalog, eventHandler, transactionManager, transactionScheduler, vmsInternalPubSubService );
     }
 
     /**
@@ -173,9 +178,15 @@ public final class VmsApplication {
     }
 
     public Object getService() {
-        var service = this.vmsRuntimeMetadata.loadedVmsInstances().get(this.name);
-        if(service != null) return service;
+        var service = this.vmsRuntimeMetadata.loadedVmsInstances().entrySet().iterator().next().getValue();
+        if(service != null) {
+            return service;
+        }
         throw new RuntimeException("Service not loaded");
+    }
+
+    public ITransactionManager getTransactionManager() {
+        return this.transactionManager;
     }
 
 }

@@ -1,10 +1,10 @@
 package dk.ku.di.dms.vms.marketplace;
 
-import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.Coordinator;
-import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
+import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
 import dk.ku.di.dms.vms.marketplace.common.inputs.PriceUpdate;
 import dk.ku.di.dms.vms.marketplace.common.inputs.UpdateProduct;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
@@ -143,7 +143,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
                 producePriceUpdate(val, serdes);
                 val++;
             }
-            logger.log(INFO, "Producer going to bed definitely... ");
+            LOGGER.log(INFO, "Producer going to bed definitely... ");
         }
 
         private void produceProductUpdate(int val, IVmsSerdesProxy serdes) {
@@ -153,7 +153,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
             String payload = serdes.serialize(updateProduct, UpdateProduct.class);
             TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRODUCT, payload);
             TransactionInput txInput = new TransactionInput(UPDATE_PRODUCT, eventPayload);
-            logger.log(INFO, "[Producer] New product version: "+ val);
+            LOGGER.log(INFO, "[Producer] New product version: "+ val);
             coordinator.queueTransactionInput(txInput);
         }
 
@@ -162,7 +162,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
             String payload = serdes.serialize(priceUpdate, PriceUpdate.class);
             TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRICE, payload);
             TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);
-            logger.log(INFO, "[Producer] New product price: "+ val);
+            LOGGER.log(INFO, "[Producer] New product price: "+ val);
             coordinator.queueTransactionInput(txInput);
         }
     }

@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
 import dk.ku.di.dms.vms.modb.api.enums.ExecutionModeEnum;
-import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.sdk.core.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.ISchedulerCallback;
@@ -73,7 +73,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     public static VmsTransactionScheduler build(String vmsIdentifier,
                                                 IVmsInternalChannels vmsChannels,
                                                 Map<String, VmsTransactionMetadata> transactionMetadataMap,
-                                                ITransactionalHandler transactionalHandler,
+                                                ITransactionManager transactionalHandler,
                                                 ICheckpointEventHandler checkpointHandler,
                                                 int vmsThreadPoolSize){
         LOGGER.log(INFO, vmsIdentifier+ ": Building transaction scheduler with thread pool size of "+ vmsThreadPoolSize);
@@ -90,7 +90,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                                     ExecutorService sharedTaskPool,
                                     IVmsInternalChannels vmsChannels,
                                     Map<String, VmsTransactionMetadata> transactionMetadataMap,
-                                    ITransactionalHandler transactionalHandler,
+                                    ITransactionManager transactionalHandler,
                                     ICheckpointEventHandler checkpointHandler){
         super();
 

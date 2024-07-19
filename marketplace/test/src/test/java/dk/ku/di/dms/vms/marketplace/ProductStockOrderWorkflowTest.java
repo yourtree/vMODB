@@ -1,10 +1,10 @@
 package dk.ku.di.dms.vms.marketplace;
 
-import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.Coordinator;
-import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
+import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
 import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
@@ -84,7 +84,7 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
                 String payload = serdes.serialize(updateProduct, UpdateProduct.class);
                 TransactionInput.Event eventPayload = new TransactionInput.Event("update_product", payload);
                 TransactionInput txInput = new TransactionInput("update_product", eventPayload);
-                logger.log(INFO, "[InputProducer] New product version: "+val);
+                LOGGER.log(INFO, "[InputProducer] New product version: "+val);
                 parsedTransactionRequests.add(txInput);
 
                 // reserve stock
@@ -96,12 +96,12 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
                 String payload_ = serdes.serialize(reserveStockEvent, ReserveStock.class);
                 TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
                 TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
-                logger.log(INFO, "[CheckoutProducer] New reserve stock event with version: "+val);
+                LOGGER.log(INFO, "[CheckoutProducer] New reserve stock event with version: "+val);
                 parsedTransactionRequests.add(txInput_);
 
                 val++;
             }
-            logger.log(INFO, "InputProducer going to bed definitely... ");
+            LOGGER.log(INFO, "InputProducer going to bed definitely... ");
         }
     }
 

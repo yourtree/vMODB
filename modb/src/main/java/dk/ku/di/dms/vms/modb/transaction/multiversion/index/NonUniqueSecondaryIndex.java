@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
 import java.util.*;
@@ -46,7 +47,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
      * @param primaryKey may have many secIdxKey associated
      */
     @Override
-    public boolean insert(IKey primaryKey, Object[] record){
+    public boolean insert(TransactionContext txCtx, IKey primaryKey, Object[] record){
         IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
         Set<IKey> set = this.keyMap.computeIfAbsent(secKey, (ignored)-> new HashSet<>());
         if(!set.contains(primaryKey)) {
@@ -57,7 +58,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     }
 
     @Override
-    public void undoTransactionWrites(){
+    public void undoTransactionWrites(TransactionContext txCtx){
         var writes = WRITE_SET.get().entrySet().stream().filter(p->p.getValue().t2()==WriteType.INSERT).toList();
         for(Map.Entry<IKey, Tuple<Object[], WriteType>> entry : writes){
             IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), entry.getValue().t1() );
@@ -68,30 +69,29 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     }
 
     @Override
-    public boolean update(IKey key, Object[] record) {
+    public boolean update(TransactionContext txCtx, IKey key, Object[] record) {
         // KEY_WRITES.get().put(key, new Tuple<>(record, WriteType.UPDATE));
         // key already there
-        return true;
-    }
-
-    @Override
-    public boolean remove(IKey key) {
-        // how to know the sec idx if we don't have the record?
-        return false;
-    }
-
-    public boolean remove(IKey key, Object[] record){
-        // WRITE_SET.get().put(key, new Tuple<>(record, WriteType.DELETE));
-        return true;
-    }
-
-    @Override
-    public Object[] lookupByKey(IKey key) {
         throw new RuntimeException("Not supported");
     }
 
     @Override
-    public void installWrites() {
+    public boolean remove(TransactionContext txCtx, IKey key) {
+        // how to know the sec idx if we don't have the record?
+        throw new RuntimeException("Not supported");
+    }
+
+    public boolean remove(IKey ignoredKey, Object[] ignoredRecord){
+        throw new RuntimeException("Not supported");
+    }
+
+    @Override
+    public Object[] lookupByKey(TransactionContext txCtx, IKey key) {
+        throw new RuntimeException("Not supported");
+    }
+
+    @Override
+    public void installWrites(TransactionContext txCtx) {
         // just remove the delete TODO separate INSERT and DELETE into different maps
 //        Map<IKey, Tuple<Object[], WriteType>> writeSet = WRITE_SET.get();
 //        for(Map.Entry<IKey, Tuple<Object[], WriteType>> entry : writeSet.entrySet()){
@@ -104,44 +104,24 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     }
 
     @Override
-    public Iterator<Object[]> iterator() {
-        return new MultiVersionIterator();
-    }
-
-    private static class MultiVersionIterator implements Iterator<Object[]> {
-
-        public MultiVersionIterator(){
-
-        }
-
-        @Override
-        public boolean hasNext() {
-            throw new RuntimeException("Not supported");
-        }
-
-        @Override
-        public Object[] next() {
-            throw new RuntimeException("Not supported");
-        }
-    }
-
-    @Override
-    public Iterator<Object[]> iterator(IKey[] keys) {
-        return new MultiKeyMultiVersionIterator(this.primaryIndex, keys, this.keyMap);
+    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey[] keys) {
+        return new MultiKeyMultiVersionIterator(this.primaryIndex, txCtx, keys, this.keyMap);
     }
 
     private static class MultiKeyMultiVersionIterator implements Iterator<Object[]> {
 
         private final Map<IKey, Set<IKey>> keyMap;
         private final PrimaryIndex primaryIndex;
+        private final TransactionContext txCtx;
         private Iterator<IKey> currentIterator;
 
         private final IKey[] keys;
 
         private int idx;
 
-        public MultiKeyMultiVersionIterator(PrimaryIndex primaryIndex, IKey[] keys, Map<IKey, Set<IKey>> keyMap){
+        public MultiKeyMultiVersionIterator(PrimaryIndex primaryIndex, TransactionContext txCtx, IKey[] keys, Map<IKey, Set<IKey>> keyMap){
             this.primaryIndex = primaryIndex;
+            this.txCtx = txCtx;
             this.idx = 0;
             this.keys = keys;
             this.currentIterator = keyMap.computeIfAbsent(keys[this.idx], (ignored) -> new HashSet<>()).iterator();
@@ -160,7 +140,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
                 this.currentIterator = this.keyMap.computeIfAbsent(this.keys[this.idx], (ignored) -> new HashSet<>()).iterator();
             }
             IKey key = this.currentIterator.next();
-            return this.primaryIndex.getRecord(key);
+            return this.primaryIndex.getRecord(txCtx, key);
         }
 
     }

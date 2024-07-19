@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
 import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIFO;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
@@ -21,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class UniqueSecondaryIndex implements IMultiVersionIndex {
 
-    // not all writes reach it here
+    // not all writes reach here
     private final ThreadLocal<Map<IKey, WriteType>> KEY_WRITES = ThreadLocal.withInitial(HashMap::new);
 
     private final PrimaryIndex primaryIndex;
@@ -34,39 +35,30 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
     }
 
     @Override
-    public void undoTransactionWrites() {
-        Map<IKey, WriteType> writesOfTid = KEY_WRITES.get();
-        // nothing to do
-        writesOfTid.clear();
-    }
-
-    @Override
-    public boolean insert(IKey key, Object[] record) {
+    public boolean insert(TransactionContext txCtx, IKey key, Object[] record) {
         KEY_WRITES.get().put(key, WriteType.INSERT);
         return true;
     }
 
     @Override
-    public boolean update(IKey key, Object[] record) {
-        // we assume it is already there
-        // KEY_WRITES.get().put(key, WriteType.UPDATE);
-        return true;
+    public boolean update(TransactionContext txCtx, IKey key, Object[] record) {
+        throw new RuntimeException("Not supported");
     }
 
     @Override
-    public boolean remove(IKey key) {
+    public boolean remove(TransactionContext txCtx, IKey key) {
         this.KEY_WRITES.get().put(key, WriteType.DELETE);
         return true;
     }
 
     @Override
-    public Object[] lookupByKey(IKey key){
+    public Object[] lookupByKey(TransactionContext txCtx,  IKey key){
         // should never call it. this index does not have the record
-        return null;
+        throw new RuntimeException("Not supported");
     }
 
     @Override
-    public void installWrites() {
+    public void installWrites(TransactionContext txCtx) {
         Map<IKey, WriteType> writesOfTid = KEY_WRITES.get();
         if(writesOfTid == null) return;
         for(var entry : writesOfTid.entrySet()){
@@ -79,19 +71,27 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
     }
 
     @Override
-    public Iterator<Object[]> iterator() {
-        return new MultiVersionIterator(this.primaryIndex, new HashMap<>( KEY_WRITES.get() ), this.keyMap.iterator());
+    public void undoTransactionWrites(TransactionContext txCtx) {
+        Map<IKey, WriteType> writesOfTid = KEY_WRITES.get();
+        // nothing to do
+        writesOfTid.clear();
+    }
+
+    @Override
+    public Iterator<Object[]> iterator(TransactionContext txCtx) {
+        return new MultiVersionIterator(this.primaryIndex, txCtx, new HashMap<>( KEY_WRITES.get() ), this.keyMap.iterator());
     }
 
     private static class MultiVersionIterator implements Iterator<Object[]> {
-
         private final PrimaryIndex primaryIndex;
+        private final TransactionContext txCtx;
         private final Iterator<IKey> iterator;
         private final Map<IKey, WriteType> writeSet;
         private Iterator<Map.Entry<IKey, WriteType>> currentTidIterator;
 
-        public MultiVersionIterator(PrimaryIndex primaryIndex, Map<IKey, WriteType> writeSet, Iterator<IKey> iterator){
+        public MultiVersionIterator(PrimaryIndex primaryIndex, TransactionContext txCtx, Map<IKey, WriteType> writeSet, Iterator<IKey> iterator){
             this.primaryIndex = primaryIndex;
+            this.txCtx = txCtx;
             this.writeSet = writeSet;
             this.iterator = iterator;
         }
@@ -118,7 +118,7 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
                     return null;
                 key = entryCurr.getKey();
             }
-            SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> entry = this.primaryIndex.getFloorEntry(key);
+            SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> entry = this.primaryIndex.getFloorEntry(txCtx, key);
             if (entry != null)
                 return entry.val().record;
             return null;
@@ -127,15 +127,17 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
     }
 
     @Override
-    public Iterator<Object[]> iterator(IKey[] keys) {
-        return new KeyMultiVersionIterator(keys);
+    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey[] keys) {
+        return new KeyMultiVersionIterator(txCtx, keys);
     }
 
     private class KeyMultiVersionIterator implements Iterator<Object[]> {
+        private final TransactionContext txCtx;
         private final IKey[] keys;
         private final Map<IKey, WriteType> writeSet;
         private int idx = 0;
-        public KeyMultiVersionIterator(IKey[] keys){
+        public KeyMultiVersionIterator(TransactionContext txCtx, IKey[] keys){
+            this.txCtx = txCtx;
             this.keys = keys;
             this.writeSet = KEY_WRITES.get();
         }
@@ -153,7 +155,7 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
 
         @Override
         public Object[] next() {
-            var obj = primaryIndex.getFloorEntry(keys[idx]);
+            var obj = primaryIndex.getFloorEntry(txCtx, keys[idx]);
             return obj.val().record;
         }
 

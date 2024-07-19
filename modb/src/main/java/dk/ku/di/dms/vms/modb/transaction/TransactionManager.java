@@ -4,8 +4,7 @@ import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
@@ -24,7 +23,9 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -38,15 +39,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * in order to accommodate two or more VMSs in the same resource,
  *  it would need to make this class an instance (no static methods) and put it into modb modules
  */
-public final class TransactionManager implements OperationalAPI, ITransactionalHandler {
+public final class TransactionManager implements OperationalAPI, ITransactionManager {
 
-    private static final ThreadLocal<Set<IMultiVersionIndex>> INDEX_WRITES = ThreadLocal.withInitial( () -> {
-        if(!TransactionMetadata.TRANSACTION_CONTEXT.get().readOnly) {
-            // TODO buffer of hashsets...
-            return new HashSet<>(4); // 4 maximum indexes used per task
-        }
-        return Collections.emptySet();
-    });
+     public static final ThreadLocal<TransactionContext> TRANSACTION_CONTEXT = new ThreadLocal<>();
 
     private final Analyzer analyzer;
 
@@ -68,7 +63,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
         for(var entry : table.foreignKeys().entrySet()){
             IKey fk = KeyUtils.buildRecordKey( entry.getValue(), values );
             // have some previous TID deleted it? or simply not exists
-            if (!entry.getKey().exists(fk)) return false;
+            if (!entry.getKey().exists(TRANSACTION_CONTEXT.get(), fk)) return false;
         }
         return true;
     }
@@ -92,11 +87,11 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
 
         if(scanOperator.isIndexScan()){
             IKey key = this.getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
-            return scanOperator.asIndexScan().runAsEmbedded(new IKey[]{ key });
+            return scanOperator.asIndexScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), new IKey[]{ key });
         } else if(scanOperator.isIndexAggregationScan()){
-            return scanOperator.asIndexAggregationScan().runAsEmbedded();
+            return scanOperator.asIndexAggregationScan().runAsEmbedded(TRANSACTION_CONTEXT.get());
         } else {
-            return scanOperator.asFullScan().runAsEmbedded();
+            return scanOperator.asFullScan().runAsEmbedded(TRANSACTION_CONTEXT.get());
         }
     }
 
@@ -205,84 +200,85 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
      * @param pk The primary key
      */
     private void deleteByKey(Table table, IKey pk){
-        var opt = table.primaryKeyIndex().removeOpt(pk);
+        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
+        var opt = table.primaryKeyIndex().removeOpt(txCtx, pk);
         if(opt.isPresent()){
-            INDEX_WRITES.get().add(table.primaryKeyIndex());
-
+            txCtx.indexes.add(table.primaryKeyIndex());
             for (NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()) {
-                INDEX_WRITES.get().add(secIndex);
+                txCtx.indexes.add(secIndex);
                 secIndex.remove(pk, opt.get());
             }
-
             for(var entry : table.partialIndexMap.entrySet()){
                 // does the record "fits" the partial index?
                 Tuple<Integer, Object> check = table.partialIndexMetaMap.get( entry.getKey() );
                 if (table.primaryKeyIndex().meetPartialIndex(opt.get(), check.t1(), check.t2() )){
-                    INDEX_WRITES.get().add(entry.getValue());
-                    entry.getValue().remove( pk );
+                    txCtx.indexes.add(entry.getValue());
+                    entry.getValue().remove(txCtx, pk);
                 }
             }
-
         }
     }
 
     public boolean exists(PrimaryIndex primaryKeyIndex, Object[] valuesOfKey){
         IKey pk = KeyUtils.buildIndexKey(valuesOfKey);
-        return primaryKeyIndex.exists(pk);
+        return primaryKeyIndex.exists(TRANSACTION_CONTEXT.get(), pk);
     }
 
     public Object[] lookupByKey(PrimaryIndex index, Object[] valuesOfKey){
         IKey pk = KeyUtils.buildIndexKey(valuesOfKey);
-        return index.lookupByKey(pk);
+        return index.lookupByKey(TRANSACTION_CONTEXT.get(), pk);
     }
 
     /**
      * @param table The corresponding database table
      * @param values The fields extracted from the entity
      */
+    @Override
     public void insert(Table table, Object[] values){
-        this.doInsert(table, values);
+        this.doInsert(TRANSACTION_CONTEXT.get(), table, values);
     }
 
-    private Object[] doInsert(Table table, Object[] values) {
+    private Object[] doInsert(TransactionContext txCtx, Table table, Object[] values) {
         PrimaryIndex primaryIndex = table.primaryKeyIndex();
         if(this.fkConstraintViolationFree(table, values)){
-            IKey pk = primaryIndex.insertAndGetKey(values);
+            IKey pk = primaryIndex.insertAndGetKey(txCtx, values);
             if(pk != null) {
-                INDEX_WRITES.get().add(primaryIndex);
+                txCtx.indexes.add(primaryIndex);
                 // iterate over secondary indexes to insert the new write
                 // this is the delta. records that the underlying index does not know yet
                 for (NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()) {
-                    INDEX_WRITES.get().add(secIndex);
-                    secIndex.insert(pk, values);
+                    txCtx.indexes.add(secIndex);
+                    secIndex.insert(txCtx, pk, values);
                 }
                 for(var entry : table.partialIndexMap.entrySet()){
                     // does the record "fits" the partial index?
                     Tuple<Integer, Object> check = table.partialIndexMetaMap.get( entry.getKey() );
                     if (primaryIndex.meetPartialIndex(values, check.t1(), check.t2() )){
-                        INDEX_WRITES.get().add(entry.getValue());
-                        entry.getValue().insert( pk, values);
+                        txCtx.indexes.add(entry.getValue());
+                        entry.getValue().insert(txCtx, pk, values);
                     }
                 }
                 return values;
             }
         }
-        this.undoTransactionWrites();
+        this.undoTransactionWrites(txCtx);
         throw new RuntimeException("Constraint violation in table "+table.getName());
     }
 
+    @Override
     public Object[] insertAndGet(Table table, Object[] values){
-        return this.doInsert(table, values);
+        return this.doInsert(TRANSACTION_CONTEXT.get(), table, values);
     }
 
     public void upsert(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), values);
-        if(index.upsert(pk, values)) {
-            INDEX_WRITES.get().add(index);
+        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
+        if(index.upsert(txCtx, pk, values)) {
+            txCtx.indexes.add(index);
             return;
         }
-        this.undoTransactionWrites();
+        this.undoTransactionWrites(txCtx);
         throw new RuntimeException("Constraint violation.");
     }
 
@@ -293,11 +289,12 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
     public void update(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), values);
-        if(this.fkConstraintViolationFree(table, values) && index.update(pk, values)){
-            INDEX_WRITES.get().add(index);
+        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
+        if(this.fkConstraintViolationFree(table, values) && index.update(txCtx, pk, values)){
+            txCtx.indexes.add(index);
             return;
         }
-        this.undoTransactionWrites();
+        this.undoTransactionWrites(txCtx);
         throw new RuntimeException("Constraint violation.");
     }
 
@@ -305,9 +302,9 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
      * how can I do that more optimized? creating another interface so secondary indexes also have the #undoTransactionWrites ?
      * INDEX_WRITES can have primary indexes and secondary indexes...
      */
-    private void undoTransactionWrites(){
-        for(IMultiVersionIndex index : INDEX_WRITES.get()) {
-            index.undoTransactionWrites();
+    private void undoTransactionWrites(TransactionContext txCtx){
+        for(IMultiVersionIndex index : txCtx.indexes) {
+            index.undoTransactionWrites(txCtx);
         }
     }
 
@@ -387,16 +384,30 @@ public final class TransactionManager implements OperationalAPI, ITransactionalH
 
     @Override
     public void commit(){
-        Set<IMultiVersionIndex> indexes = INDEX_WRITES.get();
-        for(var index : indexes){
-            index.installWrites();
+        var txCtx = TRANSACTION_CONTEXT.get();
+        for(var index : txCtx.indexes){
+            boolean notPrimary = !(index instanceof PrimaryIndex);
+            // primary index already has the wirtes in a hash map (see updatesPerKeyMap)
+            // installing write for primary index would only duplicate operation and data
+            // secondary indexes still need to remove from their ThreadLocals and put in their respective hash maps
+            if(notPrimary){
+                index.installWrites(txCtx);
+            }
         }
-        indexes.clear();
+        txCtx.close();
     }
 
     @Override
     public void beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) {
-        TransactionMetadata.registerTransactionStart(tid, identifier, lastTid, readOnly);
+        TRANSACTION_CONTEXT.set( new TransactionContext(
+                tid,
+                lastTid,
+                readOnly )
+        );
+    }
+
+    public TransactionContext getTransactionContext(){
+        return TRANSACTION_CONTEXT.get();
     }
 
 }

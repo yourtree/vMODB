@@ -1,10 +1,10 @@
 package dk.ku.di.dms.vms.marketplace;
 
-import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.Coordinator;
-import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
+import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
 import dk.ku.di.dms.vms.marketplace.common.inputs.PriceUpdate;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
@@ -128,13 +128,13 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
 
                 TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);
 
-                logger.log(INFO, "[Producer] Adding "+val);
+                LOGGER.log(INFO, "[Producer] Adding "+val);
 
                 coordinator.queueTransactionInput(txInput);
 
                 val++;
             }
-            logger.log(INFO, "Producer going to bed definitely... ");
+            LOGGER.log(INFO, "Producer going to bed definitely... ");
         }
     }
 

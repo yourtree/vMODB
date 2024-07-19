@@ -7,12 +7,12 @@ import dk.ku.di.dms.vms.marketplace.cart.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionContext;
-import dk.ku.di.dms.vms.modb.common.transaction.TransactionMetadata;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
+import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
+import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
@@ -100,9 +100,10 @@ public final class Main {
                     IKey key = CompositeKey.of( obj );
 
                     long tid = this.vms.lastTidFinished();
-                    TransactionMetadata.TRANSACTION_CONTEXT.set( new TransactionContext(tid, tid,true) );
+                    this.vms.getTransactionManager().beginTransaction( tid, 0, tid,true );
+                    TransactionContext txCtx = ((TransactionManager)this.vms.getTransactionManager()).getTransactionContext();
 
-                    Object[] record = this.table.primaryKeyIndex().lookupByKey(key);
+                    Object[] record = this.table.primaryKeyIndex().lookupByKey(txCtx, key);
 
                     try {
                         var entity = this.repository.parseObjectIntoEntity(record);
@@ -147,11 +148,13 @@ public final class Main {
                         // get last tid executed to bypass transaction scheduler
                         long tid = this.vms.lastTidFinished();
                         // can ask the transactional handler
-                        TransactionMetadata.TRANSACTION_CONTEXT.set( new TransactionContext(tid,tid-1,false) );
-                        this.table.primaryKeyIndex().insert(key, obj);
+                        this.vms.getTransactionManager().beginTransaction( tid, 0, tid,true );
+                        TransactionContext txCtx = ((TransactionManager)this.vms.getTransactionManager()).getTransactionContext();
+
+                        this.table.primaryKeyIndex().insert(txCtx, key, obj);
 
                         // add to customer idx for fast lookup on checkout
-                        this.customerIdx.insert(key, obj);
+                        this.customerIdx.insert(txCtx, key, obj);
 
                         // response
                         OutputStream outputStream = exchange.getResponseBody();

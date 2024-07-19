@@ -10,7 +10,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
@@ -71,7 +71,7 @@ public final class VmsEventHandler extends StoppableRunnable {
     private final Map<Integer, ConnectionMetadata> producerConnectionMetadataMap;
 
     /** For checkpointing the state */
-    private final ITransactionalHandler transactionalHandler;
+    private final ITransactionManager transactionalHandler;
 
     /** SERIALIZATION & DESERIALIZATION **/
     private final IVmsSerdesProxy serdesProxy;
@@ -128,7 +128,7 @@ public final class VmsEventHandler extends StoppableRunnable {
     public static VmsEventHandler build(// to identify which vms this is
                                         VmsNode me,
                                         // to checkpoint private state
-                                        ITransactionalHandler transactionalHandler,
+                                        ITransactionManager transactionalHandler,
                                         // for communicating with other components
                                         VmsEmbeddedInternalChannels vmsInternalChannels,
                                         // metadata about this vms
@@ -158,7 +158,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     private VmsEventHandler(VmsNode me,
                             VmsRuntimeMetadata vmsMetadata,
-                            ITransactionalHandler transactionalHandler,
+                            ITransactionManager transactionalHandler,
                             VmsEmbeddedInternalChannels vmsInternalChannels,
                             VmsHandlerOptions options,
                             IVmsSerdesProxy serdesProxy
@@ -1155,7 +1155,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         return this.checkpointEventHandler;
     }
 
-    public ITransactionalHandler transactionalHandler(){
+    public ITransactionManager transactionalHandler(){
         return this.transactionalHandler;
     }
 

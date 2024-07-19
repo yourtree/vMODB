@@ -1,10 +1,11 @@
 package dk.ku.di.dms.vms.marketplace;
 
-import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.Coordinator;
-import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
+import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
+import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -44,13 +45,13 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
 
-        logger.log(INFO, "Triggering checkout workflow...");
+        LOGGER.log(INFO, "Triggering checkout workflow...");
         this.triggerCheckoutWorkflow(coordinator);
 
-        logger.log(INFO, "Waiting batch window interval...");
+        LOGGER.log(INFO, "Waiting batch window interval...");
         sleep(BATCH_WINDOW_INTERVAL * 7);
 
-        logger.log(INFO, "Sending update shipment event...");
+        LOGGER.log(INFO, "Sending update shipment event...");
         // now send the update shipment event
         new UpdateShipmentProducer(coordinator).run();
 
@@ -73,7 +74,7 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
 
         @Override
         public void run() {
-            logger.log(INFO, "["+name+"] Starting...");
+            LOGGER.log(INFO, "["+name+"] Starting...");
             String instanceId = "1";
 
             // event name
@@ -82,12 +83,11 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
             // transaction name
             TransactionInput txInput_ = new TransactionInput(UPDATE_DELIVERY, eventPayload_);
 
-            logger.log(INFO, "["+name+"] New update shipment event with version: "+instanceId);
+            LOGGER.log(INFO, "["+name+"] New update shipment event with version: "+instanceId);
             coordinator.queueTransactionInput(txInput_);
 
-            logger.log(INFO, "["+name+"] Going to bed definitely... ");
+            LOGGER.log(INFO, "["+name+"] Going to bed definitely... ");
         }
-
     }
 
     private void initVMSs() throws Exception {
@@ -102,7 +102,7 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
     }
 
     private Coordinator loadCoordinator() throws IOException {
-        ServerNode serverIdentifier = new ServerNode( "localhost", 8080 );
+        ServerNode serverIdentifier = new ServerNode( "localhost", 8091 );
 
         Map<Integer, ServerNode> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
@@ -129,17 +129,17 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(10);
-        IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", 8082);
+        IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", Constants.STOCK_VMS_PORT);
         starterVMSs.put(stockAddress.hashCode(), stockAddress);
-        IdentifiableNode orderAddress = new IdentifiableNode("order", "localhost", 8083);
+        IdentifiableNode orderAddress = new IdentifiableNode("order", "localhost", Constants.ORDER_VMS_PORT);
         starterVMSs.put(orderAddress.hashCode(), orderAddress);
-        IdentifiableNode paymentAddress = new IdentifiableNode("payment", "localhost", 8084);
+        IdentifiableNode paymentAddress = new IdentifiableNode("payment", "localhost", Constants.PAYMENT_VMS_PORT);
         starterVMSs.put(paymentAddress.hashCode(), paymentAddress);
-        IdentifiableNode shipmentAddress = new IdentifiableNode("shipment","localhost", 8085);
+        IdentifiableNode shipmentAddress = new IdentifiableNode("shipment","localhost", Constants.SHIPMENT_VMS_PORT);
         starterVMSs.put(shipmentAddress.hashCode(), shipmentAddress);
-        IdentifiableNode customerAddress = new IdentifiableNode("customer", "localhost", 8086);
+        IdentifiableNode customerAddress = new IdentifiableNode("customer", "localhost", Constants.CUSTOMER_VMS_PORT);
         starterVMSs.put(customerAddress.hashCode(), customerAddress);
-        IdentifiableNode sellerAddress = new IdentifiableNode("seller", "localhost", 8087);
+        IdentifiableNode sellerAddress = new IdentifiableNode("seller", "localhost", Constants.SELLER_VMS_PORT);
         // starterVMSs.put(sellerAddress.hashCode(), sellerAddress);
 
         return Coordinator.build(

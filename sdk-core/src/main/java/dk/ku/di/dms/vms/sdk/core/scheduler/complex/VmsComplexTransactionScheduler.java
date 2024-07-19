@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler.complex;
 
 import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
-import dk.ku.di.dms.vms.modb.common.transaction.ITransactionalHandler;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.sdk.core.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.*;
@@ -76,7 +76,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
     // reuse same collection to avoid many allocations
     private final Collection<InboundEvent> inputEvents;
 
-    private final ITransactionalHandler transactionalHandler;
+    private final ITransactionManager transactionalHandler;
 
     // used to receive external signals that require the scheduler to pause and run tasks, e.g., checkpointing
     private final ICheckpointEventHandler checkpointHandler;
@@ -88,7 +88,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
                                                        IVmsInternalChannels vmsChannels,
                                                        // (input) queue to transactions map
                                                        Map<String, VmsTransactionMetadata> transactionMetadataMap,
-                                                       ITransactionalHandler transactionalHandler,
+                                                       ITransactionManager transactionalHandler,
                                                        ICheckpointEventHandler checkpointHandler){
         // could be higher. must adjust according to the number of cores available
         return new VmsComplexTransactionScheduler( vmsIdentifier,
@@ -102,7 +102,7 @@ public final class VmsComplexTransactionScheduler extends StoppableRunnable {
                                            IVmsInternalChannels vmsChannels,
                                            // (input) queue to transactions map
                                            Map<String, VmsTransactionMetadata> transactionMetadataMap,
-                                           ITransactionalHandler transactionalHandler,
+                                           ITransactionManager transactionalHandler,
                                            ICheckpointEventHandler checkpointHandler){
         super();
 

@@ -40,7 +40,7 @@ public class CompositeKey extends Row implements IKey, IIndexKey {
 
     @Override
     public boolean equals(Object key){
-        return this.hashCode() == key.hashCode();
+        return this.hashKey == key.hashCode();
     }
 
 }

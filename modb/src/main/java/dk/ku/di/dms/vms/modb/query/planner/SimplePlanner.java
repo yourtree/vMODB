@@ -239,7 +239,6 @@ public final class SimplePlanner {
         if(indexSelected != null) {
             // return the index scan with projection
             return new IndexScanWithProjection(indexSelected, projectionColumns, entrySize);
-
         } else {
             // then must get the PK index, ScanWithProjection
             return new FullScanWithProjection(tb.primaryKeyIndex(), projectionColumns, entrySize);

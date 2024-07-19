@@ -24,7 +24,7 @@ public final class OperationSetOfKey {
      * Serves a cache for the last stable write for this key. To avoid traversing all writes performed by TIDs in the history map.
      * It is written during RW/W tasks, so can only be used by on-flight RW/W tasks
      */
-    public WriteType lastWriteType;
+    public volatile WriteType lastWriteType;
 
     /**
      * Entity from the last write operation (insert or update)
@@ -32,10 +32,7 @@ public final class OperationSetOfKey {
      * to speed up the checking of constraints
      * Only used by on-flight RW/W tasks
      */
-    // TODO is it safe to assign it without being volatile? it was before due to the single-thread abstraction
-    //  but it no longer safe due to the new concurrent API
-    //  simple way to solve: make it final. instead of overwriting, copy fields to last version array positions
-    public Object[] lastVersion;
+    public volatile Object[] lastVersion;
 
     // version stored in main memory, from the last snapshot state
     // the logic to keep everything in sync requires changes to write operations

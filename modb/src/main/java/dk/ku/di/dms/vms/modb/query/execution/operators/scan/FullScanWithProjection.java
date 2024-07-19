@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.query.execution.operators.scan;
 
+import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 
 import java.util.Iterator;
@@ -24,9 +25,9 @@ public class FullScanWithProjection extends AbstractScan {
 //        return memoryRefNode;
 //    }
 
-    public List<Object[]> runAsEmbedded(){
+    public List<Object[]> runAsEmbedded(TransactionContext txCtx){
         // TODO return objects
-        Iterator<Object[]> iterator = this.index.iterator();
+        Iterator<Object[]> iterator = this.index.iterator(txCtx);
         while(iterator.hasNext()){
             iterator.next();
         }

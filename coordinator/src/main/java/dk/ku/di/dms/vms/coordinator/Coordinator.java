@@ -1,15 +1,15 @@
 package dk.ku.di.dms.vms.coordinator;
 
-import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
 import dk.ku.di.dms.vms.coordinator.batch.BatchAlgo;
 import dk.ku.di.dms.vms.coordinator.batch.BatchContext;
+import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
 import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.options.VmsWorkerOptions;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionWorker;
 import dk.ku.di.dms.vms.coordinator.vms.IVmsWorker;
 import dk.ku.di.dms.vms.coordinator.vms.VmsWorker;
-import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
-import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
