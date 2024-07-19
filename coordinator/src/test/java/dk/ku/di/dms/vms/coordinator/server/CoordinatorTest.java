@@ -32,13 +32,6 @@ public final class CoordinatorTest {
 
     private static final int MAX_NUM_TID_BATCH = 10;
 
-    private static class NoOpVmsWorker implements IVmsWorker {
-        @Override
-        public void queueTransactionEvent(TransactionEvent.PayloadRaw payloadRaw) { }
-        @Override
-        public void queueMessage(Object message) { }
-    }
-
     private static class StorePayloadVmsWorker implements IVmsWorker {
         private final IVmsSerdesProxy serdesProxy;
         public final ConcurrentLinkedQueue<Map<String,Long>> queue;
@@ -54,14 +47,11 @@ public final class CoordinatorTest {
             var map = serdesProxy.deserializeDependenceMap(str);
             this.queue.add(map);
         }
-        @Override
-        public void queueMessage(Object message) { }
     }
 
     @SuppressWarnings("BusyWait")
     @Test
     public void testTwoPendingTransactionInput() throws InterruptedException {
-
         HashMap<String, VmsNode> vmsMetadataMap = new HashMap<>();
         vmsMetadataMap.put( "product", new VmsNode("localhost", 8080, "product", 0, 0, 0, null, null, null));
         vmsMetadataMap.put( "cart", new VmsNode("localhost", 8081, "cart", 0, 0, 0, null, null, null));
@@ -70,8 +60,8 @@ public final class CoordinatorTest {
         Map<String,IVmsWorker> workers = new HashMap<>();
         var productWorker = new StorePayloadVmsWorker(VmsSerdesProxyBuilder.build());
         workers.put("product", productWorker);
-        workers.put("cart", new NoOpVmsWorker());
-        workers.put("stock", new NoOpVmsWorker());
+        workers.put("cart", new IVmsWorker() { });
+        workers.put("stock", new IVmsWorker() { });
 
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
         TransactionDAG updateProductDag = TransactionBootstrap.name("update_product")
@@ -371,7 +361,7 @@ public final class CoordinatorTest {
 
     private static Map<String, IVmsWorker> buildTestVmsWorker() {
         Map<String,IVmsWorker> workers = new HashMap<>();
-        workers.put("product", new NoOpVmsWorker());
+        workers.put("product", new IVmsWorker(){});
         return workers;
     }
 
@@ -407,7 +397,6 @@ public final class CoordinatorTest {
      */
     @Test
     public void testSimpleDependenceMap(){
-
         // build VMSs
         VmsNode vms1 =  new VmsNode("",0,"vms1",1,1,0,null,null,null);
         VmsNode vms2 =  new VmsNode("",0,"vms2",2,2,1,null,null,null);

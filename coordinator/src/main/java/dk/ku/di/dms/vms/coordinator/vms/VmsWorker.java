@@ -31,6 +31,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.*;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static dk.ku.di.dms.vms.coordinator.vms.VmsWorker.State.*;
@@ -53,6 +54,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             throw new InternalError(e);
         }
     }
+
     @SuppressWarnings("unused")
     private volatile int writeSynchronizer;
 
@@ -106,6 +108,8 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
 
     private final BatchWriteCompletionHandler batchWriteCompletionHandler = new BatchWriteCompletionHandler();
+
+    private final Consumer<Object> queueMessage_;
 
     private interface IVmsDeque {
         void drain(List<TransactionEvent.PayloadRaw> list);
@@ -207,6 +211,12 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             this.transactionEventQueue = new MultiDeque(options.numQueuesVmsWorker());
         } else {
             this.transactionEventQueue = new SingleDeque();
+        }
+
+        if(this.options.active()){
+            this.queueMessage_ = this.messageQueue::offerLast;
+        } else {
+            this.queueMessage_ = this::sendMessage;
         }
 
         // out - shared by many vms workers
@@ -347,10 +357,10 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 this.processPendingNetworkTasks();
                 this.processPendingLogging();
             } catch (InterruptedException e) {
-                LOGGER.log(ERROR, "Leader: VMS worker for "+this.consumerVms.identifier+" has been interrupted: "+e);
+                LOGGER.log(ERROR, "Leader: VMS worker for "+this.consumerVms.identifier+" has been interrupted: \n"+e);
                 this.stop();
             } catch (Exception e) {
-                LOGGER.log(ERROR, "Leader: VMS worker for "+this.consumerVms.identifier+" has caught an exception: "+e);
+                LOGGER.log(ERROR, "Leader: VMS worker for "+this.consumerVms.identifier+" has caught an exception: \n"+e);
             }
         }
     }
@@ -359,6 +369,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         ByteBuffer writeBuffer = this.loggingWriteBuffers.poll();
         if(writeBuffer != null){
             try {
+                writeBuffer.position(0);
                 this.loggingHandler.log(writeBuffer);
                 // return buffer
                 this.returnByteBuffer(writeBuffer);
@@ -370,9 +381,9 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     }
 
     private void processPendingNetworkTasks() {
-        Object msg;
-        while((msg = this.messageQueue.pollFirst()) != null){
-            this.sendMessage(msg);
+        Object pendingMessage;
+        while((pendingMessage = this.messageQueue.pollFirst()) != null){
+            this.sendMessage(pendingMessage);
         }
         ByteBuffer bb = this.pendingWriteBuffers.poll();
         if(bb != null){
@@ -410,12 +421,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     @Override
     public void queueMessage(Object message) {
-        if(this.options.active()) {
-            this.messageQueue.offerLast(message);
-        } else {
-            // perform write directly
-            this.sendMessage(message);
-        }
+        this.queueMessage_.accept(message);
     }
 
     private void sendMessage(Object message) {

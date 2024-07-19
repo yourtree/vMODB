@@ -7,4 +7,5 @@ public interface ILoggingHandler {
 
     default void log(ByteBuffer byteBuffer) throws IOException {}
 
+    default void close() { }
 }

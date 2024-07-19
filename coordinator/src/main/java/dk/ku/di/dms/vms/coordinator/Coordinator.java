@@ -385,7 +385,7 @@ public final class Coordinator extends StoppableRunnable {
 
         public void addWorker(VmsWorker vmsWorker) {
             this.vmsWorkers[this.nextPos] = vmsWorker;
-            nextPos++;
+            this.nextPos++;
         }
 
         @Override

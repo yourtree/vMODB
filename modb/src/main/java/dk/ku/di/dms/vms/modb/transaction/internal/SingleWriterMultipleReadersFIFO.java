@@ -56,6 +56,7 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
 
     }
 
+    // TODO shouldn't this be volatile?
     private transient Entry<K,V> first;
 
     public void put(K key, V val){
