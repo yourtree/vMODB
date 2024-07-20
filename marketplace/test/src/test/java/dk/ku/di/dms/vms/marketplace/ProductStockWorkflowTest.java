@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -23,7 +24,6 @@ public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
 
     @Test
     public void testLargeBatchWithTwoVMSs() throws Exception {
-
         dk.ku.di.dms.vms.marketplace.product.Main.main(null);
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
 
@@ -91,7 +91,7 @@ public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
                 serverIdentifier,
                 new CoordinatorOptions().withBatchWindow(BATCH_WINDOW_INTERVAL),
                 1,
-                1,
+                1, 
                 serdes
         );
     }

@@ -25,6 +25,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
+import dk.ku.di.dms.vms.modb.common.transaction.LoggingHandler;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.channel.JdkAsyncChannel;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
@@ -118,20 +119,6 @@ public final class Coordinator extends StoppableRunnable {
 
     private final Queue<Object> coordinatorQueue;
 
-    // for tests to remain operational
-    public static Coordinator build(Map<Integer, ServerNode> servers,
-                                    Map<Integer, IdentifiableNode> startersVMSs,
-                                    Map<String, TransactionDAG> transactionMap,
-                                    ServerNode me,
-                                    CoordinatorOptions options,
-                                    long startingBatchOffset,
-                                    long startingTid,
-                                    IVmsSerdesProxy serdesProxy) throws IOException {
-        return new Coordinator(servers == null ? new ConcurrentHashMap<>() : servers,
-                new HashMap<>(), startersVMSs, transactionMap,
-                me, options, startingBatchOffset, startingTid, new ILoggingHandler() { }, serdesProxy);
-    }
-
     public static Coordinator build(// obtained from leader election or passed by parameter on setup
                                     Map<Integer, ServerNode> servers,
                                     // passed by parameter
@@ -144,11 +131,11 @@ public final class Coordinator extends StoppableRunnable {
                                     long startingBatchOffset,
                                     // starting tid (may come from storage after a crash)
                                     long startingTid,
-                                    ILoggingHandler loggingHandler,
                                     IVmsSerdesProxy serdesProxy) throws IOException {
         return new Coordinator(servers == null ? new ConcurrentHashMap<>() : servers,
                 new HashMap<>(), startersVMSs, transactionMap,
-                me, options, startingBatchOffset, startingTid, loggingHandler, serdesProxy);
+                me, options, startingBatchOffset, startingTid,
+                serdesProxy);
     }
 
     private Coordinator(Map<Integer, ServerNode> servers,
@@ -159,7 +146,6 @@ public final class Coordinator extends StoppableRunnable {
                         CoordinatorOptions options,
                         long startingBatchOffset,
                         long startingTid,
-                        ILoggingHandler loggingHandler,
                         IVmsSerdesProxy serdesProxy) throws IOException {
         super();
 
@@ -190,7 +176,11 @@ public final class Coordinator extends StoppableRunnable {
         this.me = me;
 
         // logging
-        this.loggingHandler = loggingHandler;
+        if(options.logging()) {
+            this.loggingHandler = LoggingHandler.build("coordinator"); }
+        else {
+            this.loggingHandler = new ILoggingHandler() { };
+        }
 
         // infra
         this.serdesProxy = serdesProxy;
@@ -426,7 +416,7 @@ public final class Coordinator extends StoppableRunnable {
 
                 // coordinator will later keep track of this thread when the connection with the VMS is fully established
                 VmsWorker vmsWorker = VmsWorker.build(this.me, vmsNode, this.coordinatorQueue,
-                        () -> JdkAsyncChannel.create(group),
+                        () -> JdkAsyncChannel.create(this.group),
                         new VmsWorkerOptions(
                                 active,
                                 this.options.logging(),

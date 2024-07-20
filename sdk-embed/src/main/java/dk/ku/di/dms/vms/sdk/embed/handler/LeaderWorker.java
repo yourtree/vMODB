@@ -11,9 +11,7 @@ import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Future;
 
 import static java.lang.System.Logger.Level.*;
 import static java.lang.Thread.sleep;
@@ -66,11 +64,8 @@ final class LeaderWorker extends StoppableRunnable {
                     continue;
                 }
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
-
                 LOGGER.log(DEBUG, this.vmsNode.identifier+": Leader worker will send message type: "+ message.getClass().getName());
-
                 this.sendMessage(message);
-
             } catch (Exception e) {
                 LOGGER.log(ERROR, this.vmsNode.identifier+": Error on taking message from worker queue: "+e.getCause().getMessage());
                 if(message != null){
@@ -96,8 +91,6 @@ final class LeaderWorker extends StoppableRunnable {
         this.writeBuffer.clear();
         this.sendMessage(message);
     }
-
-    private Future<Integer> promise = CompletableFuture.completedFuture(0);
 
     private void write(Object message) {
         try {

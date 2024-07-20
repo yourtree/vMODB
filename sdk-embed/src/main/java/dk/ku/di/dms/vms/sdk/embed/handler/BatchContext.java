@@ -47,23 +47,19 @@ public final class BatchContext {
      * A batch being completed in a VMS does not necessarily mean
      * it can commit the batch. A new leader may need to abort the
      * last batch. In this case, the (local) state must be restored to
-     * last logged state.
+     * last checkpointed state.
      */
     // newly received batch
     public static final int OPEN = 0;
     // this status is set after all TIDs of the batch have been processed
     public static final int BATCH_COMPLETED = 1;
-    // this status is set when the logging process starts right after the leader sends the batch commit request
-    public static final int LOGGING = 2;
+    // this status is set when the checkpoint process starts right after the leader sends the batch commit request
+    public static final int CHECKPOINTING = 2;
     // this status is set when the state is logged
     public static final int BATCH_COMMITTED = 3;
 
     public boolean isOpen(){
         return this.status == OPEN;
-    }
-
-    public boolean isCommitted(){
-        return this.status == BATCH_COMMITTED;
     }
 
     public boolean isCompleted(){

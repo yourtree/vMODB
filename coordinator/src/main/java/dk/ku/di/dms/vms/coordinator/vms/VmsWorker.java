@@ -333,9 +333,10 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     }
 
     /**
-     * Event loop performs two tasks:
+     * Event loop performs some tasks:
      * (a) get and process batch-tracking messages from coordinator
      * (b) process transaction input events
+     * (c) logging
      */
     @SuppressWarnings("BusyWait")
     private void eventLoop() {
@@ -351,7 +352,6 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     continue;
                 }
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
-                // FIXME sending single event is buggy
 //                if(!this.transactionEventQueue.isEmpty()){
                     this.sendBatchOfEvents();
 //                } else {
@@ -414,6 +414,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.transactionEventQueue.insert(payloadRaw);
     }
 
+    @SuppressWarnings("unused")
     private void sendEvent(TransactionEvent.PayloadRaw payload) {
         ByteBuffer writeBuffer = this.retrieveByteBuffer();
         TransactionEvent.write( writeBuffer, payload );
@@ -461,8 +462,8 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 LOGGER.log(WARNING,"Leader: Channel with "+this.consumerVms.identifier+"is closed");
                 this.stop(); // no reason to continue the loop
             }
-            this.messageQueue.offerFirst(batchCommitCommand);
             this.releaseLock();
+            this.messageQueue.offerFirst(batchCommitCommand);
         }
     }
 
@@ -613,8 +614,8 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             LOGGER.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info sent to " + this.consumerVms.identifier+"\n"+batchCommitInfo);
         } catch (Exception e) {
             LOGGER.log(ERROR, "Leader: Error on sending a batch commit info to VMS: " + e.getMessage());
-            this.messageQueue.offerFirst(batchCommitInfo);
             this.releaseLock();
+            this.messageQueue.offerFirst(batchCommitInfo);
         }
     }
 

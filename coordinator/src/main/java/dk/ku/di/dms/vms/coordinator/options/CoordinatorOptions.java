@@ -30,9 +30,6 @@ public final class CoordinatorOptions {
      */
     private int networkThreadPoolSize = NUM_CPUS;
 
-    // defines how the batch metadata is replicated across servers
-    private BatchReplicationStrategy batchReplicationStrategy = BatchReplicationStrategy.NONE;
-
     private int numTransactionWorkers = 1;
 
     private int maxSleep = 1000;
@@ -76,15 +73,6 @@ public final class CoordinatorOptions {
 
     public int getNetworkSendTimeout(){
         return this.networkSendTimeout;
-    }
-
-    public BatchReplicationStrategy getBatchReplicationStrategy() {
-        return this.batchReplicationStrategy;
-    }
-
-    public CoordinatorOptions withBatchReplicationStrategy(BatchReplicationStrategy replicationStrategy){
-        this.batchReplicationStrategy = replicationStrategy;
-        return this;
     }
 
     public CoordinatorOptions withNumWorkersPerVms(int numWorkersPerVms){
@@ -145,8 +133,8 @@ public final class CoordinatorOptions {
         return this.logging;
     }
 
-    public CoordinatorOptions withLogging() {
-        this.logging = true;
+    public CoordinatorOptions withLogging(boolean value) {
+        this.logging = value;
         return this;
     }
 

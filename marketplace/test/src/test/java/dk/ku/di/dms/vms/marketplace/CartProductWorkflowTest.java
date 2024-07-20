@@ -22,14 +22,11 @@ import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
-public final class CartProductWorkflowTest extends AbstractWorkflowTest {
-
+public class CartProductWorkflowTest extends AbstractWorkflowTest {
+    
     @Test
-    public void testBasicCartProductWorkflow() throws Exception {
-
-        dk.ku.di.dms.vms.marketplace.product.Main.main(null);
-        dk.ku.di.dms.vms.marketplace.cart.Main.main(null);
-
+    public final void testBasicCartProductWorkflow() throws Exception {
+        this.initCartAndProduct();
         this.ingestDataIntoProductVms();
 
         // initialize coordinator
@@ -54,6 +51,15 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
         sleep(BATCH_WINDOW_INTERVAL * 3);
 
         assert coordinator.getLastTidOfLastCompletedBatch() == 11;
+
+        additionalAssertions();
+    }
+
+    protected void additionalAssertions() { }
+
+    protected void initCartAndProduct(){
+        dk.ku.di.dms.vms.marketplace.product.Main.main(null);
+        dk.ku.di.dms.vms.marketplace.cart.Main.main(null);
     }
 
     private Coordinator loadCoordinator(Properties properties) throws IOException {
@@ -86,6 +92,7 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         int batchSendRate = Integer.parseInt( properties.getProperty("batch_window_ms") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
+        boolean logging = Boolean.parseBoolean( properties.getProperty("logging") );
 
         return Coordinator.build(
                 serverMap,
@@ -95,16 +102,17 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
                 new CoordinatorOptions()
                         .withBatchWindow(batchSendRate)
                         .withNetworkThreadPoolSize(groupPoolSize)
-                        .withNetworkBufferSize(networkBufferSize),
+                        .withNetworkBufferSize(networkBufferSize)
+                        .withLogging(logging),
                 1,
-                1,
+                1, 
                 serdes
         );
     }
 
     private static class Producer implements Runnable {
 
-        Coordinator coordinator;
+        private final Coordinator coordinator;
 
         public Producer(Coordinator coordinator) {
             this.coordinator = coordinator;
@@ -112,26 +120,16 @@ public final class CartProductWorkflowTest extends AbstractWorkflowTest {
 
         @Override
         public void run() {
-
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
-
             int val = 1;
-
             while(val < 10) {
                 PriceUpdate priceUpdate = new PriceUpdate(
-                        1,1,10.0F, String.valueOf(1), String.valueOf(val)
-                );
-
+                        1,1,10.0F, String.valueOf(1), String.valueOf(val) );
                 String payload = serdes.serialize(priceUpdate, PriceUpdate.class);
-
                 TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRICE, payload);
-
                 TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);
-
                 LOGGER.log(INFO, "[Producer] Adding "+val);
-
-                coordinator.queueTransactionInput(txInput);
-
+                this.coordinator.queueTransactionInput(txInput);
                 val++;
             }
             LOGGER.log(INFO, "Producer going to bed definitely... ");

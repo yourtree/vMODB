@@ -1,6 +1,4 @@
-package dk.ku.di.dms.vms.coordinator.logging;
-
-import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
+package dk.ku.di.dms.vms.modb.common.transaction;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;

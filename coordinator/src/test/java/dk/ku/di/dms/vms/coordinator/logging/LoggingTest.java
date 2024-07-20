@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.coordinator.logging;
 
+import dk.ku.di.dms.vms.modb.common.transaction.LoggingHandler;
 import org.junit.Test;
 
 import java.io.IOException;

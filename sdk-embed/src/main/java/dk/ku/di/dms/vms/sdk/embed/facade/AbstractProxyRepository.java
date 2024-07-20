@@ -268,8 +268,6 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
 
     public final Object[] extractFieldValuesFromEntityObject(T entityObject) {
         Object[] values = new Object[this.table.schema().columnNames().length];
-        // TODO objectCacheStore.peek()
-
         int fieldIdx = 0;
         // get values from entity
         for(String columnName : this.table.schema().columnNames()){

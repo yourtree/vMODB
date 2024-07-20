@@ -336,30 +336,32 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     public MemoryRefNode run(List<WherePredicate> wherePredicates,
                              IndexScanWithProjection operator){
-//        int i = 0;
-//        Object[] keyList = new Object[operator.index.columns().length];
-//        List<WherePredicate> wherePredicatesNoIndex = new ArrayList<>(wherePredicates.size());
-//        // build filters for only those columns not in selected index
-//        for (WherePredicate wherePredicate : wherePredicates) {
-//            // not found, then build filter
-//            if(operator.index.containsColumn( wherePredicate.columnReference.columnPosition )){
-//                keyList[i] = wherePredicate.value;
-//                i++;
-//            } else {
-//                wherePredicatesNoIndex.add(wherePredicate);
-//            }
-//        }
+        /* COMMENTED FOR NOW
+        int i = 0;
+        Object[] keyList = new Object[operator.index.columns().length];
+        List<WherePredicate> wherePredicatesNoIndex = new ArrayList<>(wherePredicates.size());
+        // build filters for only those columns not in selected index
+        for (WherePredicate wherePredicate : wherePredicates) {
+            // not found, then build filter
+            if(operator.index.containsColumn( wherePredicate.columnReference.columnPosition )){
+                keyList[i] = wherePredicate.value;
+                i++;
+            } else {
+                wherePredicatesNoIndex.add(wherePredicate);
+            }
+        }
 
-        // build input
-//        IKey inputKey = KeyUtils.buildKey( keyList );
-//
-//        FilterContext filterContext;
-//        if(!wherePredicatesNoIndex.isEmpty()) {
-//            filterContext = FilterContextBuilder.build(wherePredicatesNoIndex);
-////            return operator.run( table.underlyingPrimaryKeyIndex(), filterContext, inputKey );
-//            return operator.run( filterContext, inputKey );
-//        }
-//        return operator.run(inputKey);
+         build input
+        IKey inputKey = KeyUtils.buildKey( keyList );
+
+        FilterContext filterContext;
+        if(!wherePredicatesNoIndex.isEmpty()) {
+            filterContext = FilterContextBuilder.build(wherePredicatesNoIndex);
+//            return operator.run( table.underlyingPrimaryKeyIndex(), filterContext, inputKey );
+            return operator.run( filterContext, inputKey );
+        }
+        return operator.run(inputKey);
+         */
         return null;
     }
 
@@ -382,6 +384,11 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         // get buffered writes in transaction facade and merge in memory
     }
 
+    /**
+     * The idea of commit is to make the effects of the transaction (i.e., operations)
+     * materialized in the underlying indexes. The primary index does not need such because
+     * it already tracks individual operations on keys through its own cache
+     */
     @Override
     public void commit(){
         var txCtx = TRANSACTION_CONTEXT.get();

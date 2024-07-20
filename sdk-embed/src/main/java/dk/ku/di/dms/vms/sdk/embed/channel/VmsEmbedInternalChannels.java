@@ -8,7 +8,7 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public final class VmsEmbeddedInternalChannels implements IVmsInternalChannels {
+public final class VmsEmbedInternalChannels implements IVmsInternalChannels {
 
     private final Queue<InboundEvent> transactionInputQueue;
 
@@ -20,7 +20,7 @@ public final class VmsEmbeddedInternalChannels implements IVmsInternalChannels {
 
     private final Queue<Object> batchCommitCommandQueue;
 
-    public VmsEmbeddedInternalChannels() {
+    public VmsEmbedInternalChannels() {
         // linked blocking queue because method size is a constant time operation
         /* transaction **/
         this.transactionInputQueue = new ConcurrentLinkedQueue<>();

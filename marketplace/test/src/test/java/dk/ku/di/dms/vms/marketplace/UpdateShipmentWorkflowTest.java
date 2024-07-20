@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -29,7 +30,7 @@ import static java.lang.Thread.sleep;
 public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest {
 
     /**
-     * Overriding because this test only wants the behavior of checkout workflow, not testing it
+     * Overriding because this test only intends to inherit the behavior of checkout workflow, not testing it
      */
     @Override
     public void testCheckout() {
@@ -149,7 +150,7 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
                 serverIdentifier,
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
-                1,
+                1, 
                 serdes
         );
     }

@@ -11,6 +11,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -56,6 +57,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
         assert coordinator.getLastTidOfLastCompletedBatch() == 11;
     }
 
+    @SuppressWarnings("BusyWait")
     protected void triggerCheckoutWorkflow(Coordinator coordinator) throws Exception {
         int numStarterVMSs = coordinator.getStarterVMSs().size();
         do{
@@ -135,7 +137,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
                 serverIdentifier,
                 new CoordinatorOptions().withBatchWindow(1000),
                 1,
-                1,
+                1, 
                 serdes
         );
     }

@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -23,14 +24,12 @@ import java.util.Map;
 import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
-/**
- *
- */
 public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
 
     private static final CustomerCheckout customerCheckout = new CustomerCheckout();
 
     @Test
+    @SuppressWarnings("BusyWait")
     public void testTopologyWithTwoVMSs() throws Exception {
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
         dk.ku.di.dms.vms.marketplace.order.Main.main(null);
@@ -117,7 +116,7 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
                 serverIdentifier,
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
-                1,
+                1, 
                 serdes
         );
     }

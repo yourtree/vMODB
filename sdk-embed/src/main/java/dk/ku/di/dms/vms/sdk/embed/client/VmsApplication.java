@@ -5,14 +5,16 @@ import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
+import dk.ku.di.dms.vms.modb.common.transaction.LoggingHandler;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
 import dk.ku.di.dms.vms.sdk.core.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
-import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
+import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.VmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
@@ -78,7 +80,7 @@ public final class VmsApplication {
 
         if(packageName.equalsIgnoreCase("Nothing")) throw new IllegalStateException("Cannot identify package.");
 
-        VmsEmbeddedInternalChannels vmsInternalPubSubService = new VmsEmbeddedInternalChannels();
+        VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
 
         Reflections reflections = VmsMetadataLoader.configureReflections(options.packages() );
 
@@ -120,8 +122,15 @@ public final class VmsApplication {
                 vmsMetadata.inputEventSchema(),
                 vmsMetadata.outputEventSchema());
 
+        ILoggingHandler loggingHandler;
+        if(options.isLogging()){
+            loggingHandler = LoggingHandler.build(vmsName);
+        } else {
+            loggingHandler = new ILoggingHandler() {};
+        }
+
         VmsEventHandler eventHandler = VmsEventHandler.build(
-                vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, options, serdes);
+                vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, options, loggingHandler, serdes);
 
 //        VmsComplexTransactionScheduler scheduler =
 //                VmsComplexTransactionScheduler.build(

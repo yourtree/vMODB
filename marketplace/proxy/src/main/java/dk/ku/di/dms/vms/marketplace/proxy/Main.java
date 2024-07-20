@@ -140,6 +140,9 @@ public final class Main {
         int numQueuesVmsWorker = Integer.parseInt( properties.getProperty("num_queues_vms_worker"));
         int maxSleep = Integer.parseInt( properties.getProperty("max_sleep") );
 
+        // logging
+        boolean logging = Boolean.parseBoolean( properties.getProperty("logging") );
+
         Coordinator coordinator = Coordinator.build(
                 serverMap,
                 starterVMSs,
@@ -156,6 +159,7 @@ public final class Main {
                         .withNumWorkersPerVms(numWorkersPerVms)
                         .withNumQueuesVmsWorker(numQueuesVmsWorker)
                         .withMaxVmsWorkerSleep(maxSleep)
+                        .withLogging(logging)
                         ,
                 STARTING_BATCH_ID,
                 STARTING_TID,

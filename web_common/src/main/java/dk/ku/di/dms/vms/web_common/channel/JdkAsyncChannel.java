@@ -27,6 +27,11 @@ public final class JdkAsyncChannel implements IChannel {
     }
 
     @Override
+    public Future<Integer> write(ByteBuffer src){
+        return this.channel.write(src);
+    }
+
+    @Override
     public <A> void write(ByteBuffer src, long timeout, TimeUnit unit, A attachment, CompletionHandler<Integer, ? super A> handler) {
         this.channel.write(src, timeout, unit, attachment, handler);
     }

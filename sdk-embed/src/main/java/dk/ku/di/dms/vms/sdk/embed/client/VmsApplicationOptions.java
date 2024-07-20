@@ -27,6 +27,8 @@ public final class VmsApplicationOptions {
 
     private final int maxSleep;
 
+    private final boolean logging;
+
     public static VmsApplicationOptions build(String host, int port, String[] packages) {
         Properties properties = ConfigUtils.loadProperties();
         int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
@@ -36,6 +38,8 @@ public final class VmsApplicationOptions {
         int vmsThreadPoolSize = Integer.parseInt(properties.getProperty("vms_thread_pool_size"));
         int numVmsWorkers = Integer.parseInt(properties.getProperty("num_vms_workers"));
         int maxSleep = Integer.parseInt(properties.getProperty("max_sleep"));
+        boolean logging = Boolean.parseBoolean(properties.getProperty("logging"));
+
         return new VmsApplicationOptions(
                 host,
                 port,
@@ -46,12 +50,13 @@ public final class VmsApplicationOptions {
                 vmsThreadPoolSize,
                 networkSendTimeout,
                 soBufferSize,
+                logging,
                 maxSleep);
     }
 
     private VmsApplicationOptions(String host, int port, String[] packages,
                                   int networkBufferSize, int networkThreadPoolSize, int numVmsWorkers,
-                                  int vmsThreadPoolSize, int networkSendTimeout, int osBufferSize, int maxSleep) {
+                                  int vmsThreadPoolSize, int networkSendTimeout, int osBufferSize, boolean logging, int maxSleep) {
         this.host = host;
         this.port = port;
         this.packages = packages;
@@ -61,6 +66,7 @@ public final class VmsApplicationOptions {
         this.vmsThreadPoolSize = vmsThreadPoolSize;
         this.networkSendTimeout = networkSendTimeout;
         this.osBufferSize = osBufferSize;
+        this.logging = logging;
         this.maxSleep = maxSleep;
     }
 
@@ -102,5 +108,9 @@ public final class VmsApplicationOptions {
 
     public int maxSleep() {
         return this.maxSleep;
+    }
+
+    public boolean isLogging() {
+        return this.logging;
     }
 }

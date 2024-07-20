@@ -11,13 +11,14 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
-import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
+import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.sdk.embed.events.InputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample1;
@@ -97,7 +98,7 @@ public class EventHandlerTest {
      */
     private static VmsCtx loadMicroservice(NetworkNode node,
                                            boolean eventHandlerActive,
-                                           VmsEmbeddedInternalChannels vmsInternalPubSubService, String vmsName,
+                                           VmsEmbedInternalChannels vmsInternalPubSubService, String vmsName,
                                            List<String> inToDiscard, List<String> outToDiscard, List<String> inToSwap, List<String> outToSwap)
             throws Exception {
 
@@ -136,6 +137,7 @@ public class EventHandlerTest {
                 vmsIdentifier, new NoOpCheckpointAPI(),
                 vmsInternalPubSubService, vmsMetadata,
                 VmsApplicationOptions.build(null, 0, null),
+                new ILoggingHandler() { },
                 serdes);
 
         if(eventHandlerActive) {
@@ -164,7 +166,7 @@ public class EventHandlerTest {
         List<String> inToSwap = List.of("out2");
 
         // to avoid set up this thread as a producer
-        VmsEmbeddedInternalChannels channelForAddingInput = new VmsEmbeddedInternalChannels();
+        VmsEmbedInternalChannels channelForAddingInput = new VmsEmbedInternalChannels();
 
         // microservice 1
         VmsCtx vmsCtx = loadMicroservice(
@@ -183,7 +185,7 @@ public class EventHandlerTest {
         inToDiscard = List.of("in");
 
         // internal channel so this thread can read the output at some point without being a consumer
-        VmsEmbeddedInternalChannels channelForGettingOutput = new VmsEmbeddedInternalChannels();
+        VmsEmbedInternalChannels channelForGettingOutput = new VmsEmbedInternalChannels();
 
         // microservice 2
         VmsCtx vmsCtx2 = loadMicroservice(
@@ -272,7 +274,7 @@ public class EventHandlerTest {
         VmsCtx vmsCtx = loadMicroservice(
                 new NetworkNode("localhost", 1083),
                 true,
-                new VmsEmbeddedInternalChannels(),
+                new VmsEmbedInternalChannels(),
                 "example1",
                 inToDiscard,
                 outToDiscard,
@@ -333,7 +335,7 @@ public class EventHandlerTest {
         VmsCtx vmsCtx = loadMicroservice(
                         vmsToConnectTo,
                         true,
-                        new VmsEmbeddedInternalChannels(),
+                        new VmsEmbedInternalChannels(),
                         "example1",
                         inToDiscard,
                         outToDiscard,
@@ -421,7 +423,7 @@ public class EventHandlerTest {
         VmsCtx vmsCtx = loadMicroservice(
                 vmsToConnectTo,
                 true,
-                new VmsEmbeddedInternalChannels(),
+                new VmsEmbedInternalChannels(),
                 "example1",
                 inToDiscard,
                 outToDiscard,
@@ -471,7 +473,7 @@ public class EventHandlerTest {
         VmsCtx vmsCtx = loadMicroservice(
                 vmsToConnectTo,
                 true,
-                new VmsEmbeddedInternalChannels(),
+                new VmsEmbedInternalChannels(),
                 "example1",
                 inToDiscard,
                 outToDiscard,
@@ -525,7 +527,7 @@ public class EventHandlerTest {
         VmsCtx vmsCtx = loadMicroservice(
                 vmsToConnectTo,
                 true,
-                new VmsEmbeddedInternalChannels(),
+                new VmsEmbedInternalChannels(),
                 "example1",
                 inToDiscard,
                 outToDiscard,

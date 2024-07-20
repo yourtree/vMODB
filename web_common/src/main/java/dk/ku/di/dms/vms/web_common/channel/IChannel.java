@@ -9,6 +9,8 @@ import java.util.concurrent.TimeUnit;
 
 public interface IChannel {
 
+    default Future<Integer> write(ByteBuffer src) { return CompletableFuture.completedFuture(0); }
+
     default <A> void write(ByteBuffer src,
                                    long timeout,
                                    TimeUnit unit,

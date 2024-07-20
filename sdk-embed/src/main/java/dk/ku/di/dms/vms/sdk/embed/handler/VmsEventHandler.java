@@ -10,15 +10,17 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
-import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbeddedInternalChannels;
+import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
+import dk.ku.di.dms.vms.web_common.channel.JdkAsyncChannel;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
@@ -55,7 +57,7 @@ public final class VmsEventHandler extends StoppableRunnable {
     private final AsynchronousChannelGroup group;
 
     /** INTERNAL CHANNELS **/
-    private final VmsEmbeddedInternalChannels vmsInternalChannels;
+    private final VmsEmbedInternalChannels vmsInternalChannels;
 
     /** VMS METADATA **/
     private final VmsNode me; // this merges network and semantic data about the vms
@@ -77,6 +79,8 @@ public final class VmsEventHandler extends StoppableRunnable {
     private final IVmsSerdesProxy serdesProxy;
 
     private final VmsHandlerOptions options;
+
+    private final ILoggingHandler loggingHandler;
 
     /** COORDINATOR **/
     private ServerNode leader;
@@ -130,19 +134,20 @@ public final class VmsEventHandler extends StoppableRunnable {
                                         // to checkpoint private state
                                         ITransactionManager transactionalHandler,
                                         // for communicating with other components
-                                        VmsEmbeddedInternalChannels vmsInternalChannels,
+                                        VmsEmbedInternalChannels vmsInternalChannels,
                                         // metadata about this vms
                                         VmsRuntimeMetadata vmsMetadata,
                                         VmsApplicationOptions options,
+                                        ILoggingHandler loggingHandler,
                                         // serialization/deserialization of objects
-                                        IVmsSerdesProxy serdesProxy
-                                        ){
+                                        IVmsSerdesProxy serdesProxy){
         try {
             return new VmsEventHandler(me, vmsMetadata,
                     transactionalHandler, vmsInternalChannels,
-                    new VmsEventHandler.VmsHandlerOptions( options.maxSleep(), options.networkBufferSize(), options.osBufferSize(),
-                            options.networkThreadPoolSize(), options.networkSendTimeout(), options.vmsThreadPoolSize(), options.numVmsWorkers()),
-                    serdesProxy);
+                    new VmsEventHandler.VmsHandlerOptions( options.maxSleep(), options.networkBufferSize(),
+                            options.osBufferSize(), options.networkThreadPoolSize(), options.networkSendTimeout(),
+                            options.vmsThreadPoolSize(), options.numVmsWorkers(), options.isLogging()),
+                    loggingHandler, serdesProxy);
         } catch (IOException e){
             throw new RuntimeException("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
@@ -154,15 +159,16 @@ public final class VmsEventHandler extends StoppableRunnable {
                             int networkThreadPoolSize,
                             int networkSendTimeout,
                             int vmsThreadPoolSize,
-                            int numVmsWorkers) {}
+                            int numVmsWorkers,
+                            boolean logging) {}
 
     private VmsEventHandler(VmsNode me,
                             VmsRuntimeMetadata vmsMetadata,
                             ITransactionManager transactionalHandler,
-                            VmsEmbeddedInternalChannels vmsInternalChannels,
+                            VmsEmbedInternalChannels vmsInternalChannels,
                             VmsHandlerOptions options,
-                            IVmsSerdesProxy serdesProxy
-                            ) throws IOException {
+                            ILoggingHandler loggingHandler,
+                            IVmsSerdesProxy serdesProxy) throws IOException {
         super();
 
         // network and executor
@@ -206,6 +212,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         this.queuesLeaderSubscribesTo = new HashSet<>();
 
         this.options = options;
+        this.loggingHandler = loggingHandler;
     }
 
     @Override
@@ -338,10 +345,8 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
     }
 
-    private static final Object DUMB_OBJECT = new Object();
-
     /**
-     * it may be the case that, due to an abort of the last tid, the last tid changes
+     * It may be the case that, due to an abort of the last tid, the last tid changes
      * the current code is not incorporating that
      */
     private void moveBatchIfNecessary(){
@@ -395,7 +400,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         @Override
         public void checkpoint() {
             vmsInternalChannels.batchCommitCommandQueue().remove();
-            log();
+            VmsEventHandler.this.checkpoint();
         }
         @Override
         public boolean mustCheckpoint() {
@@ -405,15 +410,13 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     private static final boolean INFORM_BATCH_ACK = false;
 
-    private void log() {
-        this.currentBatch.setStatus(BatchContext.LOGGING);
+    private void checkpoint() {
+        this.currentBatch.setStatus(BatchContext.CHECKPOINTING);
         // of course, I do not need to stop the scheduler on commit
         // I need to make access to the data versions data race free
         // so new transactions get data versions from the version map or the store
         this.transactionalHandler.checkpoint();
-
         this.currentBatch.setStatus(BatchContext.BATCH_COMMITTED);
-
         // it may not be necessary. the leader has already moved on at this point
         if(INFORM_BATCH_ACK) {
             this.leaderWorker.queueMessage(BatchCommitAck.of(this.currentBatch.batch, this.me.identifier));
@@ -464,8 +467,12 @@ public final class VmsEventHandler extends StoppableRunnable {
             return;
         }
 
-        ConsumerVmsWorker consumerVmsWorker = new ConsumerVmsWorker(this.me, node, this.group, this.serdesProxy,
-                this.options);
+        ConsumerVmsWorker consumerVmsWorker = ConsumerVmsWorker.build(this.me, node,
+                        () -> JdkAsyncChannel.create(this.group),
+                        this.options,
+                        this.loggingHandler,
+                        this.serdesProxy
+                        );
         Thread thread = Thread.ofPlatform().factory().newThread(consumerVmsWorker);
         thread.setName("vms-consumer-"+node.identifier+"-"+identifier);
         thread.start();

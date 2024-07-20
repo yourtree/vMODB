@@ -13,6 +13,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -20,8 +21,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
 
 import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
@@ -32,8 +31,6 @@ import static java.lang.Thread.sleep;
  */
 public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
 
-    private final BlockingQueue<TransactionInput> parsedTransactionRequests = new LinkedBlockingDeque<>();
-
     private static final CustomerCheckout customerCheckout = new CustomerCheckout(
          1, "test", "test", "test", "test","test",
             "test", "test","test","test","test",
@@ -41,19 +38,16 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
             );
 
     @Test
+    @SuppressWarnings("BusyWait")
     public void testComplexTopologyWithThreeVMSs() throws Exception {
-
         dk.ku.di.dms.vms.marketplace.product.Main.main(null);
-
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
-
         dk.ku.di.dms.vms.marketplace.order.Main.main(null);
 
         this.ingestDataIntoProductVms();
         this.insertItemsInStockVms();
 
         Coordinator coordinator = loadCoordinator();
-
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
 
@@ -61,7 +55,7 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
             sleep(5000);
         } while (coordinator.getConnectedVMSs().size() < 3);
 
-        Thread thread = new Thread(new InputProducer());
+        Thread thread = new Thread(new InputProducer(coordinator));
         thread.start();
 
         sleep(BATCH_WINDOW_INTERVAL * 5);
@@ -71,7 +65,14 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
         assert coordinator.getLastTidOfLastCompletedBatch() == 21;
     }
 
-    private class InputProducer implements Runnable {
+    private static class InputProducer implements Runnable {
+
+        private final Coordinator coordinator;
+
+        public InputProducer(Coordinator coordinator) {
+            this.coordinator = coordinator;
+        }
+
         @Override
         public void run() {
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
@@ -85,7 +86,7 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
                 TransactionInput.Event eventPayload = new TransactionInput.Event("update_product", payload);
                 TransactionInput txInput = new TransactionInput("update_product", eventPayload);
                 LOGGER.log(INFO, "[InputProducer] New product version: "+val);
-                parsedTransactionRequests.add(txInput);
+                this.coordinator.queueTransactionInput(txInput);
 
                 // reserve stock
                 ReserveStock reserveStockEvent = new ReserveStock(
@@ -97,7 +98,7 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
                 TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
                 TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
                 LOGGER.log(INFO, "[CheckoutProducer] New reserve stock event with version: "+val);
-                parsedTransactionRequests.add(txInput_);
+                this.coordinator.queueTransactionInput(txInput_);
 
                 val++;
             }
@@ -148,7 +149,7 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
                 serverIdentifier,
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
-                1,
+                1, 
                 serdes
         );
     }
