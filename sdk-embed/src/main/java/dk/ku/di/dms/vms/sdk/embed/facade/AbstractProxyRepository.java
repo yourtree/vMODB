@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.sdk.embed.facade;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityUtils;
@@ -24,7 +25,8 @@ import java.util.Map;
 
 /**
  * The interface between the application and internal database operations
- * Responsible to parse objects and convert database results to application objects
+ * Responsible to parse objects and convert database results to application objects.
+ * A repository class do not need direct access to {@link ITransactionManager}
  */
 public abstract class AbstractProxyRepository<PK extends Serializable, T extends IEntity<PK>> implements IRepository<PK, T> {
 
@@ -81,6 +83,7 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     /**
      * <a href="http://mydailyjava.blogspot.com/2022/02/using-byte-buddy-for-proxy-creation.html">Proxy creation in ByteBuddy</a>
      */
+    @SuppressWarnings("rawtypes")
     public static final class Interceptor {
         @RuntimeType
         public static Object intercept(
@@ -92,24 +95,19 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     }
 
     public final List<T> intercept(String methodName, Object[] args) {
-
         // retrieve statically defined query
         SelectStatement selectStatement = this.repositoryQueriesMap.get(methodName);
-
         // set query arguments
         for(int i = 0; i < args.length; i++) {
             selectStatement.whereClause.get(i).setValue( args[i] );
         }
-
         // submit for execution
         List<Object[]> records = this.operationalAPI.fetch( this.table, selectStatement );
-
         List<T> result = new ArrayList<>(records.size());
         for(Object[] record : records) {
             T ent = this.parseObjectIntoEntity(record);
             if(ent != null) result.add( ent );
         }
-
         return result;
     }
 
@@ -127,7 +125,6 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         // we always need to offload the lookup to the transaction facade
         Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(key);
         Object[] object = this.operationalAPI.lookupByKey(this.table.primaryKeyIndex(), valuesOfKey);
-
         // parse object into entity
         return this.parseObjectIntoEntity(object);
     }
@@ -151,13 +148,22 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         this.operationalAPI.insert(this.table, values);
     }
 
+    /**
+     * an optimization is just setting the PK into the entity passed as parameter
+     * another optimization is checking if PK is generated before returning the entity,
+     * but this is missing for now
+     */
     @Override
     public final T insertAndGet(T entity){
-        // TODO check if PK is generated before returning the entity
         Object[] values = this.extractFieldValuesFromEntityObject(entity);
-        // Object valuesWithKey =
         Object[] newValues = this.operationalAPI.insertAndGet(this.table, values);
-        // this.setKeyValueOnObject( key_, cached );
+        for(var entry : this.pkFieldMap.entrySet()){
+            int i = this.table.underlyingPrimaryKeyIndex().schema().columnPosition(entry.getKey());
+            if(newValues[i] == null){
+                continue;
+            }
+            entry.getValue().set( entity, newValues[i] );
+        }
         return entity;
     }
 
@@ -217,6 +223,8 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         this.operationalAPI.deleteAll( this.table, parsedEntities );
     }
 
+
+
     public final T parseObjectIntoEntity(Object[] object){
         // all entities must have default constructor
         if (object == null)
@@ -272,47 +280,45 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     }
 
     /**
-     * TODO This implementation should be used is a possible implementation with a sidecar
+     * This implementation should be used is a possible implementation with a sidecar
      * We can return objects in embedded mode. See last method
+    public <DTO> List<DTO> fetchMany(SelectStatement statement, Class<DTO> clazz){
+        // we need some context about the results in this memory space
+        // solved by now with the assumption the result is of the same size of memory
+        // number of records
+        // schema of the return (maybe not if it is a dto)
+        var memRes = this.operationalAPI.fetchMemoryReference(this.table, statement);
+        try {
+            List<DTO> result = new ArrayList<>(10);
+            Constructor<?> constructor = clazz.getDeclaredConstructors()[0];
+            Field[] fields = clazz.getFields();
+            long currAddress = memRes.address();
+            long lastOffset = currAddress + memRes.bytes();
+            while(memRes != null) {
+                DTO dto = (DTO) constructor.newInstance();
+                for (var field : fields) {
+                    DataType dt = DataTypeUtils.getDataTypeFromJavaType(field.getType());
+                    field.set(dto, DataTypeUtils.callReadFunction(currAddress, dt));
+                    currAddress += dt.value;
+                }
+                result.add(dto);
+
+                if(currAddress == lastOffset) {
+                    MemoryManager.releaseTemporaryDirectMemory(memRes.address());
+                    memRes = memRes.next;
+                    if(memRes != null){
+                        memRes = memRes.next;
+                        currAddress = memRes.address();
+                        lastOffset = currAddress + memRes.bytes();
+                    }
+                }
+            }
+            return result;
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
+    }
      */
-//    @Override
-//    @SuppressWarnings("unchecked")
-//    public <DTO> List<DTO> fetchMany(SelectStatement statement, Class<DTO> clazz){
-//        // we need some context about the results in this memory space
-//        // solved by now with the assumption the result is of the same size of memory
-//        // number of records
-//        // schema of the return (maybe not if it is a dto)
-//        var memRes = this.operationalAPI.fetchMemoryReference(this.table, statement);
-//        try {
-//            List<DTO> result = new ArrayList<>(10);
-//            Constructor<?> constructor = clazz.getDeclaredConstructors()[0];
-//            Field[] fields = clazz.getFields();
-//            long currAddress = memRes.address();
-//            long lastOffset = currAddress + memRes.bytes();
-//            while(memRes != null) {
-//                DTO dto = (DTO) constructor.newInstance();
-//                for (var field : fields) {
-//                    DataType dt = DataTypeUtils.getDataTypeFromJavaType(field.getType());
-//                    field.set(dto, DataTypeUtils.callReadFunction(currAddress, dt));
-//                    currAddress += dt.value;
-//                }
-//                result.add(dto);
-//
-//                if(currAddress == lastOffset) {
-//                    MemoryManager.releaseTemporaryDirectMemory(memRes.address());
-//                    memRes = memRes.next;
-//                    if(memRes != null){
-//                        memRes = memRes.next;
-//                        currAddress = memRes.address();
-//                        lastOffset = currAddress + memRes.bytes();
-//                    }
-//                }
-//            }
-//            return result;
-//        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
 
     @Override
     @SuppressWarnings("unchecked")

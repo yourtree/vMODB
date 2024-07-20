@@ -11,8 +11,8 @@ import java.util.List;
 
 /**
  * Set of internal operations performed in the private state
- * It abstracts the possible calls {@link dk.ku.di.dms.vms.modb.api.interfaces.IRepository}
- * classes perform to the {@link TransactionManager}.
+ * It abstracts the possible calls that {@link dk.ku.di.dms.vms.modb.api.interfaces.IRepository}
+ * classes make to the {@link TransactionManager}.
  */
 public sealed interface OperationalAPI permits TransactionManager {
 
