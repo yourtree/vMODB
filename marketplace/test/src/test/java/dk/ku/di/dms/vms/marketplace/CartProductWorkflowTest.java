@@ -92,7 +92,9 @@ public class CartProductWorkflowTest extends AbstractWorkflowTest {
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         int batchSendRate = Integer.parseInt( properties.getProperty("batch_window_ms") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
-        boolean logging = Boolean.parseBoolean( properties.getProperty("logging") );
+        boolean logging = false;
+        String loggingVal = System.getProperty("logging");
+        if(loggingVal != null) logging = Boolean.parseBoolean(loggingVal);
 
         return Coordinator.build(
                 serverMap,

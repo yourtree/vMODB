@@ -126,7 +126,12 @@ public final class VmsApplication {
         if(options.isLogging()){
             loggingHandler = LoggingHandler.build(vmsName);
         } else {
-            loggingHandler = new ILoggingHandler() {};
+            String loggingStr = System.getProperty("logging");
+            if(Boolean.parseBoolean(loggingStr)){
+                loggingHandler = LoggingHandler.build(vmsName);
+            } else {
+                loggingHandler = new ILoggingHandler() { };
+            }
         }
 
         VmsEventHandler eventHandler = VmsEventHandler.build(

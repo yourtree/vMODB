@@ -3,7 +3,8 @@ package dk.ku.di.dms.vms.marketplace;
 import java.io.File;
 
 /**
- * In order to work, logging must be enabled in app.properties file
+ * In order to work, logging must be enabled
+ * Overwriting app.config if necessary
  */
 public final class LoggingWorkflowTest extends CartProductWorkflowTest {
 
