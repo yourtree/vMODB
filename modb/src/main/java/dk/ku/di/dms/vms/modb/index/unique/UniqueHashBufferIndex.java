@@ -13,11 +13,7 @@ import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
-import static java.lang.System.Logger.Level.WARNING;
 
 /**
  * This index does not support growing number of keys
@@ -26,11 +22,7 @@ import static java.lang.System.Logger.Level.WARNING;
  */
 public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements ReadWriteBufferIndex<IKey> {
 
-    private static final System.Logger logger = System.getLogger(UniqueHashBufferIndex.class.getName());
-
     private final RecordBufferContext recordBufferContext;
-
-    private final Map<IKey, Object[]> cacheObjectStore;
 
     // cache to avoid getting data from schema
     private volatile int size = 0;
@@ -43,21 +35,9 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
      */
     // static final int TREEIFY_THRESHOLD = 8;
 
-    public UniqueHashBufferIndex(RecordBufferContext recordBufferContext, Schema schema){
-        super(schema, schema.getPrimaryKeyColumns());
-        this.recordBufferContext = recordBufferContext;
-        this.cacheObjectStore = new ConcurrentHashMap<>();
-        this.recordSize = schema.getRecordSize();
-    }
-
-    /**
-     * Unique index for non-primary keys.
-     * In other words, a constructor for a secondary index
-     */
-    public UniqueHashBufferIndex(RecordBufferContext recordBufferContext, Schema schema, int... columnsIndex){
+    public UniqueHashBufferIndex(RecordBufferContext recordBufferContext, Schema schema, int[] columnsIndex){
         super(schema, columnsIndex);
         this.recordBufferContext = recordBufferContext;
-        this.cacheObjectStore = new ConcurrentHashMap<>();
         this.recordSize = schema.getRecordSize();
     }
 
@@ -67,30 +47,31 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
      * and then computing the remainder when dividing by M, as in modular hashing."
      */
     private long getPosition(int key){
-        int logicalPosition = (key & 0x7fffffff) % this.recordBufferContext.capacity;
+        long logicalPosition = (key & 0x7fffffff) % this.recordBufferContext.capacity;
         return this.recordBufferContext.address + ( this.recordSize * logicalPosition );
     }
 
     @Override
     public void insert(IKey key, long srcAddress) {
-        long pos = getPosition(key.hashCode());
-
+        long pos = this.getPosition(key.hashCode());
         if(UNSAFE.getBoolean(null, pos)){
-            logger.log(WARNING, "Overwriting previously written record.");
+            System.out.println("Overwriting previously written record!");
         }
-
         UNSAFE.putBoolean(null, pos, true);
         UNSAFE.putInt(null, pos, key.hashCode());
         UNSAFE.copyMemory(null, srcAddress, null, pos + Schema.RECORD_HEADER, schema.getRecordSizeWithoutHeader());
-        this.size = this.size + 1;
+        this.updateSize(1);
+    }
+
+    @SuppressWarnings("UnnecessaryLocalVariable")
+    private void updateSize(int val){
+        int newVal = this.size + val;
+        this.size = newVal;
     }
 
     /**
-     * The update can be possibly optimized
-     * for updating only the fields required
-     * instead of the whole record.
-     * This method assumes the srcAddress
-     * begins with header data
+     * The update can be possibly optimized for updating only the fields required instead
+     * of the whole record. This method assumes the srcAddress begins with header data
      */
     @Override
     public void update(IKey key, long srcAddress) {
@@ -100,12 +81,9 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public void update(IKey key, Object[] record){
-
         long pos = this.getPosition(key.hashCode());
-
         int maxColumns = this.schema().columnOffset().length;
         long currAddress = pos + Schema.RECORD_HEADER;
-
         for(int index = 0; index < maxColumns; index++) {
             DataType dt = this.schema().columnDataType(index);
             DataTypeUtils.callWriteFunction( currAddress,
@@ -117,7 +95,6 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public void insert(IKey key, Object[] record){
-
         long pos = this.getPosition(key.hashCode());
 
         UNSAFE.putBoolean(null, pos, true);
@@ -133,14 +110,14 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
                     record[index] );
             currAddress += dt.value;
         }
-        this.size = this.size + 1;
+        this.updateSize(1);
     }
 
     @Override
     public void delete(IKey key) {
-        long pos = getPosition(key.hashCode());
+        long pos = this.getPosition(key.hashCode());
         UNSAFE.putBoolean(null, pos, inactive);
-        this.size = this.size - 1;
+        this.updateSize(-1);
     }
 
     @Override
@@ -159,7 +136,10 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public Object[] lookupByKey(IKey key){
-        return this.readFromIndex(this.getPosition(key.hashCode()));
+        var pos = this.getPosition(key.hashCode());
+        if(exists(pos))
+            return this.readFromIndex(pos);
+        return null;
     }
 
     @Override
@@ -197,12 +177,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public Object[] record(IKey key) {
-        Object[] objectLookup = this.cacheObjectStore.get(key);
-        if(objectLookup == null){
-            objectLookup = this.readFromIndex(this.address(key) + Schema.RECORD_HEADER);
-            this.cacheObjectStore.put( key, objectLookup );
-        }
-        return objectLookup;
+        return this.readFromIndex(this.address(key) + Schema.RECORD_HEADER);
     }
 
     @Override
@@ -210,8 +185,9 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         return IndexTypeEnum.UNIQUE;
     }
 
-    public RecordBufferContext buffer(){
-        return this.recordBufferContext;
+    @Override
+    public void flush() {
+        this.recordBufferContext.force();
     }
 
 }

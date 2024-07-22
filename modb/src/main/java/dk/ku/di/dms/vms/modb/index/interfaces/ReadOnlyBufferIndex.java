@@ -60,8 +60,7 @@ public interface ReadOnlyBufferIndex<K> extends ReadOnlyIndex<K> {
     }
 
     /**
-     * This is the basic check condition. Does not take into consideration the
-     * versioned values.
+     * This is the basic check condition. Does not take into consideration the versioned values.
      * @param address src address of the record
      * @param filterContext the filter to be applied
      * @return whether a record exists
@@ -77,7 +76,7 @@ public interface ReadOnlyBufferIndex<K> extends ReadOnlyIndex<K> {
         // the number of filters to apply
         int filterIdx = 0;
 
-        // the filter index on which a given param (e.g., literals, zero, 1, 'SURNAME', etc) should apply
+        // the filter index on which a given param (e.g., literals, zero, 1, 'SURNAME', etc.) should apply
         int biPredIdx = 0;
 
         // simple predicates, do not involve input params (i.e, NULL, NOT NULL, EXISTS?, etc)

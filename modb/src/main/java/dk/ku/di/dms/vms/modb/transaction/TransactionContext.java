@@ -30,10 +30,11 @@ public final class TransactionContext {
         if(!readOnly) {
             // 4 maximum indexes used per task
             this.indexes = Objects.requireNonNullElseGet(INDEX_SET_BUFFER.poll(), HashSet::new);
+            this.writeSet = Objects.requireNonNullElseGet(WRITE_SET_BUFFER.poll(), HashSet::new);
         } else {
             this.indexes = Collections.emptySet();
+            this.writeSet = Collections.emptySet();
         }
-        this.writeSet = Objects.requireNonNullElseGet(WRITE_SET_BUFFER.poll(), HashSet::new);
     }
 
     public void close(){

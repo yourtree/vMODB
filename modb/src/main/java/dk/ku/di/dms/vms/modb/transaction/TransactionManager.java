@@ -53,17 +53,23 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      */
     private final Map<String, AbstractSimpleOperator> queryPlanCacheMap;
 
+    private final List<PrimaryIndex> primaryIndexes;
+
     public TransactionManager(Map<String, Table> catalog){
         this.planner = new SimplePlanner();
         this.analyzer = new Analyzer(catalog);
+        this.primaryIndexes = new ArrayList<>();
+        for(var table : catalog.values()){
+            this.primaryIndexes.add(table.primaryKeyIndex());
+        }
         this.queryPlanCacheMap = new ConcurrentHashMap<>();
     }
 
-    private boolean fkConstraintViolationFree(Table table, Object[] values){
+    private boolean fkConstraintViolationFree(TransactionContext txCtx, Table table, Object[] values){
         for(var entry : table.foreignKeys().entrySet()){
             IKey fk = KeyUtils.buildRecordKey( entry.getValue(), values );
             // have some previous TID deleted it? or simply not exists
-            if (!entry.getKey().exists(TRANSACTION_CONTEXT.get(), fk)) return false;
+            if (!entry.getKey().exists(txCtx, fk)) return false;
         }
         return true;
     }
@@ -73,7 +79,6 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         String sqlAsKey = selectStatement.SQL.toString();
         AbstractSimpleOperator scanOperator = this.queryPlanCacheMap.getOrDefault( sqlAsKey, null );
         List<WherePredicate> wherePredicates;
-
         if(scanOperator == null){
             QueryTree queryTree = this.analyzer.analyze(selectStatement);
             wherePredicates = queryTree.wherePredicates;
@@ -84,7 +89,6 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             wherePredicates = this.analyzer.analyzeWhere(
                     table, selectStatement.whereClause);
         }
-
         if(scanOperator.isIndexScan()){
             IKey key = this.getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
             return scanOperator.asIndexScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), new IKey[]{ key });
@@ -105,7 +109,6 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         String sqlAsKey = selectStatement.SQL.toString();
         AbstractSimpleOperator scanOperator = this.queryPlanCacheMap.getOrDefault( sqlAsKey, null );
         List<WherePredicate> wherePredicates;
-
         if(scanOperator == null){
             QueryTree queryTree = this.analyzer.analyze(selectStatement);
             wherePredicates = queryTree.wherePredicates;
@@ -113,12 +116,9 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             this.queryPlanCacheMap.put(sqlAsKey, scanOperator);
         } else {
             // get only the where clause params
-            wherePredicates = this.analyzer.analyzeWhere(
-                    table, selectStatement.whereClause);
+            wherePredicates = this.analyzer.analyzeWhere(table, selectStatement.whereClause);
         }
-
         MemoryRefNode memRes;
-
         // TODO complete for all types or migrate the choice to transaction facade
         // make an enum, it is easier
         if(scanOperator.isIndexScan()){
@@ -130,7 +130,6 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             // build only filters
             memRes = this.run(table, wherePredicates, scanOperator.asFullScan());
         }
-
         return memRes;
     }
 
@@ -138,27 +137,20 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      * TODO finish. can we extract the column values and make a special api for the facade? only if it is a single key
      */
     public void issue(Table table, IStatement statement) throws AnalyzerException {
-
         switch (statement.getType()){
             case UPDATE -> {
-
                 List<WherePredicate> wherePredicates = this.analyzer.analyzeWhere(
                         table, statement.asUpdateStatement().whereClause);
-
                 // this.planner.getOptimalIndex(table, wherePredicates);
-
                 // TODO plan update and delete in planner. only need to send where predicates and not a query tree like a select
                 // UpdateOperator.run(statement.asUpdateStatement(), table.primaryKeyIndex() );
             }
             case INSERT -> {
                 // TODO get columns, put object array in order and submit to entity api
             }
-            case DELETE -> {
-
-            }
+            case DELETE -> { }
             default -> throw new IllegalStateException("Statement type cannot be identified.");
         }
-
     }
 
     /****** ENTITY *******/
@@ -240,7 +232,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     private Object[] doInsert(TransactionContext txCtx, Table table, Object[] values) {
         PrimaryIndex primaryIndex = table.primaryKeyIndex();
-        if(this.fkConstraintViolationFree(table, values)){
+        if(this.fkConstraintViolationFree(txCtx, table, values)){
             IKey pk = primaryIndex.insertAndGetKey(txCtx, values);
             if(pk != null) {
                 txCtx.indexes.add(primaryIndex);
@@ -290,7 +282,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), values);
         TransactionContext txCtx = TRANSACTION_CONTEXT.get();
-        if(this.fkConstraintViolationFree(table, values) && index.update(txCtx, pk, values)){
+        if(this.fkConstraintViolationFree(txCtx, table, values) && index.update(txCtx, pk, values)){
             txCtx.indexes.add(index);
             return;
         }
@@ -382,6 +374,9 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     public void checkpoint(){
         // make state durable
         // get buffered writes in transaction facade and merge in memory
+        for(var index : this.primaryIndexes){
+            index.checkpoint();
+        }
     }
 
     /**
@@ -391,15 +386,9 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      */
     @Override
     public void commit(){
-        var txCtx = TRANSACTION_CONTEXT.get();
+        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
         for(var index : txCtx.indexes){
-            boolean notPrimary = !(index instanceof PrimaryIndex);
-            // primary index already has the wirtes in a hash map (see updatesPerKeyMap)
-            // installing write for primary index would only duplicate operation and data
-            // secondary indexes still need to remove from their ThreadLocals and put in their respective hash maps
-            if(notPrimary){
-                index.installWrites(txCtx);
-            }
+            index.installWrites(txCtx);
         }
         txCtx.close();
     }

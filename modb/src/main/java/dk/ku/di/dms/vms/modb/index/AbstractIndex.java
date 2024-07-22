@@ -18,7 +18,7 @@ public abstract class AbstractIndex<K> implements ReadOnlyIndex<K> {
 
     protected final int[] columns;
 
-    // to speed up queries, so the filters can be build on flight
+    // to speed up queries, so the filters can be built on flight
     protected final HashSet<Integer> columnsHash;
 
     private final IIndexKey key;

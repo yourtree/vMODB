@@ -14,10 +14,10 @@ public final class RecordIterator extends CachingKeyIterator implements IRecordI
 
     private long nextAddress;
     private final int recordSize;
-    private final int capacity;
+    private final long capacity;
     private int progress; // how many records have been iterated so far
 
-    public RecordIterator(long address, int recordSize, int capacity){
+    public RecordIterator(long address, int recordSize, long capacity){
         this.nextAddress = address;
         this.recordSize = recordSize;
         this.capacity = capacity;

@@ -44,6 +44,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     // for PK generation. for now, all strategies use sequence
     private final Optional<IPrimaryKeyGenerator<?>> primaryKeyGenerator;
 
+    private final Set<IKey> keysToFlush = ConcurrentHashMap.newKeySet();
+
     public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
@@ -72,7 +74,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      * @return whether the record exists for this transaction, respecting atomic visibility
      */
     public boolean exists(TransactionContext txCtx, IKey key) {
-        // O(1)
         OperationSetOfKey opSet = this.updatesPerKeyMap.get(key);
         if(opSet != null){
             // why checking first if I am a WRITE. because by checking if I am right, I don't need to pay O(log n)
@@ -80,8 +81,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             if( !txCtx.readOnly ){
                 return opSet.lastWriteType != WriteType.DELETE;
             }
-
-            // O(log n)
             var floorEntry = opSet.updateHistoryMap.floorEntry(txCtx.lastTid);
             if(floorEntry == null) return this.primaryKeyIndex.exists(key);
             return floorEntry.val().type != WriteType.DELETE;
@@ -361,18 +360,17 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      * Called when a constraint is violated, leading to a transaction abort
      */
     public void undoTransactionWrites(TransactionContext txCtx){
-        Set<IKey> writesOfTid = txCtx.writeSet;
-        if(writesOfTid == null) return;
-        for(var key : writesOfTid) {
+        if(txCtx.writeSet == null) return;
+        for(var key : txCtx.writeSet) {
             // do we have a record written in the corresponding index? always yes. if no, it is a bug
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             operationSetOfKey.updateHistoryMap.poll();
         }
-        writesOfTid.clear();
+        txCtx.writeSet.clear();
     }
 
-    public void installWrites(TransactionContext txCtx){
-        for(IKey key : txCtx.writeSet) {
+    public void checkpoint(){
+        for(var key : this.keysToFlush){
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             switch (operationSetOfKey.lastWriteType){
                 case UPDATE -> this.primaryKeyIndex.update(key, operationSetOfKey.lastVersion);
@@ -380,8 +378,12 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 case DELETE -> this.primaryKeyIndex.delete(key);
             }
         }
-        // cannot clear updatesPerKeyMap because read and write transactions may require older versions
-        txCtx.writeSet.clear();
+        this.primaryKeyIndex.flush();
+        this.keysToFlush.clear();
+    }
+
+    public void installWrites(TransactionContext txCtx){
+        this.keysToFlush.addAll(txCtx.writeSet);
     }
 
     public ReadWriteIndex<IKey> underlyingIndex(){
@@ -406,7 +408,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     protected class MultiVersionIterator implements Iterator<Object[]>{
 
-        Iterator<Map.Entry<IKey,Object[]>> freshSetIterator;
+        private final Iterator<Map.Entry<IKey,Object[]>> freshSetIterator;
 
         public MultiVersionIterator(TransactionContext txCtx){
             this.freshSetIterator = collectFreshSet(txCtx).entrySet().iterator();
@@ -455,8 +457,9 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public Object[] getRecord(TransactionContext txCtx, IKey key){
         OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
         if(operation != null){
-            return operation.updateHistoryMap
-                    .floorEntry(txCtx.lastTid).val().record;
+            var val_ = Objects.requireNonNull(operation.updateHistoryMap
+                    .floorEntry(txCtx.lastTid)).val();
+            return val_.record;
         }
         return this.primaryKeyIndex.lookupByKey(key);
     }
