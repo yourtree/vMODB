@@ -98,3 +98,6 @@ local.properties
 # Mac file(s)
 
 .DS_Store
+
+.data
+*/.data

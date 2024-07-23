@@ -52,7 +52,6 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
         /* abort **/
         transactionAbortInputQueue = new LinkedBlockingQueue<>();
         transactionAbortOutputQueue = new LinkedBlockingQueue<>();
-
     }
 
     @Override

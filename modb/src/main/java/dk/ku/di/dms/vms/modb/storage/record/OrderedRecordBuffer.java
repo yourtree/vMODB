@@ -10,8 +10,8 @@ import jdk.internal.misc.Unsafe;
 
 import java.util.LinkedList;
 
-import static dk.ku.di.dms.vms.modb.definition.Header.active;
-import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
+import static dk.ku.di.dms.vms.modb.definition.Header.ACTIVE;
+import static dk.ku.di.dms.vms.modb.definition.Header.INACTIVE;
 
 /**
  * A double-linked list maintained in a buffer.
@@ -156,7 +156,7 @@ public final class OrderedRecordBuffer {
 
         if(targetAddress == -1) return;
 
-        UNSAFE.putBoolean(null, targetAddress, inactive);
+        UNSAFE.putBoolean(null, targetAddress, INACTIVE);
 
         size--;
 
@@ -227,7 +227,7 @@ public final class OrderedRecordBuffer {
         }
 
         // set active
-        UNSAFE.putBoolean( null, destOffset, active);
+        UNSAFE.putBoolean( null, destOffset, ACTIVE);
 
         if(this.size == 0){
             // then it is not possible to build the key from target address

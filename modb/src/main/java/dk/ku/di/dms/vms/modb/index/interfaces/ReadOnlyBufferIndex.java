@@ -47,9 +47,7 @@ public interface ReadOnlyBufferIndex<K> extends ReadOnlyIndex<K> {
         long currAddress = address;
         for(int i = 0; i < size; i++) {
             DataType dt = schema().columnDataType(i);
-            objects[i] = DataTypeUtils.getValue(
-                    dt,
-                    currAddress);
+            objects[i] = DataTypeUtils.getValue(dt, currAddress);
             currAddress += dt.value;
         }
         return objects;
@@ -67,32 +65,22 @@ public interface ReadOnlyBufferIndex<K> extends ReadOnlyIndex<K> {
      */
     @SuppressWarnings("unchecked")
     default boolean checkCondition(long address, FilterContext filterContext){
-
         if(!exists(address)) return false;
         if(filterContext == null) return true;
-
         boolean conditionHolds = true;
-
         // the number of filters to apply
         int filterIdx = 0;
-
         // the filter index on which a given param (e.g., literals, zero, 1, 'SURNAME', etc.) should apply
         int biPredIdx = 0;
-
         // simple predicates, do not involve input params (i.e, NULL, NOT NULL, EXISTS?, etc)
         int predIdx = 0;
-
         while( conditionHolds && filterIdx < filterContext.filterTypes.size() ){
-
             // no need to read active bit
-
             int columnIndex = filterContext.filterColumns.get(filterIdx);
             int columnOffset = schema().columnOffset( columnIndex );
             DataType dataType = schema().columnDataType( columnIndex );
-
             // how to get the versioned value?
             Object val = DataTypeUtils.getValue( dataType, address + columnOffset );
-
             // it is a literal passed to the query
             if(filterContext.filterTypes.get(filterIdx) == FilterType.BP) {
                 conditionHolds = filterContext.biPredicates.get(biPredIdx).
@@ -102,13 +90,9 @@ public interface ReadOnlyBufferIndex<K> extends ReadOnlyIndex<K> {
                 conditionHolds = filterContext.predicates.get(predIdx).test( val );
                 predIdx++;
             }
-
             filterIdx++;
-
         }
-
         return conditionHolds;
-
     }
 
 }

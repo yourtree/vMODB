@@ -14,8 +14,8 @@ import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.NoPrimaryKeyFoundException;
-import dk.ku.di.dms.vms.sdk.core.metadata.exception.NotAcceptableTypeException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.QueueMappingException;
 import dk.ku.di.dms.vms.sdk.core.metadata.exception.UnsupportedConstraint;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionSignature;
@@ -254,7 +254,7 @@ public final class VmsMetadataLoader {
             int i = 0;
             for(Field field : pkFields){
                 Class<?> attributeType = field.getType();
-                columnDataTypes.add( getColumnDataTypeFromAttributeType(attributeType) );
+                columnDataTypes.add( DataTypeUtils.getColumnDataTypeFromAttributeType(attributeType) );
                 pkFieldsStr[i] = i;
                 columnNames.add( field.getName() );
                 i++;
@@ -306,7 +306,7 @@ public final class VmsMetadataLoader {
      * non-foreign key column constraints are inherent to the table, not referring to other tables
      */
     private static ConstraintReference[] processRegularColumns(List<Field> columnFields, String[] columnNames, DataType[] columnDataTypes, int columnPosition)
-            throws UnsupportedConstraint, NotAcceptableTypeException {
+            throws UnsupportedConstraint {
 
         if(columnFields == null) {
             return null;
@@ -318,7 +318,7 @@ public final class VmsMetadataLoader {
         for (Field field : columnFields) {
 
             Class<?> attributeType = field.getType();
-            columnDataTypes[columnPosition] = getColumnDataTypeFromAttributeType(attributeType);
+            columnDataTypes[columnPosition] = DataTypeUtils.getColumnDataTypeFromAttributeType(attributeType);
 
             // get constraints ought to be applied to this column, e.g., non-negative, not null, nullable
             List<Annotation> constraintAnnotations = Arrays.stream(field.getAnnotations())
@@ -433,17 +433,7 @@ public final class VmsMetadataLoader {
             String className = method.getDeclaringClass().getCanonicalName();
             Object obj = loadedVmsInstances.get(className);
 
-            Class<?> outputType;
-            try{
-                outputType = method.getReturnType();
-            } catch(Exception e) {
-                throw new QueueMappingException("All output events must implement IEvent interface.");
-            }
-
-            // output type cannot be String or primitive
-            if((outputType.isPrimitive() && !outputType.getSimpleName().equals("void")) || outputType.isArray() || outputType.isInstance(String.class)){
-                throw new IllegalStateException("Output type cannot be String, array, annotation, or primitive");
-            }
+            Class<?> outputType = getOutputType(method);
 
             List<Class<?>> inputTypes = new ArrayList<>();
 
@@ -574,6 +564,20 @@ public final class VmsMetadataLoader {
         }
     }
 
+    private static Class<?> getOutputType(Method method) {
+        Class<?> outputType;
+        try{
+            outputType = method.getReturnType();
+        } catch(Exception e) {
+            throw new QueueMappingException("All output events must implement IEvent interface.");
+        }
+        // output type cannot be String or primitive
+        if((outputType.isPrimitive() && !outputType.getSimpleName().equals("void")) || outputType.isArray() || outputType.isInstance(String.class)){
+            throw new IllegalStateException("Output type cannot be String, array, annotation, or primitive");
+        }
+        return outputType;
+    }
+
     /**
      * Event types are not being used in ser/des of events
      * So it is ok to just return null for now.
@@ -614,37 +618,6 @@ public final class VmsMetadataLoader {
         else {
             logger.log(INFO, attributeCanonicalName + " will be recognized as a complex data type");
             return DataType.COMPLEX;
-        }
-    }
-
-    private static DataType getColumnDataTypeFromAttributeType(Class<?> attributeType) throws NotAcceptableTypeException {
-        String attributeCanonicalName = attributeType.getCanonicalName();
-        if (attributeCanonicalName.equalsIgnoreCase("int") || attributeType == Integer.class){
-            return DataType.INT;
-        }
-        else if (attributeCanonicalName.equalsIgnoreCase("float") || attributeType == Float.class){
-            return DataType.FLOAT;
-        }
-        else if (attributeCanonicalName.equalsIgnoreCase("double") || attributeType == Double.class){
-            return DataType.DOUBLE;
-        }
-        else if (attributeCanonicalName.equalsIgnoreCase("char") || attributeType == Character.class){
-            return DataType.CHAR;
-        }
-        else if (attributeCanonicalName.equalsIgnoreCase("long") || attributeType == Long.class){
-            return DataType.LONG;
-        }
-        else if (attributeType == Date.class){
-            return DataType.DATE;
-        }
-        else if(attributeType == String.class){
-            return DataType.STRING;
-        }
-        else if(attributeType.isEnum()){
-            return DataType.ENUM;
-        }
-        else {
-            throw new NotAcceptableTypeException(attributeType.getCanonicalName() + " is not accepted as a column data type.");
         }
     }
 

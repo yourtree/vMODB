@@ -94,7 +94,7 @@ public final class VmsApplication {
         Map<String, Table> catalog = EmbedMetadataLoader.loadCatalog(vmsDataModelMap, entityToTableNameMap);
 
         // operational API and checkpoint API
-        TransactionManager transactionManager = new TransactionManager(catalog);
+        TransactionManager transactionManager = new TransactionManager(catalog, options.isCheckpointing());
 
         Map<String, Object> tableToRepositoryMap = EmbedMetadataLoader.loadRepositoryClasses( vmsClasses, entityToTableNameMap, catalog,  transactionManager );
         Map<String, List<Object>> vmsToRepositoriesMap = EmbedMetadataLoader.mapRepositoriesToVms(vmsClasses, entityToTableNameMap, tableToRepositoryMap);
@@ -151,8 +151,7 @@ public final class VmsApplication {
                 vmsName,
                 vmsInternalPubSubService,
                 vmsMetadata.queueToVmsTransactionMap(),
-                eventHandler.transactionalHandler(),
-                eventHandler.schedulerHandler(),
+                transactionManager,
                 threadPoolSize );
 
         return new VmsApplication( vmsName, vmsMetadata, catalog, eventHandler, transactionManager, transactionScheduler, vmsInternalPubSubService );

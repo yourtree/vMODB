@@ -430,8 +430,14 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     private void sendMessage(Object message) {
         switch (message) {
-            case BatchCommitCommand.Payload o -> this.sendBatchCommitCommand(o);
-            case BatchCommitInfo.Payload o -> this.sendBatchCommitInfo(o);
+            case BatchCommitCommand.Payload o -> {
+                this.sendBatchCommitCommand(o);
+                this.loggingHandler.force();
+            }
+            case BatchCommitInfo.Payload o -> {
+                this.sendBatchCommitInfo(o);
+                this.loggingHandler.force();
+            }
             case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
             case String o -> this.sendConsumerSet(o);
             default ->

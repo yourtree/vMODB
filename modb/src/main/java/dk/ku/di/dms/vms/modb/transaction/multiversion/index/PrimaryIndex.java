@@ -209,8 +209,9 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 if (entry != null){
                     return (entry.val().type != WriteType.DELETE ? entry.val().record : null);
                 }
-            } else
+            } else {
                 return operationSet.lastWriteType != WriteType.DELETE ? operationSet.lastVersion : null;
+            }
         }
         // it is a readonly
         if(this.primaryKeyIndex.exists(key)) {
@@ -220,7 +221,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     /**
-     * possible optimization: if cached value is not null, then extract the updated columns to make constraint violation check faster
+     * possible optimization: if cached value is not null,
+     * then extract the updated columns to make constraint violation check faster
      * @return whether it is allowed to proceed with the operation
      */
     public boolean insert(TransactionContext txCtx, IKey key, Object[] values) {
@@ -369,12 +371,14 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         txCtx.writeSet.clear();
     }
 
-    public void checkpoint(){
+    public void checkpoint(long maxTid){
         for(var key : this.keysToFlush){
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
+            var entry = operationSetOfKey.updateHistoryMap.removeUpToEntry(maxTid);
+            assert entry != null;
             switch (operationSetOfKey.lastWriteType){
-                case UPDATE -> this.primaryKeyIndex.update(key, operationSetOfKey.lastVersion);
-                case INSERT -> this.primaryKeyIndex.insert(key, operationSetOfKey.lastVersion);
+                case UPDATE -> this.primaryKeyIndex.update(key, entry.val().record);
+                case INSERT -> this.primaryKeyIndex.insert(key, entry.val().record);
                 case DELETE -> this.primaryKeyIndex.delete(key);
             }
         }
@@ -457,9 +461,10 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public Object[] getRecord(TransactionContext txCtx, IKey key){
         OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
         if(operation != null){
-            var val_ = Objects.requireNonNull(operation.updateHistoryMap
-                    .floorEntry(txCtx.lastTid)).val();
-            return val_.record;
+            var entry = operation.updateHistoryMap
+                    .floorEntry(txCtx.lastTid);
+            assert entry != null;
+            return entry.val().record;
         }
         return this.primaryKeyIndex.lookupByKey(key);
     }

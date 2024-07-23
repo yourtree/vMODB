@@ -18,8 +18,6 @@ public final class VmsEmbedInternalChannels implements IVmsInternalChannels {
 
     private final Queue<TransactionAbort.Payload> transactionAbortOutputQueue;
 
-    private final Queue<Object> batchCommitCommandQueue;
-
     public VmsEmbedInternalChannels() {
         // linked blocking queue because method size is a constant time operation
         /* transaction **/
@@ -28,8 +26,6 @@ public final class VmsEmbedInternalChannels implements IVmsInternalChannels {
         /* abort **/
         this.transactionAbortInputQueue = new ConcurrentLinkedQueue<>();
         this.transactionAbortOutputQueue = new ConcurrentLinkedQueue<>();
-        /* batch */
-        this.batchCommitCommandQueue = new ConcurrentLinkedQueue<>();
     }
 
     @Override
@@ -50,10 +46,6 @@ public final class VmsEmbedInternalChannels implements IVmsInternalChannels {
     @Override
     public Queue<TransactionAbort.Payload> transactionAbortOutputQueue() {
         return this.transactionAbortOutputQueue;
-    }
-
-    public Queue<Object> batchCommitCommandQueue(){
-        return this.batchCommitCommandQueue;
     }
 
 }

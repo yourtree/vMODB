@@ -5,7 +5,7 @@ package dk.ku.di.dms.vms.modb.common.transaction;
  */
 public interface ITransactionManager {
 
-    void checkpoint();
+    void checkpoint(long maxTid);
 
     void commit();
 

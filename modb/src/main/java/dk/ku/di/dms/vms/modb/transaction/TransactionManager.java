@@ -55,7 +55,9 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     private final List<PrimaryIndex> primaryIndexes;
 
-    public TransactionManager(Map<String, Table> catalog){
+    private final boolean checkpointing;
+
+    public TransactionManager(Map<String, Table> catalog, boolean checkpointing){
         this.planner = new SimplePlanner();
         this.analyzer = new Analyzer(catalog);
         this.primaryIndexes = new ArrayList<>();
@@ -63,6 +65,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             this.primaryIndexes.add(table.primaryKeyIndex());
         }
         this.queryPlanCacheMap = new ConcurrentHashMap<>();
+        this.checkpointing = checkpointing;
     }
 
     private boolean fkConstraintViolationFree(TransactionContext txCtx, Table table, Object[] values){
@@ -169,8 +172,9 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     }
 
     public void updateAll(Table table, List<Object[]> objects) {
+        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
         for(Object[] entry : objects) {
-            this.update(table, entry);
+            this.update(txCtx, table, entry);
         }
     }
 
@@ -274,14 +278,18 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         throw new RuntimeException("Constraint violation.");
     }
 
+    @Override
+    public void update(Table table, Object[] values) {
+        this.update(TRANSACTION_CONTEXT.get(), table, values);
+    }
+
     /**
      * Iterate over all indexes, get the corresponding writes of this tid and remove them
-     *      this method can be called in parallel by transaction facade without risk
+     * This method can be called in parallel by transaction facade without any risk
      */
-    public void update(Table table, Object[] values){
+    public void update(TransactionContext txCtx, Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), values);
-        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
         if(this.fkConstraintViolationFree(txCtx, table, values) && index.update(txCtx, pk, values)){
             txCtx.indexes.add(index);
             return;
@@ -365,17 +373,15 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     }
 
     /**
-     * checkpoint
      * Must log the updates in a separate file. no need for WAL, no need to store before and after
      * Only log those data versions until the corresponding batch.
      * TIDs are not necessarily a sequence.
      */
     @Override
-    public void checkpoint(){
-        // make state durable
-        // get buffered writes in transaction facade and merge in memory
+    public void checkpoint(long maxTid){
+        if(!this.checkpointing) return;
         for(var index : this.primaryIndexes){
-            index.checkpoint();
+            index.checkpoint(maxTid);
         }
     }
 

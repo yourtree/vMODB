@@ -26,8 +26,7 @@ public class LoggingHandler implements ILoggingHandler {
             var fileChannel = FileChannel.open(path,
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING,
-                StandardOpenOption.WRITE,
-                StandardOpenOption.DSYNC);
+                StandardOpenOption.WRITE);
             return new LoggingHandler(fileChannel, fileName);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -49,6 +48,15 @@ public class LoggingHandler implements ILoggingHandler {
         do {
             pos = this.fileChannel.write(byteBuffer);
         } while(pos < byteBuffer.limit());
+    }
+
+    @Override
+    public void force(){
+        try {
+            this.fileChannel.force(false);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public String getFileName() {

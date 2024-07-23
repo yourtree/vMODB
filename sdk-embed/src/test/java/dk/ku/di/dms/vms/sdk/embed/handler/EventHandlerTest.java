@@ -74,7 +74,7 @@ public class EventHandlerTest {
 
     private static final class NoOpCheckpointAPI implements ITransactionManager {
         @Override
-        public void checkpoint() {
+        public void checkpoint(long maxTid) {
              logger.log(INFO, "Checkpoint called at: "+System.currentTimeMillis());
         }
 
@@ -125,7 +125,7 @@ public class EventHandlerTest {
 
         VmsComplexTransactionScheduler scheduler = VmsComplexTransactionScheduler.build(
                 "test", vmsInternalPubSubService,
-                        vmsMetadata.queueToVmsTransactionMap(), null, null);
+                        vmsMetadata.queueToVmsTransactionMap(), null);
 
         VmsNode vmsIdentifier = new VmsNode(
                 node.host, node.port, vmsName,

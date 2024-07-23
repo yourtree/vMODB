@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.modb.index.unique;
 
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
+import dk.ku.di.dms.vms.modb.definition.Header;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
@@ -13,7 +14,8 @@ import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 
-import static dk.ku.di.dms.vms.modb.definition.Header.inactive;
+import static dk.ku.di.dms.vms.modb.definition.Header.INACTIVE;
+import static dk.ku.di.dms.vms.modb.definition.Header.INACTIVE_BYTE;
 
 /**
  * This index does not support growing number of keys
@@ -28,6 +30,8 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     private volatile int size = 0;
 
     private final long recordSize;
+
+
 
     /**
      * Based on HashMap how handle bucket overflow
@@ -86,9 +90,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         long currAddress = pos + Schema.RECORD_HEADER;
         for(int index = 0; index < maxColumns; index++) {
             DataType dt = this.schema().columnDataType(index);
-            DataTypeUtils.callWriteFunction( currAddress,
-                    dt,
-                    record[index] );
+            DataTypeUtils.callWriteFunction( currAddress, dt, record[index] );
             currAddress += dt.value;
         }
     }
@@ -96,18 +98,13 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     @Override
     public void insert(IKey key, Object[] record){
         long pos = this.getPosition(key.hashCode());
-
-        UNSAFE.putBoolean(null, pos, true);
+        UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
         UNSAFE.putInt(null, pos, key.hashCode());
-
         int maxColumns = this.schema.columnOffset().length;
         long currAddress = pos + Schema.RECORD_HEADER;
-
         for(int index = 0; index < maxColumns; index++) {
             DataType dt = this.schema.columnDataType(index);
-            DataTypeUtils.callWriteFunction( currAddress,
-                    dt,
-                    record[index] );
+            DataTypeUtils.callWriteFunction( currAddress, dt, record[index] );
             currAddress += dt.value;
         }
         this.updateSize(1);
@@ -116,7 +113,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     @Override
     public void delete(IKey key) {
         long pos = this.getPosition(key.hashCode());
-        UNSAFE.putBoolean(null, pos, inactive);
+        UNSAFE.putByte(null, pos, Header.INACTIVE_BYTE);
         this.updateSize(-1);
     }
 

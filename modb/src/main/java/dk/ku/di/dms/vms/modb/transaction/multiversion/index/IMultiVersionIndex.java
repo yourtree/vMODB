@@ -40,21 +40,19 @@ public interface IMultiVersionIndex {
     default boolean checkCondition(FilterContext filterContext, Object[] record){
         if(filterContext == null) return true;
         boolean conditionHolds = true;
-
         // the number of filters to apply
         int filterIdx = 0;
         // the filter index on which a given param (e.g., literals, zero, 1, 'SURNAME', etc.) should apply
         int biPredIdx = 0;
         // simple predicates, do not involve input params (i.e, NULL, NOT NULL, EXISTS?, etc)
         int predIdx = 0;
-
         while( conditionHolds && filterIdx < filterContext.filterTypes.size() ){
             int columnIndex = filterContext.filterColumns.get(filterIdx);
             Object val = record[columnIndex];
             // it is a literal passed to the query
             if(filterContext.filterTypes.get(filterIdx) == FilterType.BP) {
-                conditionHolds = filterContext.biPredicates.get(biPredIdx).
-                        apply(val, filterContext.biPredicateParams.get(biPredIdx));
+                conditionHolds = filterContext.biPredicates.get(biPredIdx)
+                        .apply(val, filterContext.biPredicateParams.get(biPredIdx));
                 biPredIdx++;
             } else {
                 conditionHolds = filterContext.predicates.get(predIdx).test( val );

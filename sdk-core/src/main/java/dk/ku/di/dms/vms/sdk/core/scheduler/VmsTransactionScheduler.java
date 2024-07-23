@@ -10,7 +10,6 @@ import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder.VmsTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
-import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;
@@ -62,9 +61,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     private final Collection<InboundEvent> localInputEvents;
 
-    // used to receive external signals that require the scheduler to pause and run tasks, e.g., checkpointing
-    private final ICheckpointEventHandler checkpointHandler;
-
     // used to identify in which VMS this scheduler is running
     private final String vmsIdentifier;
 
@@ -74,7 +70,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                                                 IVmsInternalChannels vmsChannels,
                                                 Map<String, VmsTransactionMetadata> transactionMetadataMap,
                                                 ITransactionManager transactionalHandler,
-                                                ICheckpointEventHandler checkpointHandler,
                                                 int vmsThreadPoolSize){
         LOGGER.log(INFO, vmsIdentifier+ ": Building transaction scheduler with thread pool size of "+ vmsThreadPoolSize);
         return new VmsTransactionScheduler(
@@ -82,16 +77,14 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 Executors.newWorkStealingPool(vmsThreadPoolSize),
                 vmsChannels,
                 transactionMetadataMap,
-                transactionalHandler,
-                checkpointHandler);
+                transactionalHandler);
     }
 
     private VmsTransactionScheduler(String vmsIdentifier,
                                     ExecutorService sharedTaskPool,
                                     IVmsInternalChannels vmsChannels,
                                     Map<String, VmsTransactionMetadata> transactionMetadataMap,
-                                    ITransactionManager transactionalHandler,
-                                    ICheckpointEventHandler checkpointHandler){
+                                    ITransactionManager transactionalHandler){
         super();
 
         this.vmsIdentifier = vmsIdentifier;
@@ -108,10 +101,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         this.vmsTransactionTaskBuilder = new VmsTransactionTaskBuilder(transactionalHandler, callback);
         this.transactionTaskMap.put( 0L, this.vmsTransactionTaskBuilder.buildFinished(0) );
         this.lastTidToTidMap = new HashMap<>();
-
         this.localInputEvents = new ArrayList<>(100000);
-
-        this.checkpointHandler = checkpointHandler;
     }
 
     /**
@@ -126,10 +116,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             try{
                 this.checkForNewEvents();
                 this.executeReadyTasks();
-                // FIXME hiding for now
-//                if( this.checkpointHandler.mustCheckpoint() ) {
-//                    this.checkpointHandler.checkpoint();
-//                }
             } catch(Exception e){
                 LOGGER.log(WARNING, this.vmsIdentifier+": Error on scheduler loop: "+e.getCause().getMessage());
             }

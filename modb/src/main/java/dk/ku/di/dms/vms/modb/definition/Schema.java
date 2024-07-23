@@ -112,6 +112,9 @@ public final class Schema {
         return this.columnOffset;
     }
 
+    /**
+     * {@return Return the size (in bytes) of a record complying to this schema}
+     */
     public int getRecordSize(){
         return this.recordSize;
     }

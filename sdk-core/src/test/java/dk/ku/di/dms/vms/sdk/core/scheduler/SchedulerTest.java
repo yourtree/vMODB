@@ -52,7 +52,7 @@ public class SchedulerTest {
         */
 
         VmsComplexTransactionScheduler scheduler = VmsComplexTransactionScheduler.build(
-                "test", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null, null);
+                "test", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null);
 
         Thread schedulerThread = new Thread(scheduler);
         schedulerThread.start();
@@ -77,7 +77,7 @@ public class SchedulerTest {
         // tricky to simulate we have a scheduler in other microservice.... we need a new scheduler because of the tid
         // could reset the tid to 0, but would need to synchronize to avoid exceptions
         scheduler = VmsComplexTransactionScheduler.build(
-                "vmsTest", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null, null);
+                "vmsTest", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null);
 
         schedulerThread = new Thread(scheduler);
         schedulerThread.start();

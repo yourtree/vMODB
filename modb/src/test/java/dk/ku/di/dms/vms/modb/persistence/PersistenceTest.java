@@ -1,6 +1,11 @@
 package dk.ku.di.dms.vms.modb.persistence;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.definition.Schema;
+import dk.ku.di.dms.vms.modb.definition.key.IntKey;
+import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
+import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -9,17 +14,21 @@ import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.Map;
 
 public class PersistenceTest {
 
-    private static jdk.internal.misc.Unsafe unsafe;
+    private static jdk.internal.misc.Unsafe UNSAFE;
 
     @BeforeClass
     public static void setUp(){
-        unsafe = MemoryUtils.UNSAFE;
-        assert unsafe != null;
+        UNSAFE = MemoryUtils.UNSAFE;
+        assert UNSAFE != null;
     }
 
     // private static final 10737418240
@@ -28,10 +37,38 @@ public class PersistenceTest {
     private static final long TEN_GB = ONE_GB * 10;
 
     @Test
-    public void testMemoryMapping(){
-        // must store this segment in the catalog
-        // MemorySegment segment = MemorySegment.allocateNative( ONE_GB * 10L, ResourceScope.globalScope() );
+    public void testMemoryMapping() throws IOException {
+        Schema schema = new Schema(new String[]{"id", "test"}, new DataType[]{ DataType.INT, DataType.STRING },
+                new int[]{ 0 }, null, false );
+        var fileName = "mapped_file_test.data";
+        Path path = Paths.get(fileName);
+        var fc = FileChannel.open(path,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.READ,
+                    StandardOpenOption.SPARSE,
+                    StandardOpenOption.WRITE
+                );
+        MemorySegment memorySegment = fc.map(FileChannel.MapMode.READ_WRITE, 0,
+                10L * schema.getRecordSize(), Arena.ofShared());
 
+        var bufCtx = new RecordBufferContext( memorySegment,10);
+        var index = new UniqueHashBufferIndex(bufCtx, schema, schema.getPrimaryKeyColumns());
+        for(int i = 1; i <= 10; i = i + 2){
+            index.insert(IntKey.of(i), new Object[] { i, "test" } );
+        }
+
+        Object[] recordRes = index.record(IntKey.of(3));
+        assert recordRes != null && ((String)recordRes[1]).contentEquals("test");
+
+        // test force now
+        bufCtx.force();
+        fc.close();
+        fc = FileChannel.open(path,
+                StandardOpenOption.READ);
+        var bb = ByteBuffer.allocate( 10 * schema.getRecordSize() );
+        int res = fc.read(bb);
+        assert res > 0;
     }
 
     @Test
@@ -109,7 +146,7 @@ public class PersistenceTest {
         mappedBuffer.putInt(10);
 
         // https://github.com/apache/flink/blob/master/flink-core/src/main/java/org/apache/flink/core/memory/MemoryUtils.java
-        unsafe.copyMemory( segment.address(), segment.address() + offsetToTest, Integer.BYTES );
+        UNSAFE.copyMemory( segment.address(), segment.address() + offsetToTest, Integer.BYTES );
 
         assert (buffers.get(2).getInt() == 10);
 

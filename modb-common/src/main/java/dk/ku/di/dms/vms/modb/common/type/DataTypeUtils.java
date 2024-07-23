@@ -15,7 +15,6 @@ public final class DataTypeUtils {
     private static final jdk.internal.misc.Unsafe UNSAFE = MemoryUtils.UNSAFE;
 
     public static Object getValue(DataType dt, long address){
-
         switch (dt) {
             case BOOL -> {
                 return UNSAFE.getBoolean(null, address);
@@ -27,13 +26,13 @@ public final class DataTypeUtils {
                 return UNSAFE.getChar(null, address);
             }
             case STRING -> {
-                char[] res = new char[DEFAULT_MAX_SIZE_STRING];
+                StringBuilder sb = new StringBuilder();
                 long currAddress = address;
                 for(int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
-                    res[i] = UNSAFE.getChar(null, currAddress);
+                    sb.append( UNSAFE.getChar(null, currAddress) );
                     currAddress += Character.BYTES;
                 }
-                return res;
+                return sb.toString();
             }
             case LONG, DATE -> {
                 return UNSAFE.getLong(null, address);
@@ -46,7 +45,6 @@ public final class DataTypeUtils {
             }
             default -> throw new IllegalStateException("Unknown data type");
         }
-
     }
 
     /**
@@ -106,15 +104,20 @@ public final class DataTypeUtils {
             case CHAR -> UNSAFE.putChar(null, address, (char)value);
             case STRING -> {
                 long currPos = address;
+                int i = 0;
                 if(value instanceof Character[] charArray) {
-                    for (int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
+                    int length = Math.min(charArray.length, DEFAULT_MAX_SIZE_STRING);
+                    while(i < length) {
                         UNSAFE.putChar(null, currPos, charArray[i]);
                         currPos += Character.BYTES;
+                        i++;
                     }
                 } else if (value instanceof String strValue){
-                    for (int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
+                    int length = Math.min(strValue.length(), DEFAULT_MAX_SIZE_STRING);
+                    while(i < length) {
                         UNSAFE.putChar(null, currPos, strValue.charAt(i));
                         currPos += Character.BYTES;
+                        i++;
                     }
                 }
             }
@@ -132,28 +135,23 @@ public final class DataTypeUtils {
     }
 
     public static void callWriteFunction(ByteBuffer buffer, DataType dt, Object value){
-
         switch (dt){
             case BOOL -> // byte is used. on unsafe, the boolean is used
                     buffer.put( (byte)value);
             case INT -> buffer.putInt( (int)value);
             case CHAR -> buffer.putChar( (char)value);
             case STRING -> {
-
                 int start = buffer.position();
                 if(value instanceof Character[] charArray) {
                     for (int i = 0; i < DEFAULT_MAX_SIZE_STRING && i < charArray.length; i++) {
                         buffer.putChar(charArray[i]);
                     }
                 } else if (value instanceof String strValue){
-
                     for (int i = 0; i < DEFAULT_MAX_SIZE_STRING && i < strValue.length(); i++) {
                         buffer.putChar(strValue.charAt(i));
                     }
                 }
-
                 buffer.position(start + (Character.BYTES * DEFAULT_MAX_SIZE_STRING));
-
             }
             case LONG, DATE -> buffer.putLong((long)value);
             case FLOAT -> buffer.putFloat( (float)value);
@@ -179,32 +177,35 @@ public final class DataTypeUtils {
         return sb.toString();
     }
 
-    public static DataType getDataTypeFromJavaType(Class<?> type){
-        if (int.class.equals(type)) {
+    public static DataType getColumnDataTypeFromAttributeType(Class<?> attributeType) {
+        String attributeCanonicalName = attributeType.getCanonicalName();
+        if (attributeCanonicalName.equalsIgnoreCase("int") || attributeType == Integer.class){
             return DataType.INT;
         }
-        if (long.class.equals(type)) {
-            return DataType.LONG;
-        }
-        if (Date.class.equals(type)) {
-            return DataType.DATE;
-        }
-        if (float.class.equals(type)) {
+        else if (attributeCanonicalName.equalsIgnoreCase("float") || attributeType == Float.class){
             return DataType.FLOAT;
         }
-        if (double.class.equals(type)) {
+        else if (attributeCanonicalName.equalsIgnoreCase("double") || attributeType == Double.class){
             return DataType.DOUBLE;
         }
-        if (String.class.equals(type)) {
-            return DataType.STRING;
-        }
-        if (char.class.equals(type)) {
+        else if (attributeCanonicalName.equalsIgnoreCase("char") || attributeType == Character.class){
             return DataType.CHAR;
         }
-        if (boolean.class.equals(type)) {
-            return DataType.BOOL;
+        else if (attributeCanonicalName.equalsIgnoreCase("long") || attributeType == Long.class){
+            return DataType.LONG;
         }
-        return null;
+        else if (attributeType == Date.class){
+            return DataType.DATE;
+        }
+        else if(attributeType == String.class){
+            return DataType.STRING;
+        }
+        else if(attributeType.isEnum()){
+            return DataType.ENUM;
+        }
+        else {
+            throw new IllegalStateException(attributeType.getCanonicalName() + " is not accepted as a column data type.");
+        }
     }
 
     public static Class<?> getJavaTypeFromDataType(DataType dataType) {

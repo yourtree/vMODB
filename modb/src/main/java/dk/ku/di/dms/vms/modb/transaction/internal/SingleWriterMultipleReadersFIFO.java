@@ -1,8 +1,5 @@
 package dk.ku.di.dms.vms.modb.transaction.internal;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-
 /**
  * A data structure that serves the only purpose of storing historical writes of a key
  * regarding an index. Assumptions:
@@ -18,16 +15,10 @@ import java.util.Deque;
  */
 public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
 
-    public static class Entry<K,V> implements Cloneable {
-        private K key;
-        private V val;
-
-        protected Entry<K,V> next;
-
-        public Entry(K key, V val){
-            this.key = key;
-            this.val = val;
-        }
+    public static class Entry<K,V> {
+        private final K key;
+        private final V val;
+        private volatile Entry<K,V> next;
 
         public Entry(K key, V val, Entry<K,V> next){
             this.key = key;
@@ -43,41 +34,23 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
             return this.val;
         }
 
-        @Override
-        @SuppressWarnings("unchecked")
-        public Entry<K,V> clone() throws CloneNotSupportedException {
-            return  (Entry<K, V>) super.clone();
-        }
-
-        public void recycle(K key, V val){
-            this.key = key;
-            this.val = val;
-        }
-
     }
 
-    // TODO shouldn't this be volatile?
-    private transient Entry<K,V> first;
+    private volatile Entry<K,V> first;
 
     public void put(K key, V val){
         // always insert in the front
         Entry<K,V> currFirst = this.first;
-        Entry<K,V> newEntry;
-
-        if(!this.removedEntries.isEmpty()) {
-            newEntry = this.removedEntries.pop();
-            newEntry.next = currFirst;
-        } else {
-            newEntry = new Entry<>(key, val, currFirst);
-        }
-        this.first = newEntry;
+        this.first = new Entry<>(key, val, currFirst);
     }
 
     /**
      * Removes the head of the data structure
      */
+    @SuppressWarnings("UnnecessaryLocalVariable")
     public void poll(){
-        this.first = this.first.next;
+        var next = this.first.next;
+        this.first = next;
     }
 
     /**
@@ -94,7 +67,6 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
             if(curr == null) break;
             cmp = curr.key.compareTo(key);
         }
-
         if(cmp <= 0) return curr;
         return null;
     }
@@ -123,37 +95,28 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
      * Method is used to remove TIDs that cannot be seen anymore
      * @param key node identifier
      */
-    public void removeUpToEntry(K key){
-        Entry<K,V> currFloorEntry = getHigherEntry(key);
-        if(currFloorEntry == null) return;
+    public Entry<K,V> removeUpToEntry(K key){
+        final Entry<K,V> entryToReturn = this.getHigherEntry(key);
+        Entry<K,V> currFloorEntry = entryToReturn;
         Entry<K,V> auxEntry;
-        try {
-            auxEntry = currFloorEntry.clone();
-        } catch (CloneNotSupportedException e) {
-            throw new RuntimeException(e);
+        while(currFloorEntry != null){
+            auxEntry = currFloorEntry.next;
+            // set next to null to lose reference
+            currFloorEntry.next = null;
+            currFloorEntry = auxEntry;
         }
-        currFloorEntry.next = null;
-        while(auxEntry != null){
-            this.removedEntries.add( auxEntry );
-            auxEntry = auxEntry.next;
-        }
+        return entryToReturn;
     }
 
     public void clear(){
         var current = this.first;
         if(current == null) return;
         var next = current.next;
-        current.next = null;
-        this.removedEntries.add(current);
         while (next != null){
             current = next;
             next = current.next;
-            current.next = null;
-            this.removedEntries.add(current);
         }
     }
-
-    private final Deque<Entry<K,V>> removedEntries = new ArrayDeque<>();
 
     @Override
     public String toString(){

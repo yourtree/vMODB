@@ -16,7 +16,6 @@ import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
-import dk.ku.di.dms.vms.sdk.core.scheduler.handlers.ICheckpointEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
@@ -73,7 +72,7 @@ public final class VmsEventHandler extends StoppableRunnable {
     private final Map<Integer, ConnectionMetadata> producerConnectionMetadataMap;
 
     /** For checkpointing the state */
-    private final ITransactionManager transactionalHandler;
+    private final ITransactionManager transactionManager;
 
     /** SERIALIZATION & DESERIALIZATION **/
     private final IVmsSerdesProxy serdesProxy;
@@ -108,7 +107,8 @@ public final class VmsEventHandler extends StoppableRunnable {
      */
     private BatchContext currentBatch;
 
-    // metadata about all non-committed batches. when a batch commit finishes, it is removed from this map
+    // metadata about all non-committed batches.
+    // when a batch commit finishes, it should be removed from this map
     private final Map<Long, BatchContext> batchContextMap;
 
     /**
@@ -116,12 +116,16 @@ public final class VmsEventHandler extends StoppableRunnable {
      * The scheduler is batch-agnostic. That means in order
      * to progress with the batch in the event handler, we need to check if the
      * batch has completed using the number of TIDs executed.
+     * It must be separated from batchContextMap due to different timing of batch context sending
      */
-    public final Map<Long,Integer> numberOfTIDsProcessedPerBatch;
+    public final Map<Long, BatchMetadata> volatileBatchMetadataMap;
+
+    public static final class BatchMetadata {
+        public int numberTIDsExecuted;
+        public long maxTidExecuted;
+    }
 
     private final Map<Long, Long> batchToNextBatchMap;
-
-    private final ICheckpointEventHandler checkpointEventHandler;
 
     /**
      * It is necessary a way to store the tid received to a
@@ -164,7 +168,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     private VmsEventHandler(VmsNode me,
                             VmsRuntimeMetadata vmsMetadata,
-                            ITransactionManager transactionalHandler,
+                            ITransactionManager transactionManager,
                             VmsEmbedInternalChannels vmsInternalChannels,
                             VmsHandlerOptions options,
                             ILoggingHandler loggingHandler,
@@ -198,12 +202,11 @@ public final class VmsEventHandler extends StoppableRunnable {
         this.currentBatch = BatchContext.buildAsStarter(me.batch, me.previousBatch, me.numberOfTIDsCurrentBatch);
         this.currentBatch.setStatus(BatchContext.BATCH_COMMITTED);
         this.batchContextMap = new ConcurrentHashMap<>();
-        this.numberOfTIDsProcessedPerBatch = new HashMap<>();
+        this.volatileBatchMetadataMap = new HashMap<>();
         this.batchToNextBatchMap = new ConcurrentHashMap<>();
         this.tidToPrecedenceMap = new ConcurrentHashMap<>();
 
-        this.transactionalHandler = transactionalHandler;
-        this.checkpointEventHandler = new CheckpointEventHandlerImpl();
+        this.transactionManager = transactionManager;
 
         // set leader off at the start
         this.leader = new ServerNode("localhost",0);
@@ -218,14 +221,11 @@ public final class VmsEventHandler extends StoppableRunnable {
     @Override
     public void run() {
         LOGGER.log(INFO,this.me.identifier+": Event handler has started");
-
         // setup accept since we need to accept connections from the coordinator and other VMSs
         this.serverSocket.accept(null, new AcceptCompletionHandler());
         LOGGER.log(INFO,this.me.identifier+": Accept handler has been setup");
-
         // init event loop
         this.eventLoop();
-
         this.failSafeClose();
         LOGGER.log(INFO,this.me.identifier+": Event handler has finished execution.");
     }
@@ -269,6 +269,19 @@ public final class VmsEventHandler extends StoppableRunnable {
     }
 
     /**
+     * From <a href="https://docs.oracle.com/javase/tutorial/networking/sockets/clientServer.html">...</a>
+     * "The Java runtime automatically closes the input and output streams, the client socket,
+     * and the server socket because they have been created in the try-with-resources statement."
+     * Which means that different tests must bind to different addresses
+     */
+    private void failSafeClose(){
+        // safe close
+        try { if(this.serverSocket.isOpen()) this.serverSocket.close(); } catch (IOException ignored) {
+            LOGGER.log(WARNING,this.me.identifier+": Could not close socket");
+        }
+    }
+
+    /**
      * A thread that basically writes events to other VMSs and the Leader
      * Retrieves data from all output queues
      * All output queues must be read in order to send their data
@@ -306,9 +319,14 @@ public final class VmsEventHandler extends StoppableRunnable {
                     OutboundEventResult outputEvent = txResult.getOutboundEventResult();
 
                     // scheduler can be way ahead of the last batch committed
-                    this.numberOfTIDsProcessedPerBatch.put(outputEvent.batch(),
-                        this.numberOfTIDsProcessedPerBatch.getOrDefault(outputEvent.batch(), 0)
-                                + 1);
+                    BatchMetadata batchMetadata = this.volatileBatchMetadataMap.get(outputEvent.batch());
+                    if(batchMetadata == null){
+                        batchMetadata = new BatchMetadata();
+                    }
+                    batchMetadata.numberTIDsExecuted += 1;
+                    if(batchMetadata.maxTidExecuted < outputEvent.tid()){
+                        batchMetadata.maxTidExecuted = outputEvent.tid();
+                    }
 
                     // it is a void method that executed, nothing to send
                     if (outputEvent.outputQueue() == null) continue;
@@ -345,6 +363,14 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
     }
 
+    private boolean currentBatchFinishedAllTIDs(){
+        BatchMetadata batchMetadata = this.volatileBatchMetadataMap.get(this.currentBatch.batch);
+        if(batchMetadata == null){
+            return false;
+        }
+        return this.currentBatch.numberOfTIDsBatch == batchMetadata.numberTIDsExecuted;
+    }
+
     /**
      * It may be the case that, due to an abort of the last tid, the last tid changes
      * the current code is not incorporating that
@@ -355,56 +381,19 @@ public final class VmsEventHandler extends StoppableRunnable {
             long nextBatchOffset = this.batchToNextBatchMap.get( this.currentBatch.batch );
             this.currentBatch = this.batchContextMap.get(nextBatchOffset);
         }
-
         // have we processed all the TIDs of this batch?
-        if(this.currentBatch.isOpen() && this.currentBatch.numberOfTIDsBatch ==
-                this.numberOfTIDsProcessedPerBatch.getOrDefault(this.currentBatch.batch, 0)){
-
+        if(this.currentBatch.isOpen() && this.currentBatchFinishedAllTIDs()){
             LOGGER.log(DEBUG,this.me.identifier+": All TIDs for the current batch ("+this.currentBatch.batch+") have been executed");
-
             // many outputs from the same transaction may arrive here, but can only send the batch commit once
             this.currentBatch.setStatus(BatchContext.BATCH_COMPLETED);
-
             // if terminal, must send batch complete
             if(this.currentBatch.terminal) {
                 // LOGGER.log(INFO,this.me.identifier+": Requesting leader worker to send batch ("+this.currentBatch.batch+") complete");
                 // must be queued in case leader is off and comes back online
                 this.leaderWorker.queueMessage(BatchComplete.of(this.currentBatch.batch, this.me.identifier));
             }
-
-            // FIXME remove?
             // this is necessary to move the batch to committed and allow the batches to progress
-            // this.vmsInternalChannels.batchCommitCommandQueue().add( DUMB_OBJECT );
-        }
-    }
-
-    /**
-     * From <a href="https://docs.oracle.com/javase/tutorial/networking/sockets/clientServer.html">...</a>
-     * "The Java runtime automatically closes the input and output streams, the client socket,
-     * and the server socket because they have been created in the try-with-resources statement."
-     * Which means that different tests must bind to different addresses
-     */
-    private void failSafeClose(){
-        // safe close
-        try { if(this.serverSocket.isOpen()) this.serverSocket.close(); } catch (IOException ignored) {
-            LOGGER.log(WARNING,this.me.identifier+": Could not close socket");
-        }
-    }
-
-    /**
-     * A callback from the transaction scheduler
-     * This is a way to coordinate with the transaction scheduler
-     * a checkpoint signal emitted by the coordinator
-     */
-    private final class CheckpointEventHandlerImpl implements ICheckpointEventHandler {
-        @Override
-        public void checkpoint() {
-            vmsInternalChannels.batchCommitCommandQueue().remove();
-            VmsEventHandler.this.checkpoint();
-        }
-        @Override
-        public boolean mustCheckpoint() {
-            return !vmsInternalChannels.batchCommitCommandQueue().isEmpty();
+            this.checkpoint();
         }
     }
 
@@ -415,7 +404,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         // of course, I do not need to stop the scheduler on commit
         // I need to make access to the data versions data race free
         // so new transactions get data versions from the version map or the store
-        this.transactionalHandler.checkpoint();
+        this.transactionManager.checkpoint(this.volatileBatchMetadataMap.get(this.currentBatch.batch).maxTidExecuted);
         this.currentBatch.setStatus(BatchContext.BATCH_COMMITTED);
         // it may not be necessary. the leader has already moved on at this point
         if(INFORM_BATCH_ACK) {
@@ -428,7 +417,6 @@ public final class VmsEventHandler extends StoppableRunnable {
      * @param outputEvent the event to be sent to the respective consumer vms
      */
     private void processOutputEvent(OutboundEventResult outputEvent, String precedenceMap){
-
         Class<?> clazz = this.vmsMetadata.queueToEventMap().get(outputEvent.outputQueue());
         String objStr = this.serdesProxy.serialize(outputEvent.output(), clazz);
 
@@ -1156,14 +1144,6 @@ public final class VmsEventHandler extends StoppableRunnable {
             exc.printStackTrace(System.out);
             this.setUpNewRead();
         }
-    }
-
-    public ICheckpointEventHandler schedulerHandler() {
-        return this.checkpointEventHandler;
-    }
-
-    public ITransactionManager transactionalHandler(){
-        return this.transactionalHandler;
     }
 
 }

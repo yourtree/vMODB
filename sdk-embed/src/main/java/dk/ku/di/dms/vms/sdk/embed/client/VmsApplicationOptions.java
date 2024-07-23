@@ -29,6 +29,8 @@ public final class VmsApplicationOptions {
 
     private final boolean logging;
 
+    private final boolean checkpointing;
+
     public static VmsApplicationOptions build(String host, int port, String[] packages) {
         Properties properties = ConfigUtils.loadProperties();
         int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
@@ -39,6 +41,7 @@ public final class VmsApplicationOptions {
         int numVmsWorkers = Integer.parseInt(properties.getProperty("num_vms_workers"));
         int maxSleep = Integer.parseInt(properties.getProperty("max_sleep"));
         boolean logging = Boolean.parseBoolean(properties.getProperty("logging"));
+        boolean checkpointing = Boolean.parseBoolean(properties.getProperty("checkpointing"));
 
         return new VmsApplicationOptions(
                 host,
@@ -51,12 +54,14 @@ public final class VmsApplicationOptions {
                 networkSendTimeout,
                 soBufferSize,
                 logging,
+                checkpointing,
                 maxSleep);
     }
 
     private VmsApplicationOptions(String host, int port, String[] packages,
                                   int networkBufferSize, int networkThreadPoolSize, int numVmsWorkers,
-                                  int vmsThreadPoolSize, int networkSendTimeout, int osBufferSize, boolean logging, int maxSleep) {
+                                  int vmsThreadPoolSize, int networkSendTimeout, int osBufferSize,
+                                  boolean logging, boolean checkpointing, int maxSleep) {
         this.host = host;
         this.port = port;
         this.packages = packages;
@@ -67,6 +72,7 @@ public final class VmsApplicationOptions {
         this.networkSendTimeout = networkSendTimeout;
         this.osBufferSize = osBufferSize;
         this.logging = logging;
+        this.checkpointing = checkpointing;
         this.maxSleep = maxSleep;
     }
 
@@ -113,4 +119,9 @@ public final class VmsApplicationOptions {
     public boolean isLogging() {
         return this.logging;
     }
+
+    public boolean isCheckpointing() {
+        return this.checkpointing;
+    }
+
 }
