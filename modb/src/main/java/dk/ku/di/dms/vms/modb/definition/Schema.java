@@ -119,6 +119,10 @@ public final class Schema {
         return this.recordSize;
     }
 
+    public int getRecordSizeWithHeader(){
+        return this.recordSize + RECORD_HEADER;
+    }
+
     public int getRecordSizeWithoutHeader(){
         return this.recordSize - RECORD_HEADER;
     }

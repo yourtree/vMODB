@@ -36,7 +36,7 @@ public final class Table {
      * Why foreign keys is on table and not on {@link Schema}?
      * (i) To avoid circular dependence schema <-> table.
      *      This way Schema does not know about the details of a Table
-     *      (e.g., the primary index structure, the table name, the secondary indexes, etc).
+     *      (e.g., the primary index structure, the table name, the secondary indexes, etc.).
      * (ii) The planner needs the foreign keys in order to define an optimal plan.
      *      As the table carries the PK, the table holds references to other tables.
      * (iii) Foreign key necessarily require coordination across different indexes that are maintaining records.

@@ -319,10 +319,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     OutboundEventResult outputEvent = txResult.getOutboundEventResult();
 
                     // scheduler can be way ahead of the last batch committed
-                    BatchMetadata batchMetadata = this.volatileBatchMetadataMap.get(outputEvent.batch());
-                    if(batchMetadata == null){
-                        batchMetadata = new BatchMetadata();
-                    }
+                    BatchMetadata batchMetadata = this.volatileBatchMetadataMap.computeIfAbsent(outputEvent.batch(), k -> new BatchMetadata());
                     batchMetadata.numberTIDsExecuted += 1;
                     if(batchMetadata.maxTidExecuted < outputEvent.tid()){
                         batchMetadata.maxTidExecuted = outputEvent.tid();

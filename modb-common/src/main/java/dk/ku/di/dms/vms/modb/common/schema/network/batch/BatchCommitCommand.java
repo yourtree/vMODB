@@ -27,9 +27,7 @@ public final class BatchCommitCommand {
         return new Payload(batch, previousBatch, numberOfTIDsBatch);
     }
 
-    public record Payload(
-            long batch, long previousBatch, int numberOfTIDsBatch
-    ){
+    public record Payload(long batch, long previousBatch, int numberOfTIDsBatch){
         @Override
         public String toString() {
             return "{"

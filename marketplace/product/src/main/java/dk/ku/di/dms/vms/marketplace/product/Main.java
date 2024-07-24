@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Date;
 import java.util.concurrent.ForkJoinPool;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.PRODUCT_HTTP_PORT;
@@ -27,37 +28,38 @@ public final class Main {
 
     private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
-    public static void main(String[] ignoredArgs) {
-
+    public static VmsApplication init(){
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 "localhost",
                 Constants.PRODUCT_VMS_PORT, new String[]{
-                "dk.ku.di.dms.vms.marketplace.product",
-                "dk.ku.di.dms.vms.marketplace.common"
-        });
-
+                        "dk.ku.di.dms.vms.marketplace.product",
+                        "dk.ku.di.dms.vms.marketplace.common"
+                });
         // initialize threads
         try {
             VmsApplication vms = VmsApplication.build(options);
             vms.start();
-
             // initialize HTTP server for data ingestion
             System.setProperty("sun.net.httpserver.nodelay","true");
             HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", PRODUCT_HTTP_PORT), 0);
             httpServer.createContext("/product", new ProductHttpHandler(vms));
             httpServer.setExecutor(ForkJoinPool.commonPool());
             httpServer.start();
-
             LOGGER.log(INFO,"Product HTTP Server initialized");
+            return vms;
         } catch (Exception e){
             throw new RuntimeException(e);
         }
     }
 
+    public static void main(String[] ignoredArgs) {
+        init();
+    }
+
     private static class ProductHttpHandler implements HttpHandler {
         private final Table table;
         private final AbstractProxyRepository<Product.ProductId, Product> repository;
-        private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+        private static final IVmsSerdesProxy SERDES = VmsSerdesProxyBuilder.build();
 
         @SuppressWarnings("unchecked")
         public ProductHttpHandler(VmsApplication vms){
@@ -67,18 +69,18 @@ public final class Main {
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            switch (exchange.getRequestMethod()) {
-                case "GET": {
-                    String[] split = exchange.getRequestURI().toString().split("/");
-                    int sellerId = Integer.parseInt(split[split.length - 2]);
-                    int productId = Integer.parseInt(split[split.length - 1]);
-
-                    Object[] obj = new Object[2];
-                    obj[0] = sellerId;
-                    obj[1] = productId;
-                    IKey key = CompositeKey.of( obj );
-                    // bypass transaction manager
-                    Object[] record = this.table.underlyingPrimaryKeyIndex().lookupByKey(key);
+            try {
+                switch (exchange.getRequestMethod()) {
+                    case "GET": {
+                        String[] split = exchange.getRequestURI().toString().split("/");
+                        int sellerId = Integer.parseInt(split[split.length - 2]);
+                        int productId = Integer.parseInt(split[split.length - 1]);
+                        Object[] obj = new Object[2];
+                        obj[0] = sellerId;
+                        obj[1] = productId;
+                        IKey key = CompositeKey.of(obj);
+                        // bypass transaction manager
+                        Object[] record = this.table.underlyingPrimaryKeyIndex().lookupByKey(key);
 
                     /*
                     // the statement won't work because this is not part of transaction
@@ -86,43 +88,54 @@ public final class Main {
                     // var entity = this.repository.lookupByKey(id);
                     */
 
-                    try{
-                        var entity = this.repository.parseObjectIntoEntity(record);
-                        OutputStream outputStream = exchange.getResponseBody();
-                        exchange.sendResponseHeaders(200, 0);
-                        outputStream.write( entity.toString().getBytes(StandardCharsets.UTF_8) );
-                        outputStream.close();
-                    } catch(RuntimeException e) {
-                        OutputStream outputStream = exchange.getResponseBody();
-                        exchange.sendResponseHeaders(404, 0);
-                        outputStream.close();
+                        try {
+                            var entity = this.repository.parseObjectIntoEntity(record);
+                            OutputStream outputStream = exchange.getResponseBody();
+                            exchange.sendResponseHeaders(200, 0);
+                            outputStream.write(entity.toString().getBytes(StandardCharsets.UTF_8));
+                            outputStream.close();
+                        } catch (RuntimeException e) {
+                            OutputStream outputStream = exchange.getResponseBody();
+                            exchange.sendResponseHeaders(404, 0);
+                            outputStream.close();
+                        }
+                        break;
                     }
-                    break;
-                }
-                case "POST": {
-                    String str = new String( exchange.getRequestBody().readAllBytes() );
+                    case "POST": {
+                        String str = new String(exchange.getRequestBody().readAllBytes());
+                        LOGGER.log(INFO, "APP: POST request for product: \n" + str);
+                        Product product = SERDES.deserialize(str, Product.class);
+                        Object[] obj = this.repository.extractFieldValuesFromEntityObject(product);
+                        IKey key = KeyUtils.buildRecordKey(this.table.schema().getPrimaryKeyColumns(), obj);
 
-                    LOGGER.log(INFO, "APP: POST request for product: \n" + str);
+                        // created and update at
+                        Date dt = new Date();
+                        obj[obj.length - 1] = dt;
+                        obj[obj.length - 2] = dt;
+                        this.table.underlyingPrimaryKeyIndex().insert(key, obj);
 
-                    Product product = serdes.deserialize(str, Product.class);
+                        exchange.sendResponseHeaders(200, 0);
+                        exchange.getResponseBody().close();
 
-                    Object[] obj = this.repository.extractFieldValuesFromEntityObject(product);
-                    IKey key = KeyUtils.buildRecordKey( this.table.schema().getPrimaryKeyColumns(), obj );
-                    this.table.underlyingPrimaryKeyIndex().insert(key, obj);
-
-                    // response
-                    exchange.sendResponseHeaders(200, 0);
-                    exchange.getResponseBody().close();
-                    break;
-                }
-                default : {
-                    // failed response
-                    OutputStream outputStream = exchange.getResponseBody();
-                    exchange.sendResponseHeaders(404, 0);
-                    outputStream.close();
+                        LOGGER.log(INFO, "APP: POST request suceeded for product: \n" + str);
+                        break;
+                    }
+                    default: {
+                        failClose(exchange);
+                    }
                 }
             }
-
+            catch (Exception e){
+                failClose(exchange);
+            }
         }
+
+        private static void failClose(HttpExchange exchange ) throws IOException {
+            // failed response
+            OutputStream outputStream = exchange.getResponseBody();
+            exchange.sendResponseHeaders(404, 0);
+            outputStream.close();
+        }
+
     }
 }

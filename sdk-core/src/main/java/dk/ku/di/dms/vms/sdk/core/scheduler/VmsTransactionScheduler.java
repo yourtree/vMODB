@@ -131,7 +131,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
             // my previous has sent the event already?
             VmsTransactionTask task = transactionTaskMap.get(outboundEventResult.tid());
-            var resultToQueue = new VmsTransactionResult(
+            VmsTransactionResult resultToQueue = new VmsTransactionResult(
                     outboundEventResult.tid(),
                     outboundEventResult);
             vmsChannels.transactionOutputQueue().add(resultToQueue);

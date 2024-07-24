@@ -213,11 +213,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 return operationSet.lastWriteType != WriteType.DELETE ? operationSet.lastVersion : null;
             }
         }
-        // it is a readonly
-        if(this.primaryKeyIndex.exists(key)) {
-            return this.primaryKeyIndex.lookupByKey(key);
-        }
-        return null;
+        return this.primaryKeyIndex.lookupByKey(key);
     }
 
     /**
@@ -371,11 +367,20 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         txCtx.writeSet.clear();
     }
 
+    public void garbageCollection(long maxTid){
+        for(var key : this.keysToFlush){
+            OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
+            operationSetOfKey.updateHistoryMap.removeUpToEntry(maxTid);
+        }
+        this.keysToFlush.clear();
+    }
+
     public void checkpoint(long maxTid){
         for(var key : this.keysToFlush){
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
+            if(operationSetOfKey == null) continue;
             var entry = operationSetOfKey.updateHistoryMap.removeUpToEntry(maxTid);
-            assert entry != null;
+            if (entry == null) continue;
             switch (operationSetOfKey.lastWriteType){
                 case UPDATE -> this.primaryKeyIndex.update(key, entry.val().record);
                 case INSERT -> this.primaryKeyIndex.insert(key, entry.val().record);

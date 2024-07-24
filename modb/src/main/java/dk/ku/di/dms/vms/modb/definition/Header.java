@@ -5,7 +5,7 @@ package dk.ku.di.dms.vms.modb.definition;
  */
 public final class Header {
 
-    public static final int SIZE = 1;
+    public static final int SIZE = Byte.BYTES;
 
     public static final boolean ACTIVE = true;
     public static final boolean INACTIVE = false;

@@ -7,6 +7,7 @@ import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
+import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
@@ -40,6 +41,9 @@ import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.reflect.*;
+import java.nio.channels.FileChannel;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -51,17 +55,15 @@ public final class EmbedMetadataLoader {
 
     private static final System.Logger LOGGER = System.getLogger(EmbedMetadataLoader.class.getName());
 
-    private static final boolean IN_MEMORY_STORAGE = true;
+    private static final boolean SEC_IDX_IN_MEMORY_STORAGE = true;
 
     public static Map<String, Object> loadRepositoryClasses(Set<Class<?>> vmsClasses,
                                                           Map<Class<?>, String> entityToTableNameMap,
                                                           Map<String, Table> catalog,
-                                                          OperationalAPI operationalAPI) throws InvocationTargetException, InstantiationException, IllegalAccessException, ClassNotFoundException, NoSuchMethodException {
+                                                          OperationalAPI operationalAPI) throws InvocationTargetException, InstantiationException, IllegalAccessException, ClassNotFoundException {
         Map<String, Object> tableToRepositoryMap = new HashMap<>();
         for(Class<?> clazz : vmsClasses) {
-
             String clazzName = clazz.getCanonicalName();
-
             Class<?> cls = Class.forName(clazzName);
             Constructor<?>[] constructors = cls.getDeclaredConstructors();
             Constructor<?> constructor = constructors[0];
@@ -109,14 +111,11 @@ public final class EmbedMetadataLoader {
                         operationalAPI,
                         repositoryQueriesMap
                 );
-
                 tableToRepositoryMap.put(tableName, instance);
-
             }
         }
         return tableToRepositoryMap;
     }
-
 
     /**
      * Key: clazzName (annotated with @Microservice)
@@ -128,30 +127,20 @@ public final class EmbedMetadataLoader {
             throws ClassNotFoundException {
         Map<String, List<Object>> repositoryClassMap = new HashMap<>();
         for(Class<?> clazz : vmsClasses) {
-
             String clazzName = clazz.getCanonicalName();
-
             Class<?> cls = Class.forName(clazzName);
             Constructor<?>[] constructors = cls.getDeclaredConstructors();
             Constructor<?> constructor = constructors[0];
-
             // the IRepository required for this vms class
             Class<?>[] repositoryTypes = constructor.getParameterTypes();
             List<Object> proxies = new ArrayList<>(repositoryTypes.length);
-
             for (Class<?> repositoryType : repositoryTypes) {
-
                 Type[] types = getPkAndEntityTypesFromRepositoryClazz(repositoryType);
-
                 Class<?> entityClazz = (Class<?>) types[1];
-
                 String tableName = entityToTableNameMap.get(entityClazz);
-
                 Object instance = tableToRepositoryMap.get(tableName);
-
                 proxies.add(instance);
             }
-
             // add to repository class map
             repositoryClassMap.put( clazzName, proxies );
         }
@@ -174,8 +163,9 @@ public final class EmbedMetadataLoader {
             List<PartialIndexMetadata> partialIndexMetadataList){}
 
     public static Map<String, Table> loadCatalog(Map<String, VmsDataModel> vmsDataModelMap,
-                                                 Map<Class<?>, String> entityToTableNameMap) throws NoSuchFieldException {
-
+                                                 Map<Class<?>, String> entityToTableNameMap,
+                                                 boolean isCheckpointing,
+                                                 int maxRecords) throws NoSuchFieldException {
         Map<String, Table> catalog = new HashMap<>(vmsDataModelMap.size());
         Map<VmsDataModel, SchemaMapping> dataSchemaToPkMap = new HashMap<>(vmsDataModelMap.size());
 
@@ -230,7 +220,7 @@ public final class EmbedMetadataLoader {
         for (var entry : dataSchemaToPkMap.entrySet()) {
 
             Schema schema = entry.getValue().schema();
-            PrimaryIndex consistentIndex = createPrimaryIndex(entry.getKey().tableName, schema);
+            PrimaryIndex consistentIndex = createPrimaryIndex(entry.getKey().tableName, schema, isCheckpointing, maxRecords);
             tableToPrimaryIndexMap.put(entry.getKey().tableName, consistentIndex);
 
             // normal indexes (i.e., non partial) and foreign key indexes go here?
@@ -321,7 +311,7 @@ public final class EmbedMetadataLoader {
     }
 
     private static ReadWriteIndex<IKey> createUniqueIndex(Schema schema, int[] columnsIndex, String indexName){
-        if(IN_MEMORY_STORAGE){
+        if(SEC_IDX_IN_MEMORY_STORAGE){
             return new UniqueHashMapIndex(schema, columnsIndex);
         }
         RecordBufferContext recordBufferContext = loadRecordBuffer(10, schema.getRecordSize(), indexName);
@@ -329,7 +319,7 @@ public final class EmbedMetadataLoader {
     }
 
     private static ReadWriteIndex<IKey> createNonUniqueIndex(Schema schema, int[] columnsIndex, String indexName){
-        if(IN_MEMORY_STORAGE){
+        if(SEC_IDX_IN_MEMORY_STORAGE){
             return new NonUniqueHashMapIndex(schema, columnsIndex);
         } else {
             OrderedRecordBuffer[] buffers = loadOrderedBuffers(MemoryUtils.DEFAULT_NUM_BUCKETS, MemoryUtils.DEFAULT_PAGE_SIZE, indexName);
@@ -356,17 +346,21 @@ public final class EmbedMetadataLoader {
         return buffers;
     }
 
-    private static PrimaryIndex createPrimaryIndex(String fileName, Schema schema) {
-        if(IN_MEMORY_STORAGE){
+    private static PrimaryIndex createPrimaryIndex(String fileName, Schema schema, boolean isCheckpointing, int maxRecords) {
+        if(isCheckpointing){
+            // map this to a file, so whenever a batch commit event arrives, it can trigger checkpointing the entire file
+            RecordBufferContext recordBufferContext = loadRecordBuffer(maxRecords, schema.getRecordSizeWithHeader(), fileName);
+            UniqueHashBufferIndex pkIndex = new UniqueHashBufferIndex(recordBufferContext, schema, schema.getPrimaryKeyColumns());
+            if(schema.isPrimaryKeyAutoGenerated()) {
+                return new PrimaryIndex(pkIndex, new IntegerPrimaryKeyGenerator());
+            } else {
+                return new PrimaryIndex(pkIndex);
+            }
+        } else {
             if(schema.isPrimaryKeyAutoGenerated()){
                 return new PrimaryIndex(new UniqueHashMapIndex(schema, schema.getPrimaryKeyColumns()), new IntegerPrimaryKeyGenerator());
             }
             return new PrimaryIndex(new UniqueHashMapIndex(schema, schema.getPrimaryKeyColumns()));
-        } else {
-            // map this to a file, so whenever a batch commit event arrives, it can trigger checkpointing the entire file
-            RecordBufferContext recordBufferContext = loadRecordBuffer(10, schema.getRecordSize(), fileName);
-            UniqueHashBufferIndex pkIndex = new UniqueHashBufferIndex(recordBufferContext, schema, schema.getPrimaryKeyColumns());
-            return new PrimaryIndex(pkIndex);
         }
     }
 
@@ -401,51 +395,48 @@ public final class EmbedMetadataLoader {
         return new OrderedRecordBuffer(appendOnlyBuffer);
     }
 
+    /**
+     * Must consider the header in the record size
+     */
     private static RecordBufferContext loadRecordBuffer(int maxNumberOfRecords, int recordSize, String append){
         long sizeInBytes = (long) maxNumberOfRecords * recordSize;
         try {
             MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, append);
             return new RecordBufferContext(segment, maxNumberOfRecords);
         } catch (Exception e){
-            LOGGER.log(WARNING, "Could not map file. Resorting to direct memory allocation attempt: "+e.getMessage());
+            LOGGER.log(WARNING, "Could not map file. Resorting to direct memory allocation attempt: \n"+e);
             try (Arena arena = Arena.ofShared()) {
                 return new RecordBufferContext(arena.allocate(sizeInBytes), maxNumberOfRecords);
             }
         }
     }
 
-    private static MemorySegment mapFileIntoMemorySegment(long bytes, String append) {
-        String userHome = System.getProperty("user.home");
-        if(userHome == null){
-            LOGGER.log(WARNING, "User home directory is not set in the environment. Resorting to /usr/local/lib");
-            userHome = "/usr/local/lib";
-        }
-        String filePath = userHome + "/vms/" + append;
+    private static MemorySegment mapFileIntoMemorySegment(long bytes, String fileName) {
+        String userHome = ConfigUtils.getUserHome();
+        String filePath = userHome + "/vms/" + fileName + ".data";
         LOGGER.log(INFO, "Attempt to delete existing file in directory: "+filePath);
         File file = new File(filePath);
         if (file.exists()) {
             if(!file.delete()) throw new IllegalStateException("File can not be deleted");
         }
-
         LOGGER.log(INFO, "Attempt to create new file in directory: "+filePath);
-
         if(file.getParentFile().mkdirs()){
             LOGGER.log(INFO, "Parent directory required being created.");
         } else {
-            LOGGER.log(INFO, "Parent directory does not need to be created.");
+            LOGGER.log(INFO, "Parent directory did not need being created.");
         }
-
         try {
-            if(file.createNewFile()) {
-                LOGGER.log(INFO, "Attempt to create new file in directory: "+filePath+" completed successfully.");
-                try (Arena arena = Arena.ofShared()) {
-                    return arena.allocate(bytes);
-                }
-            }
+            FileChannel fc = FileChannel.open(Paths.get(filePath),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.SPARSE,
+                    StandardOpenOption.READ,
+                    StandardOpenOption.WRITE);
+            LOGGER.log(INFO, "Attempt to create new file in directory: "+filePath+" completed successfully.");
+            return fc.map(FileChannel.MapMode.READ_WRITE, 0, bytes, Arena.ofShared());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        throw new IllegalStateException("File could not be created");
     }
 
 }

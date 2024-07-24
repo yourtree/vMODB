@@ -379,9 +379,14 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      */
     @Override
     public void checkpoint(long maxTid){
-        if(!this.checkpointing) return;
-        for(var index : this.primaryIndexes){
-            index.checkpoint(maxTid);
+        if(this.checkpointing) {
+            for (var index : this.primaryIndexes) {
+                index.checkpoint(maxTid);
+            }
+        } else {
+            for (var index : this.primaryIndexes) {
+                index.garbageCollection(maxTid);
+            }
         }
     }
 

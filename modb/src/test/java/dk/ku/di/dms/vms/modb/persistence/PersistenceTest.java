@@ -32,7 +32,7 @@ public class PersistenceTest {
     }
 
     // private static final 10737418240
-    private static final long ONE_GB = 1073741824;
+    private static final long ONE_GB = Integer.MAX_VALUE / 2;
     private static final long TWO_GB = Integer.MAX_VALUE;
     private static final long TEN_GB = ONE_GB * 10;
 
@@ -110,8 +110,6 @@ public class PersistenceTest {
         for(int i = 0; i < numberBuckets; i++){
 
             initOffsetPerBuffer[i] = nextOffset;
-//            long bufSize = offsetEnd-offsetInit;
-//            System.out.println("Size of the buffer "+i+" :"+bufSize);
 
             MemorySegment seg0 = segment.asSlice(nextOffset, divFactor);
             mappedBuffer = seg0.asByteBuffer();

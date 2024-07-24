@@ -101,7 +101,6 @@ public final class MemoryManager {
 
     public static ByteBuffer getTemporaryDirectBuffer(int size) {
         ByteBuffer bb = bufferCache.get(size);
-        // newBB.order(ByteOrder.nativeOrder());
         if(bb == null){
             return ByteBuffer.allocateDirect(size);
         }

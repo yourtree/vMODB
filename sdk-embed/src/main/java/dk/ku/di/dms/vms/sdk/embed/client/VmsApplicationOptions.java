@@ -31,6 +31,8 @@ public final class VmsApplicationOptions {
 
     private final boolean checkpointing;
 
+    private final int maxRecords;
+
     public static VmsApplicationOptions build(String host, int port, String[] packages) {
         Properties properties = ConfigUtils.loadProperties();
         int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
@@ -42,6 +44,7 @@ public final class VmsApplicationOptions {
         int maxSleep = Integer.parseInt(properties.getProperty("max_sleep"));
         boolean logging = Boolean.parseBoolean(properties.getProperty("logging"));
         boolean checkpointing = Boolean.parseBoolean(properties.getProperty("checkpointing"));
+        int maxRecords = Integer.parseInt(properties.getProperty("max_records"));
 
         return new VmsApplicationOptions(
                 host,
@@ -55,13 +58,14 @@ public final class VmsApplicationOptions {
                 soBufferSize,
                 logging,
                 checkpointing,
+                maxRecords,
                 maxSleep);
     }
 
     private VmsApplicationOptions(String host, int port, String[] packages,
                                   int networkBufferSize, int networkThreadPoolSize, int numVmsWorkers,
                                   int vmsThreadPoolSize, int networkSendTimeout, int osBufferSize,
-                                  boolean logging, boolean checkpointing, int maxSleep) {
+                                  boolean logging, boolean checkpointing, int maxRecords, int maxSleep) {
         this.host = host;
         this.port = port;
         this.packages = packages;
@@ -73,6 +77,7 @@ public final class VmsApplicationOptions {
         this.osBufferSize = osBufferSize;
         this.logging = logging;
         this.checkpointing = checkpointing;
+        this.maxRecords = maxRecords;
         this.maxSleep = maxSleep;
     }
 
@@ -124,4 +129,7 @@ public final class VmsApplicationOptions {
         return this.checkpointing;
     }
 
+    public int getMaxRecords() {
+        return this.maxRecords;
+    }
 }

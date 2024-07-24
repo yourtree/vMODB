@@ -11,6 +11,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -50,9 +51,9 @@ public class CartProductWorkflowTest extends AbstractWorkflowTest {
 
         sleep(BATCH_WINDOW_INTERVAL * 3);
 
-        assert coordinator.getLastTidOfLastCompletedBatch() == 11;
+        Assert.assertEquals(9, coordinator.getLastTidOfLastCompletedBatch());
 
-        additionalAssertions();
+        this.additionalAssertions();
     }
 
     protected void additionalAssertions() { }
@@ -126,7 +127,7 @@ public class CartProductWorkflowTest extends AbstractWorkflowTest {
             int val = 1;
             while(val < 10) {
                 PriceUpdate priceUpdate = new PriceUpdate(
-                        1,1,10.0F, String.valueOf(1), String.valueOf(val) );
+                        val,1,10.0F, "1", String.valueOf(val) );
                 String payload = serdes.serialize(priceUpdate, PriceUpdate.class);
                 TransactionInput.Event eventPayload = new TransactionInput.Event(UPDATE_PRICE, payload);
                 TransactionInput txInput = new TransactionInput(UPDATE_PRICE, eventPayload);

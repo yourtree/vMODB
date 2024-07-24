@@ -203,7 +203,7 @@ public final class Coordinator extends StoppableRunnable {
 
         // initialize batch offset map
         this.batchContextMap = new ConcurrentHashMap<>();
-        BatchContext currentBatch = new BatchContext(this.currentBatchOffset - 1);
+        BatchContext currentBatch = new BatchContext(this.currentBatchOffset);
         currentBatch.seal(startingTid - 1, Map.of(), Map.of());
         this.batchContextMap.put(this.currentBatchOffset, currentBatch);
     }
@@ -399,21 +399,16 @@ public final class Coordinator extends StoppableRunnable {
      * later mapped to the respective vms identifier by the thread
      */
     private void setupStarterVMSs() {
-
         var inputsVMSs = new HashSet<String>();
-
         for(var entry : this.transactionMap.entrySet()){
             for(var input : entry.getValue().inputEvents.entrySet()){
                 inputsVMSs.add(input.getValue().targetVms);
             }
         }
-
         try {
             for (IdentifiableNode vmsNode : this.starterVMSs.values()) {
-
                 // is this a VMS that receives transaction input?
                 boolean active = inputsVMSs.contains(vmsNode.identifier);
-
                 // coordinator will later keep track of this thread when the connection with the VMS is fully established
                 VmsWorker vmsWorker = VmsWorker.build(this.me, vmsNode, this.coordinatorQueue,
                         () -> JdkAsyncChannel.create(this.group),
@@ -427,12 +422,10 @@ public final class Coordinator extends StoppableRunnable {
                                 true),
                         this.loggingHandler,
                         this.serdesProxy);
-
                 // virtual thread leads to performance degradation
                 Thread vmsWorkerThread = Thread.ofPlatform().factory().newThread(vmsWorker);
                 vmsWorkerThread.setName("vms-worker-" + vmsNode.identifier + "-0");
                 vmsWorkerThread.start();
-
                 this.vmsWorkerContainerMap.put(vmsNode.identifier,
                         new VmsWorkerContainer(vmsWorker, this.options.getNumWorkersPerVms())
                 );

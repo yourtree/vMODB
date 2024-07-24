@@ -4,6 +4,8 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityUtils;
@@ -18,10 +20,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * The interface between the application and internal database operations
@@ -223,22 +222,31 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         this.operationalAPI.deleteAll( this.table, parsedEntities );
     }
 
-
-
     public final T parseObjectIntoEntity(Object[] object){
         // all entities must have default constructor
         if (object == null)
             return null;
+        Schema schema = this.table.underlyingPrimaryKeyIndex().schema();
         try {
             T entity = this.entityConstructor.newInstance();
             int i;
             for(var entry : this.entityFieldMap.entrySet()){
                 // must get the index of the column first
-                i = this.table.underlyingPrimaryKeyIndex().schema().columnPosition(entry.getKey());
+                i = schema.columnPosition(entry.getKey());
                 if(object[i] == null){
                     continue;
                 }
-                entry.getValue().set( entity, object[i] );
+//                if(schema.columnDataType(i) == DataType.DATE){
+//                    if(object[i] instanceof Date o){
+//                        entry.getValue().set(entity, o);
+//                    } if(object[i] instanceof Long o) {
+//                        entry.getValue().set(entity, new Date(o));
+//                    } else {
+//                        throw new RuntimeException("Unsupported type to represent Date: "+object[i].getClass());
+//                    }
+//                } else {
+                    entry.getValue().set(entity, object[i]);
+//                }
             }
             return entity;
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {

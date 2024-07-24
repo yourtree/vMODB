@@ -14,8 +14,7 @@ import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 
-import static dk.ku.di.dms.vms.modb.definition.Header.INACTIVE;
-import static dk.ku.di.dms.vms.modb.definition.Header.INACTIVE_BYTE;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * This index does not support growing number of keys
@@ -26,23 +25,15 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     private final RecordBufferContext recordBufferContext;
 
-    // cache to avoid getting data from schema
-    private volatile int size = 0;
+    private final AtomicInteger size;
 
     private final long recordSize;
-
-
-
-    /**
-     * Based on HashMap how handle bucket overflow
-     * After 8, records will be overwritten or stored in a non-unique hash index
-     */
-    // static final int TREEIFY_THRESHOLD = 8;
 
     public UniqueHashBufferIndex(RecordBufferContext recordBufferContext, Schema schema, int[] columnsIndex){
         super(schema, columnsIndex);
         this.recordBufferContext = recordBufferContext;
         this.recordSize = schema.getRecordSize();
+        this.size = new AtomicInteger(0);
     }
 
     /**
@@ -58,19 +49,17 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     @Override
     public void insert(IKey key, long srcAddress) {
         long pos = this.getPosition(key.hashCode());
-        if(UNSAFE.getBoolean(null, pos)){
+        if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE){
             System.out.println("Overwriting previously written record!");
         }
-        UNSAFE.putBoolean(null, pos, true);
+        UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
         UNSAFE.putInt(null, pos, key.hashCode());
         UNSAFE.copyMemory(null, srcAddress, null, pos + Schema.RECORD_HEADER, schema.getRecordSizeWithoutHeader());
         this.updateSize(1);
     }
 
-    @SuppressWarnings("UnnecessaryLocalVariable")
     private void updateSize(int val){
-        int newVal = this.size + val;
-        this.size = newVal;
+        this.size.addAndGet(val);
     }
 
     /**
@@ -97,17 +86,27 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public void insert(IKey key, Object[] record){
-        long pos = this.getPosition(key.hashCode());
-        UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
-        UNSAFE.putInt(null, pos, key.hashCode());
-        int maxColumns = this.schema.columnOffset().length;
-        long currAddress = pos + Schema.RECORD_HEADER;
-        for(int index = 0; index < maxColumns; index++) {
-            DataType dt = this.schema.columnDataType(index);
-            DataTypeUtils.callWriteFunction( currAddress, dt, record[index] );
-            currAddress += dt.value;
+        try {
+            long pos = this.getPosition(key.hashCode());
+            if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE){
+                System.out.println("Overwriting previously written record. Key: " + key+ " Hash: " + key.hashCode());
+            }
+            UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
+            UNSAFE.putInt(null, pos + Header.SIZE, key.hashCode());
+            int maxColumns = this.schema.columnOffset().length;
+            long currAddress = pos + Schema.RECORD_HEADER;
+            for (int index = 0; index < maxColumns; index++) {
+                DataType dt = this.schema.columnDataType(index);
+                // null constraint should be validated by the transaction manager
+                if(record[index] != null) {
+                    DataTypeUtils.callWriteFunction(currAddress, dt, record[index]);
+                }
+                currAddress += dt.value;
+            }
+            this.updateSize(1);
+        } catch (Exception e ){
+            throw new RuntimeException("Error inserting record: "+e.getMessage());
         }
-        this.updateSize(1);
     }
 
     @Override
@@ -128,33 +127,31 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     @Override
     public boolean exists(IKey key){
         long pos = this.getPosition(key.hashCode());
-        return UNSAFE.getBoolean(null, pos);
+        return UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE;
     }
 
     @Override
     public Object[] lookupByKey(IKey key){
         var pos = this.getPosition(key.hashCode());
-        if(exists(pos))
-            return this.readFromIndex(pos);
+        if(this.exists(pos))
+            return this.readFromIndex(pos + Schema.RECORD_HEADER);
         return null;
     }
 
     @Override
     public boolean exists(long address){
-        return UNSAFE.getBoolean(null, address);
+        return UNSAFE.getByte(null, address) == Header.ACTIVE_BYTE;
     }
 
     @Override
     public int size() {
-        return this.size;
+        return this.size.get();
     }
 
     @Override
     public IRecordIterator<IKey> iterator() {
-        return new RecordIterator(
-                this.recordBufferContext.address,
-                this.schema.getRecordSize(),
-                this.recordBufferContext.capacity);
+        return new RecordIterator(this.recordBufferContext.address,
+                this.schema.getRecordSize(), this.recordBufferContext.capacity);
     }
 
     @Override
@@ -174,7 +171,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public Object[] record(IKey key) {
-        return this.readFromIndex(this.address(key) + Schema.RECORD_HEADER);
+        return this.readFromIndex(this.getPosition(key.hashCode()) + Schema.RECORD_HEADER);
     }
 
     @Override

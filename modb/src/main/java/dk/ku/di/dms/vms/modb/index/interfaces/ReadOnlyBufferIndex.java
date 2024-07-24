@@ -42,15 +42,15 @@ public interface ReadOnlyBufferIndex<K> extends ReadOnlyIndex<K> {
     }
 
     default Object[] readFromIndex(long address) {
-        int size = schema().columnOffset().length;
-        Object[] objects = new Object[size];
+        int size = this.schema().columnOffset().length;
+        Object[] record = new Object[size];
         long currAddress = address;
         for(int i = 0; i < size; i++) {
-            DataType dt = schema().columnDataType(i);
-            objects[i] = DataTypeUtils.getValue(dt, currAddress);
+            DataType dt = this.schema().columnDataType(i);
+            record[i] = DataTypeUtils.getValue(dt, currAddress);
             currAddress += dt.value;
         }
-        return objects;
+        return record;
     }
 
     default boolean checkCondition(IRecordIterator<K> iterator, FilterContext filterContext){
@@ -65,7 +65,7 @@ public interface ReadOnlyBufferIndex<K> extends ReadOnlyIndex<K> {
      */
     @SuppressWarnings("unchecked")
     default boolean checkCondition(long address, FilterContext filterContext){
-        if(!exists(address)) return false;
+        if(!this.exists(address)) return false;
         if(filterContext == null) return true;
         boolean conditionHolds = true;
         // the number of filters to apply

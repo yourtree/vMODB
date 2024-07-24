@@ -8,6 +8,7 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.common.transaction.LoggingHandler;
+import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
 import dk.ku.di.dms.vms.sdk.core.channel.IVmsInternalChannels;
@@ -63,7 +64,6 @@ public final class VmsApplication {
      * (ii) Scheduler, responsible for scheduling transactions and returning resulting events
      */
     public static VmsApplication build(VmsApplicationOptions options) throws Exception {
-
         // check first whether we are in decoupled or embed mode
         Optional<Package> optional = Arrays.stream(Package.getPackages()).filter(p ->
                          !p.getName().contains("dk.ku.di.dms.vms.sdk.embed")
@@ -90,11 +90,20 @@ public final class VmsApplication {
         Map<Class<?>, String> entityToVirtualMicroservice = VmsMetadataLoader.mapEntitiesToVirtualMicroservice(vmsClasses, entityToTableNameMap);
         Map<String, VmsDataModel> vmsDataModelMap = VmsMetadataLoader.buildVmsDataModel( entityToVirtualMicroservice, entityToTableNameMap );
 
+        boolean isCheckpointing = options.isCheckpointing();
+        if(!isCheckpointing){
+            String checkpointingStr = System.getProperty("checkpointing");
+            if(Boolean.parseBoolean(checkpointingStr)){
+                isCheckpointing = true;
+            }
+        }
+
         // load catalog so we can pass the table instance to proxy repository
-        Map<String, Table> catalog = EmbedMetadataLoader.loadCatalog(vmsDataModelMap, entityToTableNameMap);
+        Map<String, Table> catalog = EmbedMetadataLoader
+                .loadCatalog(vmsDataModelMap, entityToTableNameMap, isCheckpointing, options.getMaxRecords());
 
         // operational API and checkpoint API
-        TransactionManager transactionManager = new TransactionManager(catalog, options.isCheckpointing());
+        TransactionManager transactionManager = new TransactionManager(catalog, isCheckpointing);
 
         Map<String, Object> tableToRepositoryMap = EmbedMetadataLoader.loadRepositoryClasses( vmsClasses, entityToTableNameMap, catalog,  transactionManager );
         Map<String, List<Object>> vmsToRepositoriesMap = EmbedMetadataLoader.mapRepositoriesToVms(vmsClasses, entityToTableNameMap, tableToRepositoryMap);
@@ -200,6 +209,10 @@ public final class VmsApplication {
 
     public ITransactionManager getTransactionManager() {
         return this.transactionManager;
+    }
+
+    public Schema getSchema(String table){
+        return this.catalog.get(table).schema();
     }
 
 }

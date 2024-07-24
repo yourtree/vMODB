@@ -55,7 +55,7 @@ public final class TransactionWorker extends StoppableRunnable {
         }
     }
 
-    private record PendingTransactionInput (long tid, TransactionInput input){}
+    private record PendingTransactionInput (long tid, long batch, TransactionInput input){}
 
     /**
      * Build private VmsTracking objects
@@ -200,7 +200,7 @@ public final class TransactionWorker extends StoppableRunnable {
                 list = new ArrayList<>();
                 this.pendingInputMap.put(lastBatchOffset, list);
             }
-            list.add(new PendingTransactionInput(this.tid, transactionInput));
+            list.add(new PendingTransactionInput(this.tid, this.batchContext.batchOffset, transactionInput));
         } else {
             String precedenceMapStr = this.serdesProxy.serializeMap(previousTidPerVms);
             TransactionEvent.PayloadRaw txEvent = TransactionEvent.of(this.tid, this.batchContext.batchOffset,
@@ -245,7 +245,6 @@ public final class TransactionWorker extends StoppableRunnable {
         if(entry == null) return;
         this.precedenceMapInputQueue.poll();
 
-        long batchOffset = entry.getKey();
         List<PendingTransactionInput> list = entry.getValue();
 
         for(PendingTransactionInput pendingInput : list) {
@@ -264,7 +263,7 @@ public final class TransactionWorker extends StoppableRunnable {
 
             EventIdentifier event = transactionDAG.inputEvents.get(pendingInput.input.event.name);
             VmsTracking inputVms = this.vmsTrackingMap.get(event.targetVms);
-            TransactionEvent.PayloadRaw txEvent = TransactionEvent.of(pendingInput.tid, batchOffset,
+            TransactionEvent.PayloadRaw txEvent = TransactionEvent.of(pendingInput.tid, pendingInput.batch,
                     pendingInput.input.event.name, pendingInput.input.event.payload, precedenceMapStr);
             this.vmsWorkerContainerMap.get(inputVms.identifier).queueTransactionEvent(txEvent);
         }
@@ -273,7 +272,7 @@ public final class TransactionWorker extends StoppableRunnable {
 
         // store precedenceMap for processing inside advanceCurrentBatch
         // store for batch completion time
-        this.precedenceMapCache.put(batchOffset, precedenceMap);
+        this.precedenceMapCache.put(entry.getKey(), precedenceMap);
     }
 
     private boolean advanceCurrentBatch() {

@@ -217,7 +217,6 @@ public final class VmsMetadataLoader {
     @SuppressWarnings("unchecked")
     public static Map<String, VmsDataModel> buildVmsDataModel(Map<Class<?>, String> entityToVirtualMicroservice,
                                                                  Map<Class<?>, String> vmsTableNames) {
-
         Map<String, VmsDataModel> schemaMap = new HashMap<>();
 
         // build schema of each table
@@ -297,17 +296,13 @@ public final class VmsMetadataLoader {
             VmsDataModel schema = new VmsDataModel(vms, vmsTableName, pkFieldsStr, columnNamesArray, columnDataTypesArray, foreignKeyReferences, constraints);
             schemaMap.put(vmsTableName, schema);
         }
-
         return schemaMap;
-
     }
 
     /**
      * non-foreign key column constraints are inherent to the table, not referring to other tables
      */
-    private static ConstraintReference[] processRegularColumns(List<Field> columnFields, String[] columnNames, DataType[] columnDataTypes, int columnPosition)
-            throws UnsupportedConstraint {
-
+    private static ConstraintReference[] processRegularColumns(List<Field> columnFields, String[] columnNames, DataType[] columnDataTypes, int columnPosition) throws UnsupportedConstraint {
         if(columnFields == null) {
             return null;
         }
@@ -374,14 +369,10 @@ public final class VmsMetadataLoader {
                 }
                 nC++;
             }
-
             columnNames[columnPosition] = field.getName();
             columnPosition++;
         }
-
         return constraints;
-
-
     }
 
     public static Map<Class<?>, String> mapEntitiesToVirtualMicroservice(Set<Class<?>> vmsClasses, Map<Class<?>, String> entityToTableNameMap) {
@@ -395,9 +386,7 @@ public final class VmsMetadataLoader {
                 entityToVirtualMicroservice.put(entry.getKey(), vmsName);
             }
         }
-
         return entityToVirtualMicroservice;
-
     }
 
     private static Map<String, Object> loadMicroserviceClasses(
@@ -558,9 +547,7 @@ public final class VmsMetadataLoader {
                     case R -> transactionMetadata.numReadTasks++;
                     case W -> transactionMetadata.numWriteTasks++;
                 }
-
             }
-
         }
     }
 
@@ -624,7 +611,6 @@ public final class VmsMetadataLoader {
     public static Map<String, SelectStatement> loadStaticQueries(Method[] queryMethods){
         Map<String, SelectStatement> res = new HashMap<>(queryMethods.length);
         for(Method queryMethod : queryMethods){
-
             try {
                 Optional<Annotation> annotation = Arrays.stream(queryMethod.getAnnotations())
                         .filter( a -> a.annotationType() == Query.class).findFirst();
@@ -642,7 +628,6 @@ public final class VmsMetadataLoader {
             } catch(Exception e){
                 throw new RuntimeException("Error on processing the query annotation: "+e.getMessage());
             }
-
         }
         return res;
     }

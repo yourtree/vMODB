@@ -32,10 +32,20 @@ public final class DataTypeUtils {
                     sb.append( UNSAFE.getChar(null, currAddress) );
                     currAddress += Character.BYTES;
                 }
+                // temporary solution due to the lack of string size metadata
+                for(int i = DEFAULT_MAX_SIZE_STRING-1; i >= 0; i--) {
+                    if(sb.charAt(sb.length()-1) == '\0'){
+                        sb.delete(sb.length()-1, sb.length());
+                    }
+                }
                 return sb.toString();
             }
-            case LONG, DATE -> {
+            case LONG -> {
                 return UNSAFE.getLong(null, address);
+            }
+            case DATE -> {
+                long dateLong = UNSAFE.getLong(null, address);
+                return new Date(dateLong);
             }
             case FLOAT -> {
                 return UNSAFE.getFloat(null, address);
@@ -55,7 +65,7 @@ public final class DataTypeUtils {
     public static Function<ByteBuffer,?> getReadFunction(DataType dt){
         switch (dt){
             case BOOL -> {
-                 return ByteBuffer::get; // byte is used. on unsafe, the boolean is used
+                 return ByteBuffer::get;
              }
              case INT -> {
                      return ByteBuffer::getInt;
@@ -125,8 +135,9 @@ public final class DataTypeUtils {
             case DATE -> {
                 if(value instanceof Date date){
                     UNSAFE.putLong(null, address, date.getTime());
+                } else {
+                    throw new IllegalStateException("Date can only be of type Date");
                 }
-                else UNSAFE.putLong(null, address, (long)value);
             }
             case FLOAT -> UNSAFE.putFloat(null, address, (float)value);
             case DOUBLE -> UNSAFE.putDouble(null, address, (double)value);
