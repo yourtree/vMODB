@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.marketplace.seller.entities;
 
 import dk.ku.di.dms.vms.marketplace.common.enums.OrderStatus;
 import dk.ku.di.dms.vms.marketplace.common.enums.PackageStatus;
-import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
+import dk.ku.di.dms.vms.modb.api.annotations.VmsIndex;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
@@ -16,21 +16,30 @@ import java.util.Date;
 @IdClass(OrderEntry.OrderEntryId.class)
 public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
 
-    public static class OrderEntryId implements Serializable {
+    public static class OrderId implements Serializable {
+        public int customer_id;
+        public int order_id;
 
+        public OrderId() { }
+
+        public OrderId(int customer_id, int order_id) {
+            this.customer_id = customer_id;
+            this.order_id = order_id;
+        }
+    }
+
+    public static class OrderEntryId implements Serializable {
         public int customer_id;
         public int order_id;
         public int product_id;
 
-        public OrderEntryId() {
-        }
+        public OrderEntryId() { }
 
         public OrderEntryId(int customer_id, int order_id, int product_id) {
             this.customer_id = customer_id;
             this.order_id = order_id;
             this.product_id = product_id;
         }
-
     }
 
     @Id
@@ -42,8 +51,9 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
     @Id
     public int product_id;
 
+    // @VmsForeignKey(table = Seller.class, column = "id")
+    @VmsIndex(name = "seller_idx")
     @Column
-    @VmsForeignKey(table = Seller.class, column = "id")
     public int seller_id;
 
     @Column
@@ -116,4 +126,51 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
         return new OrderEntryId( this.customer_id, this.order_id, this.package_id );
     }
 
+    public OrderId getOrderId(){
+        return new OrderId( this.customer_id, this.order_id );
+    }
+
+    public float getTotalItems() {
+        return total_items;
+    }
+
+    public float getTotalAmount() {
+        return total_amount;
+    }
+
+    public float getTotalInvoice() {
+        return total_invoice;
+    }
+
+    public float getTotalIncentive() {
+        return total_incentive;
+    }
+
+    public float getFreightValue() {
+        return freight_value;
+    }
+
+    @Override
+    public String toString() {
+        return "{"
+                + "\"customer_id\":\"" + customer_id + "\""
+                + ",\"order_id\":\"" + order_id + "\""
+                + ",\"product_id\":\"" + product_id + "\""
+                + ",\"seller_id\":\"" + seller_id + "\""
+                + ",\"package_id\":\"" + package_id + "\""
+                + ",\"product_name\":\"" + product_name + "\""
+                + ",\"product_category\":\"" + product_category + "\""
+                + ",\"unit_price\":\"" + unit_price + "\""
+                + ",\"quantity\":\"" + quantity + "\""
+                + ",\"total_items\":\"" + total_items + "\""
+                + ",\"total_amount\":\"" + total_amount + "\""
+                + ",\"total_invoice\":\"" + total_invoice + "\""
+                + ",\"total_incentive\":\"" + total_incentive + "\""
+                + ",\"freight_value\":\"" + freight_value + "\""
+                + ",\"shipment_date\":" + shipment_date
+                + ",\"delivery_date\":" + delivery_date
+                + ",\"order_status\":\"" + order_status + "\""
+                + ",\"delivery_status\":\"" + delivery_status + "\""
+                + "}";
+    }
 }

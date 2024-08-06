@@ -9,6 +9,7 @@ import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentNotification;
 import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
 import dk.ku.di.dms.vms.marketplace.seller.dtos.OrderSellerView;
+import dk.ku.di.dms.vms.marketplace.seller.dtos.SellerDashboard;
 import dk.ku.di.dms.vms.marketplace.seller.entities.OrderEntry;
 import dk.ku.di.dms.vms.marketplace.seller.repositories.IOrderEntryRepository;
 import dk.ku.di.dms.vms.marketplace.seller.repositories.ISellerRepository;
@@ -40,6 +41,7 @@ public final class SellerService {
     private final Map<Integer, ReadWriteLock> sellerLockMap;
 
     // necessary to force vms loader to load this repository
+    @SuppressWarnings({"FieldCanBeLocal", "unused"})
     private final ISellerRepository sellerRepository;
 
     private final IOrderEntryRepository orderEntryRepository;
@@ -59,7 +61,10 @@ public final class SellerService {
     public void processInvoiceIssued(InvoiceIssued invoiceIssued){
         LOGGER.log(INFO, "APP: Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
 
-        Map<Integer,ReadWriteLock> locksAcquired = new HashMap<>();
+        Map<Integer,ReadWriteLock> locksAcquired = null;
+        if(SellerConst.APP_MAINTAINED_VIEW) {
+            locksAcquired = new HashMap<>();
+        }
         List<OrderItem> orderItems = invoiceIssued.getItems();
         List<OrderEntry> list = new ArrayList<>(invoiceIssued.getItems().size());
 
@@ -87,36 +92,38 @@ public final class SellerService {
             );
             list.add(entry);
 
-            if(!locksAcquired.containsKey(orderItem.seller_id)) {
-                ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(orderItem.seller_id, (ignored) -> new ReentrantReadWriteLock());
-                sellerLock.writeLock().lock();
-                locksAcquired.put(entry.seller_id, sellerLock);
+            if(SellerConst.APP_MAINTAINED_VIEW) {
+                //noinspection DataFlowIssue
+                if (!locksAcquired.containsKey(orderItem.seller_id)) {
+                    ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(orderItem.seller_id, (ignored) -> new ReentrantReadWriteLock());
+                    sellerLock.writeLock().lock();
+                    locksAcquired.put(entry.seller_id, sellerLock);
+                }
+                // view maintenance code
+                OrderSellerView view;
+                if (this.orderSellerViewMap.containsKey(orderItem.seller_id)) {
+                    view = this.orderSellerViewMap.get(orderItem.seller_id);
+                } else {
+                    view = new OrderSellerView(orderItem.seller_id);
+                    this.orderSellerViewMap.put(orderItem.seller_id, view);
+                }
+                view.orders.add(new OrderSellerView.OrderId(entry.customer_id, orderItem.order_id));
+                view.count_items += 1;
+                view.total_amount += entry.total_amount;
+                view.total_incentive += orderItem.total_incentive;
+                view.total_freight += orderItem.freight_value;
+                view.total_items += orderItem.total_items;
+                view.total_invoice += totalInvoice;
+                // this requires maintaining another map
+                view.count_orders = view.orders.size();
             }
-
-            // view maintenance code
-            // orderSellerViewMap.putIfAbsent(orderItem.seller_id, new OrderSellerView(orderItem.seller_id) );
-            OrderSellerView view;
-            if(this.orderSellerViewMap.containsKey(orderItem.seller_id)){
-                view = this.orderSellerViewMap.get(orderItem.seller_id);
-            } else {
-                view = new OrderSellerView(orderItem.seller_id);
-                this.orderSellerViewMap.put(orderItem.seller_id, view);
-            }
-
-            view.orders.add(new OrderSellerView.OrderId(entry.customer_id, orderItem.order_id));
-            view.count_items += entry.quantity;
-            view.total_amount += entry.total_amount;
-            view.total_incentive += orderItem.total_incentive;
-            view.total_freight += orderItem.freight_value;
-            view.total_items += orderItem.total_items;
-            view.total_invoice += totalInvoice;
-            // this requires maintaining another map
-            view.count_orders = view.orders.size();
         }
 
-        // unlock all
-        for(Map.Entry<Integer, ReadWriteLock> lock : locksAcquired.entrySet()){
-            lock.getValue().writeLock().unlock();
+        if(SellerConst.APP_MAINTAINED_VIEW) {
+            // unlock all
+            for (Map.Entry<Integer, ReadWriteLock> lock : locksAcquired.entrySet()) {
+                lock.getValue().writeLock().unlock();
+            }
         }
 
         this.orderEntryRepository.insertAll(list);
@@ -127,7 +134,7 @@ public final class SellerService {
     public void processShipmentUpdate(ShipmentUpdated shipmentUpdated){
         LOGGER.log(INFO, "APP: Seller received a shipment update event with TID: "+ shipmentUpdated.instanceId);
 
-        // TODO synchronization must also be present here
+        // synchronization must also be present here
 
         for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {
             List<OrderEntry> orderEntries = this.orderEntryRepository.getOrderEntriesByCustomerIdAndOrderId(
@@ -149,16 +156,18 @@ public final class SellerService {
                     case ShipmentStatus.CONCLUDED -> {
                         // remove entry from view
                         entry.order_status = OrderStatus.DELIVERED;
-                        OrderSellerView view = this.orderSellerViewMap.get(entry.seller_id);
-                        view.orders.remove(new OrderSellerView.OrderId(entry.customer_id, entry.order_id));
-                        view.count_items -= entry.quantity;
-                        view.total_amount -= entry.total_amount;
-                        view.total_incentive -= entry.total_incentive;
-                        view.total_freight -= entry.freight_value;
-                        view.total_items -= entry.total_items;
-                        view.total_invoice -= entry.total_invoice;
-                        // this requires maintaining another map
-                        view.count_orders = view.orders.size();
+                        if(SellerConst.APP_MAINTAINED_VIEW) {
+                            OrderSellerView view = this.orderSellerViewMap.get(entry.seller_id);
+                            view.orders.remove(new OrderSellerView.OrderId(entry.customer_id, entry.order_id));
+                            view.count_items -= 1;
+                            view.total_amount -= entry.total_amount;
+                            view.total_incentive -= entry.total_incentive;
+                            view.total_freight -= entry.freight_value;
+                            view.total_items -= entry.total_items;
+                            view.total_invoice -= entry.total_invoice;
+                            // this requires maintaining another map
+                            view.count_orders = view.orders.size();
+                        }
                     }
                     default -> throw new IllegalStateException("Unexpected value: " + shipmentNotification.status);
                 }
@@ -186,12 +195,37 @@ public final class SellerService {
      * @param sellerId the seller identifier
      * @return seller dashboard
      */
-    public OrderSellerView queryDashboard(int sellerId){
+    public SellerDashboard queryDashboard(int sellerId){
         ReadWriteLock sellerLock = this.sellerLockMap.computeIfAbsent(sellerId, (ignored) -> new ReentrantReadWriteLock());
         sellerLock.readLock().lock();
         OrderSellerView res = this.orderSellerViewMap.getOrDefault( sellerId, new OrderSellerView(sellerId) );
         sellerLock.readLock().unlock();
-        return res;
+        return new SellerDashboard(res, List.of());
+    }
+
+    public SellerDashboard queryDashboardNoApp(int sellerId){
+        List<OrderEntry> orderEntries = this.orderEntryRepository.getOrderEntriesBySellerId(sellerId);
+        OrderSellerView view = new OrderSellerView();
+        view.seller_id = sellerId;
+        /* faster way, but kept the current for comparison
+        for(OrderEntry entry : orderEntries){
+            view.count_items += entry.quantity;
+            view.total_amount += entry.total_amount;
+            view.total_incentive += entry.total_incentive;
+            view.total_freight += entry.freight_value;
+            view.total_items += entry.total_items;
+            view.total_invoice += entry.total_invoice;
+        }
+        */
+        view.total_amount = orderEntries.stream().mapToDouble(OrderEntry::getTotalAmount).sum();
+        view.total_freight = orderEntries.stream().mapToDouble(OrderEntry::getFreightValue).sum();
+        view.total_incentive = orderEntries.stream().mapToDouble(OrderEntry::getTotalIncentive).sum();
+        view.total_invoice = orderEntries.stream().mapToDouble(OrderEntry::getTotalInvoice).sum();
+        view.total_items = orderEntries.stream().mapToDouble(OrderEntry::getTotalItems).sum();
+
+        view.count_items = orderEntries.size();
+        view.count_orders = (int) orderEntries.stream().map(OrderEntry::getOrderId).distinct().count();
+        return new SellerDashboard(view, orderEntries);
     }
 
 }

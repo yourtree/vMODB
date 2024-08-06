@@ -15,17 +15,15 @@ public final class OrderSellerView {
     public int count_orders;
     public int count_items;
 
-    public float total_amount;
-    public float total_freight;
+    public double total_amount;
+    public double total_freight;
 
-    public float total_incentive;
+    public double total_incentive;
 
-    public float total_invoice;
-    public float total_items;
+    public double total_invoice;
+    public double total_items;
 
-    public OrderSellerView() {
-        // this.orders = Set.of();
-    }
+    public OrderSellerView() { }
 
     public OrderSellerView(int sellerId) {
         this.seller_id = sellerId;
@@ -35,8 +33,7 @@ public final class OrderSellerView {
     @Override
     public String toString() {
         return "{"
-                + " \"count_items\":\"" + count_items + "\""
-                + ",\"orders\":" + orders
+                + "\"count_items\":\"" + count_items + "\""
                 + ",\"seller_id\":\"" + seller_id + "\""
                 + ",\"count_orders\":\"" + count_orders + "\""
                 + ",\"total_amount\":\"" + total_amount + "\""

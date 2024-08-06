@@ -4,7 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.seller.dtos.OrderSellerView;
+import dk.ku.di.dms.vms.marketplace.seller.dtos.SellerDashboard;
 import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
 import dk.ku.di.dms.vms.marketplace.seller.repositories.IOrderEntryRepository;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -60,8 +60,11 @@ public final class Main {
 
         private final SellerService sellerService;
 
+        private final VmsApplication vms;
+
         @SuppressWarnings("unchecked")
         private SellerHttpHandler(VmsApplication vms) {
+            this.vms = vms;
             this.sellerService = ((SellerService) vms.getService());
             this.orderEntryRepository = (IOrderEntryRepository) vms.getRepositoryProxy("packages");
             this.sellerTable = vms.getTable("sellers");
@@ -79,12 +82,19 @@ public final class Main {
                     String[] split = exchange.getRequestURI().toString().split("/");
 
                     if(split[2].contentEquals("dashboard")){
-                        // register a transaction with the last tid finished to get the freshest view
-                        // not necessary. the concurrent hashmap guarantees all-or-nothing
-                        // vms.lastTidFinished()
-
                         int sellerId = Integer.parseInt(split[split.length - 1]);
-                        OrderSellerView view = this.sellerService.queryDashboard(sellerId);
+                        SellerDashboard view;
+                        if(SellerConst.APP_MAINTAINED_VIEW){
+                            // not necessary to register a transaction
+                            // the concurrent hashmap and locking guarantees all-or-nothing
+                            view = this.sellerService.queryDashboard(sellerId);
+                        } else {
+                            // register a transaction with the last tid finished
+                            // this allows to get the freshest view, bypassing the scheduler
+                            long lastTid = this.vms.lastTidFinished();
+                            this.vms.getTransactionManager().beginTransaction(lastTid, 0, lastTid, true);
+                            view = this.sellerService.queryDashboardNoApp(sellerId);
+                        }
                         // parse and return result
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(200, 0);

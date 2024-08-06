@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
 import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
 import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
+import dk.ku.di.dms.vms.marketplace.seller.dtos.SellerDashboard;
 import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
@@ -11,6 +12,7 @@ import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.Date;
@@ -22,13 +24,31 @@ public final class SellerTest {
 
     private static final int MAX_SELLERS = 10;
 
+    private static final int LAST_TID = 10;
+
+    @Test
+    public void testSellerDashboard() throws Exception {
+        VmsApplication vms = getVmsApplication();
+        vms.start();
+        generateInvoices(vms);
+        sleep(3000);
+        vms.getTransactionManager().beginTransaction(LAST_TID, 0, LAST_TID, true);
+        SellerDashboard dash = ((SellerService)vms.getService()).queryDashboardNoApp(1);
+        Assert.assertNotNull(dash);
+        Assert.assertEquals(dash.view.count_items, 1);
+    }
+
     @Test
     public void testParallelInvoiceIssued() throws Exception {
         VmsApplication vms = getVmsApplication();
         vms.start();
-
         insertSellers(vms);
+        generateInvoices(vms);
+        sleep(3000);
+        Assert.assertEquals(LAST_TID, vms.lastTidFinished());
+    }
 
+    private static void generateInvoices(VmsApplication vms) {
         CustomerCheckout customerCheckout = new CustomerCheckout(
                 1, "test", "test", "test", "test","test", "test", "test",
                 "CREDIT_CARD","test","test","test", "test", "test", 1,"1");
@@ -43,16 +63,11 @@ public final class SellerTest {
                     "invoice_issued", InvoiceIssued.class, invoiceIssued);
             vms.internalChannels().transactionInputQueue().add(inboundEvent);
         }
-
-        sleep(3000);
-
-        assert vms.lastTidFinished() == 10;
-
     }
 
     /**
      *  Add sellers first to avoid foreign key constraint violation
-      */
+     */
     @SuppressWarnings("unchecked")
     private static void insertSellers(VmsApplication vms) {
         var sellerTable = vms.getTable("sellers");

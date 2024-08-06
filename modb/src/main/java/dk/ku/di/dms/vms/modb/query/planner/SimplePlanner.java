@@ -168,7 +168,7 @@ public final class SimplePlanner {
                         indexColumns, projectionColumns, minColumn, entrySize, queryTree.limit.orElse(Integer.MAX_VALUE));
             }
             case SUM -> {
-                // is there any index that applies?
+                // is there any index that can be applied?
                 // Table tb = queryTree.groupByProjections.getFirst().columnReference().table;
                 IMultiVersionIndex indexSelected = this.getOptimalIndex(
                         queryTree.groupByProjections.getFirst().columnReference().table,

@@ -30,7 +30,7 @@ import java.util.function.Function;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static java.lang.Thread.sleep;
 
-public final class SellerDashboardTest extends AbstractWorkflowTest {
+public final class SellerViewTest extends AbstractWorkflowTest {
 
     @Test
     public void test() throws Exception {

@@ -6,8 +6,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Properties;
 
-import static java.lang.System.Logger.Level.WARNING;
-
 public final class ConfigUtils {
 
     private static final String CONFIG_FILE = "app.properties";

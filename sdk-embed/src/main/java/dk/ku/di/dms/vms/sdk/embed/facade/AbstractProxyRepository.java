@@ -4,7 +4,6 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
-import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
@@ -20,7 +19,10 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The interface between the application and internal database operations
@@ -148,8 +150,8 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     }
 
     /**
-     * an optimization is just setting the PK into the entity passed as parameter
-     * another optimization is checking if PK is generated before returning the entity,
+     * An optimization is just setting the PK into the entity passed as parameter.
+     * Another optimization is checking if PK is generated before returning the entity,
      * but this is missing for now
      */
     @Override
@@ -230,23 +232,13 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         try {
             T entity = this.entityConstructor.newInstance();
             int i;
-            for(var entry : this.entityFieldMap.entrySet()){
+            for(Map.Entry<String,VarHandle> entry : this.entityFieldMap.entrySet()){
                 // must get the index of the column first
                 i = schema.columnPosition(entry.getKey());
                 if(object[i] == null){
                     continue;
                 }
-//                if(schema.columnDataType(i) == DataType.DATE){
-//                    if(object[i] instanceof Date o){
-//                        entry.getValue().set(entity, o);
-//                    } if(object[i] instanceof Long o) {
-//                        entry.getValue().set(entity, new Date(o));
-//                    } else {
-//                        throw new RuntimeException("Unsupported type to represent Date: "+object[i].getClass());
-//                    }
-//                } else {
-                    entry.getValue().set(entity, object[i]);
-//                }
+                entry.getValue().set(entity, object[i]);
             }
             return entity;
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
@@ -259,12 +251,10 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
      */
     private Object[] extractFieldValuesFromKeyObject(PK keyObject) {
         Object[] values = new Object[this.pkFieldMap.size()];
-
         if(keyObject instanceof Number){
             values[0] = keyObject;
             return values;
         }
-
         int fieldIdx = 0;
         // get values from key object
         for(String columnName : this.pkFieldMap.keySet()){

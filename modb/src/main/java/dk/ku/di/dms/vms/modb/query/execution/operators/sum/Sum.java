@@ -46,21 +46,21 @@ public class Sum extends AbstractMemoryBasedOperator {
 
     private static class IntSumOp implements SumOperation<Integer> {
 
-        int sum = 0;
+        private int sum = 0;
 
         @Override
         public void accept(Integer i) {
-            sum += i;
+            this.sum += i;
         }
 
         @Override
         public Integer get() {
-            return sum;
+            return this.sum;
         }
 
         @Override
         public int asInt() {
-            return sum;
+            return this.sum;
         }
     }
 
@@ -84,13 +84,12 @@ public class Sum extends AbstractMemoryBasedOperator {
         }
     }
 
-    // we need a class that performs the  operation and maintains state
+    // we need a class that performs the operation and maintains state
     // the interface should have a close() method. if sum, return. if count (have to consider distinct), return. if
     // a consumer may suffice. srcAddress, columnOffset
     // dynamically create. different from filter, this must maintain state, ok to create for each query
 
     SumOperation<?> buildOperation(DataType dataType){
-
         switch(dataType){
             case INT -> {
                 return new IntSumOp();
@@ -99,7 +98,6 @@ public class Sum extends AbstractMemoryBasedOperator {
                 return new FloatSumOp();
             }
         }
-
         return null;
     }
 
@@ -121,18 +119,15 @@ public class Sum extends AbstractMemoryBasedOperator {
 
         appendResult(sumOperation);
         return memoryRefNode;
-
     }
 
     protected void appendResult(SumOperation<?> sumOperation){
-
         switch (dataType){
             case INT -> this.currentBuffer.append( sumOperation.asInt() );
             case FLOAT -> this.currentBuffer.append( sumOperation.asFloat() );
             case DOUBLE -> this.currentBuffer.append( sumOperation.asDouble() );
             case LONG -> this.currentBuffer.append( sumOperation.asLong() );
         }
-
     }
 
 }

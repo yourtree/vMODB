@@ -11,4 +11,7 @@ public interface IOrderEntryRepository extends IRepository<OrderEntry.OrderEntry
     @Query("select * from order_entries where customer_id = :customerId and order_id = :orderId")
     List<OrderEntry> getOrderEntriesByCustomerIdAndOrderId(int customerId, int orderId);
 
+    @Query("select * from order_entries where seller_id = :sellerId")
+    List<OrderEntry> getOrderEntriesBySellerId(int sellerId);
+
 }
