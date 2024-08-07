@@ -28,7 +28,7 @@ public class CartProductWorkflowTest extends AbstractWorkflowTest {
     @Test
     public final void testBasicCartProductWorkflow() throws Exception {
         this.initCartAndProduct();
-        this.ingestDataIntoProductVms();
+        ingestDataIntoProductVms();
 
         // initialize coordinator
         Properties properties = ConfigUtils.loadProperties();
@@ -46,7 +46,7 @@ public class CartProductWorkflowTest extends AbstractWorkflowTest {
 
         if(coordinator.getConnectedVMSs().size() < 2) throw new RuntimeException("VMSs did not connect to coordinator on time");
 
-        Thread thread = new Thread(new Producer(coordinator));
+        Thread thread = new Thread(new PriceUpdateProducer(coordinator));
         thread.start();
 
         sleep(BATCH_WINDOW_INTERVAL * 3);
@@ -78,7 +78,7 @@ public class CartProductWorkflowTest extends AbstractWorkflowTest {
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
         transactionMap.put(updatePriceDag.name, updatePriceDag);
 
-        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
+        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         String productHost = properties.getProperty("product_host");
         String cartHost = properties.getProperty("cart_host");
@@ -113,11 +113,11 @@ public class CartProductWorkflowTest extends AbstractWorkflowTest {
         );
     }
 
-    private static class Producer implements Runnable {
+    private static class PriceUpdateProducer implements Runnable {
 
         private final Coordinator coordinator;
 
-        public Producer(Coordinator coordinator) {
+        public PriceUpdateProducer(Coordinator coordinator) {
             this.coordinator = coordinator;
         }
 

@@ -72,31 +72,37 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
     }
 
     /**
-     * Gets the entry for the lowest key higher than the specified
+     * Gets the entry for the highest key equal or below the specified
      * key; if no such entry exists, returns {@code null}.
      * In other words, gets the immediate successor of key.
      */
-    public Entry<K,V> getHigherEntry(K key) {
+    public Entry<K,V> getHigherEntryUpToKey(K key) {
         if(this.first == null) return null;
-        Entry<K,V> curr = this.first;
-        Entry<K,V> prev = null;
-        int cmp = curr.key.compareTo(key);
-        while(cmp > 0){
-            prev = curr;
-            curr = curr.next;
-            if(curr == null) break;
+        // is parameter key already higher than the highest entry? if so, just return it
+        if(key.compareTo(this.first.key) >= 0) return this.first;
+        Entry<K,V> next = this.first;
+        Entry<K,V> curr;
+        int cmp;
+        do {
+            curr = next;
+            next = next.next;
+            if(next == null) break;
             cmp = curr.key.compareTo(key);
-        }
-        return prev;
+        } while(cmp > 0); // curr node is higher than parameter key? if so, continue
+
+        // it means no entry key is below the parameter key
+        if(next == null && curr.key.compareTo(key) > 0) return null;
+
+        return curr;
     }
 
     /**
-     * Remove all entries below or equal the key
+     * Remove all entries below the key
      * Method is used to remove TIDs that cannot be seen anymore
      * @param key node identifier
      */
     public Entry<K,V> removeUpToEntry(K key){
-        final Entry<K,V> entryToReturn = this.getHigherEntry(key);
+        final Entry<K,V> entryToReturn = this.getHigherEntryUpToKey(key);
         Entry<K,V> currFloorEntry = entryToReturn;
         Entry<K,V> auxEntry;
         while(currFloorEntry != null){

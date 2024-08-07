@@ -81,8 +81,10 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
         throw new RuntimeException("Not supported");
     }
 
-    public boolean remove(IKey ignoredKey, Object[] ignoredRecord){
-        throw new RuntimeException("Not supported");
+    public boolean remove(IKey key, Object[] record){
+        IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
+        Set<IKey> set = this.keyMap.get(secKey);
+        return set.remove(key);
     }
 
     @Override

@@ -1089,7 +1089,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
             } catch (Exception e){
                 LOGGER.log(ERROR, me.identifier +": Error while processing a batch\n"+e);
-                // e.printStackTrace(System.out);
+                e.printStackTrace(System.out);
                 if(e instanceof BufferUnderflowException) {
                     throw new RuntimeException(e);
                 }

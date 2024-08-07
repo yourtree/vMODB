@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -29,13 +30,12 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
 
     @Test
     public void testBasicCartProductStockWorkflow() throws Exception {
-
         dk.ku.di.dms.vms.marketplace.product.Main.main(null);
         dk.ku.di.dms.vms.marketplace.cart.Main.main(null);
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
 
-        this.ingestDataIntoProductVms();
-        this.insertItemsInStockVms();
+        ingestDataIntoProductVms();
+        insertItemsInStockVms();
 
         // initialize coordinator
         Properties properties = ConfigUtils.loadProperties();
@@ -53,13 +53,13 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
 
         if(coordinator.getConnectedVMSs().size() < 3) throw new RuntimeException("VMSs did not connect to coordinator on time");
 
-        Thread thread = new Thread(new Producer(coordinator));
+        Thread thread = new Thread(new ProductUpdateProducer(coordinator));
         thread.start();
 
         sleep(BATCH_WINDOW_INTERVAL * 2);
 
-        assert coordinator.getLastTidOfLastCompletedBatch() == 21;
-        assert coordinator.getBatchOffsetPendingCommit() == 2;
+        Assert.assertEquals(20, coordinator.getLastTidOfLastCompletedBatch());
+        Assert.assertEquals(2, coordinator.getBatchOffsetPendingCommit());
     }
 
     private Coordinator loadCoordinator(Properties properties) throws IOException {
@@ -123,11 +123,11 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
         return VMSs;
     }
 
-    private static class Producer implements Runnable {
+    private static class ProductUpdateProducer implements Runnable {
 
         Coordinator coordinator;
 
-        public Producer(Coordinator coordinator) {
+        public ProductUpdateProducer(Coordinator coordinator) {
             this.coordinator = coordinator;
         }
 

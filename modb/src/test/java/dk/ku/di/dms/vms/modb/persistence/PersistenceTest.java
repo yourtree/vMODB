@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IntKey;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -21,7 +22,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.Map;
 
-public class PersistenceTest {
+public final class PersistenceTest {
 
     private static jdk.internal.misc.Unsafe UNSAFE;
 
@@ -66,9 +67,19 @@ public class PersistenceTest {
         fc.close();
         fc = FileChannel.open(path,
                 StandardOpenOption.READ);
+
+        memorySegment = fc.map(FileChannel.MapMode.READ_ONLY, 0,
+                10L * schema.getRecordSize(), Arena.ofShared());
+        bufCtx = new RecordBufferContext( memorySegment,10);
+        index = new UniqueHashBufferIndex(bufCtx, schema, schema.getPrimaryKeyColumns());
+
         var bb = ByteBuffer.allocate( 10 * schema.getRecordSize() );
         int res = fc.read(bb);
-        assert res > 0;
+        Assert.assertEquals(730, res);
+
+        var record = index.lookupByKey( IntKey.of(3) );
+        Assert.assertNotNull(record);
+        Assert.assertTrue(record[1].toString().contentEquals("test"));
     }
 
     @Test

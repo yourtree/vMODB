@@ -10,12 +10,15 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.UPDATE_PRICE;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.UPDATE_PRODUCT;
 import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
@@ -26,8 +29,8 @@ public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
         dk.ku.di.dms.vms.marketplace.product.Main.main(null);
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
 
-        this.ingestDataIntoProductVms();
-        this.insertItemsInStockVms();
+        ingestDataIntoProductVms();
+        insertItemsInStockVms();
 
         // initialize coordinator
         Coordinator coordinator = loadCoordinator();
@@ -47,11 +50,10 @@ public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
         Thread thread = new Thread(new Producer(coordinator));
         thread.start();
 
-        sleep(BATCH_WINDOW_INTERVAL * 3);
+        sleep(BATCH_WINDOW_INTERVAL * 2);
 
-        assert coordinator.getBatchOffsetPendingCommit() == 2;
-        assert coordinator.getLastTidOfLastCompletedBatch() == 10;
-        assert coordinator.getCurrentBatchOffset() == 2;
+        Assert.assertEquals(2, coordinator.getBatchOffsetPendingCommit());
+        Assert.assertEquals(9, coordinator.getLastTidOfLastCompletedBatch());
     }
 
     private Coordinator loadCoordinator() throws IOException {
@@ -60,13 +62,13 @@ public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
         Map<Integer, ServerNode> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
-        TransactionDAG updatePriceDag =  TransactionBootstrap.name("update_price")
-                .input( "a", "product", "update_price" )
+        TransactionDAG updatePriceDag =  TransactionBootstrap.name(UPDATE_PRICE)
+                .input( "a", "product", UPDATE_PRICE)
                 .terminal("b", "product", "a")
                 .build();
 
-        TransactionDAG updateProductDag =  TransactionBootstrap.name("update_product")
-                .input( "a", "product", "update_product" )
+        TransactionDAG updateProductDag =  TransactionBootstrap.name(UPDATE_PRODUCT)
+                .input( "a", "product", UPDATE_PRODUCT)
                 .terminal("b", "stock", "a")
                 .build();
 

@@ -92,13 +92,6 @@ public final class Coordinator extends StoppableRunnable {
 
     private final ILoggingHandler loggingHandler;
 
-    /**
-     * the current batch on which new transactions are being generated
-     * for optimistic generation of batches (non-blocking on commit)
-     * this value may be way ahead of batchOffsetPendingCommit
-     */
-    private long currentBatchOffset;
-
     /*
      * the offset of the pending batch commit (always < batchOffset)
      * volatile because it is accessed by vms workers
@@ -198,14 +191,14 @@ public final class Coordinator extends StoppableRunnable {
         this.coordinatorQueue = new LinkedBlockingQueue<>();
 
         // batch commit metadata
-        this.currentBatchOffset = startingBatchOffset - 1;
+        long dummyBatchOffset = startingBatchOffset - 1;
         this.batchOffsetPendingCommit = startingBatchOffset;
 
         // initialize batch offset map
         this.batchContextMap = new ConcurrentHashMap<>();
-        BatchContext currentBatch = new BatchContext(this.currentBatchOffset);
+        BatchContext currentBatch = new BatchContext(dummyBatchOffset);
         currentBatch.seal(startingTid - 1, Map.of(), Map.of());
-        this.batchContextMap.put(this.currentBatchOffset, currentBatch);
+        this.batchContextMap.put(dummyBatchOffset, currentBatch);
     }
 
     private final Map<String, VmsNode[]> vmsIdentifiersPerDAG = new HashMap<>();
@@ -765,10 +758,6 @@ public final class Coordinator extends StoppableRunnable {
 
     public Map<String, VmsNode> getConnectedVMSs() {
         return this.vmsMetadataMap;
-    }
-
-    public long getCurrentBatchOffset() {
-        return this.currentBatchOffset;
     }
 
     public long getBatchOffsetPendingCommit() {

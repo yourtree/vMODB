@@ -105,8 +105,6 @@ public final class CartTest {
                 "0"
         };
 
-
-
         for(int i = 1; i <= 2; i++) {
             vms.getTransactionManager().beginTransaction(i-1, 0,i-1,false);
 
@@ -137,7 +135,6 @@ public final class CartTest {
         List<CartItem> list = cartItemRepository.getCartItemsByCustomerId(1);
 
         assert list.isEmpty();
-
     }
 
 }

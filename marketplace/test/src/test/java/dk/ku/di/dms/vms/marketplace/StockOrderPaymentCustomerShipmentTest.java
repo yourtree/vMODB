@@ -11,6 +11,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -31,8 +32,7 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
         dk.ku.di.dms.vms.marketplace.payment.Main.main(null);
         dk.ku.di.dms.vms.marketplace.shipment.Main.main(null);
         dk.ku.di.dms.vms.marketplace.customer.Main.main(null);
-
-        this.insertItemsInStockVms();
+        insertItemsInStockVms();
         this.insertCustomersInCustomerVms();
     }
 
@@ -48,9 +48,8 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
 
         sleep(BATCH_WINDOW_INTERVAL * 5);
 
-        assert coordinator.getCurrentBatchOffset() == 2;
-        assert coordinator.getBatchOffsetPendingCommit() == 2;
-        assert coordinator.getLastTidOfLastCompletedBatch() == 11;
+        Assert.assertEquals(2, coordinator.getBatchOffsetPendingCommit());
+        Assert.assertEquals(10, coordinator.getLastTidOfLastCompletedBatch());
     }
 
     @SuppressWarnings("BusyWait")
@@ -63,11 +62,11 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
         new ReserveStockProducer(coordinator).run();
     }
 
-    private static final Random random = new Random();
+    private static final Random RANDOM = new Random();
 
     private static class ReserveStockProducer implements Runnable {
 
-        private final String name = ReserveStockProducer.class.getSimpleName();
+        private final String NAME = ReserveStockProducer.class.getSimpleName();
 
         Coordinator coordinator;
 
@@ -77,14 +76,13 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
 
         @Override
         public void run() {
-            LOGGER.log(INFO, "["+name+"] Starting...");
+            LOGGER.log(INFO, "["+ NAME +"] Starting...");
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
             int val = 1;
             while(val <= 10) {
-
                 // reserve stock
                 ReserveStock reserveStockEvent = new ReserveStock(
-                        new Date(), customerCheckoutFunction.apply( random.nextInt(1,MAX_CUSTOMERS+1) ),
+                        new Date(), CUSTOMER_CHECKOUT_FUNCTION.apply( RANDOM.nextInt(1,MAX_CUSTOMERS+1) ),
                         List.of(
                                 new CartItem(val,1,"test",
                                         1.0f, 1.0f, 1, 1.0f, "1")
@@ -94,12 +92,11 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
                 String payload_ = serdes.serialize(reserveStockEvent, ReserveStock.class);
                 TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
                 TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
-                LOGGER.log(INFO, "["+name+"] New reserve stock event with version: "+val);
+                LOGGER.log(INFO, "["+ NAME +"] New reserve stock event with version: "+val);
                 coordinator.queueTransactionInput(txInput_);
-
                 val++;
             }
-            LOGGER.log(INFO, "["+name+"] Going to bed definitely...");
+            LOGGER.log(INFO, "["+ NAME +"] Going to bed definitely...");
         }
     }
 

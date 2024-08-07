@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.modb.definition.key;
 
 import dk.ku.di.dms.vms.modb.definition.Row;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
 import java.util.Arrays;
 
@@ -40,7 +41,7 @@ public class CompositeKey extends Row implements IKey, IIndexKey {
 
     @Override
     public boolean equals(Object key){
-        return this.hashKey == key.hashCode();
+        return key instanceof CompositeKey && this.hashKey == key.hashCode();
     }
 
 }

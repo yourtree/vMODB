@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.marketplace;
 
+import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.customer.Customer;
 import dk.ku.di.dms.vms.marketplace.product.Product;
@@ -14,7 +15,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiFunction;
 import java.util.function.Function;
+
+import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 
 public class AbstractWorkflowTest {
 
@@ -30,31 +34,37 @@ public class AbstractWorkflowTest {
 
     protected static HttpClient.Version HTTP_VERSION = HttpClient.Version.HTTP_1_1;
 
-    protected static final Function<Integer, CustomerCheckout> customerCheckoutFunction = customerId -> new CustomerCheckout(
+    protected static final Function<Integer, CustomerCheckout> CUSTOMER_CHECKOUT_FUNCTION = customerId -> new CustomerCheckout(
             customerId, "test", "test", "test", "test","test",
             "test", "test","test","test","test",
-            "test", "test", "test", 1,"1"
+            "test", "test", "test", 1, String.valueOf(customerId)
     );
 
-    protected static final Function<String, HttpRequest> httpRequestProductSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8001/product" ) )
+    protected static final BiFunction<Integer, String, HttpRequest> HTTP_REQUEST_CART_SUPPLIER = (customerId, payload) -> HttpRequest.newBuilder( URI.create( "http://localhost:"+CART_HTTP_PORT+"/cart/"+customerId+"/add" ) )
+            .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
+            .version(HTTP_VERSION)
+            .method("PATCH", HttpRequest.BodyPublishers.ofString( payload ))
+            .build();
+
+    protected static final Function<String, HttpRequest> HTTP_REQUEST_PRODUCT_SUPPLIER = str -> HttpRequest.newBuilder( URI.create( "http://localhost:"+PRODUCT_HTTP_PORT+"/product" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HTTP_VERSION)
             .POST(HttpRequest.BodyPublishers.ofString( str ))
             .build();
 
-    protected static final Function<String, HttpRequest> httpRequestStockSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8002/stock" ) )
+    protected static final Function<String, HttpRequest> HTTP_REQUEST_STOCK_SUPPLIER = str -> HttpRequest.newBuilder( URI.create( "http://localhost:"+STOCK_HTTP_PORT+"/stock" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HTTP_VERSION)
             .POST(HttpRequest.BodyPublishers.ofString( str ))
             .build();
 
-    protected static final Function<String, HttpRequest> httpRequestCustomerSupplier = str -> HttpRequest.newBuilder( URI.create( "http://localhost:8006/customer" ) )
+    protected static final Function<String, HttpRequest> HTTP_REQUEST_CUSTOMER_SUPPLIER = str -> HttpRequest.newBuilder( URI.create( "http://localhost:"+CUSTOMER_HTTP_PORT+"/customer" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HTTP_VERSION)
             .POST(HttpRequest.BodyPublishers.ofString( str ))
             .build();
 
-    protected void ingestDataIntoProductVms() {
+    protected static void ingestDataIntoProductVms() {
         try (HttpClient client = HttpClient.newBuilder()
                                             .version(HTTP_VERSION)
                                             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -63,25 +73,25 @@ public class AbstractWorkflowTest {
             List<CompletableFuture<HttpResponse<String>>> futures = new ArrayList<>();
             for (int i = 1; i <= MAX_ITEMS; i++) {
                 String str = new Product(i, 1, "test", "test", "test", "test", 1.0f, 1.0f, "test", "1").toString();
-                HttpRequest prodReq = httpRequestProductSupplier.apply(str);
+                HttpRequest prodReq = HTTP_REQUEST_PRODUCT_SUPPLIER.apply(str);
                 futures.add( client.sendAsync(prodReq, HttpResponse.BodyHandlers.ofString()) );
             }
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).join();
         }
     }
 
-    protected void insertItemsInStockVms() throws IOException, InterruptedException {
+    protected static void insertItemsInStockVms() throws IOException, InterruptedException {
         try (HttpClient client = HttpClient.newBuilder().version(HTTP_VERSION).build()) {
             String str;
             for (int i = 1; i <= MAX_ITEMS; i++) {
-                str = new StockItem(i, 1, 100, 0, 0, 0, "test", "1").toString();
-                HttpRequest stockReq = httpRequestStockSupplier.apply(str);
+                str = new StockItem(i, 1, 100, 0, 0, 0, "test", "0").toString();
+                HttpRequest stockReq = HTTP_REQUEST_STOCK_SUPPLIER.apply(str);
                 client.send(stockReq, HttpResponse.BodyHandlers.ofString());
             }
         }
     }
 
-    protected void insertCustomersInCustomerVms() throws IOException, InterruptedException {
+    protected static void insertCustomersInCustomerVms() throws IOException, InterruptedException {
         try (HttpClient client = HttpClient.newBuilder()
                 .version(HTTP_VERSION)
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -92,9 +102,21 @@ public class AbstractWorkflowTest {
                         "test", "test", "test", "test", "test",
                         "test", "test", "test", "CREDIT_CARD",
                         0, 0, 0, "test").toString();
-                HttpRequest stockReq = httpRequestCustomerSupplier.apply(str);
+                HttpRequest stockReq = HTTP_REQUEST_CUSTOMER_SUPPLIER.apply(str);
                 client.send(stockReq, HttpResponse.BodyHandlers.ofString());
             }
+        }
+    }
+
+    protected static void insertCartItemInCartVms(int customerId) throws IOException, InterruptedException {
+        try (HttpClient client = HttpClient.newBuilder()
+                .version(HTTP_VERSION)
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .connectTimeout(Duration.ofSeconds(20)).build()) {
+            CartItem cartItem = new CartItem(1, 1, "test", 10, 10, 1, 0, "0");
+            String str = cartItem.toString();
+            HttpRequest addItemRe = HTTP_REQUEST_CART_SUPPLIER.apply(customerId, str);
+            client.send(addItemRe, HttpResponse.BodyHandlers.ofString());
         }
     }
 

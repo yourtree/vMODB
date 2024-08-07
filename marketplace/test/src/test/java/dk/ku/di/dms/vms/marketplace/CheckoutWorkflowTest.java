@@ -5,12 +5,12 @@ import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
-import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
-import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
+import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -34,26 +34,20 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
         dk.ku.di.dms.vms.marketplace.shipment.Main.main(null);
         dk.ku.di.dms.vms.marketplace.customer.Main.main(null);
         dk.ku.di.dms.vms.marketplace.seller.Main.main(null);
-
-        this.insertItemsInStockVms();
-        this.insertCustomersInCustomerVms();
+        insertItemsInStockVms();
+        insertCustomersInCustomerVms();
     }
 
     @Test
     public void testCheckout() throws Exception {
         this.initVMSs();
-
         Coordinator coordinator = this.loadCoordinator();
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
-
         this.triggerCheckoutWorkflow(coordinator);
-
         sleep(BATCH_WINDOW_INTERVAL * 5);
-
-        assert coordinator.getCurrentBatchOffset() == 2;
-        assert coordinator.getBatchOffsetPendingCommit() == 2;
-        assert coordinator.getLastTidOfLastCompletedBatch() == 11;
+        Assert.assertEquals(2, coordinator.getBatchOffsetPendingCommit());
+        Assert.assertEquals(10, coordinator.getLastTidOfLastCompletedBatch());
     }
 
     @SuppressWarnings("BusyWait")
@@ -62,47 +56,44 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
         do{
             sleep(2000);
         } while (coordinator.getConnectedVMSs().size() < numStarterVMSs);
-
-        new ReserveStockProducer(coordinator).run();
+        new CustomerCheckoutProducer(coordinator).run();
     }
 
-    private static final Random random = new Random();
+    private static class CustomerCheckoutProducer implements Runnable {
 
-    private static class ReserveStockProducer implements Runnable {
+        private final String NAME = CustomerCheckoutProducer.class.getSimpleName();
 
-        private final String name = ReserveStockProducer.class.getSimpleName();
+        private final Coordinator coordinator;
 
-        Coordinator coordinator;
-
-        public ReserveStockProducer(Coordinator coordinator) {
+        public CustomerCheckoutProducer(Coordinator coordinator) {
             this.coordinator = coordinator;
         }
 
         @Override
         public void run() {
-            LOGGER.log(INFO, "["+this.name+"] Starting...");
+            LOGGER.log(INFO, "["+this.NAME +"] Starting...");
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
             int val = 1;
             while(val <= 10) {
+                // add item
+                try {
+                    insertCartItemInCartVms(val);
+                } catch (IOException | InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
 
-                // reserve stock
-                ReserveStock reserveStockEvent = new ReserveStock(
-                        new Date(), customerCheckoutFunction.apply( random.nextInt(1,MAX_CUSTOMERS+1) ),
-                        List.of(
-                                new CartItem(val,1,"test",
-                                        1.0f, 1.0f, 1, 1.0f, "1")
-                        ),
-                        String.valueOf(val)
-                );
-                String payload_ = serdes.serialize(reserveStockEvent, ReserveStock.class);
-                TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
-                TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
-                LOGGER.log(INFO, "["+this.name+"] New reserve stock event with version: "+val);
+                // customer checkout
+                var custCheckout = CUSTOMER_CHECKOUT_FUNCTION.apply( val );
+
+                String checkoutPayload = serdes.serialize(custCheckout, CustomerCheckout.class);
+                TransactionInput.Event eventPayload_ = new TransactionInput.Event(CUSTOMER_CHECKOUT, checkoutPayload);
+
+                TransactionInput txInput_ = new TransactionInput(CUSTOMER_CHECKOUT, eventPayload_);
+                LOGGER.log(INFO, "["+this.NAME +"] New customer checkout event with version: "+val);
                 coordinator.queueTransactionInput(txInput_);
-
                 val++;
             }
-            LOGGER.log(INFO, "["+this.name+"] Going to bed definitely...");
+            LOGGER.log(INFO, "["+this.NAME +"] Going to bed definitely...");
         }
     }
 
@@ -134,7 +125,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
                 starterVMSs,
                 transactionMap,
                 serverIdentifier,
-                new CoordinatorOptions().withBatchWindow(1000),
+                new CoordinatorOptions().withBatchWindow(BATCH_WINDOW_INTERVAL),
                 1,
                 1, 
                 serdes

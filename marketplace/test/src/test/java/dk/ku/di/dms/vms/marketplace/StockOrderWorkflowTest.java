@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -20,6 +21,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.CUSTOMER_CHECKOUT;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.RESERVE_STOCK;
 import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
@@ -33,7 +36,7 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
         dk.ku.di.dms.vms.marketplace.order.Main.main(null);
 
-        this.insertItemsInStockVms();
+        insertItemsInStockVms();
 
         Coordinator coordinator = loadCoordinator();
 
@@ -47,16 +50,15 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
         Thread thread = new Thread(new InputProducer(coordinator));
         thread.start();
 
-        sleep(BATCH_WINDOW_INTERVAL * 3);
+        sleep(BATCH_WINDOW_INTERVAL * 2);
 
-        assert coordinator.getCurrentBatchOffset() == 2;
-        assert coordinator.getBatchOffsetPendingCommit() == 2;
-        assert coordinator.getLastTidOfLastCompletedBatch() == 21;
+        Assert.assertEquals(2, coordinator.getBatchOffsetPendingCommit());
+        Assert.assertEquals(20, coordinator.getLastTidOfLastCompletedBatch());
     }
 
     private static class InputProducer implements Runnable {
 
-        Coordinator coordinator;
+        private final Coordinator coordinator;
 
         public InputProducer(Coordinator coordinator) {
             this.coordinator = coordinator;
@@ -67,7 +69,6 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
             IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
             int val = 1;
             while(val < 21) {
-
                 // reserve stock
                 ReserveStock reserveStockEvent = new ReserveStock(
                         new Date(), customerCheckout,
@@ -75,11 +76,10 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
                         String.valueOf(val)
                 );
                 String payload_ = serdes.serialize(reserveStockEvent, ReserveStock.class);
-                TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
-                TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
+                TransactionInput.Event eventPayload_ = new TransactionInput.Event(RESERVE_STOCK, payload_);
+                TransactionInput txInput_ = new TransactionInput(CUSTOMER_CHECKOUT, eventPayload_);
                 LOGGER.log(INFO, "[CheckoutProducer] New reserve stock event with version: "+val);
                 coordinator.queueTransactionInput(txInput_);
-
                 val++;
             }
             LOGGER.log(INFO, "InputProducer going to bed definitely... ");
@@ -92,8 +92,8 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
         Map<Integer, ServerNode> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
-        TransactionDAG checkoutDag =  TransactionBootstrap.name("customer_checkout")
-                .input( "a", "stock", "reserve_stock" )
+        TransactionDAG checkoutDag =  TransactionBootstrap.name(CUSTOMER_CHECKOUT)
+                .input( "a", "stock", RESERVE_STOCK)
                 .terminal("b", "order", "a")
                 .build();
 

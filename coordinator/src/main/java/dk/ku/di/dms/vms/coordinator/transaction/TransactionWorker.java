@@ -158,15 +158,22 @@ public final class TransactionWorker extends StoppableRunnable {
     }
 
     private long getTidNextBatch() {
+        if(this.numWorkers == 1) return this.tid;
         return this.startingTidBatch + ((long) this.numWorkers * this.maxNumberOfTIDsBatch);
     }
 
     private void queueTransactionInput(TransactionInput transactionInput) {
         TransactionDAG transactionDAG = this.transactionMap.get( transactionInput.name );
+        if(transactionDAG == null){
+            throw new RuntimeException("The transaction DAG for event "+transactionInput.name+" does not exist");
+        }
         EventIdentifier event = transactionDAG.inputEvents.get(transactionInput.event.name);
+        if(event == null){
+            throw new RuntimeException("The input event "+transactionInput.event.name+" for transaction DAG "+transactionDAG.name+" does not exist");
+        }
         // get the vms
         VmsTracking inputVms = this.vmsTrackingMap.get(event.targetVms);
-        VmsTracking[] vmsList = this.vmsPerTransactionMap.get( transactionDAG.name );
+        VmsTracking[] vmsList = this.vmsPerTransactionMap.get(transactionDAG.name);
 
         // this hashmap can be reused
         Map<String, Long> previousTidPerVms = new HashMap<>(vmsList.length);
@@ -309,9 +316,7 @@ public final class TransactionWorker extends StoppableRunnable {
             }
 
             // update the same map
-            precedenceMap.put(vms.identifier, new PrecendenceInfo(
-                    vms.lastTid, vms.batch, vms.previousBatch));
-
+            precedenceMap.put(vms.identifier, new PrecendenceInfo(vms.lastTid, vms.batch, vms.previousBatch));
         }
 
         // send batch precedence map for next worker in the ring

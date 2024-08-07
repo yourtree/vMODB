@@ -13,6 +13,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -43,8 +44,8 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
         dk.ku.di.dms.vms.marketplace.stock.Main.main(null);
         dk.ku.di.dms.vms.marketplace.order.Main.main(null);
 
-        this.ingestDataIntoProductVms();
-        this.insertItemsInStockVms();
+        ingestDataIntoProductVms();
+        insertItemsInStockVms();
 
         Coordinator coordinator = loadCoordinator();
         Thread coordinatorThread = new Thread(coordinator);
@@ -54,21 +55,20 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
             sleep(5000);
         } while (coordinator.getConnectedVMSs().size() < 3);
 
-        Thread thread = new Thread(new InputProducer(coordinator));
+        Thread thread = new Thread(new ProductUpdateAndCheckoutProducer(coordinator));
         thread.start();
 
-        sleep(BATCH_WINDOW_INTERVAL * 5);
+        sleep(BATCH_WINDOW_INTERVAL * 3);
 
-        assert coordinator.getCurrentBatchOffset() == 2;
-        assert coordinator.getBatchOffsetPendingCommit() == 2;
-        assert coordinator.getLastTidOfLastCompletedBatch() == 21;
+        Assert.assertEquals(2, coordinator.getBatchOffsetPendingCommit());
+        Assert.assertEquals(20, coordinator.getLastTidOfLastCompletedBatch());
     }
 
-    private static class InputProducer implements Runnable {
+    private static class ProductUpdateAndCheckoutProducer implements Runnable {
 
         private final Coordinator coordinator;
 
-        public InputProducer(Coordinator coordinator) {
+        public ProductUpdateAndCheckoutProducer(Coordinator coordinator) {
             this.coordinator = coordinator;
         }
 
@@ -133,13 +133,7 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
-        Map<Integer, IdentifiableNode> VMSs = new HashMap<>(3);
-        IdentifiableNode productAddress = new IdentifiableNode("product", "localhost", 8081);
-        VMSs.put(productAddress.hashCode(), productAddress);
-        IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", 8082);
-        VMSs.put(stockAddress.hashCode(), stockAddress);
-        IdentifiableNode orderAddress = new IdentifiableNode("order", "localhost", 8083);
-        VMSs.put(orderAddress.hashCode(), orderAddress);
+        Map<Integer, IdentifiableNode> VMSs = getIdentifiableNodeMap();
 
         return Coordinator.build(
                 serverMap,
@@ -151,6 +145,17 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
                 1, 
                 serdes
         );
+    }
+
+    private static Map<Integer, IdentifiableNode> getIdentifiableNodeMap() {
+        Map<Integer, IdentifiableNode> VMSs = new HashMap<>(3);
+        IdentifiableNode productAddress = new IdentifiableNode("product", "localhost", 8081);
+        VMSs.put(productAddress.hashCode(), productAddress);
+        IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", 8082);
+        VMSs.put(stockAddress.hashCode(), stockAddress);
+        IdentifiableNode orderAddress = new IdentifiableNode("order", "localhost", 8083);
+        VMSs.put(orderAddress.hashCode(), orderAddress);
+        return VMSs;
     }
 
 }

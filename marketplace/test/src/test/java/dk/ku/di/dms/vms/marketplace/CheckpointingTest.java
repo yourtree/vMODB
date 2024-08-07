@@ -1,18 +1,23 @@
 package dk.ku.di.dms.vms.marketplace;
 
-
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
+import dk.ku.di.dms.vms.modb.definition.key.IntKey;
+import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
+import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.HashSet;
+import java.util.Set;
 
 public class CheckpointingTest extends CartProductWorkflowTest {
 
@@ -38,30 +43,24 @@ public class CheckpointingTest extends CartProductWorkflowTest {
         String userHome = ConfigUtils.getUserHome();
         String filePath = userHome + "/vms/products.data";
         Path path = Paths.get(filePath);
-        Schema productSchema = PRODUCT_VMS.getSchema("products");
+        Schema schema = PRODUCT_VMS.getSchema("products");
         try {
             FileChannel fc = FileChannel.open(path, StandardOpenOption.READ);
+            var memorySegment = fc.map(FileChannel.MapMode.READ_ONLY, 0,
+                    10L * schema.getRecordSize(), Arena.ofShared());
+            var bufCtx = new RecordBufferContext( memorySegment,10);
+            var index = new UniqueHashBufferIndex(bufCtx, schema, schema.getPrimaryKeyColumns());
             var bb = MemoryManager.getTemporaryDirectBuffer( (int)fc.size() );
-            //bb.order(ByteOrder.nativeOrder());
             int res = fc.read(bb);
             Assert.assertEquals(4260, res);
-            /* this is not working well...
-            bb.position(0);
             Set<Integer> setOfIds = new HashSet<>();
             // read records from the byte buffer
             for(int i = 1; i <= MAX_ITEMS; i++){
-                int pos = 0;
-                bb.position(bb.position() + Schema.RECORD_HEADER);
-                Object[] record = new Object[productSchema.columnDataTypes().length];
-                for(DataType dt : productSchema.columnDataTypes()) {
-                    var rf = DataTypeUtils.getReadFunction(dt);
-                    record[pos] = rf.apply(bb);
-                    pos++;
-                }
+                Object[] record = index.lookupByKey( IntKey.of(i) );
+                Assert.assertNotNull(record);
                 setOfIds.add((Integer) record[0]);
             }
             Assert.assertEquals(MAX_ITEMS, setOfIds.size());
-             */
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

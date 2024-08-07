@@ -30,4 +30,18 @@ public final class CartItem {
         Voucher = voucher;
         Version = version;
     }
+
+    @Override
+    public String toString() {
+        return "{"
+                + "\"SellerId\":\"" + SellerId + "\""
+                + ",\"ProductId\":\"" + ProductId + "\""
+                + ",\"ProductName\":\"" + ProductName + "\""
+                + ",\"UnitPrice\":\"" + UnitPrice + "\""
+                + ",\"FreightValue\":\"" + FreightValue + "\""
+                + ",\"Quantity\":\"" + Quantity + "\""
+                + ",\"Voucher\":\"" + Voucher + "\""
+                + ",\"Version\":\"" + Version + "\""
+                + "}";
+    }
 }

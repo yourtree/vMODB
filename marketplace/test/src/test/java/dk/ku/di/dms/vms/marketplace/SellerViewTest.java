@@ -13,6 +13,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -45,7 +46,7 @@ public final class SellerViewTest extends AbstractWorkflowTest {
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         for(int i = 1; i <= MAX_SELLERS; i++) {
-            CustomerCheckout customerCheckout = customerCheckoutFunction.apply(1);
+            CustomerCheckout customerCheckout = CUSTOMER_CHECKOUT_FUNCTION.apply(1);
             InvoiceIssued invoiceIssued = new InvoiceIssued( customerCheckout, i,  "test", new Date(), 100,
                     List.of(new OrderItem(i,1,1, "name",
                             i, 1.0f, new Date(), 1.0f, 1, 1.0f, 1.0f, 0.0f) )
@@ -63,11 +64,9 @@ public final class SellerViewTest extends AbstractWorkflowTest {
         sleep(BATCH_WINDOW_INTERVAL * 3);
 
         try (HttpClient client = HttpClient.newHttpClient()) {
-
-            var request = httpRequestDashboardSupplier.apply(1);
+            var request = HTTP_REQUEST_DASHBOARD_SUPPLIER.apply(1);
             var response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            assert response.statusCode() == 200;
+            Assert.assertEquals(200, response.statusCode());
         }
     }
 
@@ -103,14 +102,14 @@ public final class SellerViewTest extends AbstractWorkflowTest {
         );
     }
 
-    private static final Function<Integer, HttpRequest> httpRequestDashboardSupplier = sellerId -> HttpRequest.newBuilder(
+    private static final Function<Integer, HttpRequest> HTTP_REQUEST_DASHBOARD_SUPPLIER = sellerId -> HttpRequest.newBuilder(
                     URI.create( "http://localhost:8007/seller/dashboard/"+sellerId ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HttpClient.Version.HTTP_2)
             .GET()
             .build();
 
-    private static final Function<String, HttpRequest> httpRequestSellerSupplier = str -> HttpRequest.newBuilder(
+    private static final Function<String, HttpRequest> HTTP_REQUEST_SELLER_SUPPLIER = str -> HttpRequest.newBuilder(
                     URI.create( "http://localhost:8007/seller" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HttpClient.Version.HTTP_2)
@@ -124,7 +123,7 @@ public final class SellerViewTest extends AbstractWorkflowTest {
                 str = new Seller(i, "test", "test", "test",
                         "test", "test", "test", "test",
                         "test", "test", "test", "test", "test").toString();
-                HttpRequest sellerReq = httpRequestSellerSupplier.apply(str);
+                HttpRequest sellerReq = HTTP_REQUEST_SELLER_SUPPLIER.apply(str);
                 client.send(sellerReq, HttpResponse.BodyHandlers.ofString());
             }
         }

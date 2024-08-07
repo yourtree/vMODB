@@ -6,17 +6,20 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
+import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
+import dk.ku.di.dms.vms.marketplace.common.events.ReserveStock;
+import dk.ku.di.dms.vms.marketplace.common.inputs.UpdateDelivery;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
-import static dk.ku.di.dms.vms.marketplace.common.Constants.UPDATE_DELIVERY;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 
@@ -49,22 +52,68 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
         this.triggerCheckoutWorkflow(coordinator);
 
         LOGGER.log(INFO, "Waiting batch window interval...");
-        sleep(BATCH_WINDOW_INTERVAL * 7);
+        sleep(BATCH_WINDOW_INTERVAL * 2);
 
         LOGGER.log(INFO, "Sending update shipment event...");
         // now send the update shipment event
         new UpdateShipmentProducer(coordinator).run();
 
-        sleep(BATCH_WINDOW_INTERVAL * 3);
+        sleep(BATCH_WINDOW_INTERVAL * 2);
 
-        assert coordinator.getCurrentBatchOffset() == 3;
-        assert coordinator.getBatchOffsetPendingCommit() == 3;
-        assert coordinator.getLastTidOfLastCompletedBatch() == 12;
+        Assert.assertEquals(3, coordinator.getBatchOffsetPendingCommit());
+        Assert.assertEquals(11, coordinator.getLastTidOfLastCompletedBatch());
+    }
+
+    @Override
+    protected void triggerCheckoutWorkflow(Coordinator coordinator) throws Exception {
+        int numStarterVMSs = coordinator.getStarterVMSs().size();
+        do{
+            sleep(2000);
+        } while (coordinator.getConnectedVMSs().size() < numStarterVMSs);
+        new ReserveStockProducer(coordinator).run();
+    }
+
+    private static final Random RANDOM = new Random();
+
+    private static class ReserveStockProducer implements Runnable {
+
+        private final String NAME = ReserveStockProducer.class.getSimpleName();
+
+        Coordinator coordinator;
+
+        public ReserveStockProducer(Coordinator coordinator) {
+            this.coordinator = coordinator;
+        }
+
+        @Override
+        public void run() {
+            LOGGER.log(INFO, "["+ NAME +"] Starting...");
+            IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+            int val = 1;
+            while(val <= 10) {
+                // reserve stock
+                ReserveStock reserveStockEvent = new ReserveStock(
+                        new Date(), CUSTOMER_CHECKOUT_FUNCTION.apply( RANDOM.nextInt(1,MAX_CUSTOMERS+1) ),
+                        List.of(
+                                new CartItem(val,1,"test",
+                                        1.0f, 1.0f, 1, 1.0f, "1")
+                        ),
+                        String.valueOf(val)
+                );
+                String payload_ = serdes.serialize(reserveStockEvent, ReserveStock.class);
+                TransactionInput.Event eventPayload_ = new TransactionInput.Event("reserve_stock", payload_);
+                TransactionInput txInput_ = new TransactionInput("customer_checkout", eventPayload_);
+                LOGGER.log(INFO, "["+ NAME +"] New reserve stock event with version: "+val);
+                coordinator.queueTransactionInput(txInput_);
+                val++;
+            }
+            LOGGER.log(INFO, "["+ NAME +"] Going to bed definitely...");
+        }
     }
 
     private static class UpdateShipmentProducer implements Runnable {
 
-        private final String name = UpdateShipmentProducer.class.getSimpleName();
+        private final String NAME = UpdateShipmentProducer.class.getSimpleName();
 
         Coordinator coordinator;
 
@@ -74,19 +123,20 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
 
         @Override
         public void run() {
-            LOGGER.log(INFO, "["+name+"] Starting...");
-            String instanceId = "1";
-
+            IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+            LOGGER.log(INFO, "["+ NAME +"] Starting...");
+            UpdateDelivery updateDelivery = new UpdateDelivery("11");
+            String payload_ = serdes.serialize(updateDelivery, UpdateDelivery.class);
             // event name
-            TransactionInput.Event eventPayload_ = new TransactionInput.Event(UPDATE_DELIVERY, instanceId);
+            TransactionInput.Event eventPayload_ = new TransactionInput.Event(UPDATE_DELIVERY, payload_);
 
             // transaction name
             TransactionInput txInput_ = new TransactionInput(UPDATE_DELIVERY, eventPayload_);
 
-            LOGGER.log(INFO, "["+name+"] New update shipment event with version: "+instanceId);
+            LOGGER.log(INFO, "["+ NAME +"] New update shipment event with version 11");
             coordinator.queueTransactionInput(txInput_);
 
-            LOGGER.log(INFO, "["+name+"] Going to bed definitely... ");
+            LOGGER.log(INFO, "["+ NAME +"] Going to bed definitely... ");
         }
     }
 
@@ -96,9 +146,8 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
         dk.ku.di.dms.vms.marketplace.payment.Main.main(null);
         dk.ku.di.dms.vms.marketplace.shipment.Main.main(null);
         dk.ku.di.dms.vms.marketplace.customer.Main.main(null);
-
-        this.insertItemsInStockVms();
-        this.insertCustomersInCustomerVms();
+        insertItemsInStockVms();
+        insertCustomersInCustomerVms();
     }
 
     private Coordinator loadCoordinator() throws IOException {
@@ -107,16 +156,16 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
         Map<Integer, ServerNode> serverMap = new HashMap<>(2);
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
-        TransactionDAG checkoutDag =  TransactionBootstrap.name("customer_checkout")
-                .input( "a", "stock", "reserve_stock" )
-                .internal("b", "order", "stock_confirmed", "a")
-                .internal("c", "payment", "invoice_issued", "b")
+        TransactionDAG checkoutDag =  TransactionBootstrap.name(CUSTOMER_CHECKOUT)
+                .input( "a", "stock", RESERVE_STOCK )
+                .internal("b", "order", STOCK_CONFIRMED, "a")
+                .internal("c", "payment", INVOICE_ISSUED, "b")
                 .terminal( "d", "customer", "c" )
                 .terminal( "e", "shipment",  "c" )
                 .build();
 
-        TransactionDAG updateShipmentDag =  TransactionBootstrap.name("update_shipment")
-                .input( "a", "shipment", "update_shipment" )
+        TransactionDAG updateShipmentDag =  TransactionBootstrap.name(UPDATE_DELIVERY)
+                .input( "a", "shipment", UPDATE_DELIVERY)
                 // .terminal("b", "seller", "a")
                 .terminal( "c", "customer", "a" )
                 .terminal( "d", "order",  "a" )
@@ -128,6 +177,21 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
+        Map<Integer, IdentifiableNode> starterVMSs = getIdentifiableNodeMap();
+
+        return Coordinator.build(
+                serverMap,
+                starterVMSs,
+                transactionMap,
+                serverIdentifier,
+                new CoordinatorOptions().withBatchWindow(BATCH_WINDOW_INTERVAL),
+                1,
+                1, 
+                serdes
+        );
+    }
+
+    private static Map<Integer, IdentifiableNode> getIdentifiableNodeMap() {
         Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(10);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", Constants.STOCK_VMS_PORT);
         starterVMSs.put(stockAddress.hashCode(), stockAddress);
@@ -139,19 +203,9 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
         starterVMSs.put(shipmentAddress.hashCode(), shipmentAddress);
         IdentifiableNode customerAddress = new IdentifiableNode("customer", "localhost", Constants.CUSTOMER_VMS_PORT);
         starterVMSs.put(customerAddress.hashCode(), customerAddress);
-        IdentifiableNode sellerAddress = new IdentifiableNode("seller", "localhost", Constants.SELLER_VMS_PORT);
+        // IdentifiableNode sellerAddress = new IdentifiableNode("seller", "localhost", Constants.SELLER_VMS_PORT);
         // starterVMSs.put(sellerAddress.hashCode(), sellerAddress);
-
-        return Coordinator.build(
-                serverMap,
-                starterVMSs,
-                transactionMap,
-                serverIdentifier,
-                new CoordinatorOptions().withBatchWindow(3000),
-                1,
-                1, 
-                serdes
-        );
+        return starterVMSs;
     }
 
 }

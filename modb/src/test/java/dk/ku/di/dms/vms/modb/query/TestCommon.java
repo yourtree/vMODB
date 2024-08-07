@@ -1,9 +1,7 @@
 package dk.ku.di.dms.vms.modb.query;
 
-import dk.ku.di.dms.vms.modb.ExecutorTest;
-
 /**
- * Common set of methods for two or more tests (e.g., {@link PlannerTest} and {@link ExecutorTest}
+ * Common set of methods for two or more tests (e.g., {@link PlannerTest} and {@ExecutorTest}
  */
 public final class TestCommon {
 

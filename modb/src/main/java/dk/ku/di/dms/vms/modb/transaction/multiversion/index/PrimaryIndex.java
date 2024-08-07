@@ -15,6 +15,7 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
 
@@ -37,6 +38,8 @@ import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
  */
 public final class PrimaryIndex implements IMultiVersionIndex {
 
+    private static final Deque<Set<IKey>> WRITE_SET_BUFFER = new ConcurrentLinkedDeque<>();
+
     private final ReadWriteIndex<IKey> primaryKeyIndex;
 
     private final Map<IKey, OperationSetOfKey> updatesPerKeyMap;
@@ -46,16 +49,21 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     private final Set<IKey> keysToFlush = ConcurrentHashMap.newKeySet();
 
+    // write set of transactions
+    private final Map<Long, Set<IKey>> writeSet;
+
     public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
         this.primaryKeyGenerator = Optional.empty();
+        this.writeSet = new ConcurrentHashMap<>();
     }
 
     public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
-        this.primaryKeyGenerator = Optional.of( primaryKeyGenerator );
+        this.primaryKeyGenerator = Optional.of(primaryKeyGenerator);
+        this.writeSet = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -246,7 +254,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         operationSet.updateHistoryMap.put(txCtx.tid, entry);
         operationSet.lastWriteType = WriteType.INSERT;
         operationSet.lastVersion = values;
-        txCtx.writeSet.add(key);
+        this.appendWrite(txCtx, key);
         return true;
     }
 
@@ -292,7 +300,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         operationSet.updateHistoryMap.put(txCtx.tid, entry);
         operationSet.lastWriteType = WriteType.UPDATE;
         operationSet.lastVersion = values;
-        txCtx.writeSet.add(key);
+        this.appendWrite(txCtx, key);
         return true;
     }
 
@@ -323,10 +331,9 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
         if (operationSet != null && operationSet.lastWriteType != WriteType.DELETE){
             TransactionWrite entry = new TransactionWrite(WriteType.DELETE, null);
-            // amortized O(1)
             operationSet.updateHistoryMap.put(txCtx.tid, entry);
             operationSet.lastWriteType = WriteType.DELETE;
-            txCtx.writeSet.add(key);
+            this.appendWrite(txCtx, key);
             return Optional.of( operationSet.lastVersion );
             // does this key even exist? if not, don't even need to save it on transaction metadata
         }
@@ -338,7 +345,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             TransactionWrite entry = new TransactionWrite(WriteType.DELETE, null);
             operationSet.updateHistoryMap.put(txCtx.tid, entry);
             operationSet.lastWriteType = WriteType.DELETE;
-            txCtx.writeSet.add(key);
+            this.appendWrite(txCtx, key);
             return Optional.of( obj );
         }
         return Optional.empty();
@@ -358,19 +365,26 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      * Called when a constraint is violated, leading to a transaction abort
      */
     public void undoTransactionWrites(TransactionContext txCtx){
-        if(txCtx.writeSet == null) return;
-        for(var key : txCtx.writeSet) {
+        var writeSet = this.removeWriteSet(txCtx);
+        if(writeSet == null) return;
+        for(var key : writeSet) {
             // do we have a record written in the corresponding index? always yes. if no, it is a bug
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             operationSetOfKey.updateHistoryMap.poll();
         }
-        txCtx.writeSet.clear();
+        writeSet.clear();
+        WRITE_SET_BUFFER.addLast(writeSet);
     }
 
     public void garbageCollection(long maxTid){
         for(var key : this.keysToFlush){
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
-            operationSetOfKey.updateHistoryMap.removeUpToEntry(maxTid);
+            if(operationSetOfKey == null){
+                throw new RuntimeException("Error on retrieving operation set for key "+key);
+            }
+            if(operationSetOfKey.updateHistoryMap.removeUpToEntry(maxTid) == null){
+                throw new RuntimeException("Error on retrieving entry from operation set key "+key);
+            }
         }
         this.keysToFlush.clear();
     }
@@ -378,9 +392,13 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public void checkpoint(long maxTid){
         for(var key : this.keysToFlush){
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
-            if(operationSetOfKey == null) continue;
+            if(operationSetOfKey == null){
+                throw new RuntimeException("Error on retrieving operation set for key "+key);
+            }
             var entry = operationSetOfKey.updateHistoryMap.removeUpToEntry(maxTid);
-            if (entry == null) continue;
+            if (entry == null) {
+                throw new RuntimeException("Error on retrieving entry from operation set key "+key);
+            }
             switch (operationSetOfKey.lastWriteType){
                 case UPDATE -> this.primaryKeyIndex.update(key, entry.val().record);
                 case INSERT -> this.primaryKeyIndex.insert(key, entry.val().record);
@@ -392,7 +410,19 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     public void installWrites(TransactionContext txCtx){
-        this.keysToFlush.addAll(txCtx.writeSet);
+        Set<IKey> writeSet = this.removeWriteSet(txCtx);
+        this.keysToFlush.addAll(writeSet);
+        writeSet.clear();
+        WRITE_SET_BUFFER.addLast(writeSet);
+    }
+
+    public void appendWrite(TransactionContext txCtx, IKey key){
+        this.writeSet.computeIfAbsent(txCtx.tid, k ->
+                Objects.requireNonNullElseGet(WRITE_SET_BUFFER.poll(), HashSet::new)).add(key);
+    }
+
+    public Set<IKey> removeWriteSet(TransactionContext txCtx){
+        return this.writeSet.remove(txCtx.tid);
     }
 
     public ReadWriteIndex<IKey> underlyingIndex(){

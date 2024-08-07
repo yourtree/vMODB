@@ -77,7 +77,8 @@ public final class StockService {
             CartItem cartItem = cartItemMap.get( currId );
 
             if (item.version.compareTo(cartItem.Version) != 0) {
-                LOGGER.log(INFO,"The stock item ("+item.seller_id+"-"+item.product_id+") version is incorrect.\nStock item: "+ item.version+ " Cart item: "+cartItem.Version);
+                LOGGER.log(INFO,"The stock item ("+item.seller_id+"-"+item.product_id+") version is incorrect.\n" +
+                        "Stock item: "+ item.version+ " Cart item: "+cartItem.Version);
                 unavailableItems.add(cartItem);
                 continue;
             }

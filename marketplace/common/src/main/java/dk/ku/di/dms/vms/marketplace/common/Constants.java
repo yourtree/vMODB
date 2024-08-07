@@ -20,6 +20,7 @@ public final class Constants {
 
     public static final int SHIPMENT_VMS_PORT = 8085;
 
+    public static final int CUSTOMER_HTTP_PORT = 8006;
     public static final int CUSTOMER_VMS_PORT = 8086;
 
     public static final int SELLER_VMS_PORT = 8087;
