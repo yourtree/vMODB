@@ -44,4 +44,10 @@ public class CompositeKey extends Row implements IKey, IIndexKey {
         return key instanceof CompositeKey && this.hashKey == key.hashCode();
     }
 
+    @Override
+    public String toString() {
+        return "{"
+                + "\"values\":" + Arrays.toString(values)
+                + "}";
+    }
 }

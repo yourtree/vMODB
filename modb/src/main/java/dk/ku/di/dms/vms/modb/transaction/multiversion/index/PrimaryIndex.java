@@ -218,7 +218,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                     return (entry.val().type != WriteType.DELETE ? entry.val().record : null);
                 }
             } else {
-                return operationSet.lastWriteType != WriteType.DELETE ? operationSet.lastVersion : null;
+                return operationSet.lastWriteType != WriteType.DELETE ? operationSet.updateHistoryMap.peak().val().record : null;
             }
         }
         return this.primaryKeyIndex.lookupByKey(key);
@@ -253,7 +253,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         }
         operationSet.updateHistoryMap.put(txCtx.tid, entry);
         operationSet.lastWriteType = WriteType.INSERT;
-        operationSet.lastVersion = values;
         this.appendWrite(txCtx, key);
         return true;
     }
@@ -299,7 +298,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         }
         operationSet.updateHistoryMap.put(txCtx.tid, entry);
         operationSet.lastWriteType = WriteType.UPDATE;
-        operationSet.lastVersion = values;
         this.appendWrite(txCtx, key);
         return true;
     }
@@ -334,7 +332,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             operationSet.updateHistoryMap.put(txCtx.tid, entry);
             operationSet.lastWriteType = WriteType.DELETE;
             this.appendWrite(txCtx, key);
-            return Optional.of( operationSet.lastVersion );
+            return Optional.of( operationSet.updateHistoryMap.peak().val().record );
             // does this key even exist? if not, don't even need to save it on transaction metadata
         }
         Object[] obj = this.primaryKeyIndex.lookupByKey(key);
@@ -382,11 +380,31 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             if(operationSetOfKey == null){
                 throw new RuntimeException("Error on retrieving operation set for key "+key);
             }
-            if(operationSetOfKey.updateHistoryMap.removeUpToEntry(maxTid) == null){
-                throw new RuntimeException("Error on retrieving entry from operation set key "+key);
+            var entry = operationSetOfKey.updateHistoryMap.removeUpToEntry(maxTid);
+            if(entry != null){
+                // only remove from keys to flush if max tid meets the entry
+                this.keysToFlush.remove(key);
             }
+            /* for troubleshooting
+            if(entry == null){
+                var lastVersionEntry = operationSetOfKey.updateHistoryMap.peak();
+                var next = lastVersionEntry.next();
+                long nextVersionTID = 0;
+                if(next != null){
+                    nextVersionTID = next.key();
+                }
+                var lastVersion = lastVersionEntry.val().record;
+                String lastVersionStr = lastVersion != null ?
+                        Arrays.toString(lastVersion) : "null";
+                System.out.println("It was not possible to find an entry for operation set key "+key+ " and maxTid "+maxTid+
+                        "\nLast write TID: "+lastVersionEntry.key()+
+                        "\nLast write type: "+operationSetOfKey.lastWriteType+
+                        "\nLast version: "+lastVersionStr+
+                        "\nNext version TID: "+nextVersionTID
+                );
+            }
+            */
         }
-        this.keysToFlush.clear();
     }
 
     public void checkpoint(long maxTid){
@@ -396,17 +414,16 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 throw new RuntimeException("Error on retrieving operation set for key "+key);
             }
             var entry = operationSetOfKey.updateHistoryMap.removeUpToEntry(maxTid);
-            if (entry == null) {
-                throw new RuntimeException("Error on retrieving entry from operation set key "+key);
-            }
-            switch (operationSetOfKey.lastWriteType){
-                case UPDATE -> this.primaryKeyIndex.update(key, entry.val().record);
-                case INSERT -> this.primaryKeyIndex.insert(key, entry.val().record);
-                case DELETE -> this.primaryKeyIndex.delete(key);
+            if (entry != null) {
+                this.keysToFlush.remove(key);
+                switch (operationSetOfKey.lastWriteType) {
+                    case UPDATE -> this.primaryKeyIndex.update(key, entry.val().record);
+                    case INSERT -> this.primaryKeyIndex.insert(key, entry.val().record);
+                    case DELETE -> this.primaryKeyIndex.delete(key);
+                }
             }
         }
         this.primaryKeyIndex.flush();
-        this.keysToFlush.clear();
     }
 
     public void installWrites(TransactionContext txCtx){

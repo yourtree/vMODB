@@ -26,20 +26,6 @@ public final class OperationSetOfKey {
      */
     public volatile WriteType lastWriteType;
 
-    /**
-     * Entity from the last write operation (insert or update)
-     * cached, so we can extract the fields changed from the last version
-     * to speed up the checking of constraints
-     * Only used by on-flight RW/W tasks
-     */
-    public volatile Object[] lastVersion;
-
-    // version stored in main memory, from the last snapshot state
-    // the logic to keep everything in sync requires changes to write operations
-    // better to look for that later
-    // another design is making the index itself cache that for us
-    // public Object[] snapshotVersion;
-
     public OperationSetOfKey(){
         this.updateHistoryMap = new SingleWriterMultipleReadersFIFO<>();
     }

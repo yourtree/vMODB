@@ -14,7 +14,6 @@ public abstract class AbstractHttpHandler {
     }
 
     protected void submitCustomerCheckout(String payload) {
-
         TransactionInput.Event eventPayload = new TransactionInput.Event(CUSTOMER_CHECKOUT, payload);
         TransactionInput txInput = new TransactionInput(CUSTOMER_CHECKOUT, eventPayload);
         this.coordinator.queueTransactionInput(txInput);
@@ -22,7 +21,7 @@ public abstract class AbstractHttpHandler {
 
     protected byte[] getLastTidBytes() {
         long lng = this.coordinator.getLastTidOfLastCompletedBatch();
-        System.out.println("retrieved tid = "+lng);
+        System.out.println("Retrieved TID: "+lng);
         return new byte[] {
                 (byte) lng,
                 (byte) (lng >> 8),

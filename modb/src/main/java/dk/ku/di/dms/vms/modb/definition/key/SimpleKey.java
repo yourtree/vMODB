@@ -31,4 +31,10 @@ public final class SimpleKey implements IKey, IIndexKey {
         return false;
     }
 
+    @Override
+    public String toString() {
+        return "{" +
+                "value =" + value +
+                '}';
+    }
 }

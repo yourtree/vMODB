@@ -34,6 +34,10 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
             return this.val;
         }
 
+        public Entry<K,V> next(){
+            return this.next;
+        }
+
     }
 
     private volatile Entry<K,V> first;
@@ -51,6 +55,10 @@ public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
     public void poll(){
         var next = this.first.next;
         this.first = next;
+    }
+
+    public Entry<K,V> peak(){
+        return this.first;
     }
 
     /**

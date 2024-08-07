@@ -137,7 +137,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     }
 
     /**
-     * TODO finish. can we extract the column values and make a special api for the facade? only if it is a single key
+     * finish at some point. can we extract the column values and make a special api for the facade? only if it is a single key
      */
     public void issue(Table table, IStatement statement) throws AnalyzerException {
         switch (statement.getType()){
@@ -312,7 +312,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     /*
      * Simple implementation to make package query work
-     * TODO disaggregate the index choice, limit, aka query details, from the operator
+     * disaggregate the index choice, limit, aka query details, from the operator
      */
     public MemoryRefNode run(List<WherePredicate> wherePredicates,
                              IndexGroupByMinWithProjection operator){
@@ -388,6 +388,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
                 index.garbageCollection(maxTid);
             }
         }
+
     }
 
     /**
