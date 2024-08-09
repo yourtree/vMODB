@@ -6,11 +6,11 @@ import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.execution.filter.types.TypedBiPredicate;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
 
+@SuppressWarnings("DuplicatedCode")
 public class FilterContextBuilder {
 
     public static Predicate<Object> predicateNull = Objects::isNull;
@@ -20,8 +20,8 @@ public class FilterContextBuilder {
     public static final TypedBiPredicate<Integer> intGtOrEqPredicate = ((t1, t2) -> t1 >= t2);
     public static final TypedBiPredicate<Integer> intLtPredicate = ((t1, t2) -> t1 < t2);
     public static final TypedBiPredicate<Integer> intLtOrEqPredicate = ((t1, t2) -> t1 <= t2);
-    public static final TypedBiPredicate<Integer> intEqPredicate = ((t1, t2) -> t1 == t2);
-    public static final TypedBiPredicate<Integer> intNotEqPredicate = ((t1, t2) -> t1 != t2);
+    public static final TypedBiPredicate<Integer> intEqPredicate = (Integer::equals);
+    public static final TypedBiPredicate<Integer> intNotEqPredicate = ((t1, t2) -> !t1.equals(t2));
 
     private static TypedBiPredicate<Integer> getIntValuePredicate(ExpressionTypeEnum expressionType){
         return switch (expressionType) {
@@ -39,8 +39,8 @@ public class FilterContextBuilder {
     public static final TypedBiPredicate<Float> floatGtOrEqPredicate = ((t1, t2) -> t1 >= t2);
     public static final TypedBiPredicate<Float> floatLtPredicate = ((t1, t2) -> t1 < t2);
     public static final TypedBiPredicate<Float> floatLtOrEqPredicate = ((t1, t2) -> t1 <= t2);
-    public static final TypedBiPredicate<Float> floatEqPredicate = ((t1, t2) -> t1 == t2);
-    public static final TypedBiPredicate<Float> floatNotEqPredicate = ((t1, t2) -> t1 != t2);
+    public static final TypedBiPredicate<Float> floatEqPredicate = (Float::equals);
+    public static final TypedBiPredicate<Float> floatNotEqPredicate = ((t1, t2) -> !t1.equals(t2));
 
     private static TypedBiPredicate<Float> getFloatValuePredicate(ExpressionTypeEnum expressionType){
         return switch (expressionType) {
@@ -58,8 +58,8 @@ public class FilterContextBuilder {
     public static final TypedBiPredicate<Double> doubleGtOrEqPredicate = ((t1, t2) -> t1 >= t2);
     public static final TypedBiPredicate<Double> doubleLtPredicate = ((t1, t2) -> t1 < t2);
     public static final TypedBiPredicate<Double> doubleLtOrEqPredicate = ((t1, t2) -> t1 <= t2);
-    public static final TypedBiPredicate<Double> doubleEqPredicate = ((t1, t2) -> t1 == t2);
-    public static final TypedBiPredicate<Double> doubleNotEqPredicate = ((t1, t2) -> t1 != t2);
+    public static final TypedBiPredicate<Double> doubleEqPredicate = (Double::equals);
+    public static final TypedBiPredicate<Double> doubleNotEqPredicate = ((t1, t2) -> !t1.equals(t2));
 
     private static TypedBiPredicate<Double> getDoubleValuePredicate(ExpressionTypeEnum expressionType){
         return switch (expressionType) {
@@ -77,8 +77,8 @@ public class FilterContextBuilder {
     public static final TypedBiPredicate<Long> longGtOrEqPredicate = ((t1, t2) -> t1 >= t2);
     public static final TypedBiPredicate<Long> longLtPredicate = ((t1, t2) -> t1 < t2);
     public static final TypedBiPredicate<Long> longLtOrEqPredicate = ((t1, t2) -> t1 <= t2);
-    public static final TypedBiPredicate<Long> longEqPredicate = ((t1, t2) -> t1 == t2);
-    public static final TypedBiPredicate<Long> longNotEqPredicate = ((t1, t2) -> t1 != t2);
+    public static final TypedBiPredicate<Long> longEqPredicate = (Long::equals);
+    public static final TypedBiPredicate<Long> longNotEqPredicate = ((t1, t2) -> !t1.equals(t2));
 
     private static TypedBiPredicate<Long> getLongValuePredicate(ExpressionTypeEnum expressionType){
         return switch (expressionType) {
@@ -103,13 +103,13 @@ public class FilterContextBuilder {
         };
     }
 
-    public static final TypedBiPredicate<Character[]> charArrayEqPredicate = ((t1, t2) -> Arrays.toString(t1).compareTo(Arrays.toString(t2)) == 0);
-    public static final TypedBiPredicate<Character[]> charArrayNotEqPredicate = ((t1, t2) -> Arrays.toString(t1).compareTo(Arrays.toString(t2)) != 0);
+    public static final TypedBiPredicate<String> stringEqPredicate = (String::contentEquals);
+    public static final TypedBiPredicate<String> stringNotEqPredicate = ((t1, t2) -> !t1.contentEquals(t2));
 
-    private static TypedBiPredicate<Character[]> getCharArrayValuePredicate(ExpressionTypeEnum expressionType){
+    private static TypedBiPredicate<String> getStringValuePredicate(ExpressionTypeEnum expressionType){
         return switch (expressionType) {
-            case EQUALS -> charArrayEqPredicate;
-            case NOT_EQUALS -> charArrayNotEqPredicate;
+            case EQUALS -> stringEqPredicate;
+            case NOT_EQUALS -> stringNotEqPredicate;
             default -> throw new IllegalStateException("FAIL");
         };
     }
@@ -164,34 +164,14 @@ public class FilterContextBuilder {
             filterContext.biPredicateParams.add( wherePredicate.value );
 
             switch(dataType){
-
-                case INT: {
-                    filterContext.biPredicates.add(getIntValuePredicate(expressionType));
-                }
-                case STRING: {
-                    filterContext.biPredicates.add(getCharArrayValuePredicate(expressionType));
-                }
-                case LONG: {
-                    filterContext.biPredicates.add( getLongValuePredicate(expressionType) );
-                }
-                case DOUBLE: {
-                    filterContext.biPredicates.add( getDoubleValuePredicate(expressionType) );
-                }
-                case FLOAT: {
-                    filterContext.biPredicates.add( getFloatValuePredicate(expressionType) );
-                }
-                case DATE: {
-                    filterContext.biPredicates.add( getLongValuePredicate(expressionType) );
-                }
-                case BOOL: {
-                    filterContext.biPredicates.add( getBooleanValuePredicate(expressionType) );
-                }
-                case CHAR: {
-                    filterContext.biPredicates.add( getCharValuePredicate(expressionType) );
-                }
-                default: {
-                    throw new IllegalStateException("Unexpected value: " + dataType);
-                }
+                case INT -> filterContext.biPredicates.add(getIntValuePredicate(expressionType));
+                case STRING -> filterContext.biPredicates.add(getStringValuePredicate(expressionType));
+                case LONG, DATE -> filterContext.biPredicates.add( getLongValuePredicate(expressionType) );
+                case DOUBLE -> filterContext.biPredicates.add( getDoubleValuePredicate(expressionType) );
+                case FLOAT -> filterContext.biPredicates.add( getFloatValuePredicate(expressionType) );
+                case BOOL -> filterContext.biPredicates.add( getBooleanValuePredicate(expressionType) );
+                case CHAR -> filterContext.biPredicates.add( getCharValuePredicate(expressionType) );
+                default -> throw new IllegalStateException("Unexpected value: " + dataType);
             }
 
         }

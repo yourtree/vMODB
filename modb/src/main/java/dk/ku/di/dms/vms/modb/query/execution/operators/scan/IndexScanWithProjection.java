@@ -61,7 +61,7 @@ public final class IndexScanWithProjection extends AbstractScan {
 
     public MemoryRefNode run(TransactionContext txCtx, FilterContext filterContext, IKey... keys) {
         // unifying in terms of iterator
-        Iterator<Object[]> iterator = index.iterator(txCtx, keys);
+        Iterator<Object[]> iterator = this.index.iterator(txCtx, keys);
         while(iterator.hasNext()){
             Object[] record = iterator.next();
             if(index.checkCondition(filterContext, record)){

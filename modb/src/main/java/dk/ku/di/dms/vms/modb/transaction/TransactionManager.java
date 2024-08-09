@@ -92,13 +92,16 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             wherePredicates = this.analyzer.analyzeWhere(
                     table, selectStatement.whereClause);
         }
+
         if(scanOperator.isIndexScan()){
             IKey key = this.getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
             return scanOperator.asIndexScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), new IKey[]{ key });
         } else if(scanOperator.isIndexAggregationScan()){
             return scanOperator.asIndexAggregationScan().runAsEmbedded(TRANSACTION_CONTEXT.get());
         } else {
-            return scanOperator.asFullScan().runAsEmbedded(TRANSACTION_CONTEXT.get());
+            // future optimization is filter not incuding the columns of partial or non unique index
+            FilterContext filterContext = FilterContextBuilder.build(wherePredicates);
+            return scanOperator.asFullScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), filterContext);
         }
     }
 
@@ -388,7 +391,6 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
                 index.garbageCollection(maxTid);
             }
         }
-
     }
 
     /**

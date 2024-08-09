@@ -8,7 +8,7 @@ import javax.persistence.Id;
 import javax.persistence.IdClass;
 import java.io.Serializable;
 
-@VmsTable(name="product_replica")
+@VmsTable(name="product_replicas")
 @IdClass(ProductReplica.ProductId.class)
 public final class ProductReplica implements IEntity<ProductReplica.ProductId> {
 

@@ -12,6 +12,8 @@ public final class PriceUpdated {
 
     public float price;
 
+    public String version;
+
     public String instanceId;
 
     public PriceUpdated(){}
@@ -19,10 +21,12 @@ public final class PriceUpdated {
     public PriceUpdated(int sellerId,
                        int productId,
                        float price,
+                       String version,
                        String instanceId) {
         this.sellerId = sellerId;
         this.productId = productId;
         this.price = price;
+        this.version = version;
         this.instanceId = instanceId;
     }
 

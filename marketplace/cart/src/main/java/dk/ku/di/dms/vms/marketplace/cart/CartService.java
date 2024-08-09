@@ -43,13 +43,6 @@ public final class CartService {
             LOGGER.log(ERROR, "APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
             throw new RuntimeException("APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
         }
-        for (var cartItem : cartItems) {
-            var product = this.productReplicaRepository.lookupByKey(new ProductReplica.ProductId(cartItem.seller_id, cartItem.product_id));
-            if (product != null && cartItem.version.contentEquals(product.version) && cartItem.unit_price < product.price) {
-                cartItem.voucher += (product.price - cartItem.unit_price);
-                cartItem.unit_price = product.price;
-            }
-        }
         this.cartItemRepository.deleteAll(cartItems);
         return new ReserveStock(new Date(), checkout, convertCartItems( cartItems ), checkout.instanceId);
     }
@@ -68,13 +61,20 @@ public final class CartService {
                 new ProductReplica.ProductId(priceUpdated.sellerId, priceUpdated.productId));
         if(product == null){
             LOGGER.log(WARNING,"Cart has no product replica with seller ID "+priceUpdated.sellerId+" : product ID "+priceUpdated.productId);
-            return;
+        } else {
+            if (product.version.contentEquals(priceUpdated.version)) {
+                product.price = priceUpdated.price;
+                this.productReplicaRepository.update(product);
+            }
         }
-        if(product.version.contentEquals(priceUpdated.instanceId)){
-            product.price = priceUpdated.price;
+        // update all carts
+        List<CartItem> cartItems = this.cartItemRepository.getCartItemsBySellerIdAndProductIdAndVersion(
+                priceUpdated.sellerId, priceUpdated.productId, priceUpdated.version);
+        for (var cartItem : cartItems) {
+            cartItem.voucher += (priceUpdated.price - cartItem.unit_price);
+            cartItem.unit_price = priceUpdated.price;
         }
-        // update all carts?
-        this.productReplicaRepository.update(product);
+        this.cartItemRepository.updateAll(cartItems);
     }
 
     /**

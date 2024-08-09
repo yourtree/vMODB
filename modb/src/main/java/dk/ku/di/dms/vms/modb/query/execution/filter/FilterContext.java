@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.modb.query.execution.filter.types.TypedBiPredicate;
 import java.util.List;
 import java.util.function.Predicate;
 
-public class FilterContext {
+public final class FilterContext {
 
     public List<FilterType> filterTypes;
 

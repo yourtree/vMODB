@@ -489,7 +489,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         Map<IKey, Object[]> freshSet = new HashMap<>();
         // iterate over keys
         for(Map.Entry<IKey, OperationSetOfKey> entry : this.updatesPerKeyMap.entrySet()) {
-            var obj = entry.getValue().updateHistoryMap.floorEntry(txCtx.lastTid);
+            var obj = entry.getValue().updateHistoryMap.floorEntry(txCtx.tid);
             if (obj != null) {
                 freshSet.put(entry.getKey(), obj.val().record);
             }
@@ -502,7 +502,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         // iterate over keys
         for(IKey key : keys){
             var operation = this.updatesPerKeyMap.get(key);
-            SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> obj = operation.updateHistoryMap.floorEntry(txCtx.lastTid);
+            SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> obj = operation.updateHistoryMap.floorEntry(txCtx.tid);
             if (obj != null) {
                 freshSet.put(key, obj.val().record);
             }

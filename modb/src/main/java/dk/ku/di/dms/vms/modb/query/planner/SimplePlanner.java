@@ -224,7 +224,7 @@ public final class SimplePlanner {
 
         // avoid one of the columns to have expression different from EQUALS
         // to be picked by unique and non-unique index
-        IMultiVersionIndex indexSelected = this.getOptimalIndex(tb, queryTree.wherePredicates).index();
+        IndexSelectionVerdict indexSelectionVerdict = this.getOptimalIndex(tb, queryTree.wherePredicates);
 
         // build projection
         int[] projectionColumns = new int[queryTree.projections.size()];
@@ -236,9 +236,9 @@ public final class SimplePlanner {
         
         int entrySize = calculateQueryResultEntrySize(tb.schema(), queryTree.projections.size(), projectionColumns);
 
-        if(indexSelected != null) {
+        if(indexSelectionVerdict.indexIsUsedGivenWhereClause()) {
             // return the index scan with projection
-            return new IndexScanWithProjection(indexSelected, projectionColumns, entrySize);
+            return new IndexScanWithProjection(indexSelectionVerdict.index(), projectionColumns, entrySize);
         } else {
             // then must get the PK index, ScanWithProjection
             return new FullScanWithProjection(tb.primaryKeyIndex(), projectionColumns, entrySize);
@@ -255,7 +255,6 @@ public final class SimplePlanner {
     }
 
     private IndexSelectionVerdict getOptimalIndex(final Table table, List<WherePredicate> wherePredicates) {
-
         final IntStream intStream = wherePredicates.stream()
                 .filter( wherePredicate ->
                         wherePredicate.expression == ExpressionTypeEnum.EQUALS
@@ -306,34 +305,26 @@ public final class SimplePlanner {
     }
 
     private ReadWriteIndex<IKey> getOptimalIndex(Table table, int[] filterColumns){
-
         IKey indexKey;
-
         // no index apply so far, perhaps a subset then?
         List<int[]> combinations = Combinatorics.getAllPossibleColumnCombinations(filterColumns);
-
         // heuristic: return the one that embraces more columns
         ReadWriteIndex<IKey> bestSoFar = null;
         int maxLength = 0;
         for(int[] arr : combinations) {
-
             if (arr.length == 1) {
                 indexKey = SimpleKey.of(filterColumns[0]);
             } else {
                 indexKey = CompositeKey.of(filterColumns);
             }
-
             if(table.secondaryIndexMap.get(indexKey) != null){
                 if(arr.length > maxLength){
                     bestSoFar = table.secondaryIndexMap.get(indexKey).getUnderlyingIndex();
                     maxLength = arr.length;
                 }
             }
-
         }
-
         return bestSoFar;
-
     }
 
 }

@@ -67,7 +67,6 @@ public final class QueryTree {
       * @param wherePredicate the predicate to add
       */
     public void addWhereClauseSortedByColumnIndex( WherePredicate wherePredicate ){
-
         int size = this.wherePredicates.size();
         if(size == 0){
             this.wherePredicates.add(wherePredicate);
@@ -76,40 +75,37 @@ public final class QueryTree {
 
         if(size == 1){
             if(wherePredicate.columnReference.columnPosition >
-                    this.wherePredicates.get(0).columnReference.columnPosition) {
-                this.wherePredicates.add(1,wherePredicate);
+                    this.wherePredicates.getFirst().columnReference.columnPosition) {
+                this.wherePredicates.add(1, wherePredicate);
             } else {
-                this.wherePredicates.add(0, wherePredicate);
+                this.wherePredicates.addFirst(wherePredicate);
             }
             return;
         }
 
         // if size >= 2 then use binary search
+        int pos = getPosition(wherePredicate, size);
+        this.wherePredicates.add(pos, wherePredicate);
+    }
 
-        int half;
-
+    private int getPosition(WherePredicate wherePredicate, int size) {
+        int pos;
         int start = 0, end = size - 1;
-
         do {
-
-            half = ((end + start) / 2);
-
-            if(this.wherePredicates.get(half).columnReference.columnPosition >
+            pos = ((end + start) / 2);
+            if(this.wherePredicates.get(pos).columnReference.columnPosition >
                     wherePredicate.columnReference.columnPosition){
-                end = half; // always guarantee end is within bounds
+                end = pos - 1; // always guarantee end is within bounds
             } else {
-                start = half;// always guarantee start is within bounds
+                start = pos + 1;// always guarantee start is within bounds
             }
-
         } while(start != end);
-
-        if(this.wherePredicates.get(half).columnReference.columnPosition <
+        pos = start;
+        if(this.wherePredicates.get(pos).columnReference.columnPosition <
                 wherePredicate.columnReference.columnPosition){
-            half++;
+            pos++;
         }
-
-        this.wherePredicates.add(half, wherePredicate);
-
+        return pos;
     }
 
     /**

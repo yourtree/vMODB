@@ -70,7 +70,7 @@ public final class ProductService {
         }
 
         // must send because some cart items may have the old product
-        return new PriceUpdated(priceUpdate.sellerId, priceUpdate.productId, priceUpdate.price, priceUpdate.instanceId);
+        return new PriceUpdated(priceUpdate.sellerId, priceUpdate.productId, priceUpdate.price, priceUpdate.version, priceUpdate.instanceId);
     }
 
 }
