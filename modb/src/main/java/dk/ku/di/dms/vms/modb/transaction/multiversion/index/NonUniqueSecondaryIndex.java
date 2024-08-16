@@ -129,6 +129,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
         private final TransactionContext txCtx;
         private Iterator<IKey> currentIterator;
+        private Object[] currRecord;
         private final IKey[] keys;
         private int idx;
 
@@ -136,23 +137,26 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
             this.txCtx = txCtx;
             this.idx = 0;
             this.keys = keys;
-            this.currentIterator = keyMap.computeIfAbsent(keys[this.idx], (ignored) -> new HashSet<>()).iterator();
+            this.currentIterator = keyMap.computeIfAbsent(keys[this.idx], (ignored) -> Set.of()).iterator();
         }
 
         @Override
         public boolean hasNext() {
-            return this.currentIterator.hasNext() || this.idx < this.keys.length - 1;
+            while(this.currentIterator.hasNext() ){
+                this.currRecord = primaryIndex.getRecord(this.txCtx, this.currentIterator.next());
+                if(this.currRecord != null) return true;
+            }
+            if(this.idx < this.keys.length - 1){
+                this.idx++;
+                this.currentIterator = keyMap.computeIfAbsent(this.keys[this.idx], (ignored) -> Set.of()).iterator();
+                return this.hasNext();
+            }
+            return false;
         }
 
         @Override
         public Object[] next() {
-            if(!this.currentIterator.hasNext()){
-                this.idx++;
-                this.currentIterator = keyMap.computeIfAbsent(this.keys[this.idx], (ignored) -> new HashSet<>()).iterator();
-            }
-            IKey key = this.currentIterator.next();
-            // this operation would not be necessary if we did not leak the writes to the keyMap
-            return primaryIndex.getRecord(this.txCtx, key);
+            return this.currRecord;
         }
     }
 

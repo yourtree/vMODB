@@ -98,6 +98,8 @@ public final class StockService {
             LOGGER.log(WARNING, "No items were reserved for instanceId = "+reserveStock.instanceId);
         }
 
+        // LOGGER.log(INFO,"APP: Stock finished a reserve stock event with TID: "+reserveStock.instanceId);
+
         // need to find a way to complete the transaction in the case it does not hit all virtual microservices
         return new StockConfirmed( reserveStock.timestamp, reserveStock.customerCheckout, cartItemsReserved, reserveStock.instanceId );
     }

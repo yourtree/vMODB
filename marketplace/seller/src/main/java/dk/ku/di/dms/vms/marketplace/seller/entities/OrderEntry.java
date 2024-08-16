@@ -51,9 +51,8 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
     @Id
     public int product_id;
 
-    // @VmsForeignKey(table = Seller.class, column = "id")
-    @VmsIndex(name = "seller_idx")
     @Column
+    @VmsIndex(name = "seller_idx")
     public int seller_id;
 
     @Column

@@ -328,11 +328,12 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public Optional<Object[]> removeOpt(TransactionContext txCtx, IKey key) {
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
         if (operationSet != null && operationSet.lastWriteType != WriteType.DELETE){
+            Object[] lastRecord = operationSet.updateHistoryMap.peak().val().record;
             TransactionWrite entry = TransactionWrite.delete(WriteType.DELETE);
             operationSet.updateHistoryMap.put(txCtx.tid, entry);
             operationSet.lastWriteType = WriteType.DELETE;
             this.appendWrite(txCtx, key);
-            return Optional.of( operationSet.updateHistoryMap.peak().val().record );
+            return Optional.of( lastRecord );
             // does this key even exist? if not, don't even need to save it on transaction metadata
         }
         Object[] obj = this.primaryKeyIndex.lookupByKey(key);
@@ -451,6 +452,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     /**
+     * Used for scanning short number of keys
      * 1 - collect all records eligible in this.updatesPerKeyMap (use a hashmap)
      * 2 - build an iterator object that iterates over the records of the underling index
      * 3. for each key, check if it is present in the set (1)
@@ -505,23 +507,11 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     /**
-     * Mostly applies to full scan
+     * Used in full scan
      */
     @Override
     public Iterator<Object[]> iterator(TransactionContext txCtx) {
         return new PrimaryIndexIterator(txCtx);
-    }
-
-    private Map<IKey, Object[]> collectFreshSet(TransactionContext txCtx) {
-        Map<IKey, Object[]> freshSet = new HashMap<>();
-        // iterate over keys
-        for(Map.Entry<IKey, OperationSetOfKey> entry : this.updatesPerKeyMap.entrySet()) {
-            var obj = entry.getValue().updateHistoryMap.floorEntry(txCtx.tid);
-            if (obj != null) {
-                freshSet.put(entry.getKey(), obj.val().record);
-            }
-        }
-        return freshSet;
     }
 
     private class PrimaryIndexIterator implements Iterator<Object[]> {
@@ -538,9 +528,14 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         @Override
         public boolean hasNext() {
             while(this.iterator.hasNext()){
-                var next = this.iterator.next();
+                Map.Entry<IKey, OperationSetOfKey> next = this.iterator.next();
                 var entry = next.getValue().updateHistoryMap.floorEntry(txCtx.tid);
-                if(entry == null || entry.val().type == WriteType.DELETE) {
+                if(entry == null) {
+                    this.currRecord = primaryKeyIndex.lookupByKey(next.getKey());
+                    if(this.currRecord == null) continue;
+                    return true;
+                }
+                if(entry.val().type == WriteType.DELETE) {
                     this.iterator.next();
                     continue;
                 }
@@ -554,6 +549,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         public Object[] next() {
             return this.currRecord;
         }
+
     }
 
 }

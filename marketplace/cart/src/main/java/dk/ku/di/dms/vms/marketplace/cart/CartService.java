@@ -44,6 +44,7 @@ public final class CartService {
             throw new RuntimeException("APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
         }
         this.cartItemRepository.deleteAll(cartItems);
+        // LOGGER.log(INFO, "APP: Cart finished a checkout request with TID: "+checkout.instanceId);
         return new ReserveStock(new Date(), checkout, convertCartItems( cartItems ), checkout.instanceId);
     }
 
@@ -51,9 +52,9 @@ public final class CartService {
         return cartItems.stream().map(f-> new dk.ku.di.dms.vms.marketplace.common.entities.CartItem( f.seller_id, f.product_id, f.product_name, f.unit_price, f.freight_value, f.quantity, f.voucher, f.version)).toList();
     }
 
+    // @PartitionBy(clazz = PriceUpdated.class, method = "getId") // partitioned execution can lead to abortion if conflicts with checkout
     @Inbound(values = {PRICE_UPDATED})
     @Transactional(type=RW)
-    // @PartitionBy(clazz = PriceUpdated.class, method = "getId") // partitioned execution can lead to abortion if conflicts with checkout
     public void updateProductPrice(PriceUpdated priceUpdated) {
         LOGGER.log(INFO,"APP: Cart received an update price event with version: "+priceUpdated.instanceId);
         // could use issue statement for faster update

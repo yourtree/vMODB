@@ -655,18 +655,23 @@ public final class Coordinator extends StoppableRunnable {
         // only if it is not a duplicate vote
         batchContext.missingVotes.remove( batchComplete.vms() );
         if(batchContext.missingVotes.isEmpty()){
-            LOGGER.log(INFO,"Leader: Received all missing votes of batch: "+ batchComplete.batch());
+            this.updateBatchOffsetPendingCommit(batchContext);
+        }
+    }
+
+    private void updateBatchOffsetPendingCommit(BatchContext batchContext) {
+        LOGGER.log(INFO,"Leader: Received all missing votes of batch: "+ batchContext.batchOffset);
+        if(batchContext.batchOffset == this.batchOffsetPendingCommit){
+            this.sendCommitCommandToVMSs(batchContext);
+            this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
             // making this implement order-independent, so not assuming batch commit are received in order,
-            // although they are necessarily applied in order both here and in the VMSs
-            // is the current? this approach may miss a batch... so when the batchOffsetPendingCommit finishes,
-            // it must check the batch context match to see whether it is completed
-            if(batchContext.batchOffset == this.batchOffsetPendingCommit){
-                this.sendCommitCommandToVMSs(batchContext);
-                this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
-            } else {
-                // this probably means some batch complete message got lost
-                LOGGER.log(WARNING,"Leader: Batch ("+ batchComplete.batch() +") is not the pending one. Still has to wait for the pending batch ("+this.batchOffsetPendingCommit+") to finish before progressing...");
+            BatchContext nextBatchContext = this.batchContextMap.get( this.batchOffsetPendingCommit );
+            if(nextBatchContext != null && nextBatchContext.missingVotes.isEmpty()){
+                this.updateBatchOffsetPendingCommit(nextBatchContext);
             }
+        } else {
+            // probably some batch complete message got lost or received out of order
+            LOGGER.log(WARNING,"Leader: Batch ("+ batchContext.batchOffset +") is not the pending one. Still has to wait for the pending batch ("+this.batchOffsetPendingCommit+") to finish before progressing...");
         }
     }
 

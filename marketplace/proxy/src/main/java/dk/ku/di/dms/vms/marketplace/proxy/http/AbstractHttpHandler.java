@@ -13,12 +13,6 @@ public abstract class AbstractHttpHandler {
         this.coordinator = coordinator;
     }
 
-    protected void submitCustomerCheckout(String payload) {
-        TransactionInput.Event eventPayload = new TransactionInput.Event(CUSTOMER_CHECKOUT, payload);
-        TransactionInput txInput = new TransactionInput(CUSTOMER_CHECKOUT, eventPayload);
-        this.coordinator.queueTransactionInput(txInput);
-    }
-
     protected byte[] getLastTidBytes() {
         long lng = this.coordinator.getLastTidOfLastCompletedBatch();
         System.out.println("Retrieved TID: "+lng);
@@ -31,6 +25,12 @@ public abstract class AbstractHttpHandler {
                 (byte) (lng >> 40),
                 (byte) (lng >> 48),
                 (byte) (lng >> 56)};
+    }
+
+    protected void submitCustomerCheckout(String payload) {
+        TransactionInput.Event eventPayload = new TransactionInput.Event(CUSTOMER_CHECKOUT, payload);
+        TransactionInput txInput = new TransactionInput(CUSTOMER_CHECKOUT, eventPayload);
+        this.coordinator.queueTransactionInput(txInput);
     }
 
     protected void submitUpdatePrice(String payload) {

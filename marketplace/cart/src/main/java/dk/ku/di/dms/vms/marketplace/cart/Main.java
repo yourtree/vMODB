@@ -130,31 +130,7 @@ public final class Main {
                         dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
                                 SERDES.deserialize(str, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
 
-                        // bypass repository. use api object directly to transform payload
-                        Object[] obj = new Object[]{
-                                cartItemAPI.SellerId,
-                                cartItemAPI.ProductId,
-                                customerId,
-                                cartItemAPI.ProductName,
-                                cartItemAPI.UnitPrice,
-                                cartItemAPI.FreightValue,
-                                cartItemAPI.Quantity,
-                                cartItemAPI.Voucher,
-                                cartItemAPI.Version
-                        };
-
-                        IKey key = KeyUtils.buildRecordKey(this.table.schema().getPrimaryKeyColumns(), obj);
-
-                        // get last tid executed to bypass transaction scheduler
-                        long tid = this.vms.lastTidFinished();
-                        // can ask the transactional handler
-                        this.vms.getTransactionManager().beginTransaction( tid, 0, tid,true );
-                        TransactionContext txCtx = ((TransactionManager)this.vms.getTransactionManager()).getTransactionContext();
-
-                        this.table.primaryKeyIndex().insert(txCtx, key, obj);
-
-                        // add to customer idx for fast lookup on checkout
-                        this.customerIdx.insert(txCtx, key, obj);
+                        this.processAddCartItem(customerId, cartItemAPI);
 
                         // response
                         OutputStream outputStream = exchange.getResponseBody();
@@ -165,10 +141,40 @@ public final class Main {
                     }
                     break;
                 }
-                default : {
+                default: {
                     returnFailed(exchange);
                 }
             }
+        }
+
+        private void processAddCartItem(int customerId,
+                                        dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI) {
+            // bypass repository. use api object directly to transform payload
+            Object[] obj = new Object[]{
+                    cartItemAPI.SellerId,
+                    cartItemAPI.ProductId,
+                    customerId,
+                    cartItemAPI.ProductName,
+                    cartItemAPI.UnitPrice,
+                    cartItemAPI.FreightValue,
+                    cartItemAPI.Quantity,
+                    cartItemAPI.Voucher,
+                    cartItemAPI.Version
+            };
+
+            IKey key = KeyUtils.buildRecordKey(this.table.schema().getPrimaryKeyColumns(), obj);
+
+            // get last tid executed to bypass transaction scheduler
+            long tid = this.vms.lastTidFinished();
+            // can ask the transactional handler
+            this.vms.getTransactionManager().beginTransaction( tid, 0, tid,false );
+            TransactionContext txCtx = ((TransactionManager)this.vms.getTransactionManager()).getTransactionContext();
+
+            this.table.primaryKeyIndex().insert(txCtx, key, obj);
+
+            // add to customer idx for fast lookup on checkout
+            this.customerIdx.insert(txCtx, key, obj);
+            txCtx.close();
         }
 
         private static void returnFailed(HttpExchange exchange) throws IOException {

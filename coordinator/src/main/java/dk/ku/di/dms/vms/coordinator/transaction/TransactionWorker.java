@@ -135,7 +135,7 @@ public final class TransactionWorker extends StoppableRunnable {
                         this.tid <= lastTidBatch) {
                     // process precedence from previous worker in the ring
                     // we could do it in advance current batch, but can lead to higher wait in vms
-                    this.queueTransactionInput(data);
+                    this.processTransactionInput(data);
                 }
             } while (this.tid <= lastTidBatch && System.currentTimeMillis() < end);
 
@@ -162,10 +162,10 @@ public final class TransactionWorker extends StoppableRunnable {
         return this.startingTidBatch + ((long) this.numWorkers * this.maxNumberOfTIDsBatch);
     }
 
-    private void queueTransactionInput(TransactionInput transactionInput) {
+    private void processTransactionInput(TransactionInput transactionInput) {
         TransactionDAG transactionDAG = this.transactionMap.get( transactionInput.name );
         if(transactionDAG == null){
-            throw new RuntimeException("The transaction DAG for event "+transactionInput.name+" does not exist");
+            throw new RuntimeException("The DAG for transaction "+transactionInput.name+" cannot be found");
         }
         EventIdentifier event = transactionDAG.inputEvents.get(transactionInput.event.name);
         if(event == null){

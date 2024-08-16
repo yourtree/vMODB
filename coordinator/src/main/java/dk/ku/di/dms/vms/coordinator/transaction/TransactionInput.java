@@ -6,12 +6,12 @@ package dk.ku.di.dms.vms.coordinator.transaction;
  * An internal VMs, for example, is subject to these phenomena
  * (e.g., update shipment transaction and the invoice issued event)
  */
-public class TransactionInput {
+public final class TransactionInput {
 
-    //name of the transaction
-    public String name;
+    // name of the transaction
+    public final String name;
 
-    public Event event;
+    public final Event event;
 
     public TransactionInput(String name, Event event) {
         this.name = name;
@@ -30,7 +30,14 @@ public class TransactionInput {
 
     // for stream operations
     public String getName() {
-        return name;
+        return this.name;
     }
 
+    @Override
+    public String toString() {
+        return "{"
+                + "\"name\":\"" + name + "\""
+                + ",\"event\":" + event
+                + "}";
+    }
 }

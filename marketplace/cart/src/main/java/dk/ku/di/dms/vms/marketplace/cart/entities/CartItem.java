@@ -36,7 +36,7 @@ public final class CartItem implements IEntity<CartItem.CartItemId> {
     // another way to create index on customer:
     // @VmsForeignKey(table = Cart.class, column = "id")
     @Id
-    @VmsIndex(name = "customerIdx")
+    @VmsIndex(name = "customer_idx")
     public int customer_id;
 
     @Column
