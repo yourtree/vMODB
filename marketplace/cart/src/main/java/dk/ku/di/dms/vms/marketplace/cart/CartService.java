@@ -53,7 +53,7 @@ public final class CartService {
 
     @Inbound(values = {PRICE_UPDATED})
     @Transactional(type=RW)
-    @PartitionBy(clazz = PriceUpdated.class, method = "getId")
+    // @PartitionBy(clazz = PriceUpdated.class, method = "getId") // partitioned execution can lead to abortion if conflicts with checkout
     public void updateProductPrice(PriceUpdated priceUpdated) {
         LOGGER.log(INFO,"APP: Cart received an update price event with version: "+priceUpdated.instanceId);
         // could use issue statement for faster update

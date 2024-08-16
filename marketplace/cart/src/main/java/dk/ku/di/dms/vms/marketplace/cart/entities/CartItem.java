@@ -20,10 +20,10 @@ public final class CartItem implements IEntity<CartItem.CartItemId> {
 
         public CartItemId(){}
 
-        public CartItemId(int customer_id, int product_id, int seller_id) {
-            this.customer_id = customer_id;
-            this.product_id = product_id;
+        public CartItemId(int seller_id, int product_id, int customer_id) {
             this.seller_id = seller_id;
+            this.product_id = product_id;
+            this.customer_id = customer_id;
         }
     }
 
@@ -60,15 +60,15 @@ public final class CartItem implements IEntity<CartItem.CartItemId> {
     public CartItem() {}
 
     public CartItem(int seller_id, int product_id, int customer_id, String product_name, float unit_price, float freight_value, int quantity, float voucher, String version) {
-        this.customer_id = customer_id;
-        this.freight_value = freight_value;
-        this.product_id = product_id;
-        this.product_name = product_name;
-        this.quantity = quantity;
         this.seller_id = seller_id;
+        this.product_id = product_id;
+        this.customer_id = customer_id;
+        this.product_name = product_name;
         this.unit_price = unit_price;
-        this.version = version;
+        this.freight_value = freight_value;
+        this.quantity = quantity;
         this.voucher = voucher;
+        this.version = version;
     }
 
     @Override

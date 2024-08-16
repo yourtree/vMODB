@@ -99,7 +99,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         } else if(scanOperator.isIndexAggregationScan()){
             return scanOperator.asIndexAggregationScan().runAsEmbedded(TRANSACTION_CONTEXT.get());
         } else {
-            // future optimization is filter not incuding the columns of partial or non unique index
+            // future optimization is filter not incuding the columns of partial or non-unique index
             FilterContext filterContext = FilterContextBuilder.build(wherePredicates);
             return scanOperator.asFullScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), filterContext);
         }
@@ -205,7 +205,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             txCtx.indexes.add(table.primaryKeyIndex());
             for (NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()) {
                 txCtx.indexes.add(secIndex);
-                secIndex.remove(pk, opt.get());
+                secIndex.remove(txCtx, pk, opt.get());
             }
             for(var entry : table.partialIndexMap.entrySet()){
                 // does the record "fits" the partial index?

@@ -51,7 +51,7 @@ public final class CartTest {
                 PRICE_UPDATED, PriceUpdated.class, priceUpdated );
         vms.internalChannels().transactionInputQueue().add( inboundEvent );
 
-        sleep(1000000);
+        sleep(3000);
 
         Assert.assertEquals(1, vms.lastTidFinished());
 
@@ -62,7 +62,7 @@ public final class CartTest {
 
         ProductReplica productReplica = productReplicaRepository.lookupByKey(new ProductReplica.ProductId(1,1));
 
-        Assert.assertEquals(20, productReplica.price);
+        Assert.assertEquals(20.0, productReplica.price, 0);
     }
 
     @Test

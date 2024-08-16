@@ -117,7 +117,6 @@ public class FilterContextBuilder {
     public static final TypedBiPredicate<Character> charEqPredicate = ((t1, t2) -> t1.compareTo(t2) == 0);
     public static final TypedBiPredicate<Character> charNotEqPredicate = ((t1, t2) -> t1.compareTo(t2) != 0);
 
-
     private static TypedBiPredicate<Character> getCharValuePredicate(ExpressionTypeEnum expressionType){
         return switch (expressionType) {
             case EQUALS -> charEqPredicate;
@@ -136,12 +135,9 @@ public class FilterContextBuilder {
     }
 
     public static FilterContext build(List<WherePredicate> wherePredicates){
-
         int size = wherePredicates.size();
-
         FilterContext filterContext = new FilterContext();
         filterContext.filterColumns = new ArrayList<>(size);
-
         filterContext.filterTypes = new ArrayList<>(size);
         // bipredicates usually dominate the workload
         filterContext.biPredicates = new ArrayList<>(size);
@@ -149,7 +145,6 @@ public class FilterContextBuilder {
         filterContext.predicates = new ArrayList<>();
 
         for(WherePredicate wherePredicate : wherePredicates){
-
             filterContext.filterColumns.add( wherePredicate.columnReference.columnPosition );
             DataType dataType = wherePredicate.columnReference.dataType;
             ExpressionTypeEnum expressionType = wherePredicate.expression;
@@ -162,7 +157,6 @@ public class FilterContextBuilder {
 
             filterContext.filterTypes.add(FilterType.BP);
             filterContext.biPredicateParams.add( wherePredicate.value );
-
             switch(dataType){
                 case INT -> filterContext.biPredicates.add(getIntValuePredicate(expressionType));
                 case STRING -> filterContext.biPredicates.add(getStringValuePredicate(expressionType));
@@ -173,9 +167,7 @@ public class FilterContextBuilder {
                 case CHAR -> filterContext.biPredicates.add( getCharValuePredicate(expressionType) );
                 default -> throw new IllegalStateException("Unexpected value: " + dataType);
             }
-
         }
-
         return filterContext;
     }
 

@@ -118,7 +118,8 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
                     return null;
                 key = entryCurr.getKey();
             }
-            SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> entry = this.primaryIndex.getFloorEntry(txCtx, key);
+            SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> entry =
+                    this.primaryIndex.getFloorEntry(this.txCtx, key);
             if (entry != null)
                 return entry.val().record;
             return null;
@@ -132,10 +133,12 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
     }
 
     private class KeyMultiVersionIterator implements Iterator<Object[]> {
+
         private final TransactionContext txCtx;
         private final IKey[] keys;
         private final Map<IKey, WriteType> writeSet;
         private int idx = 0;
+
         public KeyMultiVersionIterator(TransactionContext txCtx, IKey[] keys){
             this.txCtx = txCtx;
             this.keys = keys;
@@ -144,12 +147,13 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
 
         @Override
         public boolean hasNext() {
-            if(idx == keys.length) return false;
-            if((writeSet.containsKey(keys[idx]) && writeSet.get(keys[idx]) != WriteType.DELETE) || keyMap.contains(keys[idx])) {
-                idx++;
+            if(this.idx == this.keys.length) return false;
+            if((this.writeSet.containsKey(this.keys[idx]) &&
+                    this.writeSet.get(this.keys[this.idx]) != WriteType.DELETE) || keyMap.contains(this.keys[this.idx])) {
+                this.idx++;
                 return true;
             }
-            idx++;
+            this.idx++;
             return false;
         }
 

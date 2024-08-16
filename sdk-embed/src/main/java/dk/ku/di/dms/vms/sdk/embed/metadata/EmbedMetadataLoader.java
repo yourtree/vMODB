@@ -200,7 +200,6 @@ public final class EmbedMetadataLoader {
                 // build
                 Map<String, List<ForeignKeyReference>> fksPerTable = Stream.of( vmsDataModel.foreignKeyReferences )
                                 .collect( Collectors.groupingBy(ForeignKeyReference::parentTableName) );
-
                 // table name, fields
                 Map<String, Tuple<int[],int[]>> secondaryIndexMap = buildSchemaForeignKeyMap(vmsDataModel, fksPerTable, vmsDataModelMap);
                 dataSchemaToPkMap.put(vmsDataModel, new SchemaMapping(schema, secondaryIndexMap, indexMetadataList, partialIndexMetadataList));

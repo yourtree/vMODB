@@ -246,7 +246,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     private boolean doInsert(TransactionContext txCtx, IKey key, Object[] values, OperationSetOfKey operationSet) {
-        TransactionWrite entry = new TransactionWrite(WriteType.INSERT, values);
+        TransactionWrite entry = TransactionWrite.upsert(WriteType.INSERT, values);
         if(operationSet == null){
             operationSet = new OperationSetOfKey();
             this.updatesPerKeyMap.put(key, operationSet);
@@ -279,10 +279,10 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public boolean update(TransactionContext txCtx, IKey key, Object[] values) {
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
         boolean pkConstraintViolation;
-        if ( operationSet != null ){
+        if (operationSet != null){
             pkConstraintViolation = operationSet.lastWriteType == WriteType.DELETE;
         } else {
-            pkConstraintViolation = !primaryKeyIndex.exists(key);
+            pkConstraintViolation = !this.primaryKeyIndex.exists(key);
         }
         if(pkConstraintViolation || this.nonPkConstraintViolation(values)) {
             return false;
@@ -291,7 +291,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     private boolean doUpdate(TransactionContext txCtx, IKey key, Object[] values, OperationSetOfKey operationSet) {
-        TransactionWrite entry = new TransactionWrite(WriteType.UPDATE, values);
+        TransactionWrite entry = TransactionWrite.upsert(WriteType.UPDATE, values);
         if(operationSet == null){
             operationSet = new OperationSetOfKey();
             this.updatesPerKeyMap.put(key, operationSet);
@@ -328,7 +328,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public Optional<Object[]> removeOpt(TransactionContext txCtx, IKey key) {
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
         if (operationSet != null && operationSet.lastWriteType != WriteType.DELETE){
-            TransactionWrite entry = new TransactionWrite(WriteType.DELETE, null);
+            TransactionWrite entry = TransactionWrite.delete(WriteType.DELETE);
             operationSet.updateHistoryMap.put(txCtx.tid, entry);
             operationSet.lastWriteType = WriteType.DELETE;
             this.appendWrite(txCtx, key);
@@ -340,7 +340,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             // that means we haven't had any previous transaction performing writes to this key
             operationSet = new OperationSetOfKey();
             this.updatesPerKeyMap.put( key, operationSet );
-            TransactionWrite entry = new TransactionWrite(WriteType.DELETE, null);
+            TransactionWrite entry = TransactionWrite.delete(WriteType.DELETE);
             operationSet.updateHistoryMap.put(txCtx.tid, entry);
             operationSet.lastWriteType = WriteType.DELETE;
             this.appendWrite(txCtx, key);
@@ -414,13 +414,12 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 throw new RuntimeException("Error on retrieving operation set for key "+key);
             }
             var entry = operationSetOfKey.updateHistoryMap.removeUpToEntry(maxTid);
-            if (entry != null) {
-                this.keysToFlush.remove(key);
-                switch (operationSetOfKey.lastWriteType) {
-                    case UPDATE -> this.primaryKeyIndex.update(key, entry.val().record);
-                    case INSERT -> this.primaryKeyIndex.insert(key, entry.val().record);
-                    case DELETE -> this.primaryKeyIndex.delete(key);
-                }
+            if (entry == null) continue;
+            this.keysToFlush.remove(key);
+            switch (operationSetOfKey.lastWriteType) {
+                case UPDATE -> this.primaryKeyIndex.update(key, entry.val().record);
+                case INSERT -> this.primaryKeyIndex.insert(key, entry.val().record);
+                case DELETE -> this.primaryKeyIndex.delete(key);
             }
         }
         this.primaryKeyIndex.flush();
@@ -446,29 +445,21 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         return this.primaryKeyIndex;
     }
 
-    /**
-     * Mostly applies to full scan
-     */
     @Override
-    public Iterator<Object[]> iterator(TransactionContext txCtx) {
-        // TODO integrate with underlying iterator
-        // TODO optimize: do not need to iterate over all keys and then iterate again. just do it once
-        // 1 - collect all records eligible in this.updatesPerKeyMap (use a hashmap)
-        // 2 - build a iterator object that iterates over the records of the underling index
-        // 3. for each key, check if it is present in the set (1)
-        // 3a. if so, just return the fresh record as next. remember to remove it from the set
-        // 3b. otherwise, return the object as it is
-        // 4. when the iteration over the underlying index finishes, continue from the remaining set
-        return new MultiVersionIterator(txCtx);
+    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey[] keys) {
+        return new MultiVersionIterator(txCtx, keys);
     }
 
+    /**
+     * 1 - collect all records eligible in this.updatesPerKeyMap (use a hashmap)
+     * 2 - build an iterator object that iterates over the records of the underling index
+     * 3. for each key, check if it is present in the set (1)
+     * 3a. if so, just return the fresh record as next. remember to remove it from the set
+     * 3b. otherwise, return the object as it is
+     */
     protected class MultiVersionIterator implements Iterator<Object[]>{
 
-        private final Iterator<Map.Entry<IKey,Object[]>> freshSetIterator;
-
-        public MultiVersionIterator(TransactionContext txCtx){
-            this.freshSetIterator = collectFreshSet(txCtx).entrySet().iterator();
-        }
+        private final Iterator<Map.Entry<IKey, Object[]>> freshSetIterator;
 
         public MultiVersionIterator(TransactionContext txCtx, IKey[] keys){
             this.freshSetIterator = collectFreshSet(txCtx, keys).entrySet().iterator();
@@ -483,18 +474,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         public Object[] next() {
             return this.freshSetIterator.next().getValue();
         }
-    }
-
-    private Map<IKey, Object[]> collectFreshSet(TransactionContext txCtx) {
-        Map<IKey, Object[]> freshSet = new HashMap<>();
-        // iterate over keys
-        for(Map.Entry<IKey, OperationSetOfKey> entry : this.updatesPerKeyMap.entrySet()) {
-            var obj = entry.getValue().updateHistoryMap.floorEntry(txCtx.tid);
-            if (obj != null) {
-                freshSet.put(entry.getKey(), obj.val().record);
-            }
-        }
-        return freshSet;
     }
 
     private Map<IKey, Object[]> collectFreshSet(TransactionContext txCtx, IKey[] keys) {
@@ -513,22 +492,68 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public Object[] getRecord(TransactionContext txCtx, IKey key){
         OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
         if(operation != null){
-            var entry = operation.updateHistoryMap
-                    .floorEntry(txCtx.lastTid);
-            assert entry != null;
-            return entry.val().record;
+            var entry = operation.updateHistoryMap.floorEntry(txCtx.tid);
+            if(entry != null)
+                return entry.val().record;
         }
         return this.primaryKeyIndex.lookupByKey(key);
     }
 
     public SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> getFloorEntry(TransactionContext txCtx, IKey key){
         OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
-        return operation.updateHistoryMap.floorEntry(txCtx.lastTid);
+        return operation.updateHistoryMap.floorEntry(txCtx.tid);
     }
 
+    /**
+     * Mostly applies to full scan
+     */
     @Override
-    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey[] keys) {
-        return new MultiVersionIterator(txCtx, keys);
+    public Iterator<Object[]> iterator(TransactionContext txCtx) {
+        return new PrimaryIndexIterator(txCtx);
+    }
+
+    private Map<IKey, Object[]> collectFreshSet(TransactionContext txCtx) {
+        Map<IKey, Object[]> freshSet = new HashMap<>();
+        // iterate over keys
+        for(Map.Entry<IKey, OperationSetOfKey> entry : this.updatesPerKeyMap.entrySet()) {
+            var obj = entry.getValue().updateHistoryMap.floorEntry(txCtx.tid);
+            if (obj != null) {
+                freshSet.put(entry.getKey(), obj.val().record);
+            }
+        }
+        return freshSet;
+    }
+
+    private class PrimaryIndexIterator implements Iterator<Object[]> {
+
+        private final TransactionContext txCtx;
+        private final Iterator<Map.Entry<IKey, OperationSetOfKey>> iterator;
+        private Object[] currRecord;
+
+        public PrimaryIndexIterator(TransactionContext txCtx){
+            this.txCtx = txCtx;
+            this.iterator = updatesPerKeyMap.entrySet().iterator();
+        }
+
+        @Override
+        public boolean hasNext() {
+            while(this.iterator.hasNext()){
+                var next = this.iterator.next();
+                var entry = next.getValue().updateHistoryMap.floorEntry(txCtx.tid);
+                if(entry == null || entry.val().type == WriteType.DELETE) {
+                    this.iterator.next();
+                    continue;
+                }
+                this.currRecord = entry.val().record;
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public Object[] next() {
+            return this.currRecord;
+        }
     }
 
 }
