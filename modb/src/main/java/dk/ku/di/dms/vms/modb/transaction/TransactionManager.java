@@ -69,10 +69,11 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     }
 
     private boolean fkConstraintViolationFree(TransactionContext txCtx, Table table, Object[] values){
-        for(var entry : table.foreignKeys().entrySet()){
+        for(Map.Entry<PrimaryIndex, int[]> entry : table.foreignKeys().entrySet()){
             IKey fk = KeyUtils.buildRecordKey( entry.getValue(), values );
             // have some previous TID deleted it? or simply not exists
-            if (!entry.getKey().exists(txCtx, fk)) return false;
+            if (!entry.getKey().exists(txCtx, fk))
+                return false;
         }
         return true;
     }
@@ -414,6 +415,8 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
                 readOnly )
         );
     }
+
+
 
     public TransactionContext getTransactionContext(){
         return TRANSACTION_CONTEXT.get();

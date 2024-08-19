@@ -4,6 +4,8 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.cart.entities.CartItem;
+import dk.ku.di.dms.vms.marketplace.cart.infra.CartHttpServerVertx;
+import dk.ku.di.dms.vms.marketplace.cart.infra.CartUtils;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
@@ -30,7 +32,6 @@ public final class Main {
     private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
     public static void main(String[] ignoredArgs) {
-
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 "localhost",
                 Constants.CART_VMS_PORT, new String[]{
@@ -39,33 +40,38 @@ public final class Main {
         });
 
         VmsApplication vms;
-        HttpServer httpServer;
-        try
-        {
+        try {
             vms = VmsApplication.build(options);
-            vms.start();
-
-            // initialize HTTP server for data ingestion
-            System.setProperty("sun.net.httpserver.nodelay","true");
-            httpServer = HttpServer.create(new InetSocketAddress("localhost", Constants.CART_HTTP_PORT), 0);
-            httpServer.createContext("/cart", new CartHttpHandler(vms));
-            httpServer.setExecutor(ForkJoinPool.commonPool());
-            httpServer.start();
-
-            LOGGER.log(INFO, "Cart HTTP Server initialized");
-        } catch(Exception e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
+        vms.start();
 
+        // initHttpServerJdk(vms);
+        initHttpServerVertx(vms);
+
+        VmsApplication finalVms = vms;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            vms.stop();
-            httpServer.stop(0);
+            finalVms.stop();
             LOGGER.log(INFO, "Cart terminating ...");
         }));
-
     }
 
-    private static class CartHttpHandler implements HttpHandler {
+    private static void initHttpServerVertx(VmsApplication vms){
+         CartHttpServerVertx.init(vms, 4, true);
+    }
+
+    private static void initHttpServerJdk(VmsApplication vms) throws IOException {
+        // initialize HTTP server for data ingestion
+        System.setProperty("sun.net.httpserver.nodelay","true");
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", Constants.CART_HTTP_PORT), 0);
+        httpServer.createContext("/cart", new CartHttpHandlerJdk(vms));
+        httpServer.setExecutor(ForkJoinPool.commonPool());
+        httpServer.start();
+        LOGGER.log(INFO, "Cart HTTP Server initialized");
+    }
+
+    private static class CartHttpHandlerJdk implements HttpHandler {
 
         private final Table table;
         private final AbstractProxyRepository<CartItem.CartItemId, CartItem> repository;
@@ -73,7 +79,7 @@ public final class Main {
         private final VmsApplication vms;
 
         @SuppressWarnings("unchecked")
-        public CartHttpHandler(VmsApplication vms){
+        public CartHttpHandlerJdk(VmsApplication vms){
             this.vms = vms;
             this.table = vms.getTable("cart_items");
             this.repository = (AbstractProxyRepository<CartItem.CartItemId, CartItem>) vms.getRepositoryProxy("cart_items");
@@ -88,25 +94,13 @@ public final class Main {
                     int sellerId = Integer.parseInt(split[split.length - 2]);
                     int productId = Integer.parseInt(split[split.length - 1]);
 
-                    Object[] obj = new Object[3];
-                    obj[0] = sellerId;
-                    obj[1] = productId;
-                    obj[2] = customerId;
-
-                    IKey key = CompositeKey.of( obj );
-
-                    long tid = this.vms.lastTidFinished();
-                    this.vms.getTransactionManager().beginTransaction( tid, 0, tid,true );
-                    TransactionContext txCtx = ((TransactionManager)this.vms.getTransactionManager()).getTransactionContext();
-
-                    Object[] record = this.table.primaryKeyIndex().lookupByKey(txCtx, key);
-                    if(record == null){
+                    CartItem entity = getCartItem(sellerId, productId, customerId);
+                    if (entity == null) {
                         returnFailed(exchange);
                         return;
                     }
 
                     try {
-                        var entity = this.repository.parseObjectIntoEntity(record);
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, 0);
                         outputStream.write( entity.toString().getBytes(StandardCharsets.UTF_8) );
@@ -121,11 +115,9 @@ public final class Main {
 
                     try {
                         int customerId = Integer.parseInt(split[split.length - 2]);
-
                         String str = new String(exchange.getRequestBody().readAllBytes());
                         dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
                                 SERDES.deserialize(str, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
-
                         this.processAddCartItem(customerId, cartItemAPI);
 
                         // response
@@ -141,6 +133,25 @@ public final class Main {
                     returnFailed(exchange);
                 }
             }
+        }
+
+        private CartItem getCartItem(int sellerId, int productId, int customerId) {
+            Object[] obj = new Object[3];
+            obj[0] = sellerId;
+            obj[1] = productId;
+            obj[2] = customerId;
+
+            IKey key = CompositeKey.of( obj );
+
+            long tid = this.vms.lastTidFinished();
+            this.vms.getTransactionManager().beginTransaction( tid, 0, tid,true );
+            TransactionContext txCtx = ((TransactionManager)this.vms.getTransactionManager()).getTransactionContext();
+
+            Object[] record = this.table.primaryKeyIndex().lookupByKey(txCtx, key);
+            if(record == null){
+                return null;
+            }
+            return this.repository.parseObjectIntoEntity(record);
         }
 
         private void processAddCartItem(int customerId,

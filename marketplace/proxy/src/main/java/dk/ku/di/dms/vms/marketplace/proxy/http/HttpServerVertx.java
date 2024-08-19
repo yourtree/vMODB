@@ -112,11 +112,9 @@ public final class HttpServerVertx extends AbstractVerticle {
                 // assert exchange.getRequestMethod().equals("GET");
                 byte[] b = this.getLastTidBytes();
 
-                Buffer buf = retrieveBuffer();
+                Buffer buf = this.retrieveBuffer();
                 buf.setBytes(0, b);
 
-                // b.length always equals to 8
-                //Buffer finalBuf = buf;
                 exchange.response().setStatusCode(200);
                 exchange.response().end(buf).onComplete(ignored -> BUFFER_POOL.add(buf));
                 return;

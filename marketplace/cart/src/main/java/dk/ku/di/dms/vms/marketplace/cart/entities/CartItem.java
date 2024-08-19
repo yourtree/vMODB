@@ -74,7 +74,7 @@ public final class CartItem implements IEntity<CartItem.CartItemId> {
     @Override
     public String toString() {
         return "{"
-                + " \"customer_id\":\"" + customer_id + "\""
+                + "\"customer_id\":\"" + customer_id + "\""
                 + ",\"seller_id\":\"" + seller_id + "\""
                 + ",\"product_id\":\"" + product_id + "\""
                 + ",\"product_name\":\"" + product_name + "\""

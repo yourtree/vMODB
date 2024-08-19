@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.marketplace.cart;
+package dk.ku.di.dms.vms.marketplace.cart.infra;
 
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
 

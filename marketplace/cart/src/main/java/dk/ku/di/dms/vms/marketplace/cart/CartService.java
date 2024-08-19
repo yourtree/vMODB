@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.marketplace.cart;
 
 import dk.ku.di.dms.vms.marketplace.cart.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.cart.entities.ProductReplica;
+import dk.ku.di.dms.vms.marketplace.cart.infra.CartUtils;
 import dk.ku.di.dms.vms.marketplace.cart.repositories.ICartItemRepository;
 import dk.ku.di.dms.vms.marketplace.cart.repositories.IProductReplicaRepository;
 import dk.ku.di.dms.vms.marketplace.common.events.PriceUpdated;

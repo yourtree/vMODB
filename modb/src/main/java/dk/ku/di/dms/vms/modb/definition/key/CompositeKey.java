@@ -2,10 +2,8 @@ package dk.ku.di.dms.vms.modb.definition.key;
 
 import dk.ku.di.dms.vms.modb.definition.Row;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
 import java.util.Arrays;
-import java.util.Comparator;
 
 /**
  * A sequence of values that serves both for identifying a
@@ -22,17 +20,17 @@ public class CompositeKey extends Row implements IKey, IIndexKey {
     }
 
     public static CompositeKey of(int[] values){
-        return new CompositeKey(values, Arrays.hashCode(values));
+        return new CompositeKey(values);
     }
 
-    private CompositeKey(int[] values, int hashKey){
+    private CompositeKey(int[] values){
         super(values);
-        this.hashKey = hashKey;
+        this.hashKey = Arrays.stream(values).mapToObj(f->f + "|").hashCode();
     }
 
     public CompositeKey(Object[] values) {
         super(values);
-        this.hashKey = Arrays.hashCode(values);
+        this.hashKey = Arrays.stream(values).map(f->f.toString() + "|").hashCode();
     }
 
     @Override

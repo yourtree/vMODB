@@ -7,7 +7,6 @@ import dk.ku.di.dms.vms.marketplace.cart.repositories.IProductReplicaRepository;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.common.events.PriceUpdated;
 import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
-import dk.ku.di.dms.vms.marketplace.common.inputs.PriceUpdate;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
@@ -21,7 +20,8 @@ import org.junit.Test;
 
 import java.util.List;
 
-import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.CUSTOMER_CHECKOUT;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.PRICE_UPDATED;
 import static java.lang.Thread.sleep;
 
 public final class CartTest {
