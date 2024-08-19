@@ -10,10 +10,8 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
 import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
@@ -72,7 +70,6 @@ public final class Main {
         private final Table table;
         private final AbstractProxyRepository<CartItem.CartItemId, CartItem> repository;
         private static final IVmsSerdesProxy SERDES = VmsSerdesProxyBuilder.build();
-        private final NonUniqueSecondaryIndex customerIdx;
         private final VmsApplication vms;
 
         @SuppressWarnings("unchecked")
@@ -80,7 +77,6 @@ public final class Main {
             this.vms = vms;
             this.table = vms.getTable("cart_items");
             this.repository = (AbstractProxyRepository<CartItem.CartItemId, CartItem>) vms.getRepositoryProxy("cart_items");
-            this.customerIdx = table.secondaryIndexMap.get( KeyUtils.buildIndexKey( new int[]{2} ) );
         }
 
         @Override
@@ -104,13 +100,13 @@ public final class Main {
                     TransactionContext txCtx = ((TransactionManager)this.vms.getTransactionManager()).getTransactionContext();
 
                     Object[] record = this.table.primaryKeyIndex().lookupByKey(txCtx, key);
+                    if(record == null){
+                        returnFailed(exchange);
+                        return;
+                    }
 
                     try {
                         var entity = this.repository.parseObjectIntoEntity(record);
-                        if(entity == null){
-                            returnFailed(exchange);
-                            return;
-                        }
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, 0);
                         outputStream.write( entity.toString().getBytes(StandardCharsets.UTF_8) );
@@ -149,31 +145,12 @@ public final class Main {
 
         private void processAddCartItem(int customerId,
                                         dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI) {
-            // bypass repository. use api object directly to transform payload
-            Object[] obj = new Object[]{
-                    cartItemAPI.SellerId,
-                    cartItemAPI.ProductId,
-                    customerId,
-                    cartItemAPI.ProductName,
-                    cartItemAPI.UnitPrice,
-                    cartItemAPI.FreightValue,
-                    cartItemAPI.Quantity,
-                    cartItemAPI.Voucher,
-                    cartItemAPI.Version
-            };
-
-            IKey key = KeyUtils.buildRecordKey(this.table.schema().getPrimaryKeyColumns(), obj);
-
             // get last tid executed to bypass transaction scheduler
-            long tid = this.vms.lastTidFinished();
+            long tid = 0; //this.vms.lastTidFinished() - 1; // -1 to avoid concurrent modification exception
             // can ask the transactional handler
-            this.vms.getTransactionManager().beginTransaction( tid, 0, tid,false );
+            this.vms.getTransactionManager().beginTransaction(tid, 0, tid,false);
             TransactionContext txCtx = ((TransactionManager)this.vms.getTransactionManager()).getTransactionContext();
-
-            this.table.primaryKeyIndex().insert(txCtx, key, obj);
-
-            // add to customer idx for fast lookup on checkout
-            this.customerIdx.insert(txCtx, key, obj);
+            this.repository.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
             txCtx.close();
         }
 

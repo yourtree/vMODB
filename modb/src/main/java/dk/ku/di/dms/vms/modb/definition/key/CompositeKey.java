@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
 import java.util.Arrays;
+import java.util.Comparator;
 
 /**
  * A sequence of values that serves both for identifying a

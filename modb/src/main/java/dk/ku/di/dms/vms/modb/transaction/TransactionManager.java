@@ -89,8 +89,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             this.queryPlanCacheMap.put(sqlAsKey, scanOperator);
         } else {
             // get only the where clause params
-            wherePredicates = this.analyzer.analyzeWhere(
-                    table, selectStatement.whereClause);
+            wherePredicates = this.analyzer.analyzeWhere(table, selectStatement.whereClause);
         }
 
         if(scanOperator.isIndexScan()){

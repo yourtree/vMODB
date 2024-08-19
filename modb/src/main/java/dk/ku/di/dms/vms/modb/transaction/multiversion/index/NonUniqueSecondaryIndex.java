@@ -18,7 +18,9 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
     private static final Deque<Map<IKey, Tuple<Object[], WriteType>>> WRITE_SET_BUFFER = new ConcurrentLinkedDeque<>();
 
-    private final Map<Long,Map<IKey, Tuple<Object[], WriteType>>> writeSet;
+    private static final Deque<Set<IKey>> KEY_SET_BUFFER = new ConcurrentLinkedDeque<>();
+
+    private final Map<Long, Map<IKey, Tuple<Object[], WriteType>>> writeSet;
 
     // pointer to primary index
     // necessary because of concurrency control
@@ -53,9 +55,10 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     @Override
     public boolean insert(TransactionContext txCtx, IKey primaryKey, Object[] record){
         IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
-        Set<IKey> set = this.keyMap.computeIfAbsent(secKey, (ignored)-> new HashSet<>());
+        Set<IKey> set = this.keyMap.computeIfAbsent(secKey, (ignored)->
+                Objects.requireNonNullElseGet(KEY_SET_BUFFER.poll(), ConcurrentHashMap::newKeySet));
         if(!set.contains(primaryKey)) {
-            var txWriteSet = this.writeSet.computeIfAbsent(txCtx.tid, k ->
+            var txWriteSet = this.writeSet.computeIfAbsent(txCtx.tid, (ignored) ->
                     Objects.requireNonNullElseGet(WRITE_SET_BUFFER.poll(), HashMap::new));
             txWriteSet.put(primaryKey, new Tuple<>(record, WriteType.INSERT));
             set.add(primaryKey);
@@ -65,7 +68,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
     @Override
     public void undoTransactionWrites(TransactionContext txCtx){
-        var txWriteSet = this.writeSet.get(txCtx.tid);
+        Map<IKey, Tuple<Object[], WriteType>> txWriteSet = this.writeSet.get(txCtx.tid);
         // var writes = WRITE_SET.get().entrySet().stream().filter(p->p.getValue().t2()==WriteType.INSERT).toList();
         for(Map.Entry<IKey, Tuple<Object[], WriteType>> entry : txWriteSet.entrySet()){
             if(entry.getValue().t2() != WriteType.INSERT) continue;
@@ -73,7 +76,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
             Set<IKey> set = this.keyMap.get(secKey);
             set.remove(entry.getKey());
         }
-        this.clearAndReturnMapToBuffer(txCtx);
+        this.clearAndReturnMapToBuffer(txWriteSet);
     }
 
     @Override
@@ -105,17 +108,17 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     @Override
     public void installWrites(TransactionContext txCtx) {
         // just remove the delete since the insert is already in the keyMap
-        for(var entry : this.writeSet.get(txCtx.tid).entrySet()){
+        Map<IKey, Tuple<Object[], WriteType>> map = this.writeSet.get(txCtx.tid);
+        for(var entry : map.entrySet()){
             if(entry.getValue().t2() != WriteType.DELETE) continue;
             IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), entry.getValue().t1() );
             Set<IKey> set = this.keyMap.get(secKey);
             set.remove(entry.getKey());
         }
-        this.clearAndReturnMapToBuffer(txCtx);
+        this.clearAndReturnMapToBuffer(map);
     }
 
-    private void clearAndReturnMapToBuffer(TransactionContext txCtx) {
-        var map = this.writeSet.get(txCtx.tid);
+    private void clearAndReturnMapToBuffer(Map<IKey, Tuple<Object[], WriteType>> map) {
         map.clear();
         WRITE_SET_BUFFER.addLast(map);
     }

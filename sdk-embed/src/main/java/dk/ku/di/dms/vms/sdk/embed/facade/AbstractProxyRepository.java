@@ -103,11 +103,10 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
             selectStatement.whereClause.get(i).setValue( args[i] );
         }
         // submit for execution
-        List<Object[]> records = this.operationalAPI.fetch( this.table, selectStatement );
+        List<Object[]> records = this.operationalAPI.fetch(this.table, selectStatement);
         List<T> result = new ArrayList<>(records.size());
         for(Object[] record : records) {
-            T ent = this.parseObjectIntoEntity(record);
-            if(ent != null) result.add( ent );
+            result.add( this.parseObjectIntoEntity(record) );
         }
         return result;
     }
@@ -126,6 +125,7 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         // we always need to offload the lookup to the transaction facade
         Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(key);
         Object[] object = this.operationalAPI.lookupByKey(this.table.primaryKeyIndex(), valuesOfKey);
+        if (object == null) return null;
         // parse object into entity
         return this.parseObjectIntoEntity(object);
     }
@@ -136,9 +136,7 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         for(PK obj : keys){
             Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(obj);
             Object[] object = this.operationalAPI.lookupByKey(this.table.primaryKeyIndex(), valuesOfKey);
-            T ent = this.parseObjectIntoEntity(object);
-            if(ent != null)
-                resultList.add(ent);
+            resultList.add( this.parseObjectIntoEntity(object) );
         }
         return resultList;
     }
@@ -217,19 +215,16 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     @Override
     public final void deleteAll(List<T> entities) {
         List<Object[]> parsedEntities = new ArrayList<>(entities.size());
-        for (T entityObject : entities){
-            Object[] parsed = this.extractFieldValuesFromEntityObject(entityObject);
-            parsedEntities.add(parsed);
+        for (T entity : entities){
+            parsedEntities.add( this.extractFieldValuesFromEntityObject(entity) );
         }
-        this.operationalAPI.deleteAll( this.table, parsedEntities );
+        this.operationalAPI.deleteAll(this.table, parsedEntities);
     }
 
     public final T parseObjectIntoEntity(Object[] object){
-        // all entities must have default constructor
-        if (object == null)
-            return null;
         Schema schema = this.table.underlyingPrimaryKeyIndex().schema();
         try {
+            // all entities must have default constructor
             T entity = this.entityConstructor.newInstance();
             int i;
             for(Map.Entry<String,VarHandle> entry : this.entityFieldMap.entrySet()){
@@ -264,12 +259,11 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         return values;
     }
 
-    public final Object[] extractFieldValuesFromEntityObject(T entityObject) {
+    public final Object[] extractFieldValuesFromEntityObject(T entity) {
         Object[] values = new Object[this.table.schema().columnNames().length];
         int fieldIdx = 0;
-        // get values from entity
         for(String columnName : this.table.schema().columnNames()){
-            values[fieldIdx] = this.entityFieldMap.get(columnName).get(entityObject);
+            values[fieldIdx] = this.entityFieldMap.get(columnName).get(entity);
             fieldIdx++;
         }
         return values;

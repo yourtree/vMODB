@@ -5,6 +5,9 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
+/**
+ * Can make it a closeable object to facilitate object handling
+ */
 public final class TransactionContext {
 
     private static final Deque<Set<IMultiVersionIndex>> INDEX_SET_BUFFER = new ConcurrentLinkedDeque<>();

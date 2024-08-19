@@ -52,17 +52,18 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     // write set of transactions
     private final Map<Long, Set<IKey>> writeSet;
 
-    public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex) {
-        this.primaryKeyIndex = primaryKeyIndex;
-        this.updatesPerKeyMap = new ConcurrentHashMap<>();
-        this.primaryKeyGenerator = Optional.empty();
-        this.writeSet = new ConcurrentHashMap<>();
+    public static PrimaryIndex build(ReadWriteIndex<IKey> primaryKeyIndex) {
+        return new PrimaryIndex(primaryKeyIndex, null);
     }
 
-    public PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
+    public static PrimaryIndex build(ReadWriteIndex<IKey> primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator){
+        return new PrimaryIndex(primaryKeyIndex, primaryKeyGenerator);
+    }
+
+    private PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
         this.primaryKeyIndex = primaryKeyIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>();
-        this.primaryKeyGenerator = Optional.of(primaryKeyGenerator);
+        this.primaryKeyGenerator = Optional.ofNullable(primaryKeyGenerator);
         this.writeSet = new ConcurrentHashMap<>();
     }
 
@@ -495,8 +496,9 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
         if(operation != null){
             var entry = operation.updateHistoryMap.floorEntry(txCtx.tid);
-            if(entry != null)
+            if(entry != null && entry.val().type != WriteType.DELETE) {
                 return entry.val().record;
+            }
         }
         return this.primaryKeyIndex.lookupByKey(key);
     }

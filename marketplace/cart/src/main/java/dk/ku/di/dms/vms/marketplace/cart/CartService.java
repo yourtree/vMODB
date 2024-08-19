@@ -45,11 +45,7 @@ public final class CartService {
         }
         this.cartItemRepository.deleteAll(cartItems);
         // LOGGER.log(INFO, "APP: Cart finished a checkout request with TID: "+checkout.instanceId);
-        return new ReserveStock(new Date(), checkout, convertCartItems( cartItems ), checkout.instanceId);
-    }
-
-    private static List<dk.ku.di.dms.vms.marketplace.common.entities.CartItem> convertCartItems(List<CartItem> cartItems){
-        return cartItems.stream().map(f-> new dk.ku.di.dms.vms.marketplace.common.entities.CartItem( f.seller_id, f.product_id, f.product_name, f.unit_price, f.freight_value, f.quantity, f.voucher, f.version)).toList();
+        return new ReserveStock(new Date(), checkout, CartUtils.convertCartItems( cartItems ), checkout.instanceId);
     }
 
     // @PartitionBy(clazz = PriceUpdated.class, method = "getId") // partitioned execution can lead to abortion if conflicts with checkout

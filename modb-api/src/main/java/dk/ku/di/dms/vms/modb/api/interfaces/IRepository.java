@@ -42,7 +42,6 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
      * Used for issuing update, insert, and delete statements.
      * It does not return any value because
      * any error is handled by the system itself
-     * Can be insert, update, delete
       */
     void issue(IStatement statement);
 
@@ -59,10 +58,5 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
      * Return type no concept of rows
      */
     <DTO> List<DTO> fetchMany(SelectStatement statement, Class<DTO> clazz);
-
-    // maybe callbacks can be a good alternative for embedding statements inside repository
-    // <DTO extends Record> List<DTO>  create(Consumer<UpdateStatementBuilder.SetClause> callback);
-
-//    IVmsFuture<Void> submit(Runnable runnable);
 
 }
