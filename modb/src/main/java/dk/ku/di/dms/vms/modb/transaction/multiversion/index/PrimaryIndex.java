@@ -62,7 +62,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     private PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
         this.primaryKeyIndex = primaryKeyIndex;
-        this.updatesPerKeyMap = new ConcurrentHashMap<>();
+        this.updatesPerKeyMap = new ConcurrentHashMap<>(100000);
         this.primaryKeyGenerator = Optional.ofNullable(primaryKeyGenerator);
         this.writeSet = new ConcurrentHashMap<>();
     }
@@ -219,7 +219,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                     return (entry.val().type != WriteType.DELETE ? entry.val().record : null);
                 }
             } else {
-                return operationSet.lastWriteType != WriteType.DELETE ? operationSet.updateHistoryMap.peak().val().record : null;
+                return operationSet.lastWriteType != WriteType.DELETE ?
+                        operationSet.updateHistoryMap.peak().val().record : null;
             }
         }
         return this.primaryKeyIndex.lookupByKey(key);
@@ -329,7 +330,9 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public Optional<Object[]> removeOpt(TransactionContext txCtx, IKey key) {
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
         if (operationSet != null && operationSet.lastWriteType != WriteType.DELETE){
-            Object[] lastRecord = operationSet.updateHistoryMap.peak().val().record;
+            var entrySet = operationSet.updateHistoryMap.peak();
+            Object[] lastRecord = entrySet.val().record;
+            var lastWriteType = entrySet.val().type;
             TransactionWrite entry = TransactionWrite.delete(WriteType.DELETE);
             operationSet.updateHistoryMap.put(txCtx.tid, entry);
             operationSet.lastWriteType = WriteType.DELETE;
@@ -485,7 +488,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         for(IKey key : keys){
             var operation = this.updatesPerKeyMap.get(key);
             SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> obj = operation.updateHistoryMap.floorEntry(txCtx.tid);
-            if (obj != null) {
+            if (obj != null && obj.val().type != WriteType.DELETE) {
                 freshSet.put(key, obj.val().record);
             }
         }

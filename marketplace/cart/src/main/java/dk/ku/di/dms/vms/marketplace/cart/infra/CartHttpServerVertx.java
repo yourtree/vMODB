@@ -68,7 +68,6 @@ public class CartHttpServerVertx extends AbstractVerticle {
     }
 
     public static class VertxHandler implements Handler<HttpServerRequest> {
-
         @Override
         public void handle(HttpServerRequest exchange) {
             String[] uriSplit = exchange.uri().split("/");
@@ -96,22 +95,18 @@ public class CartHttpServerVertx extends AbstractVerticle {
                             int customerId = Integer.parseInt(split[split.length - 2]);
                             String payload = buff.toString(StandardCharsets.UTF_8);
                             dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
-                                    SERDES.deserialize(payload, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
-                            CART_VMS.getTransactionManager().beginTransaction(0, 0, 0,false);
-                            TransactionContext txCtx = ((TransactionManager) CART_VMS.getTransactionManager()).getTransactionContext();
+                                    SERDES.deserialize(payload,
+                                            dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
+                            long tid = CART_VMS.lastTidFinished();
+                            CART_VMS.getTransactionManager().beginTransaction(tid, 0, Integer.MIN_VALUE, false);
                             CART_REPO.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
-                            txCtx.close();
+                            CART_VMS.getTransactionManager().commit();
                             exchange.response().setStatusCode(200).end();
-                            return;
                         }
-                        default -> {
-                            exchange.response().setStatusCode(500).end();
-                            return;
-                        }
+                        default -> exchange.response().setStatusCode(500).end();
                     }
                 } else {
                     exchange.response().setStatusCode(500).end();
-                    return;
                 }
 
             });

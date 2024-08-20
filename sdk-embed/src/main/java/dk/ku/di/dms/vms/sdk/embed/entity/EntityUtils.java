@@ -17,9 +17,9 @@ public final class EntityUtils {
 
     private EntityUtils(){}
 
-    private static final MethodHandles.Lookup lookup;
+    private static final MethodHandles.Lookup LOOKUP;
     static {
-        lookup = MethodHandles.lookup();
+        LOOKUP = MethodHandles.lookup();
     }
 
     @SuppressWarnings("unchecked")
@@ -34,8 +34,7 @@ public final class EntityUtils {
 
     public static Map<String, VarHandle> getVarHandleFieldsFromCompositePk(Class<?> pkClazz) throws NoSuchFieldException, IllegalAccessException {
 
-        MethodHandles.Lookup lookup_ = MethodHandles.privateLookupIn(pkClazz, lookup);
-
+        MethodHandles.Lookup lookup_ = MethodHandles.privateLookupIn(pkClazz, LOOKUP);
         Field[] fields = pkClazz.getDeclaredFields();
         Map<String, VarHandle> fieldMap = new LinkedHashMap<>(fields.length);
 
@@ -61,7 +60,7 @@ public final class EntityUtils {
         Map<String, VarHandle> fieldMap = new HashMap<>(1);
         fieldMap.put(
                 pkColumnName,
-                lookup.findVarHandle(
+                LOOKUP.findVarHandle(
                         parentClazz,
                         pkColumnName,
                         parentClazz.getDeclaredField(pkColumnName).getType()
@@ -73,7 +72,7 @@ public final class EntityUtils {
     public static Map<String, VarHandle> getVarHandleFieldsFromEntity(Class<? extends IEntity<?>> entityClazz,
                                                                       Schema schema)
             throws NoSuchFieldException, IllegalAccessException {
-        MethodHandles.Lookup lookup_ = MethodHandles.privateLookupIn(entityClazz, lookup);
+        MethodHandles.Lookup lookup_ = MethodHandles.privateLookupIn(entityClazz, LOOKUP);
         Map<String, VarHandle> fieldMap = new HashMap<>(schema.columnNames().length);
         int i = 0;
         Class<?> typez;

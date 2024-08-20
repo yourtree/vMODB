@@ -25,10 +25,7 @@ public final class SimpleKey implements IKey, IIndexKey {
 
     @Override
     public boolean equals(Object object){
-        if(object instanceof SimpleKey o){
-            return this.value == o.value;
-        }
-        return false;
+        return object instanceof SimpleKey o && this.value == o.value;
     }
 
     @Override
