@@ -83,7 +83,7 @@ public final class VmsTransactionTaskBuilder {
 
         @Override
         public void run() {
-            this.status = RUNNING;
+            this.signalRunning();
             transactionManager.beginTransaction(this.tid, -1, this.lastTid, this.signature.transactionType() == TransactionTypeEnum.R);
             try {
                 Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.input);
@@ -91,7 +91,6 @@ public final class VmsTransactionTaskBuilder {
                 if(this.signature.transactionType() != TransactionTypeEnum.R){
                     transactionManager.commit();
                 }
-                this.status = FINISHED;
                 schedulerCallback.success(signature.executionMode(), eventOutput);
             } catch (IllegalAccessException | InvocationTargetException e) {
                 LOGGER.log(ERROR, "Error during invoking task "+this.toString()+"\n"+ e);
@@ -125,8 +124,20 @@ public final class VmsTransactionTaskBuilder {
             this.status = READY;
         }
 
+        public void signalRunning(){
+            this.status = RUNNING;
+        }
+
         public boolean isScheduled(){
-            return this.status > NEW;
+            return this.status > NEW && this.status < FINISHED;
+        }
+
+        public boolean isFinished(){
+            return this.status == FINISHED;
+        }
+
+        public void signalFinished(){
+            this.status = FINISHED;
         }
 
         public Optional<Object> partitionId() {

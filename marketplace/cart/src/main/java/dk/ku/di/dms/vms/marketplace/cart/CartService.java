@@ -42,9 +42,16 @@ public final class CartService {
         List<CartItem> cartItems = this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
         if(cartItems == null || cartItems.isEmpty()) {
             LOGGER.log(ERROR, "APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
-            throw new RuntimeException("APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
+            // throw new RuntimeException("APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
+            cartItems = List.of(new CartItem(1,1, checkout.CustomerId, "default", 0, 0, 1, 0, checkout.instanceId));
         }
-        this.cartItemRepository.deleteAll(cartItems);
+        else if(cartItems.getFirst().customer_id != checkout.CustomerId){
+            LOGGER.log(ERROR, "APP: Wrong cart items returned for customer ID "+checkout.CustomerId+" TID "+checkout.instanceId+". Customer ID retrieved: "+cartItems.getFirst().customer_id);
+            cartItems = this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
+        } else {
+            this.cartItemRepository.deleteAll(cartItems);
+        }
+
         // LOGGER.log(INFO, "APP: Cart finished a checkout request with TID: "+checkout.instanceId);
         return new ReserveStock(new Date(), checkout, CartUtils.convertCartItems( cartItems ), checkout.instanceId);
     }

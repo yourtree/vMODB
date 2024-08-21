@@ -33,11 +33,11 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     private final Map<IKey, Set<IKey>> keyMap;
 
     public NonUniqueSecondaryIndex(PrimaryIndex primaryIndex, ReadWriteIndex<IKey> underlyingIndex) {
-        this.writeSet = new ConcurrentHashMap<>();
+        this.writeSet = new ConcurrentHashMap<>(10000);
         this.primaryIndex = primaryIndex;
         this.underlyingIndex = underlyingIndex;
         // prevent a rehash to return null on get call
-        this.keyMap = new ConcurrentHashMap<>(100000);
+        this.keyMap = new ConcurrentHashMap<>(10000);
     }
 
     public ReadWriteIndex<IKey> getUnderlyingIndex(){
@@ -55,12 +55,10 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     public boolean insert(TransactionContext txCtx, IKey primaryKey, Object[] record){
         IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
         Set<IKey> set = this.keyMap.computeIfAbsent(secKey, (ignored) -> ConcurrentHashMap.newKeySet());
-//        if(!set.contains(primaryKey)) {
-            var txWriteSet = this.writeSet.computeIfAbsent(txCtx.tid, (ignored) ->
-                    Objects.requireNonNullElseGet(WRITE_SET_BUFFER.poll(), HashMap::new));
-            txWriteSet.put(primaryKey, new Tuple<>(record, WriteType.INSERT));
-            set.add(primaryKey);
-//        }
+        var txWriteSet = this.writeSet.computeIfAbsent(txCtx.tid, (ignored) ->
+                Objects.requireNonNullElseGet(WRITE_SET_BUFFER.poll(), HashMap::new));
+        txWriteSet.put(primaryKey, new Tuple<>(record, WriteType.INSERT));
+        set.add(primaryKey);
         return true;
     }
 
@@ -126,7 +124,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
         return new SecondaryIndexIterator(txCtx, keys);
     }
 
-    private class SecondaryIndexIterator implements Iterator<Object[]> {
+    private final class SecondaryIndexIterator implements Iterator<Object[]> {
 
         private final TransactionContext txCtx;
         private Iterator<IKey> currentIterator;
@@ -138,7 +136,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
             this.txCtx = txCtx;
             this.idx = 0;
             this.keys = keys;
-            this.currentIterator = keyMap.computeIfAbsent(keys[this.idx], (ignored) -> Set.of()).iterator();
+            this.currentIterator = keyMap.getOrDefault(keys[this.idx], Set.of()).iterator();
         }
 
         @Override
@@ -149,7 +147,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
             }
             if(this.idx < this.keys.length - 1){
                 this.idx++;
-                this.currentIterator = keyMap.computeIfAbsent(this.keys[this.idx], (ignored) -> Set.of()).iterator();
+                this.currentIterator = keyMap.getOrDefault(this.keys[this.idx], Set.of()).iterator();
                 return this.hasNext();
             }
             return false;

@@ -5,10 +5,10 @@ package dk.ku.di.dms.vms.modb.common.transaction;
  */
 public interface ITransactionManager {
 
-    void checkpoint(long maxTid);
+    default void checkpoint(long maxTid) { }
 
-    void commit();
+    default void commit() { }
 
-    void beginTransaction(long tid, int identifier, long lastTid, boolean readOnly);
+    default void beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) { }
 
 }

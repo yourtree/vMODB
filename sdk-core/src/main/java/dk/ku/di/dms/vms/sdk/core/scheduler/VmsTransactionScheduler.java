@@ -96,11 +96,11 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         this.vmsChannels = vmsChannels;
 
         // operational (internal control of transactions and tasks)
-        this.transactionTaskMap = new ConcurrentHashMap<>();
+        this.transactionTaskMap = new ConcurrentHashMap<>(100000);
         SchedulerCallback callback = new SchedulerCallback();
         this.vmsTransactionTaskBuilder = new VmsTransactionTaskBuilder(transactionalHandler, callback);
         this.transactionTaskMap.put( 0L, this.vmsTransactionTaskBuilder.buildFinished(0) );
-        this.lastTidToTidMap = new HashMap<>();
+        this.lastTidToTidMap = new HashMap<>(100000);
         this.localInputEvents = new ArrayList<>(100000);
     }
 
@@ -120,6 +120,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 LOGGER.log(WARNING, this.vmsIdentifier+": Error on scheduler loop: "+e.getCause().getMessage());
             }
         }
+        LOGGER.log(INFO,this.vmsIdentifier+": Transaction scheduler has terminated");
     }
 
     private final class SchedulerCallback implements ISchedulerCallback, Thread.UncaughtExceptionHandler {
@@ -127,10 +128,12 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         @Override
         public void success(ExecutionModeEnum executionMode, OutboundEventResult outboundEventResult) {
 
+            VmsTransactionTask task = transactionTaskMap.get(outboundEventResult.tid());
+            task.signalFinished();
+
             updateLastFinishedTid(outboundEventResult.tid());
 
             // my previous has sent the event already?
-            VmsTransactionTask task = transactionTaskMap.get(outboundEventResult.tid());
             VmsTransactionResult resultToQueue = new VmsTransactionResult(
                     outboundEventResult.tid(),
                     outboundEventResult);
@@ -153,7 +156,11 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         @Override
         public void error(ExecutionModeEnum executionMode, long tid, Exception e) {
-            // TODO handle errors
+            // a simple mechanism to handle error is by reexecuting, depending on the nature of the error
+            // if constraint violation, it cannot be reexecuted
+            // in this case, the error must be informed to the event handler, so the event handler
+            // can forward the error to downstream VMSs. if input VMS, easier to handle, just send a noop to them
+
             LOGGER.log(WARNING, "Error captured during application execution: \n"+e.getCause().getMessage());
             if(executionMode == ExecutionModeEnum.SINGLE_THREADED) {
                 singleThreadTaskRunning.set(false);
@@ -197,7 +204,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     private boolean BLOCKING = false;
 
     private void executeReadyTasks() {
-
         Long nextTid = this.lastTidToTidMap.get(this.lastTidFinished);
         // if nextTid == null then the scheduler must block until a new event arrive to progress
         if(nextTid == null) {
@@ -207,15 +213,13 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         }
 
         VmsTransactionTask task = this.transactionTaskMap.get( nextTid );
-
         while(true) {
 
             if(task.isScheduled()){
                 return;
             }
-
-            // noop
-            if(task.status() == 3){
+            // must check because partitioned task interleave and may finish before a lower TID
+            if(task.isFinished()){
                 this.updateLastFinishedTid(nextTid);
                 return;
             }
@@ -324,24 +328,23 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             return;
         }
 
-        // just a fast way to have it. must be incorporated by vms loader class
-        if(inboundEvent.event().equalsIgnoreCase("noop")){
-            this.transactionTaskMap.put(inboundEvent.tid(),
-                    this.vmsTransactionTaskBuilder.buildFinished(inboundEvent.tid()) );
-        } else {
-            this.transactionTaskMap.put(inboundEvent.tid(), this.vmsTransactionTaskBuilder.build(
-                    inboundEvent.tid(),
-                    inboundEvent.lastTid(),
-                    inboundEvent.batch(),
-                    this.transactionMetadataMap
-                            .get(inboundEvent.event())
-                            .signatures.getFirst().object(),
-                    inboundEvent.input()
-            ));
-        }
+        this.transactionTaskMap.put(inboundEvent.tid(), this.vmsTransactionTaskBuilder.build(
+                inboundEvent.tid(),
+                inboundEvent.lastTid(),
+                inboundEvent.batch(),
+                this.transactionMetadataMap
+                        .get(inboundEvent.event())
+                        .signatures.getFirst().object(),
+                inboundEvent.input()
+        ));
 
         // mark the last tid, so we can get the next to execute when appropriate
-        this.lastTidToTidMap.put( inboundEvent.lastTid(), inboundEvent.tid() );
+        if(this.lastTidToTidMap.containsKey(inboundEvent.lastTid())){
+            LOGGER.log(ERROR, "Inbound event is attempting to overwrite precedence of TIDs: "+
+                    inboundEvent);
+        } else {
+            this.lastTidToTidMap.put(inboundEvent.lastTid(), inboundEvent.tid());
+        }
     }
 
     public long lastTidFinished(){

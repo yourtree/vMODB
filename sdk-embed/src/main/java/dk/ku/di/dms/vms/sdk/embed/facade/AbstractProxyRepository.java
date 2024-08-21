@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.sdk.embed.facade;
 
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
+import dk.ku.di.dms.vms.modb.api.query.clause.WhereClauseElement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.definition.Schema;
@@ -98,10 +99,14 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     public final List<T> intercept(String methodName, Object[] args) {
         // retrieve statically defined query
         SelectStatement selectStatement = this.repositoryQueriesMap.get(methodName);
+
         // set query arguments
+        List<WhereClauseElement> whereClauseElements = new ArrayList<>(args.length);
         for(int i = 0; i < args.length; i++) {
-            selectStatement.whereClause.get(i).setValue( args[i] );
+            whereClauseElements.add(selectStatement.whereClause.get(i).overwriteValue( args[i] ));
         }
+        selectStatement = selectStatement.clone(whereClauseElements);
+
         // submit for execution
         List<Object[]> records = this.operationalAPI.fetch(this.table, selectStatement);
         List<T> result = new ArrayList<>(records.size());

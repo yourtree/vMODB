@@ -89,7 +89,7 @@ public final class EmbedMetadataLoader {
                 try (DynamicType.Unloaded<?> dynamicType = byteBuddy
                         .subclass(generic, ConstructorStrategy.Default.IMITATE_SUPER_CLASS)
                         .implement(repositoryType)
-                         .method(ElementMatchers.isAnnotatedWith(Query.class) )
+                        .method(ElementMatchers.isAnnotatedWith(Query.class) )
                         .intercept(
                                 MethodDelegation.to(AbstractProxyRepository.Interceptor.class)
                         )

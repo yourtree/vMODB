@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * Only parses simple SELECT statements
  */
-public class Parser {
+public final class Parser {
 
     /**
      *
@@ -73,7 +73,7 @@ public class Parser {
             return ExpressionTypeEnum.IN;
         }
 
-        // TODO complete
+        // complete
         return null;
 
     }

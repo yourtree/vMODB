@@ -402,7 +402,13 @@ public final class VmsMetadataLoader {
             Constructor<?>[] constructors = cls.getDeclaredConstructors();
             Constructor<?> constructor = constructors[0];
             // these are the classes annotated with @Microservice
-            Object vmsInstance = constructor.newInstance(repositoryClassMap.get(clazzName).toArray());
+            Object vmsInstance;
+            if(repositoryClassMap.containsKey(clazzName)) {
+                vmsInstance = constructor.newInstance(repositoryClassMap.get(clazzName).toArray());
+            } else {
+                System.out.println("Class " + clazzName + " not found in repository class map. In other words, no repository mapped for "+clazzName);
+                vmsInstance = constructor.newInstance();
+            }
             loadedMicroserviceInstances.put(clazzName, vmsInstance);
         }
         return loadedMicroserviceInstances;

@@ -109,7 +109,7 @@ public final class Analyzer {
         List<String> columns = statement.selectClause;
 
         // case where the user input is '*'
-        if (columns.size() == 1 && columns.get(0).contentEquals("*")) {
+        if (columns.size() == 1 && columns.getFirst().contentEquals("*")) {
 
             // iterate over all tables involved
             for (final Table table : queryTree.tables.values()) {
@@ -248,12 +248,11 @@ public final class Analyzer {
      */
     public List<WherePredicate> analyzeWhere(Table table, List<WhereClauseElement> whereClause) throws AnalyzerException {
         List<WherePredicate> newList = new ArrayList<>(whereClause.size());
-        // this assumes param is a value (number or char/string)
+        // this assumes param is a value (number, char, or string)
         for(WhereClauseElement element : whereClause){
-
-            if(!columnNameIsFoundInSchema(element.column(), table.schema()))
+            if(!columnNameIsFoundInSchema(element.column(), table.schema())) {
                 throw new AnalyzerException("Column does not exist in the table");
-
+            }
             ColumnReference columnReference = new ColumnReference(element.column(), table);
             newList.add( new WherePredicate(columnReference, element.expression(), element.value()) );
         }

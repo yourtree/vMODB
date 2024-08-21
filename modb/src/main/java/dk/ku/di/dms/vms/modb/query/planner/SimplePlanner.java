@@ -4,10 +4,8 @@ import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.modb.definition.ColumnReference;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
-import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
-import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
@@ -305,18 +303,13 @@ public final class SimplePlanner {
     }
 
     private ReadWriteIndex<IKey> getOptimalIndex(Table table, int[] filterColumns){
-        IKey indexKey;
         // no index apply so far, perhaps a subset then?
         List<int[]> combinations = Combinatorics.getAllPossibleColumnCombinations(filterColumns);
         // heuristic: return the one that embraces more columns
         ReadWriteIndex<IKey> bestSoFar = null;
         int maxLength = 0;
         for(int[] arr : combinations) {
-            if (arr.length == 1) {
-                indexKey = SimpleKey.of(filterColumns[0]);
-            } else {
-                indexKey = CompositeKey.of(filterColumns);
-            }
+            IKey indexKey = KeyUtils.buildIndexKey(filterColumns);
             if(table.secondaryIndexMap.get(indexKey) != null){
                 if(arr.length > maxLength){
                     bestSoFar = table.secondaryIndexMap.get(indexKey).getUnderlyingIndex();

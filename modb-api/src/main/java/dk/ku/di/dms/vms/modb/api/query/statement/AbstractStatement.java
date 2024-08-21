@@ -8,7 +8,7 @@ import java.util.List;
 public sealed abstract class AbstractStatement implements IStatement
         permits SelectStatement, UpdateStatement, DeleteStatement {
 
-    // TODO make this a string?
+    // should make it a string?
     // used to cache query plans. where clause only found in select, update, and delete
     public final StringBuilder SQL = new StringBuilder();
 

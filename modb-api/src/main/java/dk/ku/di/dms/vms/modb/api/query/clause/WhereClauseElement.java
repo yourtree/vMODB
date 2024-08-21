@@ -2,10 +2,11 @@ package dk.ku.di.dms.vms.modb.api.query.clause;
 
 import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
 
-public class WhereClauseElement {
+public final class WhereClauseElement {
+
     private final String column;
     private final ExpressionTypeEnum expression;
-    private Object value;
+    private final Object value;
 
     public WhereClauseElement(String column, ExpressionTypeEnum expression, Object value) {
         this.column = column;
@@ -14,19 +15,19 @@ public class WhereClauseElement {
     }
 
     public String column() {
-        return column;
+        return this.column;
     }
 
     public ExpressionTypeEnum expression() {
-        return expression;
+        return this.expression;
     }
 
     public Object value() {
-        return value;
+        return this.value;
     }
 
-    public void setValue(Object value){
-        this.value = value;
+    public WhereClauseElement overwriteValue(Object value) {
+        return new WhereClauseElement(column, expression, value);
     }
 
 }

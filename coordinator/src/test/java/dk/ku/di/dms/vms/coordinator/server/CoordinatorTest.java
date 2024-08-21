@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import junit.framework.Assert;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -47,6 +48,69 @@ public final class CoordinatorTest {
             var map = serdesProxy.deserializeDependenceMap(str);
             this.queue.add(map);
         }
+    }
+
+    @Test
+    public void testComplexWorkflow() throws InterruptedException {
+        HashMap<String, VmsNode> vmsMetadataMap = new HashMap<>();
+        vmsMetadataMap.put( "product", new VmsNode("localhost", 8080, "product", 0, 0, 0, null, null, null));
+        vmsMetadataMap.put( "cart", new VmsNode("localhost", 8081, "cart", 0, 0, 0, null, null, null));
+        vmsMetadataMap.put( "stock", new VmsNode("localhost", 8082, "stock", 0, 0, 0, null, null, null));
+
+        Map<String,IVmsWorker> workers = new HashMap<>();
+        var productWorker = new StorePayloadVmsWorker(VmsSerdesProxyBuilder.build());
+        workers.put("product", productWorker);
+        workers.put("cart", new IVmsWorker() { });
+        workers.put("stock", new IVmsWorker() { });
+
+        Map<String, TransactionDAG> transactionMap = new HashMap<>();
+        TransactionDAG checkoutDag = TransactionBootstrap.name("customer_checkout")
+                .input("a", "cart", "customer_checkout")
+                .terminal("b", "stock", "a")
+                .build();
+        transactionMap.put(checkoutDag.name, checkoutDag);
+        TransactionDAG updateProductDag = TransactionBootstrap.name("update_product")
+                .input("a", "product", "update_product")
+                .terminal("b", "stock", "a")
+                .terminal("c", "cart", "a")
+                .build();
+        transactionMap.put(updateProductDag.name, updateProductDag);
+        TransactionDAG updatePriceDag = TransactionBootstrap.name("update_price")
+                .input("a", "product", "update_price")
+                .terminal("b", "cart", "a")
+                .build();
+        transactionMap.put(updatePriceDag.name, updatePriceDag);
+
+        var vmsNodePerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
+
+        var txInputQueue = new ConcurrentLinkedDeque<TransactionInput>();
+        var precedenceMapInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        var precedenceMapOutputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+
+        var txWorker = TransactionWorker.build(1, txInputQueue, 1, MAX_NUM_TID_BATCH, 1000,
+                1, precedenceMapInputQueue, precedenceMapOutputQueue, transactionMap, vmsNodePerDAG,
+                workers, new ConcurrentLinkedQueue<>(), VmsSerdesProxyBuilder.build() );
+
+        var input1 = new TransactionInput("customer_checkout", new TransactionInput.Event("customer_checkout", ""));
+        txInputQueue.add(input1);
+
+        var input2 = new TransactionInput("update_price", new TransactionInput.Event("update_price", ""));
+        txInputQueue.add(input2);
+
+        var input3 = new TransactionInput("update_product", new TransactionInput.Event("update_product", ""));
+        txInputQueue.add(input3);
+
+        var txWorkerThread = Thread.ofPlatform().factory().newThread(txWorker);
+        txWorkerThread.start();
+
+        sleep(2000);
+
+        var input4 = new TransactionInput("customer_checkout", new TransactionInput.Event("customer_checkout", ""));
+        txInputQueue.add(input4);
+
+        sleep(2000000);
+
+        Assert.assertTrue(true);
     }
 
     @SuppressWarnings("BusyWait")

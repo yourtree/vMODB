@@ -50,7 +50,7 @@ public final class IndexScanWithProjection extends AbstractScan {
         return null;
     }
 
-    public List<Object[]> runAsEmbedded(TransactionContext txCtx, IKey[] keys){
+    public List<Object[]> runAsEmbedded(TransactionContext txCtx, IKey... keys){
         List<Object[]> res = new ArrayList<>();
         Iterator<Object[]> iterator = this.index.iterator(txCtx, keys);
         while(iterator.hasNext()){

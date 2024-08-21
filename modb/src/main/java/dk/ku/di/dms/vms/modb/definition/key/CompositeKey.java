@@ -14,14 +14,9 @@ import java.util.Objects;
 public final class CompositeKey implements IKey, IIndexKey {
 
     private final Object[] value;
-    // private final int hashKey;
 
     public static CompositeKey of(Object[] values){
         return new CompositeKey(values);
-    }
-
-    public static CompositeKey of(int[] values){
-        return new CompositeKey(Arrays.stream(values).mapToObj(Objects::toString).toArray());
     }
 
     private CompositeKey(Object[] values) {
@@ -30,38 +25,24 @@ public final class CompositeKey implements IKey, IIndexKey {
 
     @Override
     public int hashCode() {
-        return Objects.hash(value);
+        return Objects.hash(this.value);
     }
 
     @Override
     public boolean equals(Object key){
         return key instanceof CompositeKey compositeKey &&
-                // this.value.equals(compositeKey.value);
-        Arrays.equals(value, compositeKey.value);
-                /*
-               equals((byte[]) STRING_VALUE_HANDLE.get(this.value),
-                       (byte[]) STRING_VALUE_HANDLE.get(compositeKey.value));
-
-                 */
-    }
-
-    public static boolean equals(byte[] value, byte[] other) {
-        if (value.length == other.length) {
-            for (int i = 0; i < value.length; i++) {
-                if (value[i] != other[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        return false;
+            Arrays.equals(this.value, compositeKey.value);
     }
 
     @Override
     public String toString() {
         return "{"
-                + "\"value\":" + Arrays.toString(value)
+                + "\"value\":" + Arrays.toString(this.value)
                 + "}";
+    }
+
+    public Object[] getValue() {
+        return value;
     }
 
 }

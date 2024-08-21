@@ -14,7 +14,15 @@ public final class SimpleKey implements IKey, IIndexKey {
         this.value = value.hashCode();
     }
 
+    private SimpleKey(int value) {
+        this.value = value;
+    }
+
     public static SimpleKey of(Object value) {
+        return new SimpleKey(value);
+    }
+
+    public static SimpleKey of(int value) {
         return new SimpleKey(value);
     }
 
@@ -31,7 +39,11 @@ public final class SimpleKey implements IKey, IIndexKey {
     @Override
     public String toString() {
         return "{" +
-                "value =" + value +
+                "value =" + this.value +
                 '}';
+    }
+
+    public int getValue() {
+        return this.value;
     }
 }

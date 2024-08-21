@@ -44,6 +44,6 @@ public final class UpdateProduct {
         return new ProductId(this.seller_id, this.product_id);
     }
 
-    public record ProductId( int sellerId, int productId){}
+    public record ProductId(int sellerId, int productId){}
 
 }

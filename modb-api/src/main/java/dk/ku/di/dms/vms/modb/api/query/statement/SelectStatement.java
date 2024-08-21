@@ -49,4 +49,8 @@ public final class SelectStatement extends AbstractStatement {
         return this;
     }
 
+    public SelectStatement clone(List<WhereClauseElement> whereClause){
+        return new SelectStatement(this.selectClause, this.fromClause.getFirst(), whereClause);
+    }
+
 }

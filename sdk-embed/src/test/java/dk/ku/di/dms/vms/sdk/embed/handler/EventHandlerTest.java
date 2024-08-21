@@ -46,9 +46,9 @@ import static java.lang.System.Logger.Level.INFO;
 
 /**
  * Test vms event handler
- * a. Are events being ingested correctly?
- * b. are events being outputted correctly?
- * TODO This list below is responsibility of another test class:
+ * a) Are events being ingested correctly?
+ * b) are events being outputted correctly?
+ * This list below is responsibility of another test class:
  * c. is the internal state being managed properly (respecting correctness semantics)?
  * d. all tables have data structures properly created? embed metadata loader
  * e. ingestion is being performed correctly?
@@ -71,23 +71,6 @@ public class EventHandlerTest {
 
     private static final System.Logger logger = System.getLogger(EventHandlerTest.class.getName());
     private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
-
-    private static final class NoOpCheckpointAPI implements ITransactionManager {
-        @Override
-        public void checkpoint(long maxTid) {
-             logger.log(INFO, "Checkpoint called at: "+System.currentTimeMillis());
-        }
-
-        @Override
-        public void commit() {
-            logger.log(INFO, "Commit called at: "+System.currentTimeMillis());
-        }
-
-        @Override
-        public void beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) {
-            logger.log(INFO, "Begin transaction called at: "+System.currentTimeMillis());
-        }
-    }
 
     /**
      * Facility to load virtual microservice instances.
@@ -134,10 +117,11 @@ public class EventHandlerTest {
                 vmsMetadata.inputEventSchema(), vmsMetadata.outputEventSchema());
 
         VmsEventHandler eventHandler = VmsEventHandler.build(
-                vmsIdentifier, new NoOpCheckpointAPI(),
+                vmsIdentifier, new ITransactionManager() { },
                 vmsInternalPubSubService, vmsMetadata,
                 VmsApplicationOptions.build(null, 0, null),
-                new ILoggingHandler() { },
+                new ILoggingHandler() {
+                },
                 serdes);
 
         if(eventHandlerActive) {
@@ -372,7 +356,7 @@ public class EventHandlerTest {
         /*
          8 - listen from the internal channel. may take some time because of the batch commit scheduler
          why also checking the output? to see if the event sent is correctly processed
-         TODO hanging forever sometimes. not deterministic
+          hanging forever sometimes. not deterministic
           study possible problem: locking my thread pool: slide 44
           https://openjdk.org/projects/nio/presentations/TS-4222.pdf
           With an executor passed as a group, it started working....

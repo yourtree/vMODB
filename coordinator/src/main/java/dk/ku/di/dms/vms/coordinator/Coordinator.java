@@ -704,7 +704,6 @@ public final class Coordinator extends StoppableRunnable {
         Map<String, List<IdentifiableNode>> vmsConsumerSet;
 
         for(VmsNode vmsIdentifier : this.vmsMetadataMap.values()) {
-
             // if we reuse the hashmap, the entries get mixed and lead to incorrect consumer set
             vmsConsumerSet = new HashMap<>();
 

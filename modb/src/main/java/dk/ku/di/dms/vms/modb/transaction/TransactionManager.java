@@ -81,21 +81,16 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     @Override
     public List<Object[]> fetch(Table table, SelectStatement selectStatement){
         String sqlAsKey = selectStatement.SQL.toString();
-        AbstractSimpleOperator scanOperator = this.queryPlanCacheMap.getOrDefault( sqlAsKey, null );
-        List<WherePredicate> wherePredicates;
-        if(scanOperator == null){
-            QueryTree queryTree = this.analyzer.analyze(selectStatement);
-            wherePredicates = queryTree.wherePredicates;
-            scanOperator = this.planner.plan(queryTree);
-            this.queryPlanCacheMap.put(sqlAsKey, scanOperator);
-        } else {
-            // get only the where clause params
-            wherePredicates = this.analyzer.analyzeWhere(table, selectStatement.whereClause);
-        }
+        AbstractSimpleOperator scanOperator = this.queryPlanCacheMap.computeIfAbsent(sqlAsKey,
+                (ignored) -> {
+                    QueryTree queryTree = this.analyzer.analyze(selectStatement);
+                    return this.planner.plan(queryTree);
+                });
+        List<WherePredicate> wherePredicates = this.analyzer.analyzeWhere(table, selectStatement.whereClause);
 
         if(scanOperator.isIndexScan()){
             IKey key = this.getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
-            return scanOperator.asIndexScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), new IKey[]{ key });
+            return scanOperator.asIndexScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), key);
         } else if(scanOperator.isIndexAggregationScan()){
             return scanOperator.asIndexAggregationScan().runAsEmbedded(TRANSACTION_CONTEXT.get());
         } else {

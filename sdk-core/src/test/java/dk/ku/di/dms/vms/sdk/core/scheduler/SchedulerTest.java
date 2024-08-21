@@ -1,6 +1,8 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.sdk.core.example.InputEventExample1;
+import dk.ku.di.dms.vms.sdk.core.example.InputEventExample2;
 import dk.ku.di.dms.vms.sdk.core.example.MicroserviceExample2;
 import dk.ku.di.dms.vms.sdk.core.facade.IVmsRepositoryFacade;
 import dk.ku.di.dms.vms.sdk.core.facade.NetworkRepositoryFacade;
@@ -8,10 +10,12 @@ import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 
 import static java.lang.Thread.sleep;
 
@@ -28,7 +32,34 @@ import static java.lang.Thread.sleep;
  */
 public class SchedulerTest {
 
-    //
+    @Test
+    public void testDifferentPartitionClasses() throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException, InterruptedException {
+        VmsInternalChannels vmsInternalChannels = VmsInternalChannels.getInstance();
+        VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example");
+
+        var scheduler = VmsTransactionScheduler.build("example1", vmsInternalChannels,
+                vmsRuntimeMetadata.queueToVmsTransactionMap(), new ITransactionManager() { }, 4);
+
+        for(int i = 1; i <= 4; i++){
+            InputEventExample1 eventExample = new InputEventExample1(i);
+            InboundEvent event = new InboundEvent(i,i-1,1, "in", InputEventExample1.class, eventExample);
+            vmsInternalChannels.transactionInputQueue().add(event);
+        }
+
+        InputEventExample2 eventExample = new InputEventExample2(5, 5);
+        InboundEvent event = new InboundEvent(5,4,1, "in_", InputEventExample2.class, eventExample);
+        vmsInternalChannels.transactionInputQueue().add(event);
+
+        Thread schedulerThread = new Thread(scheduler);
+        schedulerThread.start();
+
+        sleep(2000);
+
+        var list = new ArrayList<IVmsTransactionResult>();
+        vmsInternalChannels.transactionOutputQueue().drainTo(list);
+        Assert.assertEquals(5, list.size());
+    }
+
     @Test
     public void test() throws ClassNotFoundException, InvocationTargetException, InstantiationException, IllegalAccessException, InterruptedException {
 
@@ -38,21 +69,8 @@ public class SchedulerTest {
         Constructor<IVmsRepositoryFacade> constructor = (Constructor<IVmsRepositoryFacade>) NetworkRepositoryFacade.class.getConstructors()[0];
         VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example");
 
-        /*
-        new ICheckpointHandler() {
-            @Override
-            public void checkpoint() { }
-
-            @Override
-            public boolean mustCheckpoint() {
-                return false;
-            }
-
-        });
-        */
-
         VmsComplexTransactionScheduler scheduler = VmsComplexTransactionScheduler.build(
-                "test", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null);
+                "test", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), new ITransactionManager() { });
 
         Thread schedulerThread = new Thread(scheduler);
         schedulerThread.start();
@@ -76,8 +94,8 @@ public class SchedulerTest {
 
         // tricky to simulate we have a scheduler in other microservice.... we need a new scheduler because of the tid
         // could reset the tid to 0, but would need to synchronize to avoid exceptions
-        scheduler = VmsComplexTransactionScheduler.build(
-                "vmsTest", vmsInternalChannels, vmsRuntimeMetadata.queueToVmsTransactionMap(), null);
+        scheduler = VmsComplexTransactionScheduler.build("vmsTest", vmsInternalChannels,
+                vmsRuntimeMetadata.queueToVmsTransactionMap(), new ITransactionManager() { });
 
         schedulerThread = new Thread(scheduler);
         schedulerThread.start();
