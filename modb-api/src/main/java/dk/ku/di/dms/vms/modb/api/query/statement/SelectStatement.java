@@ -33,6 +33,13 @@ public final class SelectStatement extends AbstractStatement {
         super();
     }
 
+    public SelectStatement(StringBuilder sql, List<String> selectClause, List<String> fromClause, List<WhereClauseElement> whereClause) {
+        super(sql);
+        this.selectClause = selectClause;
+        this.fromClause = fromClause;
+        this.whereClause.addAll(whereClause);
+    }
+
     public SelectStatement(List<String> selectClause, String table, List<WhereClauseElement> whereClause) {
         this.selectClause = selectClause;
         this.fromClause = List.of(table);
@@ -50,7 +57,7 @@ public final class SelectStatement extends AbstractStatement {
     }
 
     public SelectStatement clone(List<WhereClauseElement> whereClause){
-        return new SelectStatement(this.selectClause, this.fromClause.getFirst(), whereClause);
+        return new SelectStatement(this.SQL, this.selectClause, this.fromClause, whereClause);
     }
 
 }

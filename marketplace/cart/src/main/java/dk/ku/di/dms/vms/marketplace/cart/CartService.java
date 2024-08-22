@@ -38,20 +38,13 @@ public final class CartService {
     @PartitionBy(clazz = CustomerCheckout.class, method = "getId")
     public ReserveStock checkout(CustomerCheckout checkout) {
         LOGGER.log(INFO, "APP: Cart received a checkout request with TID: "+checkout.instanceId);
-        // get cart items from a customer
+        // get cart items from the given customer
         List<CartItem> cartItems = this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
         if(cartItems == null || cartItems.isEmpty()) {
             LOGGER.log(ERROR, "APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
-            // throw new RuntimeException("APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
-            cartItems = List.of(new CartItem(1,1, checkout.CustomerId, "default", 0, 0, 1, 0, checkout.instanceId));
+            throw new RuntimeException("APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
         }
-        else if(cartItems.getFirst().customer_id != checkout.CustomerId){
-            LOGGER.log(ERROR, "APP: Wrong cart items returned for customer ID "+checkout.CustomerId+" TID "+checkout.instanceId+". Customer ID retrieved: "+cartItems.getFirst().customer_id);
-            cartItems = this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
-        } else {
-            this.cartItemRepository.deleteAll(cartItems);
-        }
-
+        this.cartItemRepository.deleteAll(cartItems);
         // LOGGER.log(INFO, "APP: Cart finished a checkout request with TID: "+checkout.instanceId);
         return new ReserveStock(new Date(), checkout, CartUtils.convertCartItems( cartItems ), checkout.instanceId);
     }
@@ -65,7 +58,7 @@ public final class CartService {
         ProductReplica product = this.productReplicaRepository.lookupByKey(
                 new ProductReplica.ProductId(priceUpdated.sellerId, priceUpdated.productId));
         if(product == null){
-            LOGGER.log(WARNING,"Cart has no product replica with seller ID "+priceUpdated.sellerId+" : product ID "+priceUpdated.productId);
+            LOGGER.log(DEBUG,"Cart has no product replica with seller ID "+priceUpdated.sellerId+" : product ID "+priceUpdated.productId);
         } else {
             if (product.version.contentEquals(priceUpdated.version)) {
                 product.price = priceUpdated.price;
@@ -75,6 +68,11 @@ public final class CartService {
         // update all carts
         List<CartItem> cartItems = this.cartItemRepository.getCartItemsBySellerIdAndProductIdAndVersion(
                 priceUpdated.sellerId, priceUpdated.productId, priceUpdated.version);
+        if(cartItems.isEmpty()) {
+            LOGGER.log(DEBUG,"No cart items retrieved for price update:\n"+priceUpdated);
+            return;
+        }
+        LOGGER.log(DEBUG,cartItems.size()+" cart items retrieved for price update:\n"+priceUpdated);
         for (var cartItem : cartItems) {
             cartItem.voucher += (priceUpdated.price - cartItem.unit_price);
             cartItem.unit_price = priceUpdated.price;

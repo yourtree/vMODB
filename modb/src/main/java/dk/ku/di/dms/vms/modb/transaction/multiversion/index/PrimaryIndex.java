@@ -118,17 +118,12 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      * Methods for insert/update operations.
      */
     private boolean nonPkConstraintViolation(Object[] values) {
-
         if(this.primaryKeyIndex.schema().constraints().isEmpty())
             return false;
-
         Schema schema = this.primaryKeyIndex.schema();
         boolean constraintHolds = true;
-
         for(Map.Entry<Integer, ConstraintReference> c : schema.constraints().entrySet()) {
-
             switch (c.getValue().constraint.type){
-
                 case NUMBER -> {
                     switch (schema.columnDataType(c.getKey())) {
                         case INT -> constraintHolds = NumberTypeConstraintHelper.eval((int)values[c.getKey()] , 0, Integer::compareTo, c.getValue().constraint);
@@ -138,7 +133,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                         default -> throw new IllegalStateException("Data type "+c.getValue().constraint.type+" cannot be applied to a number");
                     }
                 }
-
                 case NUMBER_WITH_VALUE -> {
                     Object valToCompare = c.getValue().asValueConstraint().value;
                     switch (schema.columnDataType(c.getKey())) {
@@ -149,13 +143,10 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                         default -> throw new IllegalStateException("Data type "+c.getValue().constraint.type+" cannot be applied to a number");
                     }
                 }
-
                 case NULLABLE ->
                         constraintHolds = NullableTypeConstraintHelper.eval(values[c.getKey()], c.getValue().constraint);
-
                 case CHARACTER ->
                         constraintHolds = CharOrStringTypeConstraintHelper.eval((String) values[c.getKey()], c.getValue().constraint );
-
             }
             if(!constraintHolds) return true;
         }
@@ -519,7 +510,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         return new PrimaryIndexIterator(txCtx);
     }
 
-    private class PrimaryIndexIterator implements Iterator<Object[]> {
+    private final class PrimaryIndexIterator implements Iterator<Object[]> {
 
         private final TransactionContext txCtx;
         private final Iterator<Map.Entry<IKey, OperationSetOfKey>> iterator;
@@ -534,15 +525,24 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         public boolean hasNext() {
             while(this.iterator.hasNext()){
                 Map.Entry<IKey, OperationSetOfKey> next = this.iterator.next();
-                var entry = next.getValue().updateHistoryMap.floorEntry(txCtx.tid);
+                var entry = next.getValue().updateHistoryMap.floorEntry(this.txCtx.tid);
                 if(entry == null) {
                     this.currRecord = primaryKeyIndex.lookupByKey(next.getKey());
-                    if(this.currRecord == null) continue;
+                    if(this.currRecord == null){
+                        if(this.iterator.hasNext()) {
+                            continue;
+                        } else {
+                            return false;
+                        }
+                    }
                     return true;
                 }
                 if(entry.val().type == WriteType.DELETE) {
-                    this.iterator.next();
-                    continue;
+                    if(this.iterator.hasNext()) {
+                        continue;
+                    } else {
+                        return false;
+                    }
                 }
                 this.currRecord = entry.val().record;
                 return true;

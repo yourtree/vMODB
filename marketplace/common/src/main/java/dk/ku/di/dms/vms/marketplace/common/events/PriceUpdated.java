@@ -36,4 +36,14 @@ public final class PriceUpdated {
 
     public record ProductId( int sellerId, int productId){}
 
+    @Override
+    public String toString() {
+        return "{"
+                + "\"seller\":\"" + sellerId + "\""
+                + ",\"productId\":\"" + productId + "\""
+                + ",\"price\":\"" + price + "\""
+                + ",\"version\":\"" + version + "\""
+                + ",\"instanceId\":\"" + instanceId + "\""
+                + "}";
+    }
 }

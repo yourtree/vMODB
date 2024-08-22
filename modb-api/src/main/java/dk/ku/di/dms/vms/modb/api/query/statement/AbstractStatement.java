@@ -10,11 +10,18 @@ public sealed abstract class AbstractStatement implements IStatement
 
     // should make it a string?
     // used to cache query plans. where clause only found in select, update, and delete
-    public final StringBuilder SQL = new StringBuilder();
+    public final StringBuilder SQL;
 
     public final List<WhereClauseElement> whereClause;
 
     public AbstractStatement() {
+        this.SQL = new StringBuilder();
         this.whereClause = new ArrayList<>();
     }
+
+    public AbstractStatement(StringBuilder SQL) {
+        this.SQL = SQL;
+        this.whereClause = new ArrayList<>();
+    }
+
 }
