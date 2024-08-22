@@ -35,17 +35,17 @@ public final class CoordinatorTest {
 
     private static class StorePayloadVmsWorker implements IVmsWorker {
         private final IVmsSerdesProxy serdesProxy;
-        public final ConcurrentLinkedQueue<Map<String,Long>> queue;
+        public final ConcurrentLinkedDeque<Map<String,Long>> queue;
 
         public StorePayloadVmsWorker(IVmsSerdesProxy serdesProxy) {
             this.serdesProxy = serdesProxy;
-            this.queue = new ConcurrentLinkedQueue<>();
+            this.queue = new ConcurrentLinkedDeque<>();
         }
 
         @Override
         public void queueTransactionEvent(TransactionEvent.PayloadRaw payloadRaw) {
             String str = new String(payloadRaw.precedenceMap(), StandardCharsets.UTF_8);
-            var map = serdesProxy.deserializeDependenceMap(str);
+            var map = this.serdesProxy.deserializeDependenceMap(str);
             this.queue.add(map);
         }
     }
@@ -58,10 +58,12 @@ public final class CoordinatorTest {
         vmsMetadataMap.put( "stock", new VmsNode("localhost", 8082, "stock", 0, 0, 0, null, null, null));
 
         Map<String,IVmsWorker> workers = new HashMap<>();
-        var productWorker = new StorePayloadVmsWorker(VmsSerdesProxyBuilder.build());
+        var serdes = VmsSerdesProxyBuilder.build();
+        var cartWorker = new StorePayloadVmsWorker(serdes);
+        var productWorker = new StorePayloadVmsWorker(serdes);
         workers.put("product", productWorker);
-        workers.put("cart", new IVmsWorker() { });
-        workers.put("stock", new IVmsWorker() { });
+        workers.put("cart", cartWorker);
+        workers.put("stock", new IVmsWorker() {});
 
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
         TransactionDAG checkoutDag = TransactionBootstrap.name("customer_checkout")
@@ -87,9 +89,15 @@ public final class CoordinatorTest {
         var precedenceMapInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
         var precedenceMapOutputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
 
+        Map<String, TransactionWorker.PrecendenceInfo> precedenceMap = new HashMap<>();
+        precedenceMap.put("product", new TransactionWorker.PrecendenceInfo(0, 0, 0));
+        precedenceMap.put("cart", new TransactionWorker.PrecendenceInfo(0, 0, 0));
+        precedenceMap.put("stock", new TransactionWorker.PrecendenceInfo(0, 0, 0));
+        precedenceMapInputQueue.add(precedenceMap);
+
         var txWorker = TransactionWorker.build(1, txInputQueue, 1, MAX_NUM_TID_BATCH, 1000,
                 1, precedenceMapInputQueue, precedenceMapOutputQueue, transactionMap, vmsNodePerDAG,
-                workers, new ConcurrentLinkedQueue<>(), VmsSerdesProxyBuilder.build() );
+                workers, new ConcurrentLinkedQueue<>(), serdes );
 
         var input1 = new TransactionInput("customer_checkout", new TransactionInput.Event("customer_checkout", ""));
         txInputQueue.add(input1);
@@ -103,14 +111,63 @@ public final class CoordinatorTest {
         var txWorkerThread = Thread.ofPlatform().factory().newThread(txWorker);
         txWorkerThread.start();
 
-        sleep(2000);
+        // enough time to process all 3 in the same batch
+        sleep(3000);
 
         var input4 = new TransactionInput("customer_checkout", new TransactionInput.Event("customer_checkout", ""));
         txInputQueue.add(input4);
 
-        sleep(2000000);
+        Map<String, TransactionWorker.PrecendenceInfo> precedenceInfo;
+        while((precedenceInfo = precedenceMapOutputQueue.poll()) == null){
+            // do nothing
+            sleep(10);
+        }
 
-        Assert.assertTrue(true);
+        // adding to own transaction worker
+        precedenceMapInputQueue.add(precedenceInfo);
+
+        Assert.assertTrue( precedenceInfo.get("product").lastTid() == 3 &&
+                precedenceInfo.get("cart").lastTid() == 3 &&
+                precedenceInfo.get("stock").lastTid() == 3 );
+
+        Assert.assertTrue( precedenceInfo.get("product").lastBatch() == 1 &&
+                precedenceInfo.get("cart").lastBatch() == 1 &&
+                precedenceInfo.get("stock").lastBatch() == 1 );
+
+        Assert.assertTrue( precedenceInfo.get("product").previousToLastBatch() == 0 &&
+                precedenceInfo.get("cart").previousToLastBatch() == 0 &&
+                precedenceInfo.get("stock").previousToLastBatch() == 0 );
+
+        Map<String, Long> depMap = cartWorker.queue.poll();
+        Assert.assertTrue( depMap != null && depMap.get("cart") == 0 &&
+                !depMap.containsKey("product") && depMap.get("stock") == 0);
+
+        depMap = productWorker.queue.poll();
+        Assert.assertTrue( depMap != null && depMap.get("cart") == 2 &&
+                depMap.get("product") == 2 && depMap.get("stock") == 1);
+
+        depMap = productWorker.queue.poll();
+        Assert.assertTrue( depMap != null && depMap.get("cart") == 1 &&
+                !depMap.containsKey("stock") && depMap.get("product") == 0);
+
+        // stock is not an input vms. no need to check anything in this test
+        sleep(3000);
+
+        // check correctness of the next
+        precedenceInfo = precedenceMapOutputQueue.poll();
+        Assert.assertNotNull(precedenceInfo);
+
+        Assert.assertTrue( precedenceInfo.get("product").lastTid() == 3 &&
+                precedenceInfo.get("cart").lastTid() == 4 &&
+                precedenceInfo.get("stock").lastTid() == 4 );
+
+        Assert.assertTrue( precedenceInfo.get("product").lastBatch() == 1 &&
+                precedenceInfo.get("cart").lastBatch() == 2 &&
+                precedenceInfo.get("stock").lastBatch() == 2 );
+
+        Assert.assertTrue( precedenceInfo.get("product").previousToLastBatch() == 0 &&
+                precedenceInfo.get("cart").previousToLastBatch() == 1 &&
+                precedenceInfo.get("stock").previousToLastBatch() == 1 );
     }
 
     @SuppressWarnings("BusyWait")
@@ -172,24 +229,27 @@ public final class CoordinatorTest {
             sleep(10);
         }
 
-        assert precedenceInfo.get("product").lastTid() == 12 &&
+        Assert.assertTrue( precedenceInfo.get("product").lastTid() == 12 &&
                 precedenceInfo.get("cart").lastTid() == 12 &&
-                precedenceInfo.get("stock").lastTid() == 12;
+                precedenceInfo.get("stock").lastTid() == 12 );
 
-        assert precedenceInfo.get("product").lastBatch() == 2 &&
+        Assert.assertTrue( precedenceInfo.get("product").lastBatch() == 2 &&
                 precedenceInfo.get("cart").lastBatch() == 2 &&
-                precedenceInfo.get("stock").lastBatch() == 2;
+                precedenceInfo.get("stock").lastBatch() == 2 );
 
-        assert precedenceInfo.get("product").previousToLastBatch() == 1 &&
+        Assert.assertTrue( precedenceInfo.get("product").previousToLastBatch() == 1 &&
                 precedenceInfo.get("cart").previousToLastBatch() == 1 &&
-                precedenceInfo.get("stock").previousToLastBatch() == 1;
+                precedenceInfo.get("stock").previousToLastBatch() == 1 );
 
-        var map = productWorker.queue.poll();
-
-        assert map != null && map.get("cart") == 10 && map.get("product") == 10;
+        Map<String,Long> map = productWorker.queue.poll();
+        Assert.assertTrue( map != null && map.get("cart") == 10 &&
+                map.get("product") == 10 &&
+                !map.containsKey("stock"));
 
         map = productWorker.queue.poll();
-        assert map != null && map.get("cart") == 11 && map.get("product") == 11 && map.get("stock") == 1;
+        Assert.assertTrue( map != null && map.get("cart") == 11 &&
+                map.get("product") == 11 &&
+                map.get("stock") == 1);
     }
 
     @Test
@@ -249,10 +309,10 @@ public final class CoordinatorTest {
         var lastTid1 = safePoll(coordinatorQueue).lastTid;
         var lastTid2 = safePoll(coordinatorQueue).lastTid;
 
-        assert lastTid1 == 10 && lastTid2 == 20;
-
         txWorkers.get(0).t1().stop();
         txWorkers.get(1).t1().stop();
+
+        Assert.assertTrue( lastTid1 == 10 && lastTid2 == 20 );
     }
 
     private static BatchContext safePoll(Queue<Object> coordinatorQueue) {
@@ -318,8 +378,7 @@ public final class CoordinatorTest {
         LOGGER.log(System.Logger.Level.INFO, " Tx worker #1 TID: "+txWorker1Tid);
         LOGGER.log(System.Logger.Level.INFO, " Tx worker #2 TID: "+txWorker2Tid);
 
-        assert txWorker1Tid == 5;
-        assert txWorker2Tid == 20;
+        Assert.assertTrue(txWorker1Tid == 5 && txWorker2Tid == 20);
     }
 
     @Test
@@ -377,8 +436,7 @@ public final class CoordinatorTest {
         LOGGER.log(System.Logger.Level.INFO, " Tx worker #1 TID: "+txWorker1Tid);
         LOGGER.log(System.Logger.Level.INFO, " Tx worker #2 TID: "+txWorker2Tid);
 
-        assert txWorker1Tid == 10;
-        assert txWorker2Tid == 20;
+        Assert.assertTrue(txWorker1Tid == 10 && txWorker2Tid == 20);
     }
 
     private static void buildAndQueueStarterPrecedenceMap(ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>> precedenceMapQueue1) {
@@ -420,7 +478,7 @@ public final class CoordinatorTest {
         } while(txWorker1Tid == 0);
         LOGGER.log(System.Logger.Level.INFO, " Tx worker #1 TID: "+txWorker1Tid);
 
-        assert txWorker1Tid == 10;
+        Assert.assertEquals(10, txWorker1Tid);
     }
 
     private static Map<String, IVmsWorker> buildTestVmsWorker() {
