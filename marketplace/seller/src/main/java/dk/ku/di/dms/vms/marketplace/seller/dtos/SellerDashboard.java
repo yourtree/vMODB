@@ -16,17 +16,15 @@ public final class SellerDashboard {
 
     @Override
     public String toString() {
-
         StringBuilder sb = new StringBuilder("[");
         for (OrderEntry entry : entries) {
             sb.append(entry.toString()).append(", ");
         }
         sb.delete(sb.length() - 2, sb.length());
         sb.append("]");
-
         return "{"
-                + "        \"entries\":" + sb.toString()
-                + ",         \"view\":" + view
+                + "\"entries\":" + sb
+                + ",\"view\":" + view
                 + "}";
     }
 }

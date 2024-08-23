@@ -11,6 +11,7 @@ import dk.ku.di.dms.vms.marketplace.common.events.ShipmentUpdated;
 import dk.ku.di.dms.vms.marketplace.seller.dtos.OrderSellerView;
 import dk.ku.di.dms.vms.marketplace.seller.dtos.SellerDashboard;
 import dk.ku.di.dms.vms.marketplace.seller.entities.OrderEntry;
+import dk.ku.di.dms.vms.marketplace.seller.infra.SellerConst;
 import dk.ku.di.dms.vms.marketplace.seller.repositories.IOrderEntryRepository;
 import dk.ku.di.dms.vms.marketplace.seller.repositories.ISellerRepository;
 import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
@@ -66,8 +67,7 @@ public final class SellerService {
             locksAcquired = new HashMap<>();
         }
         List<OrderItem> orderItems = invoiceIssued.getItems();
-        List<OrderEntry> list = new ArrayList<>(invoiceIssued.getItems().size());
-
+        List<OrderEntry> entries = new ArrayList<>(orderItems.size());
         for (OrderItem orderItem : orderItems) {
             float totalInvoice = orderItem.total_amount + orderItem.getFreightValue();
             OrderEntry entry = new OrderEntry(
@@ -90,8 +90,7 @@ public final class SellerService {
                     OrderStatus.INVOICED,
                     null
             );
-            list.add(entry);
-
+            entries.add(entry);
             if(SellerConst.APP_MAINTAINED_VIEW) {
                 //noinspection DataFlowIssue
                 if (!locksAcquired.containsKey(orderItem.seller_id)) {
@@ -118,24 +117,20 @@ public final class SellerService {
                 view.count_orders = view.orders.size();
             }
         }
-
         if(SellerConst.APP_MAINTAINED_VIEW) {
             // unlock all
             for (Map.Entry<Integer, ReadWriteLock> lock : locksAcquired.entrySet()) {
                 lock.getValue().writeLock().unlock();
             }
         }
-
-        this.orderEntryRepository.insertAll(list);
+        this.orderEntryRepository.insertAll(entries);
     }
 
     @Inbound(values = SHIPMENT_UPDATED)
     @Transactional(type=RW)
     public void processShipmentUpdate(ShipmentUpdated shipmentUpdated){
         LOGGER.log(INFO, "APP: Seller received a shipment update event with TID: "+ shipmentUpdated.instanceId);
-
         // synchronization must also be present here
-
         for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {
             List<OrderEntry> orderEntries = this.orderEntryRepository.getOrderEntriesByCustomerIdAndOrderId(
                     shipmentNotification.customerId, shipmentNotification.orderId );
@@ -186,7 +181,6 @@ public final class SellerService {
             orderEntry.package_id = delivery.packageId;
             this.orderEntryRepository.update( orderEntry );
         }
-
     }
 
     /**
@@ -207,7 +201,7 @@ public final class SellerService {
         List<OrderEntry> orderEntries = this.orderEntryRepository.getOrderEntriesBySellerId(sellerId);
         OrderSellerView view = new OrderSellerView();
         view.seller_id = sellerId;
-        /* faster way, but kept the current for comparison
+        /* faster way, but kept the current for comparison with dapr implementation
         for(OrderEntry entry : orderEntries){
             view.count_items += entry.quantity;
             view.total_amount += entry.total_amount;
@@ -222,7 +216,6 @@ public final class SellerService {
         view.total_incentive = orderEntries.stream().mapToDouble(OrderEntry::getTotalIncentive).sum();
         view.total_invoice = orderEntries.stream().mapToDouble(OrderEntry::getTotalInvoice).sum();
         view.total_items = orderEntries.stream().mapToDouble(OrderEntry::getTotalItems).sum();
-
         view.count_items = orderEntries.size();
         view.count_orders = (int) orderEntries.stream().map(OrderEntry::getOrderId).distinct().count();
         return new SellerDashboard(view, orderEntries);

@@ -9,6 +9,6 @@ public interface ITransactionManager {
 
     default void commit() { }
 
-    default void beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) { }
+    default TransactionContextBase beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) { return null; }
 
 }

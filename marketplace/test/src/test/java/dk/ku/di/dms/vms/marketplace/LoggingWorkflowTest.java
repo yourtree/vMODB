@@ -9,7 +9,7 @@ import java.io.File;
 public final class LoggingWorkflowTest extends CartProductWorkflowTest {
 
     @Override
-    protected void initCartAndProduct() {
+    protected void initCartAndProduct() throws Exception {
         System.setProperty("logging", "true");
         dk.ku.di.dms.vms.marketplace.product.Main.main(null);
         dk.ku.di.dms.vms.marketplace.cart.Main.main(null);

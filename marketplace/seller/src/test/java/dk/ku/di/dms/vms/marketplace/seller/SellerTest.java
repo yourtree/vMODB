@@ -32,10 +32,13 @@ public final class SellerTest {
         vms.start();
         generateInvoices(vms);
         sleep(3000);
-        vms.getTransactionManager().beginTransaction(LAST_TID, 0, LAST_TID, true);
-        SellerDashboard dash = ((SellerService)vms.getService()).queryDashboardNoApp(1);
-        Assert.assertNotNull(dash);
-        Assert.assertEquals(dash.view.count_items, 1);
+        var sellerService = vms.<SellerService>getService();
+        Assert.assertTrue(sellerService.isPresent());
+        try(var txCtx = vms.getTransactionManager().beginTransaction(LAST_TID, 0, LAST_TID, true)) {
+            SellerDashboard dash = sellerService.get().queryDashboardNoApp(1);
+            Assert.assertNotNull(dash);
+            Assert.assertEquals(dash.view.count_items, 1);
+        }
     }
 
     @Test

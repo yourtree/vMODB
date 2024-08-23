@@ -1,8 +1,6 @@
 package dk.ku.di.dms.vms.modb.query.execution.operators.scan;
 
-import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 
@@ -40,14 +38,12 @@ public final class IndexScanWithProjection extends AbstractScan {
     }
 
     public List<Object[]> runAsEmbedded(TransactionContext txCtx){
-        // TODO return objects
+        List<Object[]> res = new ArrayList<>();
         Iterator<Object[]> iterator = this.index.iterator(txCtx);
         while(iterator.hasNext()){
-
-            iterator.next();
+            res.add( iterator.next() );
         }
-        // return this.memoryRefNode;
-        return null;
+        return res;
     }
 
     public List<Object[]> runAsEmbedded(TransactionContext txCtx, IKey... keys){
@@ -59,19 +55,19 @@ public final class IndexScanWithProjection extends AbstractScan {
         return res;
     }
 
-    public MemoryRefNode run(TransactionContext txCtx, FilterContext filterContext, IKey... keys) {
-        // unifying in terms of iterator
-        Iterator<Object[]> iterator = this.index.iterator(txCtx, keys);
-        while(iterator.hasNext()){
-            Object[] record = iterator.next();
-            if(index.checkCondition(filterContext, record)){
-                // this.append(iterator, this.projectionColumns);
-            }
-
-        }
-        // return this.memoryRefNode;
-        return null;
-    }
+//    public MemoryRefNode run(TransactionContext txCtx, FilterContext filterContext, IKey... keys) {
+//        // unifying in terms of iterator
+//        Iterator<Object[]> iterator = this.index.iterator(txCtx, keys);
+//        while(iterator.hasNext()){
+//            Object[] record = iterator.next();
+//            if(index.checkCondition(filterContext, record)){
+//                // this.append(iterator, this.projectionColumns);
+//            }
+//
+//        }
+//        // return this.memoryRefNode;
+//        return null;
+//    }
 
 //    public MemoryRefNode run(IKey... keys) {
 //        Iterator<IKey> iterator = this.index.iterator(keys);

@@ -112,6 +112,8 @@ public final class Coordinator extends StoppableRunnable {
 
     private final Queue<Object> coordinatorQueue;
 
+    private final Map<String, IVmsWorker> vmsWorkerContainerMap;
+
     public static Coordinator build(// obtained from leader election or passed by parameter on setup
                                     Map<Integer, ServerNode> servers,
                                     // passed by parameter
@@ -199,6 +201,8 @@ public final class Coordinator extends StoppableRunnable {
         BatchContext currentBatch = new BatchContext(dummyBatchOffset);
         currentBatch.seal(startingTid - 1, Map.of(), Map.of());
         this.batchContextMap.put(dummyBatchOffset, currentBatch);
+
+        this.vmsWorkerContainerMap = new HashMap<>();
     }
 
     private final Map<String, VmsNode[]> vmsIdentifiersPerDAG = new HashMap<>();
@@ -383,8 +387,6 @@ public final class Coordinator extends StoppableRunnable {
         }
     }
 
-    private final Map<String, IVmsWorker> vmsWorkerContainerMap = new HashMap<>();
-
     /**
      * After a leader election, it makes more sense that
      * the leader connects to all known virtual microservices.
@@ -402,7 +404,8 @@ public final class Coordinator extends StoppableRunnable {
             for (IdentifiableNode vmsNode : this.starterVMSs.values()) {
                 // is this a VMS that receives transaction input?
                 boolean active = inputsVMSs.contains(vmsNode.identifier);
-                // coordinator will later keep track of this thread when the connection with the VMS is fully established
+                // coordinator will later keep track of this thread when
+                // the connection with the VMS is fully established
                 VmsWorker vmsWorker = VmsWorker.build(this.me, vmsNode, this.coordinatorQueue,
                         () -> JdkAsyncChannel.create(this.group),
                         new VmsWorkerOptions(
@@ -418,10 +421,10 @@ public final class Coordinator extends StoppableRunnable {
                 // virtual thread leads to performance degradation
                 Thread vmsWorkerThread = Thread.ofPlatform().factory().newThread(vmsWorker);
                 vmsWorkerThread.setName("vms-worker-" + vmsNode.identifier + "-0");
-                vmsWorkerThread.start();
                 this.vmsWorkerContainerMap.put(vmsNode.identifier,
                         new VmsWorkerContainer(vmsWorker, this.options.getNumWorkersPerVms())
                 );
+                vmsWorkerThread.start();
             }
         } catch (Exception e){
             LOGGER.log(ERROR, "It was not possible to connect to one of the starter VMSs: " + e.getMessage());
@@ -727,6 +730,12 @@ public final class Coordinator extends StoppableRunnable {
                 consumerSetStr = this.serdesProxy.serializeConsumerSet(vmsConsumerSet);
                 LOGGER.log(INFO,"Leader: Consumer set built for "+vmsIdentifier.getIdentifier()+": \n"+consumerSetStr);
             }
+
+            if(!this.vmsWorkerContainerMap.containsKey(vmsIdentifier.identifier)){
+                LOGGER.log(ERROR,"Leader: Cannot find identifier ("+ vmsIdentifier.identifier +") in worker container map.");
+                continue;
+            }
+
             this.vmsWorkerContainerMap.get(vmsIdentifier.identifier).queueMessage(consumerSetStr);
         }
     }
@@ -740,7 +749,6 @@ public final class Coordinator extends StoppableRunnable {
                 LOGGER.log(DEBUG,"Leader: Batch ("+batchContext.batchOffset+") commit command not sent to "+ vms.getIdentifier() + " (terminal)");
                 continue;
             }
-
             // has this VMS participated in this batch?
             if(!batchContext.numberOfTIDsPerVms.containsKey(vms.getIdentifier())){
                 //noinspection StringTemplateMigration

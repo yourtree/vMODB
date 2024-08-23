@@ -4,8 +4,6 @@ import dk.ku.di.dms.vms.marketplace.cart.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
-import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
-import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 import io.vertx.core.*;
@@ -13,10 +11,11 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
 
-public class CartHttpServerVertx extends AbstractVerticle {
+public final class CartHttpServerVertx extends AbstractVerticle {
 
     static VmsApplication CART_VMS;
     static AbstractProxyRepository<CartItem.CartItemId, CartItem> CART_REPO;
@@ -29,11 +28,9 @@ public class CartHttpServerVertx extends AbstractVerticle {
         Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(nativeTransport));
         boolean usingNative = vertx.isNativeTransportEnabled();
         System.out.println("Vertx is running with native: " + usingNative);
-        DeploymentOptions deploymentOptions = new DeploymentOptions().setThreadingModel(ThreadingModel.EVENT_LOOP);
-
-        if(numVertices > 1){
-            deploymentOptions.setInstances(numVertices);
-        }
+        DeploymentOptions deploymentOptions = new DeploymentOptions()
+                .setThreadingModel(ThreadingModel.EVENT_LOOP)
+                .setInstances(numVertices);
 
         try {
             vertx.deployVerticle(CartHttpServerVertx.class,
@@ -55,9 +52,7 @@ public class CartHttpServerVertx extends AbstractVerticle {
         options.setHost("localhost");
         options.setTcpKeepAlive(true);
         HttpServer server = this.vertx.createHttpServer(options);
-
         server.requestHandler(new VertxHandler());
-
         server.listen(res -> {
             if (res.succeeded()) {
                 startPromise.complete();
@@ -79,16 +74,17 @@ public class CartHttpServerVertx extends AbstractVerticle {
                             int customerId = Integer.parseInt(split[split.length - 3]);
                             int sellerId = Integer.parseInt(split[split.length - 2]);
                             int productId = Integer.parseInt(split[split.length - 1]);
-                            CART_VMS.getTransactionManager().beginTransaction(0, 0, 0,false);
-                            TransactionContext txCtx = ((TransactionManager) CART_VMS.getTransactionManager()).getTransactionContext();
-                            CartItem cartItem = CART_REPO.lookupByKey( new CartItem.CartItemId(customerId, sellerId, productId) );
-                            if(cartItem != null){
-                                exchange.response().setChunked(true);
-                                exchange.response().setStatusCode(200);
-                                exchange.response().write(cartItem.toString());
-                                exchange.response().end();
+                            try(var txCtx = CART_VMS.getTransactionManager().beginTransaction(0, 0, 0,false)) {
+                                CartItem cartItem = CART_REPO.lookupByKey(new CartItem.CartItemId(customerId, sellerId, productId));
+                                if (cartItem != null) {
+                                    exchange.response().setChunked(true);
+                                    exchange.response().setStatusCode(200);
+                                    exchange.response().write(cartItem.toString());
+                                    exchange.response().end();
+                                }
+                            } catch (IOException e) {
+                                handleError(exchange, e.getMessage());
                             }
-                            txCtx.close();
                         }
                         case "PATCH" -> {
                             String[] split = exchange.uri().split("/");
@@ -98,19 +94,28 @@ public class CartHttpServerVertx extends AbstractVerticle {
                                     SERDES.deserialize(payload,
                                             dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
                             long tid = CART_VMS.lastTidFinished();
-                            CART_VMS.getTransactionManager().beginTransaction(tid, 0, Integer.MIN_VALUE, false);
-                            CART_REPO.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
-                            CART_VMS.getTransactionManager().commit();
-                            exchange.response().setStatusCode(200).end();
+                            try(var txCtx = CART_VMS.getTransactionManager().beginTransaction(tid, 0, Integer.MIN_VALUE, false)){
+                                CART_REPO.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
+                                CART_VMS.getTransactionManager().commit();
+                                exchange.response().setStatusCode(200).end();
+                            } catch (IOException e){
+                                handleError(exchange, e.getMessage());
+                            }
                         }
-                        default -> exchange.response().setStatusCode(500).end();
+                        default -> handleError(exchange, "Invalid URI");
                     }
                 } else {
-                    exchange.response().setStatusCode(500).end();
+                    handleError(exchange, "Invalid URI");
                 }
-
             });
         }
+    }
+
+    private static void handleError(HttpServerRequest exchange, String msg) {
+        exchange.response().setChunked(true);
+        exchange.response().setStatusCode(500);
+        exchange.response().write(msg);
+        exchange.response().end();
     }
 
 }

@@ -128,7 +128,7 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
     }
 
     @Override
-    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey[] keys) {
+    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey... keys) {
         return new KeyMultiVersionIterator(txCtx, keys);
     }
 

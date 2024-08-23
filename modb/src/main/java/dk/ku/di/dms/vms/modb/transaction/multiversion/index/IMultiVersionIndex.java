@@ -27,7 +27,7 @@ public interface IMultiVersionIndex {
 
     default Iterator<Object[]> iterator(TransactionContext txCtx) { throw new UnsupportedOperationException(); }
 
-    Iterator<Object[]> iterator(TransactionContext txCtx, IKey[] keys);
+    Iterator<Object[]> iterator(TransactionContext txCtx, IKey... keys);
 
     /**
      * This is the basic check condition. Does not take into consideration the

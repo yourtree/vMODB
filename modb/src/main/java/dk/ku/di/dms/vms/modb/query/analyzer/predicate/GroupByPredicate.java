@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.query.analyzer.predicate;
 import dk.ku.di.dms.vms.modb.api.query.enums.GroupByOperationEnum;
 import dk.ku.di.dms.vms.modb.definition.ColumnReference;
 
-public class GroupByPredicate {
+public final class GroupByPredicate {
 
     private final ColumnReference columnReference;
     private final GroupByOperationEnum groupByOperation;

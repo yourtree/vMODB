@@ -51,7 +51,7 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
     @Id
     public int product_id;
 
-    @Column
+    @Id
     @VmsIndex(name = "seller_idx")
     public int seller_id;
 
@@ -102,9 +102,9 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
     public OrderEntry(int customer_id, int order_id, int product_id, int seller_id, int package_id, String product_name, String product_category, float unit_price, int quantity, float total_items, float total_amount, float total_invoice, float total_incentive, float freight_value, Date shipment_date, Date delivery_date, OrderStatus order_status, PackageStatus delivery_status) {
         this.customer_id = customer_id;
         this.order_id = order_id;
-        this.package_id = package_id;
-        this.seller_id = seller_id;
         this.product_id = product_id;
+        this.seller_id = seller_id;
+        this.package_id = package_id;
         this.product_name = product_name;
         this.product_category = product_category;
         this.unit_price = unit_price;

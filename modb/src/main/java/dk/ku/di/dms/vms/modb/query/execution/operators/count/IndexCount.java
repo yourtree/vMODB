@@ -13,28 +13,23 @@ import java.util.Iterator;
  * If DISTINCT, must maintain state.
  * 
  */
-public class IndexCount extends AbstractCount {
+public final class IndexCount extends AbstractCount {
 
     public IndexCount(ReadOnlyIndex<IKey> index) {
         super(index, Integer.BYTES);
     }
 
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
-
         int count = 0;
-
         Iterator<IKey> iterator = this.index.iterator(keys);
         while(iterator.hasNext()){
             IKey key =  iterator.next();
             if(index.checkCondition(key, filterContext)){
                 count++;
             }
-
         }
-
-        append(count);
-        return memoryRefNode;
-
+        this.append(count);
+        return this.memoryRefNode;
     }
 
 }

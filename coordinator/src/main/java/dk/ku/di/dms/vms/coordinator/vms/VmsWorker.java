@@ -194,7 +194,6 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.consumerVms = consumerVms;
 
         this.channel = channel;
-
         this.options = options;
 
         // initialize the write buffer
@@ -254,9 +253,9 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 LOGGER.log(INFO, "Leader: Connection established to "+this.consumerVms.identifier);
                 break;
             } catch (IOException | InterruptedException | ExecutionException e) {
-                LOGGER.log(WARNING, "Leader: Connection attempt to " + this.consumerVms.identifier + " failed. Retrying in 5 seconds...");
+                LOGGER.log(ERROR, "Leader: Connection attempt to " + this.consumerVms.identifier + " failed. Retrying in 5 seconds...");
                 try {
-                    sleep(5000);
+                    sleep(1000);
                 } catch (InterruptedException ignored) { }
             }
         }

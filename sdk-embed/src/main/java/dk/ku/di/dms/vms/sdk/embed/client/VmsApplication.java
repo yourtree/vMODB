@@ -199,12 +199,9 @@ public final class VmsApplication {
         return ((VmsTransactionScheduler)this.transactionScheduler).lastTidFinished();
     }
 
-    public Object getService() {
-        var service = this.vmsRuntimeMetadata.loadedVmsInstances().entrySet().iterator().next().getValue();
-        if(service != null) {
-            return service;
-        }
-        throw new RuntimeException("Service not loaded");
+    @SuppressWarnings("unchecked")
+    public <T> Optional<T> getService() {
+        return (Optional<T>) this.vmsRuntimeMetadata.loadedVmsInstances().values().stream().findFirst();
     }
 
     public ITransactionManager getTransactionManager() {

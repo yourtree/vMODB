@@ -58,7 +58,7 @@ public class CartProductWorkflowTest extends AbstractWorkflowTest {
 
     protected void additionalAssertions() { }
 
-    protected void initCartAndProduct(){
+    protected void initCartAndProduct() throws Exception {
         dk.ku.di.dms.vms.marketplace.product.Main.main(null);
         dk.ku.di.dms.vms.marketplace.cart.Main.main(null);
     }

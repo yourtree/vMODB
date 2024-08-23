@@ -45,12 +45,10 @@ public final class Main {
         final int SLEEP = 1000;
         var starterVMSs = coordinator.getStarterVMSs();
         int starterSize = starterVMSs.size();
-        do {
+        LOGGER.log(INFO, "Proxy: Waiting for all starter VMSs to come online. Sleeping for "+SLEEP+" ms...");
+        while (coordinator.getConnectedVMSs().size() < starterSize) {
             sleep(SLEEP);
-            if(coordinator.getConnectedVMSs().size() == starterSize) break;
-            LOGGER.log(INFO, "Proxy: Waiting for all starter VMSs to come online. Sleeping for "+SLEEP+" ms...");
-        } while (true);
-
+        }
         LOGGER.log(INFO,"Proxy: All starter VMSs have connected to the coordinator");
     }
 
@@ -71,8 +69,6 @@ public final class Main {
                     .input("a", "product", UPDATE_PRODUCT)
                     .terminal("b", "stock", "a")
                     .terminal("c", "cart", "a")
-                    // necessary statement in order to finish batches
-//                    .terminal("b", "product", "a")
                     .build();
             transactionMap.put(updateProductDag.name, updateProductDag);
         }
@@ -92,7 +88,8 @@ public final class Main {
                     .internal("c", "order", STOCK_CONFIRMED, "b")
                     .internal("d", "payment", INVOICE_ISSUED, "c")
                     //.terminal("any", "customer", "b")
-                    .terminal("e", "shipment", "d")
+                    .terminal("e", "seller", "c")
+                    .terminal("f", "shipment", "d")
                     .build();
             transactionMap.put(checkoutDag.name, checkoutDag);
         }
@@ -171,17 +168,6 @@ public final class Main {
         return coordinator;
     }
 
-    /**
-    private static Map<Integer, IdentifiableNode> buildStarterProductVMS(Properties properties){
-        String productHost = properties.getProperty("product_host");
-        if(productHost == null) throw new RuntimeException("Product host is null");
-        IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
-        Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>();
-        starterVMSs.put(productAddress.hashCode(), productAddress);
-        return starterVMSs;
-    }
-    */
-
     private static Map<Integer, IdentifiableNode> buildStarterVMSsBasic(Properties properties){
         String cartHost = properties.getProperty("cart_host");
         String productHost = properties.getProperty("product_host");
@@ -191,46 +177,43 @@ public final class Main {
         if(cartHost == null) throw new RuntimeException("Cart host is null");
         if(stockHost == null) throw new RuntimeException("Stock host is null");
 
+        return getIdentifiableNodeMap(cartHost, productHost, stockHost);
+    }
+
+    private static Map<Integer, IdentifiableNode> getIdentifiableNodeMap(String cartHost, String productHost, String stockHost) {
         IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, Constants.CART_VMS_PORT);
         IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, Constants.STOCK_VMS_PORT);
 
         Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>();
-        starterVMSs.put(cartAddress.hashCode(), cartAddress);
-        starterVMSs.put(productAddress.hashCode(), productAddress);
-        starterVMSs.put(stockAddress.hashCode(), stockAddress);
+        starterVMSs.putIfAbsent(cartAddress.hashCode(), cartAddress);
+        starterVMSs.putIfAbsent(productAddress.hashCode(), productAddress);
+        starterVMSs.putIfAbsent(stockAddress.hashCode(), stockAddress);
         return starterVMSs;
     }
 
     private static Map<Integer, IdentifiableNode> buildStarterVMSsFull(Properties properties) {
-        String cartHost = properties.getProperty("cart_host");
-        String productHost = properties.getProperty("product_host");
-        String stockHost = properties.getProperty("stock_host");
+        Map<Integer, IdentifiableNode> starterVMSs = buildStarterVMSsBasic(properties);
+
         String orderHost = properties.getProperty("order_host");
         String paymentHost = properties.getProperty("payment_host");
         String shipmentHost = properties.getProperty("shipment_host");
+        String sellerHost = properties.getProperty("seller_host");
 
-        if(cartHost == null) throw new RuntimeException("Cart host is null");
-        if(productHost == null) throw new RuntimeException("Product host is null");
-        if(stockHost == null) throw new RuntimeException("Stock host is null");
         if(orderHost == null) throw new RuntimeException("Order host is null");
         if(paymentHost == null) throw new RuntimeException("Payment host is null");
         if(shipmentHost == null) throw new RuntimeException("Shipment host is null");
+        if(sellerHost == null) throw new RuntimeException("Seller host is null");
 
-        IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, Constants.CART_VMS_PORT);
-        IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
-        IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, Constants.STOCK_VMS_PORT);
-        IdentifiableNode orderAddress = new IdentifiableNode("order", orderHost, Constants.ORDER_VMS_PORT);
+        IdentifiableNode orderAddress = new IdentifiableNode("order", orderHost, ORDER_VMS_PORT);
         IdentifiableNode paymentAddress = new IdentifiableNode("payment", paymentHost, PAYMENT_VMS_PORT);
         IdentifiableNode shipmentAddress = new IdentifiableNode("shipment", shipmentHost, SHIPMENT_VMS_PORT);
+        IdentifiableNode sellerAddress = new IdentifiableNode("seller", sellerHost, SELLER_VMS_PORT);
 
-        Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(10);
-        starterVMSs.put(cartAddress.hashCode(), cartAddress);
-        starterVMSs.put(productAddress.hashCode(), productAddress);
-        starterVMSs.put(stockAddress.hashCode(), stockAddress);
-        starterVMSs.put(orderAddress.hashCode(), orderAddress);
-        starterVMSs.put(paymentAddress.hashCode(), paymentAddress);
-        starterVMSs.put(shipmentAddress.hashCode(), shipmentAddress);
+        starterVMSs.putIfAbsent(orderAddress.hashCode(), orderAddress);
+        starterVMSs.putIfAbsent(paymentAddress.hashCode(), paymentAddress);
+        starterVMSs.putIfAbsent(shipmentAddress.hashCode(), shipmentAddress);
+        starterVMSs.putIfAbsent(sellerAddress.hashCode(), sellerAddress);
         return starterVMSs;
     }
 

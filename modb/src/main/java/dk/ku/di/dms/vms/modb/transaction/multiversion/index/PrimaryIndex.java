@@ -442,7 +442,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     @Override
-    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey[] keys) {
+    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey... keys) {
         return new MultiVersionIterator(txCtx, keys);
     }
 

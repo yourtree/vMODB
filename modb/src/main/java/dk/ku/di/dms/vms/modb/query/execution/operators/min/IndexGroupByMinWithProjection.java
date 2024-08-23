@@ -44,7 +44,7 @@ public final class IndexGroupByMinWithProjection extends AbstractScan {
         while(iterator.hasNext()){
             this.compute(iterator.next(), minMap);
         }
-        return project(minMap);
+        return this.project(minMap);
     }
 
 //    public MemoryRefNode run(){
@@ -57,12 +57,12 @@ public final class IndexGroupByMinWithProjection extends AbstractScan {
 //
 //        // build hash with min per group (defined in group by)
 //        while(iterator.hasNext()){
-//            TODO materialize only the necessary columns
+//            // materialize only the necessary columns
 //            Object[] record = this.index.lookupByKey(iterator.next());
 //            this.compute(record, minMap);
 //        }
 //
-//        // TODO order by minColumn ... isn't it better to build a tree map ordered then just extract the 10 first later?
+//        // order by minColumn ... isn't it better to build a tree map ordered then just extract the 10 first later?
 //
 //        // apply limit while projecting columns
 //        this.project(minMap);
@@ -95,7 +95,6 @@ public final class IndexGroupByMinWithProjection extends AbstractScan {
         IKey pk = KeyUtils.buildRecordKey(schema.getPrimaryKeyColumns(), record);
         IKey groupByKey = KeyUtils.buildRecordKey(this.indexColumns, record);
         GroupByKey groupKey = new GroupByKey( groupByKey.hashCode(), pk );
-
         if(!minMap.containsKey(groupKey)){
             minMap.put(groupKey, new Tuple<>( (Comparable<?>) record[minColumn], record) );
         } else {

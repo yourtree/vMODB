@@ -31,7 +31,7 @@ public class CheckpointingTest extends CartProductWorkflowTest {
     }
 
     @Override
-    protected void initCartAndProduct() {
+    protected void initCartAndProduct() throws Exception {
         dk.ku.di.dms.vms.marketplace.cart.Main.main(null);
     }
 

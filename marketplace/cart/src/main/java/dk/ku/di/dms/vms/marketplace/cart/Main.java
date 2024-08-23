@@ -13,7 +13,6 @@ import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
-import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
@@ -31,28 +30,19 @@ public final class Main {
 
     private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
-    public static void main(String[] ignoredArgs) {
+    public static void main(String[] ignoredArgs) throws Exception {
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 "localhost",
                 Constants.CART_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.cart",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
-
-        VmsApplication vms;
-        try {
-            vms = VmsApplication.build(options);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        VmsApplication vms = VmsApplication.build(options);
         vms.start();
-
         // initHttpServerJdk(vms);
         initHttpServerVertx(vms);
-
-        VmsApplication finalVms = vms;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            finalVms.stop();
+            vms.stop();
             LOGGER.log(INFO, "Cart terminating ...");
         }));
     }
@@ -144,25 +134,24 @@ public final class Main {
             IKey key = CompositeKey.of( obj );
 
             long tid = this.vms.lastTidFinished();
-            this.vms.getTransactionManager().beginTransaction( tid, 0, tid,true );
-            TransactionContext txCtx = ((TransactionManager)this.vms.getTransactionManager()).getTransactionContext();
-
-            Object[] record = this.table.primaryKeyIndex().lookupByKey(txCtx, key);
-            if(record == null){
-                return null;
+            try(var txCtx = (TransactionContext) this.vms.getTransactionManager().beginTransaction( tid, 0, tid,true )) {
+                Object[] record = this.table.primaryKeyIndex().lookupByKey(txCtx, key);
+                if (record == null) {
+                    return null;
+                }
+                return this.repository.parseObjectIntoEntity(record);
             }
-            return this.repository.parseObjectIntoEntity(record);
         }
 
         private void processAddCartItem(int customerId,
                                         dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI) {
             // get last tid executed to bypass transaction scheduler
-            long tid = 0; //this.vms.lastTidFinished() - 1; // -1 to avoid concurrent modification exception
+            long tid = this.vms.lastTidFinished();
             // can ask the transactional handler
-            this.vms.getTransactionManager().beginTransaction(tid, 0, tid,false);
-            TransactionContext txCtx = ((TransactionManager)this.vms.getTransactionManager()).getTransactionContext();
-            this.repository.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
-            txCtx.close();
+            try(var txCtx = (TransactionContext) this.vms.getTransactionManager().beginTransaction(tid, 0, tid,false)) {
+                this.repository.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
+                this.vms.getTransactionManager().commit();
+            }
         }
 
         private static void returnFailed(HttpExchange exchange) throws IOException {

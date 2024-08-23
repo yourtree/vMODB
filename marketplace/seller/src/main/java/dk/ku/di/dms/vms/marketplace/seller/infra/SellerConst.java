@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.marketplace.seller;
+package dk.ku.di.dms.vms.marketplace.seller.infra;
 
 public class SellerConst {
 

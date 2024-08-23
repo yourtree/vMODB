@@ -6,7 +6,8 @@ import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.seller.dtos.SellerDashboard;
 import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
-import dk.ku.di.dms.vms.marketplace.seller.repositories.IOrderEntryRepository;
+import dk.ku.di.dms.vms.marketplace.seller.infra.SellerConst;
+import dk.ku.di.dms.vms.marketplace.seller.infra.SellerHttpServerVertx;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
@@ -29,28 +30,31 @@ public final class Main {
     private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
     public static void main(String[] args) throws Exception {
-
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 "localhost",
                 Constants.SELLER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.seller",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
-
         VmsApplication vms = VmsApplication.build(options);
         vms.start();
+        // initHttpServerJdk(vms);
+        initHttpServerVertx(vms);
+        LOGGER.log(INFO, "Seller HTTP Server initialized");
+    }
 
+    private static void initHttpServerJdk(VmsApplication vms) throws IOException {
         // initialize HTTP server to serve seller dashboard online requests
         HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", 8007), 0);
         httpServer.createContext("/seller", new SellerHttpHandler(vms));
         httpServer.start();
+    }
 
-        LOGGER.log(INFO, "Seller HTTP Server initialized");
+    private static void initHttpServerVertx(VmsApplication vms){
+        SellerHttpServerVertx.init(vms, 4, true);
     }
 
     private static class SellerHttpHandler implements HttpHandler {
-
-        private final IOrderEntryRepository orderEntryRepository;
 
         private final Table sellerTable;
 
@@ -65,22 +69,23 @@ public final class Main {
         @SuppressWarnings("unchecked")
         private SellerHttpHandler(VmsApplication vms) {
             this.vms = vms;
-            this.sellerService = ((SellerService) vms.getService());
-            this.orderEntryRepository = (IOrderEntryRepository) vms.getRepositoryProxy("packages");
+            var optService = vms.<SellerService>getService();
+            if(optService.isEmpty()){
+                throw new RuntimeException("Could not find service for SellerService");
+            }
+            this.sellerService = optService.get();
             this.sellerTable = vms.getTable("sellers");
             this.sellerRepository = (AbstractProxyRepository<Integer, Seller>) vms.getRepositoryProxy("sellers");
         }
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-
             switch (exchange.getRequestMethod()){
                 case "GET": {
                     //  seller dashboard. send fetch and fetchMany directly to transaction manager?
                     //  one way: the tx manager assigns the last finished tid to thread, thus obtaining the freshest snapshot possible
                     // another way: reentrant locks in the application code
                     String[] split = exchange.getRequestURI().toString().split("/");
-
                     if(split[2].contentEquals("dashboard")){
                         int sellerId = Integer.parseInt(split[split.length - 1]);
                         SellerDashboard view;
@@ -92,8 +97,9 @@ public final class Main {
                             // register a transaction with the last tid finished
                             // this allows to get the freshest view, bypassing the scheduler
                             long lastTid = this.vms.lastTidFinished();
-                            this.vms.getTransactionManager().beginTransaction(lastTid, 0, lastTid, true);
-                            view = this.sellerService.queryDashboardNoApp(sellerId);
+                            try(var txCtx = this.vms.getTransactionManager().beginTransaction(lastTid, 0, lastTid, true)) {
+                                view = this.sellerService.queryDashboardNoApp(sellerId);
+                            }
                         }
                         // parse and return result
                         OutputStream outputStream = exchange.getResponseBody();
@@ -102,11 +108,9 @@ public final class Main {
                         outputStream.close();
                     } else {
                         int sellerId = Integer.parseInt(split[split.length - 1]);
-
                         IKey key = SimpleKey.of( sellerId );
                         // bypass transaction manager
                         Object[] record = this.sellerTable.underlyingPrimaryKeyIndex().lookupByKey(key);
-
                         var entity = this.sellerRepository.parseObjectIntoEntity(record);
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(200, 0);
@@ -132,13 +136,11 @@ public final class Main {
                     return;
                 }
             }
-
             // failed response
             OutputStream outputStream = exchange.getResponseBody();
             exchange.sendResponseHeaders(404, 0);
             outputStream.flush();
             outputStream.close();
-
         }
     }
 

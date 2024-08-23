@@ -12,7 +12,7 @@ import java.util.Iterator;
  *
  * On the other side, the sum is type-dependent. Can be done while the records are scanned.
  */
-public class IndexSum extends Sum {
+public final class IndexSum extends Sum {
 
     public IndexSum(DataType dataType,
                     int columnIndex,
@@ -25,13 +25,13 @@ public class IndexSum extends Sum {
         SumOperation sumOperation = buildOperation(dataType);
         Iterator<IKey> iterator = this.index.iterator(keys);
         while(iterator.hasNext()){
-            IKey key =   iterator.next();
+            IKey key = iterator.next();
             if(this.index.checkCondition(key, filterContext)){
                 sumOperation.accept(this.index.record(key)[this.columnIndex]);
             }
 
         }
-        appendResult(sumOperation);
+        this.appendResult(sumOperation);
         return this.memoryRefNode;
     }
 

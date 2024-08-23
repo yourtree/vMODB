@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
+import dk.ku.di.dms.vms.modb.common.transaction.TransactionContextBase;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
@@ -120,7 +121,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             wherePredicates = this.analyzer.analyzeWhere(table, selectStatement.whereClause);
         }
         MemoryRefNode memRes;
-        // TODO complete for all types or migrate the choice to transaction facade
+        // complete for all types or migrate the choice to transaction facade
         // make an enum, it is easier
         if(scanOperator.isIndexScan()){
             // build keys and filters
@@ -399,22 +400,13 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         for(var index : txCtx.indexes){
             index.installWrites(txCtx);
         }
-        txCtx.close();
     }
 
     @Override
-    public void beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) {
-        TRANSACTION_CONTEXT.set( new TransactionContext(
-                tid,
-                lastTid,
-                readOnly )
-        );
-    }
-
-
-
-    public TransactionContext getTransactionContext(){
-        return TRANSACTION_CONTEXT.get();
+    public TransactionContextBase beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) {
+        TransactionContext txCtx = new TransactionContext(tid, lastTid, readOnly);
+        TRANSACTION_CONTEXT.set(txCtx);
+        return txCtx;
     }
 
 }
