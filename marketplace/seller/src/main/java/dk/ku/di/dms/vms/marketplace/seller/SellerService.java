@@ -25,7 +25,6 @@ import static dk.ku.di.dms.vms.marketplace.common.Constants.INVOICE_ISSUED;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.SHIPMENT_UPDATED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
-import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.INFO;
 
 @Microservice("seller")
@@ -43,7 +42,7 @@ public final class SellerService {
     public static final SelectStatement SELLER_VIEW_BASE = QueryBuilderFactory.select()
             .project("seller_id").sum("total_amount").sum("freight_value")
             .sum("total_incentive").sum("total_invoice").sum("total_items")
-            .count("order_id").count("seller_id")
+            .count("c_o_id").count("seller_id")
             .from("order_entries").where("seller_id", ExpressionTypeEnum.EQUALS, ":sellerId")
             .groupBy( "seller_id" ).build();
 
@@ -126,11 +125,18 @@ public final class SellerService {
         }
     }
 
+    private static final SellerDashboard EMPTY_DASHBOARD = new SellerDashboard(new OrderSellerView(), List.of());
+
+    /**
+     * Parallel by default -- http clients trigger it
+     */
     public SellerDashboard queryDashboard(int sellerId){
         LOGGER.log(INFO, "APP: Seller received a seller dashboard request for ID: "+ sellerId);
         List<OrderEntry> orderEntries = this.orderEntryRepository.getOrderEntriesBySellerId(sellerId);
+        if(orderEntries.isEmpty()) return EMPTY_DASHBOARD;
+        LOGGER.log(INFO, "APP: Seller "+sellerId+" has "+orderEntries.size()+" entries in seller dashboard");
         OrderSellerView view = this.orderEntryRepository.fetchOne(SELLER_VIEW_BASE.setParam(sellerId), OrderSellerView.class);
-        LOGGER.log(DEBUG, view);
+        // LOGGER.log(DEBUG, view);
         return new SellerDashboard(view, orderEntries);
     }
 

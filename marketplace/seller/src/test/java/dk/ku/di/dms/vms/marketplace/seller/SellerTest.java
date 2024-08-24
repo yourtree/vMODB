@@ -27,10 +27,40 @@ public final class SellerTest {
     private static final int LAST_TID = 10;
 
     @Test
-    public void testSellerDashboard() throws Exception {
+    public void testComplexSellerDashboard() throws Exception {
         VmsApplication vms = getVmsApplication();
         vms.start();
-        generateInvoices(vms);
+
+        CustomerCheckout customerCheckout = new CustomerCheckout(
+                1, "test", "test", "test", "test","test", "test", "test",
+                "CREDIT_CARD","test","test","test", "test", "test", 1,"1");
+
+        for(int i = 1; i <= 10; i++) {
+            InvoiceIssued invoiceIssued = new InvoiceIssued( customerCheckout, i,  "test", new Date(), 100,
+                    List.of(new OrderItem(i,1,1, "name", 1, 1.0f, new Date(),
+                            1.0f, 1, 1.0f, 1.0f, 1.0f) )
+                    , String.valueOf(i));
+            InboundEvent inboundEvent = new InboundEvent(i, i-1, 1,
+                    "invoice_issued", InvoiceIssued.class, invoiceIssued);
+            vms.internalChannels().transactionInputQueue().add(inboundEvent);
+        }
+
+        sleep(2000);
+        var sellerService = vms.<SellerService>getService();
+        Assert.assertTrue(sellerService.isPresent());
+        try(var txCtx = vms.getTransactionManager().beginTransaction(LAST_TID, 0, LAST_TID, true)) {
+            SellerDashboard dash = sellerService.get().queryDashboard(1);
+            Assert.assertNotNull(dash);
+            Assert.assertEquals(dash.view.count_items, 10);
+            Assert.assertEquals(dash.view.count_orders, 10);
+        }
+    }
+
+    @Test
+    public void testSimpleSellerDashboard() throws Exception {
+        VmsApplication vms = getVmsApplication();
+        vms.start();
+        generateInvoiceIssuedEvents(vms);
         sleep(2000);
         var sellerService = vms.<SellerService>getService();
         Assert.assertTrue(sellerService.isPresent());
@@ -38,6 +68,7 @@ public final class SellerTest {
             SellerDashboard dash = sellerService.get().queryDashboard(1);
             Assert.assertNotNull(dash);
             Assert.assertEquals(dash.view.count_items, 1);
+            Assert.assertEquals(dash.view.count_orders, 1);
         }
     }
 
@@ -46,22 +77,21 @@ public final class SellerTest {
         VmsApplication vms = getVmsApplication();
         vms.start();
         insertSellers(vms);
-        generateInvoices(vms);
+        generateInvoiceIssuedEvents(vms);
         sleep(3000);
         Assert.assertEquals(LAST_TID, vms.lastTidFinished());
     }
 
-    private static void generateInvoices(VmsApplication vms) {
+    private static void generateInvoiceIssuedEvents(VmsApplication vms) {
         CustomerCheckout customerCheckout = new CustomerCheckout(
                 1, "test", "test", "test", "test","test", "test", "test",
                 "CREDIT_CARD","test","test","test", "test", "test", 1,"1");
 
         for(int i = 1; i <= MAX_SELLERS; i++) {
             InvoiceIssued invoiceIssued = new InvoiceIssued( customerCheckout, i,  "test", new Date(), 100,
-                    List.of(new OrderItem(i,1,1, "name",
-                            i, 1.0f, new Date(), 1.0f, 1, 1.0f, 1.0f, 0.0f) )
+                    List.of(new OrderItem(i,1,1, "name", i, 1.0f, new Date(),
+                            1.0f, 1, 1.0f, 1.0f, 0.0f) )
                     , String.valueOf(i));
-
             InboundEvent inboundEvent = new InboundEvent(i, i-1, 1,
                     "invoice_issued", InvoiceIssued.class, invoiceIssued);
             vms.internalChannels().transactionInputQueue().add(inboundEvent);

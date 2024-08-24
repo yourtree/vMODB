@@ -42,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class TransactionManager implements OperationalAPI, ITransactionManager {
 
-     public static final ThreadLocal<TransactionContext> TRANSACTION_CONTEXT = new ThreadLocal<>();
+    private static final ThreadLocal<TransactionContext> TRANSACTION_CONTEXT = new ThreadLocal<>();
 
     private final Analyzer analyzer;
 

@@ -31,7 +31,6 @@ public final class IndexMultiAggregateScan extends AbstractSimpleOperator {
     }
 
     public List<Object[]> runAsEmbedded(TransactionContext txCtx, IKey key){
-
         Object[] baseRecord = new Object[this.projectionColumns.size() + this.aggregations.size()];
         IAggregation<?>[] operations = extractOperations();
 

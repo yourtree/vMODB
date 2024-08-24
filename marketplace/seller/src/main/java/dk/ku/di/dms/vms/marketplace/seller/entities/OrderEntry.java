@@ -16,18 +16,6 @@ import java.util.Date;
 @IdClass(OrderEntry.OrderEntryId.class)
 public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
 
-    public static class OrderId implements Serializable {
-        public int customer_id;
-        public int order_id;
-
-        public OrderId() { }
-
-        public OrderId(int customer_id, int order_id) {
-            this.customer_id = customer_id;
-            this.order_id = order_id;
-        }
-    }
-
     public static class OrderEntryId implements Serializable {
         public int customer_id;
         public int order_id;
@@ -56,6 +44,9 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
     @Id
     @VmsIndex(name = "seller_idx")
     public int seller_id;
+
+    @Column
+    public String c_o_id;
 
     @Column
     public int package_id;
@@ -120,15 +111,12 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
         this.delivery_date = delivery_date;
         this.order_status = order_status;
         this.delivery_status = delivery_status;
+        this.c_o_id = this.customer_id + "|" + this.order_id;
     }
 
     @Override
     public OrderEntryId getId(){
         return new OrderEntryId( this.customer_id, this.order_id, this.seller_id, this.product_id );
-    }
-
-    public OrderId getOrderId(){
-        return new OrderId( this.customer_id, this.order_id );
     }
 
     public float getTotalItems() {

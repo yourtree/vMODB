@@ -18,6 +18,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static java.lang.System.Logger.Level.*;
 import static java.lang.Thread.sleep;
@@ -50,7 +51,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     // the callback atomically updates this variable
     // used to track progress in the presence of parallel and partitioned tasks
-    private volatile long lastTidFinished;
+    private final AtomicLong lastTidFinished;
 
     private final Set<Object> partitionKeyTrackingMap = new HashSet<>();
 
@@ -102,6 +103,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         this.transactionTaskMap.put( 0L, this.vmsTransactionTaskBuilder.buildFinished(0) );
         this.lastTidToTidMap = new HashMap<>(100000);
         this.localInputEvents = new ArrayList<>(100000);
+
+        this.lastTidFinished = new AtomicLong(0);
     }
 
     /**
@@ -130,7 +133,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
             VmsTransactionTask task = transactionTaskMap.get(outboundEventResult.tid());
             task.signalFinished();
-
             updateLastFinishedTid(outboundEventResult.tid());
 
             // my previous has sent the event already?
@@ -139,9 +141,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     outboundEventResult);
             vmsChannels.transactionOutputQueue().add(resultToQueue);
 
-            if(executionMode == ExecutionModeEnum.SINGLE_THREADED)
+            if(executionMode == ExecutionModeEnum.SINGLE_THREADED) {
                 singleThreadTaskRunning.set(false);
-            else if (executionMode == ExecutionModeEnum.PARALLEL) {
+            } else if (executionMode == ExecutionModeEnum.PARALLEL) {
                 numParallelTasksRunning.decrementAndGet();
             } else {
                 if(task.partitionId().isPresent()){
@@ -188,13 +190,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
      * This method makes sure that TIDs always increase
      * so the next single thread tasks can be executed
      */
-    private void updateLastFinishedTid(long tid){
-        if (tid < this.lastTidFinished) return;
-        synchronized (this) {
-            if (tid > this.lastTidFinished) {
-                this.lastTidFinished = tid;
-            }
-        }
+    private void updateLastFinishedTid(final long tid){
+        if(this.lastTidFinished.get() > tid) return;
+        this.lastTidFinished.updateAndGet(currTid -> Math.max(currTid, tid));
     }
 
     /**
@@ -204,7 +202,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     private boolean BLOCKING = false;
 
     private void executeReadyTasks() {
-        Long nextTid = this.lastTidToTidMap.get(this.lastTidFinished);
+        Long nextTid = this.lastTidToTidMap.get(this.lastTidFinished.get());
         // if nextTid == null then the scheduler must block until a new event arrive to progress
         if(nextTid == null) {
             // keep scheduler sleeping since next tid is unknown
@@ -214,7 +212,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         VmsTransactionTask task = this.transactionTaskMap.get( nextTid );
         while(true) {
-
             if(task.isScheduled()){
                 return;
             }
@@ -223,7 +220,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 this.updateLastFinishedTid(nextTid);
                 return;
             }
-
             switch (task.signature().executionMode()) {
                 case SINGLE_THREADED -> {
                     if (this.canSingleThreadTaskRun()) {
@@ -348,7 +344,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     }
 
     public long lastTidFinished(){
-        return this.lastTidFinished;
+        return this.lastTidFinished.get();
     }
 
 }

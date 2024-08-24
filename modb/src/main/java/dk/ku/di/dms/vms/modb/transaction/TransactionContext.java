@@ -28,6 +28,7 @@ public final class TransactionContext extends TransactionContextBase {
     @Override
     public void close(){
         this.indexes.clear();
+        if(this.readOnly) return;
         INDEX_SET_BUFFER.addLast(this.indexes);
     }
 
