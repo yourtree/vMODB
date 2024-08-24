@@ -6,7 +6,6 @@ import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.seller.dtos.SellerDashboard;
 import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
-import dk.ku.di.dms.vms.marketplace.seller.infra.SellerConst;
 import dk.ku.di.dms.vms.marketplace.seller.infra.SellerHttpServerVertx;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
@@ -88,24 +87,17 @@ public final class Main {
                     String[] split = exchange.getRequestURI().toString().split("/");
                     if(split[2].contentEquals("dashboard")){
                         int sellerId = Integer.parseInt(split[split.length - 1]);
-                        SellerDashboard view;
-                        if(SellerConst.APP_MAINTAINED_VIEW){
-                            // not necessary to register a transaction
-                            // the concurrent hashmap and locking guarantees all-or-nothing
-                            view = this.sellerService.queryDashboard(sellerId);
-                        } else {
-                            // register a transaction with the last tid finished
-                            // this allows to get the freshest view, bypassing the scheduler
-                            long lastTid = this.vms.lastTidFinished();
-                            try(var txCtx = this.vms.getTransactionManager().beginTransaction(lastTid, 0, lastTid, true)) {
-                                view = this.sellerService.queryDashboardNoApp(sellerId);
-                            }
+                        // register a transaction with the last tid finished
+                        // this allows to get the freshest view, bypassing the scheduler
+                        long lastTid = this.vms.lastTidFinished();
+                        try(var txCtx = this.vms.getTransactionManager().beginTransaction(lastTid, 0, lastTid, true)) {
+                            SellerDashboard view = this.sellerService.queryDashboard(sellerId);
+                            // parse and return result
+                            OutputStream outputStream = exchange.getResponseBody();
+                            exchange.sendResponseHeaders(200, 0);
+                            outputStream.write( view.toString().getBytes(StandardCharsets.UTF_8) );
+                            outputStream.close();
                         }
-                        // parse and return result
-                        OutputStream outputStream = exchange.getResponseBody();
-                        exchange.sendResponseHeaders(200, 0);
-                        outputStream.write( view.toString().getBytes(StandardCharsets.UTF_8) );
-                        outputStream.close();
                     } else {
                         int sellerId = Integer.parseInt(split[split.length - 1]);
                         IKey key = SimpleKey.of( sellerId );
@@ -117,8 +109,8 @@ public final class Main {
                         outputStream.write( entity.toString().getBytes(StandardCharsets.UTF_8) );
                         outputStream.flush();
                         outputStream.close();
+                        return;
                     }
-                    return;
                 }
                 case "POST": {
                     String str = new String( exchange.getRequestBody().readAllBytes() );

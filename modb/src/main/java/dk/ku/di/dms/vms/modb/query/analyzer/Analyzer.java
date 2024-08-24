@@ -274,10 +274,8 @@ public final class Analyzer {
         return new QueryTree(analyzeWhere(table, updateStatement.whereClause));
     }
 
-    private ColumnReference findColumnReference(String columnStr, Map<String,Table> tables) throws AnalyzerException {
-
+    private ColumnReference findColumnReference(String columnStr, Map<String, Table> tables) throws AnalyzerException {
         ColumnReference columnReferenceToResult = null;
-
         for(Table table : tables.values()){
             final Schema schema = table.schema();
             final Integer columnIndex = schema.columnPosition(columnStr);

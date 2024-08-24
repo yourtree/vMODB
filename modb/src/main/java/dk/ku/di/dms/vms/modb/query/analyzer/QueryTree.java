@@ -31,21 +31,18 @@ public final class QueryTree {
 
     public final List<ColumnReference> groupByColumns;
 
-    // TODO order by predicate
     public final List<OrderByPredicate> orderByPredicates;
 
     public Optional<Integer> limit;
 
     public QueryTree(List<WherePredicate> wherePredicates){
         this.wherePredicates = wherePredicates;
-
         this.projections = Collections.emptyList();
         this.tables = Collections.emptyMap();
         this.joinPredicates = Collections.emptyList();
         this.groupByProjections = Collections.emptyList();
         this.groupByColumns = Collections.emptyList();
         this.orderByPredicates = Collections.emptyList();
-
         this.limit = Optional.empty();
     }
 
@@ -128,11 +125,15 @@ public final class QueryTree {
      * Also if this.groupByProjections.size() > 1
      */
     public boolean hasMultipleJoins(){
-        return this.joinPredicates.size() >= 2;
+        return this.joinPredicates.size() > 1;
     }
 
     public boolean isSingleTable(){
         return this.tables.size() == 1;
+    }
+
+    public boolean hasMultipleAggregates() {
+        return this.isSingleTable() && this.groupByProjections.size() > 1 && this.joinPredicates.isEmpty() && this.orderByPredicates.isEmpty();
     }
 
 }

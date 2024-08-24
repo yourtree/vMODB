@@ -316,26 +316,44 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
      */
 
     @Override
-    @SuppressWarnings("unchecked")
-    public <DTO> List<DTO> query(SelectStatement statement, Class<DTO> clazz){
+    public <DTO> DTO fetchOne(SelectStatement statement, Class<DTO> clazz){
+        List<Object[]> objects = this.operationalAPI.fetch(this.table, statement);
+        assert objects.size() == 1;
+        Object[] object = objects.getFirst();
+        Constructor<?> constructor = clazz.getDeclaredConstructors()[0];
+        Field[] fields = clazz.getFields();
+        return this.buildDtoInstance(object, constructor, fields);
+    }
+
+    @Override
+    public <DTO> List<DTO> fetchMany(SelectStatement statement, Class<DTO> clazz){
         List<Object[]> objects = this.operationalAPI.fetch(this.table, statement);
         Constructor<?> constructor = clazz.getDeclaredConstructors()[0];
         Field[] fields = clazz.getFields();
         List<DTO> result = new ArrayList<>();
-        try {
-            for(Object[] object : objects){
-                DTO dto = (DTO) constructor.newInstance();
-                int i = 0;
-                for (var field : fields) {
-                    field.set(dto, object[i]);
-                    i++;
-                }
-                result.add(dto);
-            }
-        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-            throw new RuntimeException(e);
+        for(Object[] object : objects){
+            DTO dto = buildDtoInstance(object, constructor, fields);
+            result.add(dto);
         }
         return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <DTO> DTO buildDtoInstance(Object[] object, Constructor<?> constructor, Field[] fields) {
+        try {
+            DTO dto = (DTO) constructor.newInstance();
+            int i = 0;
+            for (var field : fields) {
+                // check if field was captured by query
+                if(object[i] != null){
+                    field.set(dto, object[i]);
+                }
+                i++;
+            }
+            return dto;
+        } catch (InstantiationException | InvocationTargetException| IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }

@@ -80,7 +80,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     }
 
     @Override
-    public List<Object[]> fetch(Table table, SelectStatement selectStatement){
+    public List<Object[]> fetch(final Table table, final SelectStatement selectStatement){
         String sqlAsKey = selectStatement.SQL.toString();
         AbstractSimpleOperator scanOperator = this.queryPlanCacheMap.computeIfAbsent(sqlAsKey,
                 (ignored) -> {
@@ -94,6 +94,9 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             return scanOperator.asIndexScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), key);
         } else if(scanOperator.isIndexAggregationScan()){
             return scanOperator.asIndexAggregationScan().runAsEmbedded(TRANSACTION_CONTEXT.get());
+        } else if(scanOperator.isIndexMultiAggregationScan()){
+            IKey key = this.getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexMultiAggregationScan().index());
+            return scanOperator.asIndexMultiAggregationScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), key);
         } else {
             // future optimization is filter not incuding the columns of partial or non-unique index
             FilterContext filterContext = FilterContextBuilder.build(wherePredicates);

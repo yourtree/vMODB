@@ -90,4 +90,9 @@ public class AppendOnlyBuffer {
         this.nextOffset += Float.BYTES;
     }
 
+    public void append(double value){
+        UNSAFE.putDouble(nextOffset, value);
+        this.nextOffset += Float.BYTES;
+    }
+
 }

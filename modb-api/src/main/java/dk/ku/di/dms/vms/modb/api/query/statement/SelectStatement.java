@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.modb.api.query.statement;
 
 import dk.ku.di.dms.vms.modb.api.query.clause.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -46,6 +47,16 @@ public final class SelectStatement extends AbstractStatement {
         this.whereClause.addAll(whereClause);
     }
 
+    public SelectStatement(StringBuilder sql, List<String> selectClause, List<GroupBySelectElement> groupBySelectClause,
+                           List<String> fromClause, List<WhereClauseElement> whereClause, List<String> groupByClause) {
+        super(sql);
+        this.selectClause = selectClause;
+        this.groupBySelectClause = groupBySelectClause;
+        this.fromClause = fromClause;
+        this.whereClause.addAll(whereClause);
+        this.groupByClause = groupByClause;
+    }
+
     @Override
     public StatementType getType() {
         return StatementType.SELECT;
@@ -58,6 +69,17 @@ public final class SelectStatement extends AbstractStatement {
 
     public SelectStatement clone(List<WhereClauseElement> whereClause){
         return new SelectStatement(this.SQL, this.selectClause, this.fromClause, whereClause);
+    }
+
+    public SelectStatement setParam(Object... params) {
+        List<WhereClauseElement> whereClause_ = new ArrayList<>(this.whereClause.size());
+        for (int i = 0; i < this.whereClause.size(); i++) {
+            whereClause_.add(
+                    this.whereClause.get(i).overwriteValue(params[i])
+            );
+        }
+        return new SelectStatement(this.SQL, this.selectClause, this.groupBySelectClause,
+                this.fromClause, whereClause_, this.groupByClause);
     }
 
 }

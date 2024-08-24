@@ -28,6 +28,10 @@ public abstract class AbstractSimpleOperator {
         return false;
     }
 
+    public boolean isIndexMultiAggregationScan(){
+        return false;
+    }
+
     public boolean isIndexScan(){
         return false;
     }
@@ -35,6 +39,10 @@ public abstract class AbstractSimpleOperator {
     public boolean isHashJoin() { return false; }
 
     public IndexGroupByMinWithProjection asIndexAggregationScan(){
+        throw new IllegalStateException("No index scan operator");
+    }
+
+    public IndexMultiAggregateScan asIndexMultiAggregationScan(){
         throw new IllegalStateException("No index scan operator");
     }
 

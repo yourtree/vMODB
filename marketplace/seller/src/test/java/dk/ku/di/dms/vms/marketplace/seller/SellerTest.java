@@ -31,11 +31,11 @@ public final class SellerTest {
         VmsApplication vms = getVmsApplication();
         vms.start();
         generateInvoices(vms);
-        sleep(3000);
+        sleep(2000);
         var sellerService = vms.<SellerService>getService();
         Assert.assertTrue(sellerService.isPresent());
         try(var txCtx = vms.getTransactionManager().beginTransaction(LAST_TID, 0, LAST_TID, true)) {
-            SellerDashboard dash = sellerService.get().queryDashboardNoApp(1);
+            SellerDashboard dash = sellerService.get().queryDashboard(1);
             Assert.assertNotNull(dash);
             Assert.assertEquals(dash.view.count_items, 1);
         }

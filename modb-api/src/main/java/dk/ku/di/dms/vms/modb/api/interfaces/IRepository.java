@@ -36,8 +36,6 @@ public interface IRepository<PK extends Serializable, T extends IEntity<PK>> {
 
     List<T> query(SelectStatement selectStatement);
 
-    <DTO> List<DTO> query(SelectStatement selectStatement, Class<DTO> clazz);
-
     /**
      * Used for issuing update, insert, and delete statements.
      * It does not return any value because

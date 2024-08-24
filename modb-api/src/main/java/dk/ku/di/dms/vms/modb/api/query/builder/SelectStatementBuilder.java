@@ -222,11 +222,8 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
             return new CondJoinWhereClauseBridge(joinClauseElement, this.statement);
         }
 
-        // TODO JOIN with OR condition implement later or leave like this?
-//        public CondJoinWhereClauseBridge or(){
-//
-//        }
-
+        // JOIN with OR condition implement later or leave like this?
+        // public CondJoinWhereClauseBridge or()
     }
 
     public class OrderByGroupByJoinWhereClauseBridge extends JoinWhereClauseBridge {
@@ -267,14 +264,12 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
         }
 
         public OrderByClausePredicate orderBy(String... params){
-
             List<OrderByClauseElement> orderByClauseElements = new ArrayList<>();
-
             for (String param : params) {
                 orderByClauseElements.add(new OrderByClauseElement(param.replace(" ", "")));
+                this.statement.SQL.append(param);
             }
             this.statement.orderByClause = orderByClauseElements;
-            this.statement.SQL.append(params);
             return new OrderByClausePredicate(this.statement);
 
         }
@@ -304,14 +299,12 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
         }
 
         public OrderByClausePredicate orderBy(String... params){
-
             List<OrderByClauseElement> orderByClauseElements = new ArrayList<>();
-
             for (String param : params) {
                 orderByClauseElements.add(new OrderByClauseElement(param.replace(" ", "")));
+                this.statement.SQL.append(param);
             }
             this.statement.orderByClause = orderByClauseElements;
-            this.statement.SQL.append(params);
             return new OrderByClausePredicate(this.statement);
         }
 
@@ -329,16 +322,13 @@ public class SelectStatementBuilder extends AbstractStatementBuilder  {
         }
 
         public OrderByClausePredicate orderBy(String... params){
-
             List<OrderByClauseElement> orderByClauseElements = new ArrayList<>();
-
             for (String param : params) {
                 orderByClauseElements.add(new OrderByClauseElement(param.replace(" ", "")));
+                this.statement.SQL.append(param);
             }
             this.statement.orderByClause = orderByClauseElements;
-            this.statement.SQL.append(params);
             return new OrderByClausePredicate(this.statement);
-
         }
 
         public SelectStatement build(){

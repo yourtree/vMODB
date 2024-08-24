@@ -31,13 +31,15 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
     public static class OrderEntryId implements Serializable {
         public int customer_id;
         public int order_id;
+        public int seller_id;
         public int product_id;
 
         public OrderEntryId() { }
 
-        public OrderEntryId(int customer_id, int order_id, int product_id) {
+        public OrderEntryId(int customer_id, int order_id, int seller_id, int product_id) {
             this.customer_id = customer_id;
             this.order_id = order_id;
+            this.seller_id = seller_id;
             this.product_id = product_id;
         }
     }
@@ -122,7 +124,7 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
 
     @Override
     public OrderEntryId getId(){
-        return new OrderEntryId( this.customer_id, this.order_id, this.package_id );
+        return new OrderEntryId( this.customer_id, this.order_id, this.seller_id, this.product_id );
     }
 
     public OrderId getOrderId(){
@@ -154,8 +156,8 @@ public final class OrderEntry implements IEntity<OrderEntry.OrderEntryId> {
         return "{"
                 + "\"customer_id\":\"" + customer_id + "\""
                 + ",\"order_id\":\"" + order_id + "\""
-                + ",\"product_id\":\"" + product_id + "\""
                 + ",\"seller_id\":\"" + seller_id + "\""
+                + ",\"product_id\":\"" + product_id + "\""
                 + ",\"package_id\":\"" + package_id + "\""
                 + ",\"product_name\":\"" + product_name + "\""
                 + ",\"product_category\":\"" + product_category + "\""

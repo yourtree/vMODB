@@ -34,23 +34,20 @@ public class IndexCountDistinct extends AbstractCount {
      * Can be reused across different distinct columns
      */
     public MemoryRefNode run(int distinctColumnIndex, FilterContext filterContext, IKey... keys){
-
         EphemeralState state = new EphemeralState();
-
         Iterator<IKey> iterator = this.index.iterator(keys);
         while(iterator.hasNext()){
             IKey key = iterator.next();
-            if(index.checkCondition(key, filterContext)){
+            if(this.index.checkCondition(key, filterContext)){
                 Object val = index.record(key)[distinctColumnIndex];
-                if( !state.valuesSeen.containsKey(val.hashCode())) {
+                if(!state.valuesSeen.containsKey(val.hashCode())) {
                     state.count++;
                     state.valuesSeen.put(val.hashCode(), 1);
                 }
             }
             iterator.next();
         }
-
-        append(state.count);
+        this.append(state.count);
         return memoryRefNode;
 
     }

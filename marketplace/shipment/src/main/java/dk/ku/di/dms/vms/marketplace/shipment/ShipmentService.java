@@ -55,7 +55,7 @@ public final class ShipmentService {
         Date now = new Date();
 
         // could lock the packages so to allow for parallel annotation
-        List<OldestSellerPackageEntry> packages = this.packageRepository.query(OLDEST_SHIPMENT_PER_SELLER, OldestSellerPackageEntry.class);
+        List<OldestSellerPackageEntry> packages = this.packageRepository.fetchMany(OLDEST_SHIPMENT_PER_SELLER, OldestSellerPackageEntry.class);
 
         List<ShipmentNotification> shipmentNotifications = new ArrayList<>();
         List<DeliveryNotification> deliveryNotifications = new ArrayList<>();

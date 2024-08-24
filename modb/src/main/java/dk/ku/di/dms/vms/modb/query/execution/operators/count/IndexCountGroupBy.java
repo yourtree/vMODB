@@ -25,11 +25,8 @@ public class IndexCountGroupBy extends AbstractCount {
     }
 
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
-
         Map<Integer,Integer> countMap = new HashMap<>();
-
         Iterator<IKey> iterator = index.iterator(keys);
-
         while(iterator.hasNext()){
             IKey key = iterator.next();
             if(this.index.checkCondition(key, filterContext)){
@@ -37,32 +34,24 @@ public class IndexCountGroupBy extends AbstractCount {
             }
             iterator.next();
         }
-
-        append(countMap);
+        this.append(countMap);
         return memoryRefNode;
-
     }
 
     private void append(Map<Integer, Integer> countMap) {
         ensureMemoryCapacity(this.entrySize * countMap.size());
-
         // number of "rows"
         this.currentBuffer.append(countMap.size());
-
         countMap.forEach((key, value) -> {
             this.currentBuffer.append(key);
             this.currentBuffer.append(value);
         });
-
     }
 
     private void compute(IKey key, Map<Integer,Integer> countMap) {
-
         Object[] record = this.index.record( key );
-
         // hash the group by columns
         int groupKey = KeyUtils.buildRecordKey( this.indexColumns, record ).hashCode();
-
         if( countMap.get(groupKey) == null ){
             countMap.put(groupKey, 1);
         } else {

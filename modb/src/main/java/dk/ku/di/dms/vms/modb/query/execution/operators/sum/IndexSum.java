@@ -22,7 +22,7 @@ public final class IndexSum extends Sum {
 
     @SuppressWarnings("unchecked, rawtypes")
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
-        SumOperation sumOperation = buildOperation(dataType);
+        SumUtils.SumOperation sumOperation = SumUtils.buildSumOperation(this.dataType);
         Iterator<IKey> iterator = this.index.iterator(keys);
         while(iterator.hasNext()){
             IKey key = iterator.next();

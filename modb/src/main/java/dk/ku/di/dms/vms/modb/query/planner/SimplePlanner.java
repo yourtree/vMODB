@@ -13,6 +13,7 @@ import dk.ku.di.dms.vms.modb.query.analyzer.predicate.GroupByPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.JoinPredicate;
 import dk.ku.di.dms.vms.modb.query.analyzer.predicate.WherePredicate;
 import dk.ku.di.dms.vms.modb.query.execution.operators.AbstractSimpleOperator;
+import dk.ku.di.dms.vms.modb.query.execution.operators.IndexMultiAggregateScan;
 import dk.ku.di.dms.vms.modb.query.execution.operators.count.IndexCount;
 import dk.ku.di.dms.vms.modb.query.execution.operators.count.IndexCountGroupBy;
 import dk.ku.di.dms.vms.modb.query.execution.operators.min.IndexGroupByMinWithProjection;
@@ -79,9 +80,19 @@ public final class SimplePlanner {
             return this.planSimpleJoin(queryTree);
         }
         if(queryTree.hasMultipleJoins()){
-            return this.planMultipleJoinsQuery(queryTree);
+            return this.planMultipleJoins(queryTree);
+        }
+        if(queryTree.hasMultipleAggregates()){
+            return this.planMultipleAggregates(queryTree);
         }
         throw new RuntimeException("Could not find a plan for :"+queryTree);
+    }
+
+    private AbstractSimpleOperator planMultipleAggregates(QueryTree queryTree) {
+        IMultiVersionIndex indexSelected = this.getOptimalIndex(
+                queryTree.projections.getFirst().table,
+                queryTree.wherePredicates).index();
+        return new IndexMultiAggregateScan(queryTree.groupByProjections, indexSelected, queryTree.projections.stream().map(i->i.columnPosition).toList(), 0);
     }
 
     private AbstractSimpleOperator planSimpleJoin(QueryTree queryTree) {
@@ -125,14 +136,11 @@ public final class SimplePlanner {
         return null;
     }
 
-    private AbstractSimpleOperator planMultipleJoinsQuery(QueryTree queryTree) {
-
+    private AbstractSimpleOperator planMultipleJoins(QueryTree queryTree) {
         // order joins in order of join operation
         // simple heuristic, table with most records goes first, but care must be taken on precedence of foreign keys
-
         // dynamic programming. which join must execute first?
         // ordered by the number of records? index type?
-
         return null;
     }
 
@@ -143,8 +151,7 @@ public final class SimplePlanner {
                 Table tb = queryTree.groupByProjections.getFirst().columnReference().table;
                 IMultiVersionIndex indexSelected = this.getOptimalIndex(
                         queryTree.groupByProjections.getFirst().columnReference().table,
-                        queryTree.wherePredicates
-                ).index();
+                        queryTree.wherePredicates).index();
                 int[] indexColumns = queryTree.groupByColumns.stream()
                         .mapToInt(ColumnReference::getColumnPosition ).toArray();
 
@@ -166,12 +173,10 @@ public final class SimplePlanner {
                         indexColumns, projectionColumns, minColumn, entrySize, queryTree.limit.orElse(Integer.MAX_VALUE));
             }
             case SUM -> {
-                // is there any index that can be applied?
-                // Table tb = queryTree.groupByProjections.getFirst().columnReference().table;
+                // check if there is an index that can be applied
                 IMultiVersionIndex indexSelected = this.getOptimalIndex(
                         queryTree.groupByProjections.getFirst().columnReference().table,
-                        queryTree.wherePredicates
-                        ).index();
+                        queryTree.wherePredicates).index();
                 if(indexSelected == null){
                     return new Sum(
                             queryTree.groupByProjections.getFirst().columnReference().dataType,
@@ -200,18 +205,16 @@ public final class SimplePlanner {
                     );
                 } else {
                     int[] columns = queryTree.groupByColumns.stream()
-                            .mapToInt(ColumnReference::getColumnPosition ).toArray();
+                            .mapToInt(ColumnReference::getColumnPosition).toArray();
                     return new IndexCountGroupBy(
                             // indexSelected == null ? tb.underlyingPrimaryKeyIndex() : indexSelected,
                             tb.underlyingPrimaryKeyIndex(),
                             columns
                     );
                 }
-
             }
             default -> throw new IllegalStateException("Operator not yet implemented.");
         }
-
     }
 
     private AbstractScan planSimpleSelect(QueryTree queryTree) {
@@ -241,7 +244,6 @@ public final class SimplePlanner {
             // then must get the PK index, ScanWithProjection
             return new FullScanWithProjection(tb.primaryKeyIndex(), projectionColumns, entrySize);
         }
-
     }
 
     private static int calculateQueryResultEntrySize(Schema schema, int nProj, int[] projectionColumns) {
