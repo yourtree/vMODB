@@ -9,6 +9,7 @@ import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
 import dk.ku.di.dms.vms.marketplace.seller.infra.SellerHttpServerVertx;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
@@ -21,6 +22,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Properties;
 
 import static java.lang.System.Logger.Level.INFO;
 
@@ -29,7 +31,14 @@ public final class Main {
     private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
     public static void main(String[] args) throws Exception {
+        Properties properties = ConfigUtils.loadProperties();
+        VmsApplication vms = initVms(properties);
+        initHttpServer(properties, vms);
+    }
+
+    private static VmsApplication initVms(Properties properties) throws Exception {
         VmsApplicationOptions options = VmsApplicationOptions.build(
+                properties,
                 "localhost",
                 Constants.SELLER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.seller",
@@ -37,20 +46,40 @@ public final class Main {
         });
         VmsApplication vms = VmsApplication.build(options);
         vms.start();
-        // initHttpServerJdk(vms);
-        initHttpServerVertx(vms);
-        LOGGER.log(INFO, "Seller HTTP Server initialized");
+        return vms;
     }
 
-    private static void initHttpServerJdk(VmsApplication vms) throws IOException {
+    private static void initHttpServer(Properties properties, VmsApplication vms) throws IOException {
+        String httpServer = properties.getProperty("http_server");
+        if(httpServer == null || httpServer.isEmpty()){
+            throw new RuntimeException("http_server property is missing");
+        }
+        if(httpServer.equalsIgnoreCase("vertx")){
+            int numVertices = Integer.parseInt( properties.getProperty("num_vertices") );
+            boolean nativeTransport = Boolean.parseBoolean( properties.getProperty("native_transport") );
+            initHttpServerVertx(vms, numVertices, nativeTransport);
+            LOGGER.log(INFO,"Seller: Vertx HTTP Server started");
+            return;
+        }
+        if(httpServer.equalsIgnoreCase("jdk")){
+            int backlog = Integer.parseInt( properties.getProperty("backlog") );
+            initHttpServerJdk(vms, backlog);
+            LOGGER.log(INFO,"Seller: JDK HTTP Server started");
+            return;
+        }
+        throw new RuntimeException("http_server property is unknown: "+ httpServer);
+    }
+
+    private static void initHttpServerJdk(VmsApplication vms, int backlog) throws IOException {
         // initialize HTTP server to serve seller dashboard online requests
-        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", 8007), 0);
+        System.setProperty("sun.net.httpserver.nodelay","true");
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", 8007), backlog);
         httpServer.createContext("/seller", new SellerHttpHandler(vms));
         httpServer.start();
     }
 
-    private static void initHttpServerVertx(VmsApplication vms){
-        SellerHttpServerVertx.init(vms, 4, true);
+    private static void initHttpServerVertx(VmsApplication vms, int numVertices, boolean nativeTransport){
+        SellerHttpServerVertx.init(vms, numVertices, nativeTransport);
     }
 
     private static class SellerHttpHandler implements HttpHandler {

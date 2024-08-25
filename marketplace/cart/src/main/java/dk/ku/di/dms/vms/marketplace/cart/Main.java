@@ -9,6 +9,7 @@ import dk.ku.di.dms.vms.marketplace.cart.infra.CartUtils;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
@@ -22,6 +23,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Properties;
 import java.util.concurrent.ForkJoinPool;
 
 import static java.lang.System.Logger.Level.INFO;
@@ -31,7 +33,18 @@ public final class Main {
     private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
     public static void main(String[] ignoredArgs) throws Exception {
+        Properties properties = ConfigUtils.loadProperties();
+        VmsApplication vms = initVmsApplication(properties);
+        initHttpServer(properties, vms);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            vms.stop();
+            LOGGER.log(INFO, "Cart terminating ...");
+        }));
+    }
+
+    private static VmsApplication initVmsApplication(Properties properties) throws Exception {
         VmsApplicationOptions options = VmsApplicationOptions.build(
+                properties,
                 "localhost",
                 Constants.CART_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.cart",
@@ -39,22 +52,38 @@ public final class Main {
         });
         VmsApplication vms = VmsApplication.build(options);
         vms.start();
-        // initHttpServerJdk(vms);
-        initHttpServerVertx(vms);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            vms.stop();
-            LOGGER.log(INFO, "Cart terminating ...");
-        }));
+        return vms;
     }
 
-    private static void initHttpServerVertx(VmsApplication vms){
-         CartHttpServerVertx.init(vms, 4, true);
+    private static void initHttpServer(Properties properties, VmsApplication vms) throws IOException {
+        String httpServer = properties.getProperty("http_server");
+        if(httpServer == null || httpServer.isEmpty()){
+            throw new RuntimeException("http_server property is missing");
+        }
+        if(httpServer.equalsIgnoreCase("vertx")){
+            int numVertices = Integer.parseInt( properties.getProperty("num_vertices") );
+            boolean nativeTransport = Boolean.parseBoolean( properties.getProperty("native_transport") );
+            initHttpServerVertx(vms, numVertices, nativeTransport);
+            LOGGER.log(INFO,"Cart: Vertx HTTP Server started");
+            return;
+        }
+        if(httpServer.equalsIgnoreCase("jdk")){
+            int backlog = Integer.parseInt( properties.getProperty("backlog") );
+            initHttpServerJdk(vms, backlog);
+            LOGGER.log(INFO,"Cart: JDK HTTP Server started");
+            return;
+        }
+        throw new RuntimeException("http_server property is unknown: "+ httpServer);
     }
 
-    private static void initHttpServerJdk(VmsApplication vms) throws IOException {
+    private static void initHttpServerVertx(VmsApplication vms, int numVertices, boolean nativeTransport){
+        CartHttpServerVertx.init(vms, numVertices, nativeTransport);
+    }
+
+    private static void initHttpServerJdk(VmsApplication vms, int backlog) throws IOException {
         // initialize HTTP server for data ingestion
         System.setProperty("sun.net.httpserver.nodelay","true");
-        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", Constants.CART_HTTP_PORT), 0);
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", Constants.CART_HTTP_PORT), backlog);
         httpServer.createContext("/cart", new CartHttpHandlerJdk(vms));
         httpServer.setExecutor(ForkJoinPool.commonPool());
         httpServer.start();
@@ -83,13 +112,11 @@ public final class Main {
                     int customerId = Integer.parseInt(split[split.length - 3]);
                     int sellerId = Integer.parseInt(split[split.length - 2]);
                     int productId = Integer.parseInt(split[split.length - 1]);
-
                     CartItem entity = getCartItem(sellerId, productId, customerId);
                     if (entity == null) {
                         returnFailed(exchange);
                         return;
                     }
-
                     try {
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, 0);
@@ -102,14 +129,12 @@ public final class Main {
                 }
                 case "PATCH": {
                     String[] split = exchange.getRequestURI().toString().split("/");
-
                     try {
                         int customerId = Integer.parseInt(split[split.length - 2]);
                         String str = new String(exchange.getRequestBody().readAllBytes());
                         dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
                                 SERDES.deserialize(str, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
                         this.processAddCartItem(customerId, cartItemAPI);
-
                         // response
                         OutputStream outputStream = exchange.getResponseBody();
                         exchange.sendResponseHeaders(200, 0);

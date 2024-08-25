@@ -35,8 +35,9 @@ public final class IndexMultiAggregateScan extends AbstractSimpleOperator {
         IAggregation<?>[] operations = extractOperations();
 
         Iterator<Object[]> iterator = this.index.iterator(txCtx, key);
+        Object[] nextRecord;
         while(iterator.hasNext()){
-            var nextRecord = iterator.next();
+            nextRecord = iterator.next();
             this.compute( nextRecord, operations );
             int idx = 0;
             for (int pos : this.projectionColumns) {
@@ -60,7 +61,7 @@ public final class IndexMultiAggregateScan extends AbstractSimpleOperator {
     private IAggregation<?>[] extractOperations() {
         IAggregation<?>[] operations = new IAggregation[this.aggregations.size()];
         int idx = 0;
-        for(var agg : this.aggregations){
+        for(GroupByPredicate agg : this.aggregations){
             switch (agg.groupByOperation()) {
                 case SUM ->
                         operations[idx] = SumUtils.buildSumOperation(agg.columnReference().dataType);
