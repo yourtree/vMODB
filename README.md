@@ -11,34 +11,54 @@ Developers can plug and play any microservice at any time, the MODB then adapt t
 ## Table of Contents
 - [Getting Started](#getting-started)
     * [Prerequisites](#prerequisites)
+    * [Compilation](#compilation)
+    * [Configuration](#config)
+- [MODB](#modb)
     * [Abstractions](#abstractions)
     * [Architecture](#architecture)
-- [MODB](#modb)
-    * [Configuration](#config)
     * [APIs](#apis)
     * [Play Around](#play)
     * [Testing](#test)
-- [Utils](#utils)
+- [Links](#links)
 
 ## <a name="getting-started"></a>Getting Started
 
 ### <a name="prerequisites"></a>Prerequisites
 
-- JDK 21 (if you want to modify the source code)
-
-
-
-- Curl (if you want to play with the APIs)
 - Maven
 
-https://www.hostinger.com/tutorials/how-to-install-maven-on-ubuntu
+  To assemble the dependencies and compile the project
+
+  [How to install maven on Ubuntu](https://www.hostinger.com/tutorials/how-to-install-maven-on-ubuntu)
+
+- Java Runtime Environment 21 
+
+  Java Development Kit 21 if you intend to modify the source code
+
+- Curl 
+
+  If you want to play with the APIs, Curl allows to easily submit HTTP requests
+
+### <a name="compilation"></a>Compilation
+
+It is necessary to generate the dependencies required to compile the microservice.
+This can be accomplished via running the following command in the root folder:
+
+```
+mvn clean install -DskipTests=true
+```
+
+Then you can just run the following command:
+```
+mvn clean package -DskipTests=true
+```
 
 ## <a name="modb"></a>MODB
 
 Differently from traditional server-based database systems, where users interact via a well-defined network protocol, in MODB, users solely write code and all the data management complexity is abstracted by the runtime.
 
-## <a name="utils"></a>Utils
+## <a name="links"></a>Useful links
 
-https://stackoverflow.com/a/37267929/7735153
-http://packetbomb.com/understanding-throughput-and-tcp-windows/
-https://docs.oracle.com/cd/E23507_01/Platform.20073/ATGInstallGuide/html/s0507tuningthetcpwindowsize01.html
+- [Packet Size ,Window Size and Socket Buffer In TCP](https://stackoverflow.com/a/37267929/7735153)
+- [Throughput and TCP windows](http://packetbomb.com/understanding-throughput-and-tcp-windows/)
+- [Tuning the windows size](https://docs.oracle.com/cd/E23507_01/Platform.20073/ATGInstallGuide/html/s0507tuningthetcpwindowsize01.html)

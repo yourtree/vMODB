@@ -39,6 +39,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
@@ -94,9 +95,9 @@ public final class Coordinator extends StoppableRunnable {
 
     /*
      * the offset of the pending batch commit (always < batchOffset)
-     * volatile because it is accessed by vms workers
+     * volatile because it is accessed by http threads from driver requests
      */
-    private long batchOffsetPendingCommit;
+    private volatile long batchOffsetPendingCommit;
 
     // metadata about all non-committed batches. when a batch commit finishes, it is removed from this map
     private final Map<Long, BatchContext> batchContextMap;
@@ -199,7 +200,7 @@ public final class Coordinator extends StoppableRunnable {
         // initialize batch offset map
         this.batchContextMap = new ConcurrentHashMap<>();
         BatchContext currentBatch = new BatchContext(dummyBatchOffset);
-        currentBatch.seal(startingTid - 1, Map.of(), Map.of());
+        currentBatch.seal(startingTid - 1, startingTid - 1, Map.of(), Map.of());
         this.batchContextMap.put(dummyBatchOffset, currentBatch);
 
         this.vmsWorkerContainerMap = new HashMap<>();
@@ -662,9 +663,12 @@ public final class Coordinator extends StoppableRunnable {
         }
     }
 
+    private AtomicLong numTidsCompleted = new AtomicLong(0);
+
     private void updateBatchOffsetPendingCommit(BatchContext batchContext) {
         LOGGER.log(INFO,"Leader: Received all missing votes of batch: "+ batchContext.batchOffset);
         if(batchContext.batchOffset == this.batchOffsetPendingCommit){
+            numTidsCompleted.updateAndGet(i -> i + batchContext.numTidsOverall);
             this.sendCommitCommandToVMSs(batchContext);
             this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
             // making this implement order-independent, so not assuming batch commit are received in order,
@@ -765,7 +769,7 @@ public final class Coordinator extends StoppableRunnable {
     }
 
     public long getLastTidOfLastCompletedBatch() {
-        return this.batchContextMap.get( this.batchOffsetPendingCommit - 1 ).lastTid;
+        return this.numTidsCompleted.get();
     }
 
     public Map<String, VmsNode> getConnectedVMSs() {

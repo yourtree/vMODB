@@ -97,7 +97,8 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
      */
     private final Queue<Object> coordinatorQueue;
 
-    private final IChannel channel;
+    private final Supplier<IChannel> channelFactory;
+    private IChannel channel;
 
     // DTs particular to this vms worker
     private final IVmsDeque transactionEventQueue;
@@ -171,12 +172,12 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                                     IdentifiableNode consumerVms,
                                     // shared data structure to communicate messages to coordinator
                                     Queue<Object> coordinatorQueue,
-                                    Supplier<IChannel> channelSupplier,
+                                    Supplier<IChannel> channelFactory,
                                     VmsWorkerOptions options,
                                     ILoggingHandler loggingHandler,
                                     IVmsSerdesProxy serdesProxy) throws IOException {
         return new VmsWorker(me, consumerVms, coordinatorQueue,
-                channelSupplier.get(), options, loggingHandler, serdesProxy);
+                channelFactory, options, loggingHandler, serdesProxy);
     }
 
     private VmsWorker(// coordinator reference
@@ -185,7 +186,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                       IdentifiableNode consumerVms,
                       // events to share with coordinator
                       Queue<Object> coordinatorQueue,
-                      IChannel channel,
+                      Supplier<IChannel> channelFactory,
                       VmsWorkerOptions options,
                       ILoggingHandler loggingHandler,
                       IVmsSerdesProxy serdesProxy) {
@@ -193,7 +194,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.state = State.NEW;
         this.consumerVms = consumerVms;
 
-        this.channel = channel;
+        this.channelFactory = channelFactory;
         this.options = options;
 
         // initialize the write buffer
@@ -239,6 +240,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     }
 
     private void connect() throws IOException, InterruptedException, ExecutionException {
+        this.channel = channelFactory.get();
         NetworkUtils.configure(this.channel, options.networkBufferSize());
         // if not active, maybe set tcp_nodelay to true?
         this.channel.connect(this.consumerVms.asInetSocketAddress()).get();
@@ -246,6 +248,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     @SuppressWarnings("BusyWait")
     public void initHandshakeProtocol(){
+        int waitTime = 1000;
         LOGGER.log(INFO, "Leader: Attempting connection to "+this.consumerVms.identifier);
         while(true) {
             try {
@@ -253,9 +256,10 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 LOGGER.log(INFO, "Leader: Connection established to "+this.consumerVms.identifier);
                 break;
             } catch (IOException | InterruptedException | ExecutionException e) {
-                LOGGER.log(ERROR, "Leader: Connection attempt to " + this.consumerVms.identifier + " failed. Retrying in 5 seconds...");
+                LOGGER.log(ERROR, "Leader: Connection attempt to " + this.consumerVms.identifier + " failed. Retrying in "+waitTime/1000+" second(s)...");
                 try {
-                    sleep(1000);
+                    sleep(waitTime);
+                    waitTime = waitTime + 1000;
                 } catch (InterruptedException ignored) { }
             }
         }

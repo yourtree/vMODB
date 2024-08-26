@@ -1,17 +1,6 @@
 # Online Marketplace Stock Microservice
 
-## How to compile the project
-
-First make sure the dependencies are installed in your file system. This can be accomplished via running the following command in the root folder:
-
-```
-clean install -DskipTests=true
-```
-
-The command will generate the dependencies required to compile the <i>Product</i> microservice. Then you can just run the following command:
-```
-clean package -DskipTests=true
-```
+## Running the project
 
 And then run the project with the command as follows:
 ```

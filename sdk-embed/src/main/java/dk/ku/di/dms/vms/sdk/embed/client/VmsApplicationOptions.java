@@ -39,6 +39,9 @@ public final class VmsApplicationOptions {
     }
 
     public static VmsApplicationOptions build(Properties properties, String host, int port, String[] packages) {
+
+        System.out.println("Properties: \n" + properties.toString());
+
         int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
         int soBufferSize = Integer.parseInt(properties.getProperty("os_buffer_size"));
         int networkSendTimeout = Integer.parseInt(properties.getProperty("network_send_timeout"));

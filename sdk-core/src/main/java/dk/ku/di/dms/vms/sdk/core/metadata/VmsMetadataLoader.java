@@ -37,8 +37,7 @@ import java.net.URL;
 import java.util.*;
 import java.util.stream.Stream;
 
-import static java.lang.System.Logger.Level.INFO;
-import static java.lang.System.Logger.Level.WARNING;
+import static java.lang.System.Logger.Level.*;
 
 public final class VmsMetadataLoader {
 
@@ -609,7 +608,7 @@ public final class VmsMetadataLoader {
             return DataType.STRING_ARRAY;
         }
         else {
-            logger.log(INFO, attributeCanonicalName + " will be recognized as a complex data type");
+            logger.log(DEBUG, attributeCanonicalName + " will be recognized as a complex data type");
             return DataType.COMPLEX;
         }
     }
