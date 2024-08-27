@@ -86,9 +86,9 @@ public class CartProductWorkflowTest extends AbstractWorkflowTest {
         IdentifiableNode productAddress = new IdentifiableNode("product", productHost, PRODUCT_VMS_PORT);
         IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, CART_VMS_PORT);
 
-        Map<Integer, IdentifiableNode> VMSs = new HashMap<>(2);
-        VMSs.put(productAddress.hashCode(), productAddress);
-        VMSs.put(cartAddress.hashCode(), cartAddress);
+        Map<String, IdentifiableNode> starterVMSs = new HashMap<>(2);
+        starterVMSs.put(productAddress.identifier, productAddress);
+        starterVMSs.put(cartAddress.identifier, cartAddress);
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         int batchSendRate = Integer.parseInt( properties.getProperty("batch_window_ms") );
@@ -99,7 +99,7 @@ public class CartProductWorkflowTest extends AbstractWorkflowTest {
 
         return Coordinator.build(
                 serverMap,
-                VMSs,
+                starterVMSs,
                 transactionMap,
                 serverIdentifier,
                 new CoordinatorOptions()

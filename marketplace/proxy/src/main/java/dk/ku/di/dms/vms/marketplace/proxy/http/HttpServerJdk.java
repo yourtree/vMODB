@@ -25,8 +25,8 @@ final class HttpServerJdk {
         int http_thread_pool_size = Integer.parseInt( properties.getProperty("http_thread_pool_size") );
         int backlog = Integer.parseInt( properties.getProperty("backlog") );
         String executor = properties.getProperty("executor");
-        // System.setProperty("sun.net.httpserver.nodelay","true");
-        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", http_port), backlog);
+        System.setProperty("sun.net.httpserver.nodelay","true");
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", http_port), backlog);
         if(http_thread_pool_size > 0) {
             httpServer.setExecutor(Executors.newFixedThreadPool(http_thread_pool_size));
         } else {

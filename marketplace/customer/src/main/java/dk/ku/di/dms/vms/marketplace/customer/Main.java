@@ -22,7 +22,7 @@ public final class Main {
     public static void main(String[] args) throws Exception {
 
         VmsApplicationOptions options = VmsApplicationOptions.build(
-                "localhost",
+                "0.0.0.0",
                 Constants.CUSTOMER_VMS_PORT,
                 new String[]{
                 "dk.ku.di.dms.vms.marketplace.customer",
@@ -32,7 +32,7 @@ public final class Main {
         VmsApplication vms = VmsApplication.build(options);
         vms.start();
 
-        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", 8006), 0);
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", Constants.CUSTOMER_HTTP_PORT), 0);
         httpServer.createContext("/customer", new StockHttpHandler(vms));
         httpServer.start();
 

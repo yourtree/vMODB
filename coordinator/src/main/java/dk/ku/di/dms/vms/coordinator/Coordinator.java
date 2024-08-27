@@ -80,7 +80,7 @@ public final class Coordinator extends StoppableRunnable {
      * received from program start
      * also called known VMSs
      */
-    private final Map<Integer, IdentifiableNode> starterVMSs;
+    private final Map<String, IdentifiableNode> starterVMSs;
 
     /**
      * Those received from program start + those that joined later
@@ -118,7 +118,7 @@ public final class Coordinator extends StoppableRunnable {
     public static Coordinator build(// obtained from leader election or passed by parameter on setup
                                     Map<Integer, ServerNode> servers,
                                     // passed by parameter
-                                    Map<Integer, IdentifiableNode> startersVMSs,
+                                    Map<String, IdentifiableNode> startersVMSs,
                                     Map<String, TransactionDAG> transactionMap,
                                     ServerNode me,
                                     // coordinator configuration
@@ -136,7 +136,7 @@ public final class Coordinator extends StoppableRunnable {
 
     private Coordinator(Map<Integer, ServerNode> servers,
                         Map<Integer, LockConnectionMetadata> serverConnectionMetadataMap,
-                        Map<Integer, IdentifiableNode> startersVMSs,
+                        Map<String, IdentifiableNode> startersVMSs,
                         Map<String, TransactionDAG> transactionMap,
                         ServerNode me,
                         CoordinatorOptions options,
@@ -441,10 +441,10 @@ public final class Coordinator extends StoppableRunnable {
      * find the vms that generated the output
      */
     private List<IdentifiableNode> findConsumerVMSs(String outputEvent){
-        List<IdentifiableNode> list = new ArrayList<>(2);
+        List<IdentifiableNode> list = new ArrayList<>();
         // can be the leader or a vms
         for(VmsNode vms : this.vmsMetadataMap.values()){
-            if(vms.inputEventSchema.get(outputEvent) != null){
+            if(vms.inputEventSchema.containsKey(outputEvent)){
                 list.add(vms);
             }
         }
@@ -663,12 +663,12 @@ public final class Coordinator extends StoppableRunnable {
         }
     }
 
-    private AtomicLong numTidsCompleted = new AtomicLong(0);
+    private final AtomicLong numTIDsCompleted = new AtomicLong(0);
 
     private void updateBatchOffsetPendingCommit(BatchContext batchContext) {
         LOGGER.log(INFO,"Leader: Received all missing votes of batch: "+ batchContext.batchOffset);
         if(batchContext.batchOffset == this.batchOffsetPendingCommit){
-            numTidsCompleted.updateAndGet(i -> i + batchContext.numTidsOverall);
+            this.numTIDsCompleted.updateAndGet(i -> i + batchContext.numTidsOverall);
             this.sendCommitCommandToVMSs(batchContext);
             this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
             // making this implement order-independent, so not assuming batch commit are received in order,
@@ -710,37 +710,39 @@ public final class Coordinator extends StoppableRunnable {
         // new VMS may join, requiring updating the consumer set
         Map<String, List<IdentifiableNode>> vmsConsumerSet;
 
-        for(VmsNode vmsIdentifier : this.vmsMetadataMap.values()) {
+        for(VmsNode vmsNode : this.vmsMetadataMap.values()) {
             // if we reuse the hashmap, the entries get mixed and lead to incorrect consumer set
             vmsConsumerSet = new HashMap<>();
 
-            IdentifiableNode vms = this.starterVMSs.get( vmsIdentifier.hashCode() );
+            IdentifiableNode vms = this.starterVMSs.get(vmsNode.identifier);
             if(vms == null) {
-                LOGGER.log(WARNING,"Leader: Could not identify "+vmsIdentifier.getIdentifier()+" from set of starter VMSs");
+                LOGGER.log(WARNING,"Leader: Could not identify "+vmsNode.identifier+" from set of starter VMSs");
                 continue;
             }
 
             // build global view of vms dependencies/interactions
             // build consumer set dynamically
             // for each output event, find the consumer VMSs
-            for (VmsEventSchema eventSchema : vmsIdentifier.outputEventSchema.values()) {
+            for (VmsEventSchema eventSchema : vmsNode.outputEventSchema.values()) {
                 List<IdentifiableNode> nodes = this.findConsumerVMSs(eventSchema.eventName);
                 if (!nodes.isEmpty())
                     vmsConsumerSet.put(eventSchema.eventName, nodes);
             }
 
             String consumerSetStr = "";
-            if (!vmsConsumerSet.isEmpty()) {
+            if (vmsConsumerSet.isEmpty()) {
+                LOGGER.log(WARNING,"Leader: No consumer set built for "+vmsNode.identifier);
+            } else {
                 consumerSetStr = this.serdesProxy.serializeConsumerSet(vmsConsumerSet);
-                LOGGER.log(INFO,"Leader: Consumer set built for "+vmsIdentifier.getIdentifier()+": \n"+consumerSetStr);
+                LOGGER.log(INFO,"Leader: Consumer set built for "+vmsNode.identifier+": \n"+consumerSetStr);
             }
 
-            if(!this.vmsWorkerContainerMap.containsKey(vmsIdentifier.identifier)){
-                LOGGER.log(ERROR,"Leader: Cannot find identifier ("+ vmsIdentifier.identifier +") in worker container map.");
+            if(!this.vmsWorkerContainerMap.containsKey(vmsNode.identifier)){
+                LOGGER.log(ERROR,"Leader: Cannot find identifier ("+ vmsNode.identifier +") in worker container map.");
                 continue;
             }
 
-            this.vmsWorkerContainerMap.get(vmsIdentifier.identifier).queueMessage(consumerSetStr);
+            this.vmsWorkerContainerMap.get(vmsNode.identifier).queueMessage(consumerSetStr);
         }
     }
 
@@ -749,27 +751,27 @@ public final class Coordinator extends StoppableRunnable {
      */
     private void sendCommitCommandToVMSs(BatchContext batchContext){
         for(VmsNode vms : this.vmsMetadataMap.values()){
-            if(batchContext.terminalVMSs.contains(vms.getIdentifier())) {
-                LOGGER.log(DEBUG,"Leader: Batch ("+batchContext.batchOffset+") commit command not sent to "+ vms.getIdentifier() + " (terminal)");
+            if(batchContext.terminalVMSs.contains(vms.identifier)) {
+                LOGGER.log(DEBUG,"Leader: Batch ("+batchContext.batchOffset+") commit command not sent to "+ vms.identifier + " (terminal)");
                 continue;
             }
             // has this VMS participated in this batch?
-            if(!batchContext.numberOfTIDsPerVms.containsKey(vms.getIdentifier())){
+            if(!batchContext.numberOfTIDsPerVms.containsKey(vms.identifier)){
                 //noinspection StringTemplateMigration
-                LOGGER.log(DEBUG,"Leader: Batch ("+batchContext.batchOffset+") commit command will not be sent to "+ vms.getIdentifier() + " because this VMS has not participated in this batch.");
+                LOGGER.log(DEBUG,"Leader: Batch ("+batchContext.batchOffset+") commit command will not be sent to "+ vms.identifier + " because this VMS has not participated in this batch.");
                 continue;
             }
             this.vmsWorkerContainerMap.get(vms.identifier).queueMessage(
                     new BatchCommitCommand.Payload(
                         batchContext.batchOffset,
-                        batchContext.previousBatchPerVms.get(vms.getIdentifier()),
-                        batchContext.numberOfTIDsPerVms.get(vms.getIdentifier())
+                        batchContext.previousBatchPerVms.get(vms.identifier),
+                        batchContext.numberOfTIDsPerVms.get(vms.identifier)
             ));
         }
     }
 
     public long getLastTidOfLastCompletedBatch() {
-        return this.numTidsCompleted.get();
+        return this.numTIDsCompleted.get();
     }
 
     public Map<String, VmsNode> getConnectedVMSs() {
@@ -780,7 +782,7 @@ public final class Coordinator extends StoppableRunnable {
         return this.batchOffsetPendingCommit;
     }
 
-    public Map<Integer, IdentifiableNode> getStarterVMSs(){
+    public Map<String, IdentifiableNode> getStarterVMSs(){
         return this.starterVMSs;
     }
 

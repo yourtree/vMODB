@@ -125,8 +125,43 @@ public final class Presentation {
         buffer.put( outputEventSchemaBytes );
     }
 
-    public static VmsNode readVms(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){
+    public static VmsNode readVms(ByteBuffer buffer, IVmsSerdesProxy serdesProxy, String host) {
+        int sizeName = buffer.getInt();
+        String vmsIdentifier = ByteUtils.extractStringFromByteBuffer( buffer, sizeName );
 
+        long batch = buffer.getLong();
+        long lastTid = buffer.getLong();
+        long previousBatch = buffer.getLong();
+
+        int port = buffer.getInt();
+
+        int sizeHost = buffer.getInt();
+
+        ByteUtils.extractStringFromByteBuffer(buffer, sizeHost);
+
+        // now read the rest
+        int sizeDataSchema = buffer.getInt();
+
+        String dataSchemaStr = ByteUtils.extractStringFromByteBuffer(buffer, sizeDataSchema);
+
+        Map<String, VmsDataModel> dataSchema = serdesProxy.deserializeDataSchema( dataSchemaStr );
+
+        int sizeInputEventSchema = buffer.getInt();
+
+        String inputEventSchemaStr = ByteUtils.extractStringFromByteBuffer(buffer, sizeInputEventSchema);
+
+        Map<String, VmsEventSchema> inputEventSchema = serdesProxy.deserializeEventSchema( inputEventSchemaStr );
+
+        int sizeOutputEventSchema = buffer.getInt();
+
+        String outputEventSchemaStr = ByteUtils.extractStringFromByteBuffer(buffer, sizeOutputEventSchema);
+
+        Map<String, VmsEventSchema> outputEventSchema = serdesProxy.deserializeEventSchema( outputEventSchemaStr );
+
+        return new VmsNode( host, port, vmsIdentifier, batch , lastTid, previousBatch, dataSchema, inputEventSchema, outputEventSchema );
+    }
+
+    public static VmsNode readVms(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){
         int sizeName = buffer.getInt();
         String vmsIdentifier = ByteUtils.extractStringFromByteBuffer( buffer, sizeName );
 
@@ -160,7 +195,6 @@ public final class Presentation {
         Map<String, VmsEventSchema> outputEventSchema = serdesProxy.deserializeEventSchema( outputEventSchemaStr );
 
         return new VmsNode( host, port, vmsIdentifier, batch , lastTid, previousBatch, dataSchema, inputEventSchema, outputEventSchema );
-
     }
 
     public static Set<String> readQueuesToSubscribeTo(ByteBuffer buffer, IVmsSerdesProxy serdesProxy){

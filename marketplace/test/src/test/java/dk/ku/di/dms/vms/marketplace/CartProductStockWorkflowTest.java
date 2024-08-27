@@ -90,7 +90,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
         String cartHost = properties.getProperty("cart_host");
         String stockHost = properties.getProperty("stock_host");
 
-        Map<Integer, IdentifiableNode> VMSs = getIdentifiableNodeMap(productHost, cartHost, stockHost);
+        Map<String, IdentifiableNode> VMSs = getIdentifiableNodeMap(productHost, cartHost, stockHost);
 
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
         int batchSendRate = Integer.parseInt( properties.getProperty("batch_window_ms") );
@@ -111,15 +111,14 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
         );
     }
 
-    private static Map<Integer, IdentifiableNode> getIdentifiableNodeMap(String productHost, String cartHost, String stockHost) {
+    private static Map<String, IdentifiableNode> getIdentifiableNodeMap(String productHost, String cartHost, String stockHost) {
         IdentifiableNode productAddress = new IdentifiableNode("product", productHost, PRODUCT_VMS_PORT);
         IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, CART_VMS_PORT);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, STOCK_VMS_PORT);
-
-        Map<Integer, IdentifiableNode> VMSs = new HashMap<>();
-        VMSs.put(productAddress.hashCode(), productAddress);
-        VMSs.put(cartAddress.hashCode(), cartAddress);
-        VMSs.put(stockAddress.hashCode(), stockAddress);
+        Map<String, IdentifiableNode> VMSs = new HashMap<>();
+        VMSs.put(productAddress.identifier, productAddress);
+        VMSs.put(cartAddress.identifier, cartAddress);
+        VMSs.put(stockAddress.identifier, stockAddress);
         return VMSs;
     }
 

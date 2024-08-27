@@ -30,7 +30,7 @@ public final class Main {
 
     public static VmsApplication init(){
         VmsApplicationOptions options = VmsApplicationOptions.build(
-                "localhost",
+                "0.0.0.0",
                 Constants.PRODUCT_VMS_PORT, new String[]{
                         "dk.ku.di.dms.vms.marketplace.product",
                         "dk.ku.di.dms.vms.marketplace.common"
@@ -41,7 +41,7 @@ public final class Main {
             vms.start();
             // initialize HTTP server for data ingestion
             System.setProperty("sun.net.httpserver.nodelay","true");
-            HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", PRODUCT_HTTP_PORT), 0);
+            HttpServer httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", PRODUCT_HTTP_PORT), 0);
             httpServer.createContext("/product", new ProductHttpHandler(vms));
             httpServer.setExecutor(ForkJoinPool.commonPool());
             httpServer.start();

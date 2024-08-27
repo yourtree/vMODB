@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -80,7 +81,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private final VmsWorkerOptions options;
 
     // the vms this worker is responsible for
-    private IdentifiableNode consumerVms;
+    private final IdentifiableNode consumerVms;
 
     private State state;
 
@@ -122,9 +123,9 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     @SuppressWarnings("FieldCanBeLocal")
     private static final class MultiDeque implements IVmsDeque {
-        private int numQueues;
+        private final int numQueues;
         private int nextPos;
-        private List<Deque<TransactionEvent.PayloadRaw>> queues;
+        private final List<Deque<TransactionEvent.PayloadRaw>> queues;
         private TransactionEvent.PayloadRaw obj;
         private MultiDeque(int numQueues) {
             this.numQueues = numQueues;
@@ -308,7 +309,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     @Override
     public void run() {
-        LOGGER.log(INFO, "VmsWorker starting for consumer VMS: "+consumerVms);
+        LOGGER.log(INFO, "VmsWorker starting for consumer VMS: "+this.consumerVms);
         if(this.options.initHandshake()) {
             this.initHandshakeProtocol();
         } else {
@@ -317,7 +318,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         if(this.options.active()) {
             this.eventLoop();
         }
-        LOGGER.log(INFO, "VmsWorker finished for consumer VMS: "+consumerVms);
+        LOGGER.log(INFO, "VmsWorker finished for consumer VMS: "+this.consumerVms);
     }
 
     private boolean initSimpleConnection() {
@@ -604,10 +605,11 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         private void processVmsIdentifier() {
             // always a vms
             readBuffer.position(2);
-            consumerVms = Presentation.readVms(readBuffer, serdesProxy);
+            // vms is sending local interface as host, so it is necessary to overwrite that
+            VmsNode vmsNodeReceived = Presentation.readVms(readBuffer, serdesProxy, consumerVms.host);
             state = State.VMS_PRESENTATION_PROCESSED;
             // let coordinator aware this vms worker already has the vms identifier
-            coordinatorQueue.add(consumerVms);
+            coordinatorQueue.add(vmsNodeReceived);
         }
     }
 
@@ -664,7 +666,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                 this.channel.write(writeBuffer).get();
                 // drain buffer
                 while(writeBuffer.hasRemaining()){
-                    // LOGGER.log(WARNING, "Here we gooooo");
+                    // LOGGER.log(WARNING, "Here we go");
                     this.channel.write(writeBuffer).get();
                 }
                 this.returnByteBuffer(writeBuffer);

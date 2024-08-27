@@ -102,11 +102,11 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
-        Map<Integer, IdentifiableNode> VMSs = new HashMap<>(3);
+        Map<String, IdentifiableNode> VMSs = new HashMap<>(3);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", 8082);
-        VMSs.put(stockAddress.hashCode(), stockAddress);
+        VMSs.put(stockAddress.identifier, stockAddress);
         IdentifiableNode orderAddress = new IdentifiableNode("order", "localhost", 8083);
-        VMSs.put(orderAddress.hashCode(), orderAddress);
+        VMSs.put(orderAddress.identifier, orderAddress);
 
         return Coordinator.build(
                 serverMap,

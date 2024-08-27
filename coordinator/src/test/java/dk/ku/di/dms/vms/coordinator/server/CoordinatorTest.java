@@ -524,8 +524,8 @@ public final class CoordinatorTest {
         VmsNode vms2 =  new VmsNode("",0,"vms2",2,2,1,null,null,null);
 
         Map<String, VmsNode> vmsMetadataMap = new HashMap<>(2);
-        vmsMetadataMap.put(vms1.getIdentifier(), vms1);
-        vmsMetadataMap.put(vms2.getIdentifier(), vms2);
+        vmsMetadataMap.put(vms1.identifier, vms1);
+        vmsMetadataMap.put(vms2.identifier, vms2);
 
         // build DAG
         TransactionDAG dag = TransactionBootstrap.name("test")
@@ -571,11 +571,11 @@ public final class CoordinatorTest {
         VmsNode vms5 =  new VmsNode("",0,"order",5,5,4,null,null,null);
 
         Map<String, VmsNode> vmsMetadataMap = new HashMap<>(5);
-        vmsMetadataMap.put(vms1.getIdentifier(), vms1);
-        vmsMetadataMap.put(vms2.getIdentifier(), vms2);
-        vmsMetadataMap.put(vms3.getIdentifier(), vms3);
-        vmsMetadataMap.put(vms4.getIdentifier(), vms4);
-        vmsMetadataMap.put(vms5.getIdentifier(), vms5);
+        vmsMetadataMap.put(vms1.identifier, vms1);
+        vmsMetadataMap.put(vms2.identifier, vms2);
+        vmsMetadataMap.put(vms3.identifier, vms3);
+        vmsMetadataMap.put(vms4.identifier, vms4);
+        vmsMetadataMap.put(vms5.identifier, vms5);
         return vmsMetadataMap;
     }
 

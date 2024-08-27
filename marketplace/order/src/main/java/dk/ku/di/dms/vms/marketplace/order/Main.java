@@ -9,7 +9,7 @@ public final class Main {
     public static void main(String[] args) throws Exception {
 
         VmsApplicationOptions options = VmsApplicationOptions.build(
-                "localhost",
+                "0.0.0.0",
                 Constants.ORDER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.order",
                 "dk.ku.di.dms.vms.marketplace.common"

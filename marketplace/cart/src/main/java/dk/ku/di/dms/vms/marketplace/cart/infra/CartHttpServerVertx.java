@@ -49,7 +49,7 @@ public final class CartHttpServerVertx extends AbstractVerticle {
     public void start(Promise<Void> startPromise) {
         HttpServerOptions options = new HttpServerOptions();
         options.setPort(Constants.CART_HTTP_PORT);
-        options.setHost("localhost");
+        options.setHost("0.0.0.0");
         options.setTcpKeepAlive(true);
         HttpServer server = this.vertx.createHttpServer(options);
         server.requestHandler(new VertxHandler());

@@ -65,6 +65,7 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
     }
 
     @Override
+    @SuppressWarnings("BusyWait")
     protected void triggerCheckoutWorkflow(Coordinator coordinator) throws Exception {
         int numStarterVMSs = coordinator.getStarterVMSs().size();
         do{
@@ -177,7 +178,7 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        Map<Integer, IdentifiableNode> starterVMSs = getIdentifiableNodeMap();
+        Map<String, IdentifiableNode> starterVMSs = getIdentifiableNodeMap();
 
         return Coordinator.build(
                 serverMap,
@@ -191,20 +192,18 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
         );
     }
 
-    private static Map<Integer, IdentifiableNode> getIdentifiableNodeMap() {
-        Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(10);
+    private static Map<String, IdentifiableNode> getIdentifiableNodeMap() {
+        Map<String, IdentifiableNode> starterVMSs = new HashMap<>(10);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", Constants.STOCK_VMS_PORT);
-        starterVMSs.put(stockAddress.hashCode(), stockAddress);
+        starterVMSs.put(stockAddress.identifier, stockAddress);
         IdentifiableNode orderAddress = new IdentifiableNode("order", "localhost", Constants.ORDER_VMS_PORT);
-        starterVMSs.put(orderAddress.hashCode(), orderAddress);
+        starterVMSs.put(orderAddress.identifier, orderAddress);
         IdentifiableNode paymentAddress = new IdentifiableNode("payment", "localhost", Constants.PAYMENT_VMS_PORT);
-        starterVMSs.put(paymentAddress.hashCode(), paymentAddress);
+        starterVMSs.put(paymentAddress.identifier, paymentAddress);
         IdentifiableNode shipmentAddress = new IdentifiableNode("shipment","localhost", Constants.SHIPMENT_VMS_PORT);
-        starterVMSs.put(shipmentAddress.hashCode(), shipmentAddress);
+        starterVMSs.put(shipmentAddress.identifier, shipmentAddress);
         IdentifiableNode customerAddress = new IdentifiableNode("customer", "localhost", Constants.CUSTOMER_VMS_PORT);
-        starterVMSs.put(customerAddress.hashCode(), customerAddress);
-        // IdentifiableNode sellerAddress = new IdentifiableNode("seller", "localhost", Constants.SELLER_VMS_PORT);
-        // starterVMSs.put(sellerAddress.hashCode(), sellerAddress);
+        starterVMSs.put(customerAddress.identifier, customerAddress);
         return starterVMSs;
     }
 

@@ -209,7 +209,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         this.transactionManager = transactionManager;
 
         // set leader off at the start
-        this.leader = new ServerNode("localhost",0);
+        this.leader = new ServerNode("0.0.0.0",0);
         this.leader.off();
 
         this.queuesLeaderSubscribesTo = new HashSet<>();
@@ -319,7 +319,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     OutboundEventResult outputEvent = txResult.getOutboundEventResult();
 
                     // scheduler can be way ahead of the last batch committed
-                    BatchMetadata batchMetadata = this.volatileBatchMetadataMap.computeIfAbsent(outputEvent.batch(), k -> new BatchMetadata());
+                    BatchMetadata batchMetadata = this.volatileBatchMetadataMap.computeIfAbsent(outputEvent.batch(), ignored -> new BatchMetadata());
                     batchMetadata.numberTIDsExecuted += 1;
                     if(batchMetadata.maxTidExecuted < outputEvent.tid()){
                         batchMetadata.maxTidExecuted = outputEvent.tid();
@@ -706,6 +706,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             // then it is a VMS intending to connect due to a data/event
             // that should be delivered to this vms
             VmsNode producerVms = Presentation.readVms(this.buffer, serdesProxy);
+            LOGGER.log(INFO, me.identifier+": Producer VMS received:\n"+producerVms);
             this.buffer.clear();
 
             ConnectionMetadata connMetadata = new ConnectionMetadata(

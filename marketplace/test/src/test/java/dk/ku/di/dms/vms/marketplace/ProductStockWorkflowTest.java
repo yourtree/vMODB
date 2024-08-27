@@ -81,9 +81,9 @@ public final class ProductStockWorkflowTest extends AbstractWorkflowTest {
         IdentifiableNode productAddress = new IdentifiableNode("product", "localhost", 8081);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", 8082);
 
-        Map<Integer, IdentifiableNode> VMSs = new HashMap<>(2);
-        VMSs.put(productAddress.hashCode(), productAddress);
-        VMSs.put(stockAddress.hashCode(), stockAddress);
+        Map<String, IdentifiableNode> VMSs = new HashMap<>(2);
+        VMSs.put(productAddress.identifier, productAddress);
+        VMSs.put(stockAddress.identifier, stockAddress);
 
         return Coordinator.build(
                 serverMap,

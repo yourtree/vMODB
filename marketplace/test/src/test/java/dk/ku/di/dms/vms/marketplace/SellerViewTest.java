@@ -86,9 +86,9 @@ public final class SellerViewTest extends AbstractWorkflowTest {
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>(3);
+        Map<String, IdentifiableNode> starterVMSs = new HashMap<>(3);
         IdentifiableNode sellerAddress = new IdentifiableNode("seller", "localhost", SELLER_VMS_PORT);
-        starterVMSs.put(sellerAddress.hashCode(), sellerAddress);
+        starterVMSs.put(sellerAddress.identifier, sellerAddress);
 
         return Coordinator.build(
                 serverMap,

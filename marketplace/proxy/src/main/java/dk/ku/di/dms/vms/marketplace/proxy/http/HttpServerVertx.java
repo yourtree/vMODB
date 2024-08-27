@@ -69,10 +69,8 @@ public final class HttpServerVertx extends AbstractVerticle {
         HttpServerOptions options = new HttpServerOptions();
         JsonObject config = this.vertx.getOrCreateContext().config();
         options.setPort(config.getInteger("http_port"));
-
-        options.setHost("localhost");
+        options.setHost("0.0.0.0");
         options.setTcpKeepAlive(true);
-
         HttpServer server = this.vertx.createHttpServer(options);
 
         // only with linux native transport

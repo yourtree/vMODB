@@ -29,7 +29,7 @@ public final class Main {
     public static void main(String[] ignoredArgs) throws Exception {
 
         VmsApplicationOptions options = VmsApplicationOptions.build(
-                "localhost",
+                "0.0.0.0",
                 Constants.STOCK_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.stock",
                 "dk.ku.di.dms.vms.marketplace.common"
@@ -39,7 +39,7 @@ public final class Main {
         vms.start();
 
         System.setProperty("sun.net.httpserver.nodelay","true");
-        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", Constants.STOCK_HTTP_PORT), 0);
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", Constants.STOCK_HTTP_PORT), 0);
         httpServer.createContext("/stock", new StockHttpHandler(vms));
         httpServer.setExecutor(ForkJoinPool.commonPool());
         httpServer.start();

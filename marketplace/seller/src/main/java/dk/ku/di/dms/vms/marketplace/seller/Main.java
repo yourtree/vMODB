@@ -39,7 +39,7 @@ public final class Main {
     private static VmsApplication initVms(Properties properties) throws Exception {
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 properties,
-                "localhost",
+                "0.0.0.0",
                 Constants.SELLER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.seller",
                 "dk.ku.di.dms.vms.marketplace.common"
@@ -73,7 +73,7 @@ public final class Main {
     private static void initHttpServerJdk(VmsApplication vms, int backlog) throws IOException {
         // initialize HTTP server to serve seller dashboard online requests
         System.setProperty("sun.net.httpserver.nodelay","true");
-        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", 8007), backlog);
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", Constants.SELLER_HTTP_PORT), backlog);
         httpServer.createContext("/seller", new SellerHttpHandler(vms));
         httpServer.start();
     }
@@ -119,7 +119,7 @@ public final class Main {
                         // register a transaction with the last tid finished
                         // this allows to get the freshest view, bypassing the scheduler
                         long lastTid = this.vms.lastTidFinished();
-                        try(var txCtx = this.vms.getTransactionManager().beginTransaction(lastTid, 0, lastTid, true)) {
+                        try(var _ = this.vms.getTransactionManager().beginTransaction(lastTid, 0, lastTid, true)) {
                             SellerDashboard view = this.sellerService.queryDashboard(sellerId);
                             // parse and return result
                             OutputStream outputStream = exchange.getResponseBody();

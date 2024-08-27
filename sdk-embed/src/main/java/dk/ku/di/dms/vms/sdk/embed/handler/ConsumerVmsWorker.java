@@ -134,11 +134,11 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     public void run() {
         LOGGER.log(INFO, this.me.identifier+ ": Starting worker for consumer VMS: "+this.consumerVms.identifier);
         if(!this.connect()) {
-            LOGGER.log(WARNING, this.me.identifier+ "Finishing worker for consumer VMS: "+this.consumerVms.identifier+" because connection failed");
+            LOGGER.log(WARNING, this.me.identifier+ ": Finishing worker for consumer VMS "+this.consumerVms.identifier+" because connection failed");
             return;
         }
         this.eventLoop();
-        LOGGER.log(INFO, this.me.identifier+ "Finishing worker for consumer VMS: "+this.consumerVms.identifier);
+        LOGGER.log(INFO, this.me.identifier+ ": Finishing worker for consumer VMS: "+this.consumerVms.identifier);
     }
 
     @SuppressWarnings("BusyWait")
@@ -195,11 +195,11 @@ final class ConsumerVmsWorker extends StoppableRunnable {
             this.state = PRESENTATION_SENT;
             LOGGER.log(DEBUG,me.identifier+ ": The node "+ this.consumerVms.host+" "+ this.consumerVms.port+" status = "+this.state);
             this.returnByteBuffer(buffer);
-            LOGGER.log(INFO,me.identifier+ " setting up worker to send transactions to consumer VMS: "+this.consumerVms.identifier);
+            LOGGER.log(INFO,me.identifier+ ": Setting up worker to send transactions to consumer VMS: "+this.consumerVms.identifier);
         } catch (Exception e) {
             // check if connection is still online. if so, try again
             // otherwise, retry connection in a few minutes
-            LOGGER.log(ERROR, me.identifier + "caught an error while trying to connect to consumer VMS: " + this.consumerVms.identifier);
+            LOGGER.log(ERROR, me.identifier + ": Caught an error while trying to connect to consumer VMS: " + this.consumerVms.identifier);
             return false;
         } finally {
             buffer.clear();
@@ -218,7 +218,7 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 // return buffer
                 this.returnByteBuffer(writeBuffer);
             } catch (IOException e) {
-                LOGGER.log(ERROR, "error on writing byte buffer to logging file: "+e.getMessage());
+                LOGGER.log(ERROR, me.identifier + ": Error on writing byte buffer to logging file: "+e.getMessage());
                 this.loggingWriteBuffers.add(writeBuffer);
             }
         }
@@ -277,7 +277,6 @@ final class ConsumerVmsWorker extends StoppableRunnable {
                 this.channel.write(writeBuffer).get();
                 // drain buffer
                 while(writeBuffer.hasRemaining()){
-                    // LOGGER.log(WARNING, "Here we gooooo");
                     this.channel.write(writeBuffer).get();
                 }
                 this.returnByteBuffer(writeBuffer);

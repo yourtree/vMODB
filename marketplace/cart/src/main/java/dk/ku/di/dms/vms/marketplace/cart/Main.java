@@ -45,7 +45,7 @@ public final class Main {
     private static VmsApplication initVmsApplication(Properties properties) throws Exception {
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 properties,
-                "localhost",
+                "0.0.0.0",
                 Constants.CART_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.cart",
                 "dk.ku.di.dms.vms.marketplace.common"
@@ -83,7 +83,7 @@ public final class Main {
     private static void initHttpServerJdk(VmsApplication vms, int backlog) throws IOException {
         // initialize HTTP server for data ingestion
         System.setProperty("sun.net.httpserver.nodelay","true");
-        HttpServer httpServer = HttpServer.create(new InetSocketAddress("localhost", Constants.CART_HTTP_PORT), backlog);
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", Constants.CART_HTTP_PORT), backlog);
         httpServer.createContext("/cart", new CartHttpHandlerJdk(vms));
         httpServer.setExecutor(ForkJoinPool.commonPool());
         httpServer.start();

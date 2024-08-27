@@ -102,7 +102,7 @@ public final class Main {
         final int STARTING_BATCH_ID = 1;
 
         int tcpPort = Integer.parseInt( properties.getProperty("tcp_port") );
-        ServerNode serverIdentifier = new ServerNode( "localhost", tcpPort );
+        ServerNode serverIdentifier = new ServerNode( "0.0.0.0", tcpPort );
 
         Map<Integer, ServerNode> serverMap = new HashMap<>();
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
@@ -113,7 +113,7 @@ public final class Main {
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
-        Map<Integer, IdentifiableNode> starterVMSs;
+        Map<String, IdentifiableNode> starterVMSs;
         if(Arrays.stream(transactions).anyMatch(p->p.contentEquals(CUSTOMER_CHECKOUT))) {
             starterVMSs = buildStarterVMSsFull(properties);
         } else {
@@ -168,7 +168,7 @@ public final class Main {
         return coordinator;
     }
 
-    private static Map<Integer, IdentifiableNode> buildStarterVMSsBasic(Properties properties){
+    private static Map<String, IdentifiableNode> buildStarterVMSsBasic(Properties properties){
         String cartHost = properties.getProperty("cart_host");
         String productHost = properties.getProperty("product_host");
         String stockHost = properties.getProperty("stock_host");
@@ -180,20 +180,20 @@ public final class Main {
         return getIdentifiableNodeMap(cartHost, productHost, stockHost);
     }
 
-    private static Map<Integer, IdentifiableNode> getIdentifiableNodeMap(String cartHost, String productHost, String stockHost) {
+    private static Map<String, IdentifiableNode> getIdentifiableNodeMap(String cartHost, String productHost, String stockHost) {
         IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, Constants.CART_VMS_PORT);
         IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, Constants.STOCK_VMS_PORT);
 
-        Map<Integer, IdentifiableNode> starterVMSs = new HashMap<>();
-        starterVMSs.putIfAbsent(cartAddress.hashCode(), cartAddress);
-        starterVMSs.putIfAbsent(productAddress.hashCode(), productAddress);
-        starterVMSs.putIfAbsent(stockAddress.hashCode(), stockAddress);
+        Map<String, IdentifiableNode> starterVMSs = new HashMap<>();
+        starterVMSs.putIfAbsent(cartAddress.identifier, cartAddress);
+        starterVMSs.putIfAbsent(productAddress.identifier, productAddress);
+        starterVMSs.putIfAbsent(stockAddress.identifier, stockAddress);
         return starterVMSs;
     }
 
-    private static Map<Integer, IdentifiableNode> buildStarterVMSsFull(Properties properties) {
-        Map<Integer, IdentifiableNode> starterVMSs = buildStarterVMSsBasic(properties);
+    private static Map<String, IdentifiableNode> buildStarterVMSsFull(Properties properties) {
+        Map<String, IdentifiableNode> starterVMSs = buildStarterVMSsBasic(properties);
 
         String orderHost = properties.getProperty("order_host");
         String paymentHost = properties.getProperty("payment_host");
@@ -210,10 +210,10 @@ public final class Main {
         IdentifiableNode shipmentAddress = new IdentifiableNode("shipment", shipmentHost, SHIPMENT_VMS_PORT);
         IdentifiableNode sellerAddress = new IdentifiableNode("seller", sellerHost, SELLER_VMS_PORT);
 
-        starterVMSs.putIfAbsent(orderAddress.hashCode(), orderAddress);
-        starterVMSs.putIfAbsent(paymentAddress.hashCode(), paymentAddress);
-        starterVMSs.putIfAbsent(shipmentAddress.hashCode(), shipmentAddress);
-        starterVMSs.putIfAbsent(sellerAddress.hashCode(), sellerAddress);
+        starterVMSs.putIfAbsent(orderAddress.identifier, orderAddress);
+        starterVMSs.putIfAbsent(paymentAddress.identifier, paymentAddress);
+        starterVMSs.putIfAbsent(shipmentAddress.identifier, shipmentAddress);
+        starterVMSs.putIfAbsent(sellerAddress.identifier, sellerAddress);
         return starterVMSs;
     }
 

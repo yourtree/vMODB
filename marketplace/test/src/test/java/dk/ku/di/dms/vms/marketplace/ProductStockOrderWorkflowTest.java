@@ -133,7 +133,7 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
 
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build( );
 
-        Map<Integer, IdentifiableNode> VMSs = getIdentifiableNodeMap();
+        Map<String, IdentifiableNode> VMSs = getIdentifiableNodeMap();
 
         return Coordinator.build(
                 serverMap,
@@ -147,14 +147,14 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
         );
     }
 
-    private static Map<Integer, IdentifiableNode> getIdentifiableNodeMap() {
-        Map<Integer, IdentifiableNode> VMSs = new HashMap<>(3);
+    private static Map<String, IdentifiableNode> getIdentifiableNodeMap() {
+        Map<String, IdentifiableNode> VMSs = new HashMap<>(3);
         IdentifiableNode productAddress = new IdentifiableNode("product", "localhost", 8081);
-        VMSs.put(productAddress.hashCode(), productAddress);
+        VMSs.put(productAddress.identifier, productAddress);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", "localhost", 8082);
-        VMSs.put(stockAddress.hashCode(), stockAddress);
+        VMSs.put(stockAddress.identifier, stockAddress);
         IdentifiableNode orderAddress = new IdentifiableNode("order", "localhost", 8083);
-        VMSs.put(orderAddress.hashCode(), orderAddress);
+        VMSs.put(orderAddress.identifier, orderAddress);
         return VMSs;
     }
 
