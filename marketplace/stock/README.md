@@ -11,12 +11,12 @@ java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --ad
 
 Let's start adding an <b>item</b> to the <i>Stock</i> microservice
 ```
-curl -X POST -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "name" : "productTest", "sku" : "skuTest", "category" : "categoryTest", "status" : "AVAILABLE", "description": "descriptionTest", "price" : 10, "freight_value" : 0, "version": "1"}' localhost:8002/stock
+curl -X POST -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "name" : "productTest", "sku" : "skuTest", "category" : "categoryTest", "status" : "AVAILABLE", "description": "descriptionTest", "price" : 10, "freight_value" : 0, "version": "1"}' http://localhost:8002/stock
 ```
 
 Let's send a GET request to verify whether the function have successfully stored the state
 ```
-curl -X GET localhost:8002/stock/1/1
+curl -X GET http://localhost:8002/stock/1/1
 ```
 
 If everything worked, you should see the following output:

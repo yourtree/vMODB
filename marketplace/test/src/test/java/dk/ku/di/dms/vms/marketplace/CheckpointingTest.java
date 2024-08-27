@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.HashSet;
+import java.util.Properties;
 import java.util.Set;
 
 public class CheckpointingTest extends CartProductWorkflowTest {
@@ -24,10 +25,11 @@ public class CheckpointingTest extends CartProductWorkflowTest {
     private static VmsApplication PRODUCT_VMS;
 
     @BeforeClass
-    public static void setUpBeforeClass() {
+    public static void setUpBeforeClass() throws Exception {
         // System.setProperty("logging", "true");
         System.setProperty("checkpointing", "true");
-        PRODUCT_VMS = dk.ku.di.dms.vms.marketplace.product.Main.init();
+        Properties properties = ConfigUtils.loadProperties();
+        PRODUCT_VMS = dk.ku.di.dms.vms.marketplace.product.Main.initVms(properties);
     }
 
     @Override
@@ -44,8 +46,7 @@ public class CheckpointingTest extends CartProductWorkflowTest {
         String filePath = userHome + "/vms/products.data";
         Path path = Paths.get(filePath);
         Schema schema = PRODUCT_VMS.getSchema("products");
-        try {
-            FileChannel fc = FileChannel.open(path, StandardOpenOption.READ);
+        try (FileChannel fc = FileChannel.open(path, StandardOpenOption.READ)){
             var memorySegment = fc.map(FileChannel.MapMode.READ_ONLY, 0,
                     10L * schema.getRecordSize(), Arena.ofShared());
             var bufCtx = new RecordBufferContext( memorySegment,10);

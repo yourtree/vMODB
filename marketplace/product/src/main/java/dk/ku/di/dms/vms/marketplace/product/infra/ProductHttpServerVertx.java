@@ -1,7 +1,7 @@
-package dk.ku.di.dms.vms.marketplace.cart.infra;
+package dk.ku.di.dms.vms.marketplace.product.infra;
 
-import dk.ku.di.dms.vms.marketplace.cart.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
+import dk.ku.di.dms.vms.marketplace.product.Product;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
@@ -15,16 +15,16 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
 
-public final class CartHttpServerVertx extends AbstractVerticle {
+public final class ProductHttpServerVertx extends AbstractVerticle {
 
-    static VmsApplication CART_VMS;
-    static AbstractProxyRepository<CartItem.CartItemId, CartItem> CART_REPO;
+    static VmsApplication PRODUCT_VMS;
+    static AbstractProxyRepository<Product.ProductId, Product> PRODUCT_REPO;
     static IVmsSerdesProxy SERDES = VmsSerdesProxyBuilder.build();
 
     @SuppressWarnings("unchecked")
-    public static void init(VmsApplication cartVms, int numVertices, boolean nativeTransport){
-        CART_VMS = cartVms;
-        CART_REPO = (AbstractProxyRepository<CartItem.CartItemId, CartItem>) CART_VMS.getRepositoryProxy("cart_items");
+    public static void init(VmsApplication productVms, int numVertices, boolean nativeTransport){
+        PRODUCT_VMS = productVms;
+        PRODUCT_REPO = (AbstractProxyRepository<Product.ProductId, Product>) PRODUCT_VMS.getRepositoryProxy("products");
         Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(nativeTransport));
         boolean usingNative = vertx.isNativeTransportEnabled();
         System.out.println("Vertx is running with native: " + usingNative);
@@ -33,7 +33,7 @@ public final class CartHttpServerVertx extends AbstractVerticle {
                 .setInstances(numVertices);
 
         try {
-            vertx.deployVerticle(CartHttpServerVertx.class,
+            vertx.deployVerticle(ProductHttpServerVertx.class,
                             deploymentOptions
                     )
                     .toCompletionStage()
@@ -48,7 +48,7 @@ public final class CartHttpServerVertx extends AbstractVerticle {
     @Override
     public void start(Promise<Void> startPromise) {
         HttpServerOptions options = new HttpServerOptions();
-        options.setPort(Constants.CART_HTTP_PORT);
+        options.setPort(Constants.PRODUCT_HTTP_PORT);
         options.setHost("0.0.0.0");
         options.setTcpKeepAlive(true);
         HttpServer server = this.vertx.createHttpServer(options);
@@ -67,39 +67,33 @@ public final class CartHttpServerVertx extends AbstractVerticle {
         public void handle(HttpServerRequest exchange) {
             String[] uriSplit = exchange.uri().split("/");
             exchange.bodyHandler(buff -> {
-                if (!uriSplit[1].equals("cart")) {
+                if (!uriSplit[1].equals("product")) {
                     handleError(exchange, "Invalid URI");
                     return;
                 }
                 switch (exchange.method().name()) {
                     case "GET" -> {
                         String[] split = exchange.uri().split("/");
-                        int customerId = Integer.parseInt(split[split.length - 3]);
                         int sellerId = Integer.parseInt(split[split.length - 2]);
                         int productId = Integer.parseInt(split[split.length - 1]);
-                        try(var _ = CART_VMS.getTransactionManager().beginTransaction(0, 0, 0,true)) {
-                            CartItem cartItem = CART_REPO.lookupByKey(new CartItem.CartItemId(customerId, sellerId, productId));
-                            if (cartItem != null) {
+                        try(var _ = PRODUCT_VMS.getTransactionManager().beginTransaction(0, 0, 0,true)) {
+                            Product product = PRODUCT_REPO.lookupByKey(new Product.ProductId(sellerId, productId));
+                            if (product != null) {
                                 exchange.response().setChunked(true);
                                 exchange.response().setStatusCode(200);
-                                exchange.response().write(cartItem.toString());
+                                exchange.response().write(product.toString());
                                 exchange.response().end();
                             }
                         } catch (IOException e) {
                             handleError(exchange, e.getMessage());
                         }
                     }
-                    case "PATCH" -> {
-                        String[] split = exchange.uri().split("/");
-                        int customerId = Integer.parseInt(split[split.length - 2]);
+                    case "POST" -> {
                         String payload = buff.toString(StandardCharsets.UTF_8);
-                        dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
-                                SERDES.deserialize(payload,
-                                        dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
-                        long tid = CART_VMS.lastTidFinished();
-                        try(var _ = CART_VMS.getTransactionManager().beginTransaction(tid, 0, 0, false)){
-                            CART_REPO.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
-                            CART_VMS.getTransactionManager().commit();
+                        Product product = SERDES.deserialize(payload, Product.class);
+                        try(var _ = PRODUCT_VMS.getTransactionManager().beginTransaction(0, 0, 0, false)){
+                            PRODUCT_REPO.insert(product);
+                            PRODUCT_VMS.getTransactionManager().commit();
                             exchange.response().setStatusCode(200).end();
                         } catch (IOException e){
                             handleError(exchange, e.getMessage());

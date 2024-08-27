@@ -17,6 +17,7 @@ public final class Product implements IEntity<Product.ProductId> {
         public int seller_id;
         public int product_id;
 
+        @SuppressWarnings("unused")
         public ProductId(){}
 
         public ProductId(int seller_id, int product_id) {
@@ -81,15 +82,15 @@ public final class Product implements IEntity<Product.ProductId> {
     public String toString() {
         return "{"
                 + "\"seller_id\":\"" + seller_id + "\""
-                + ", \"product_id\":\"" + product_id + "\""
-                + ", \"name\":\"" + name + "\""
-                + ", \"sku\":\"" + sku + "\""
-                + ", \"category\":\"" + category + "\""
-                + ", \"description\":\"" + description + "\""
-                + ", \"price\":\"" + price + "\""
-                + ", \"freight_value\":\"" + freight_value + "\""
-                + ", \"status\":\"" + status + "\""
-                + ", \"version\":\"" + version + "\""
+                + ",\"product_id\":\"" + product_id + "\""
+                + ",\"name\":\"" + name + "\""
+                + ",\"sku\":\"" + sku + "\""
+                + ",\"category\":\"" + category + "\""
+                + ",\"description\":\"" + description + "\""
+                + ",\"price\":\"" + price + "\""
+                + ",\"freight_value\":\"" + freight_value + "\""
+                + ",\"status\":\"" + status + "\""
+                + ",\"version\":\"" + version + "\""
                 + "}";
     }
 

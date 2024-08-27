@@ -53,6 +53,15 @@ Then you can just run the following command:
 mvn clean package -DskipTests=true
 ```
 
+To run the microservices in the submodule `marketplace` in an IDE like IntelliJ, use the following VM parameters:
+```
+--enable-preview
+--add-exports
+java.base/jdk.internal.misc=ALL-UNNAMED
+--add-opens
+java.base/jdk.internal.misc=ALL-UNNAMED
+```
+
 ## <a name="modb"></a>MODB
 
 Differently from traditional server-based database systems, where users interact via a well-defined network protocol, in MODB, users solely write code and all the data management complexity is abstracted by the runtime.

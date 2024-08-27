@@ -4,8 +4,10 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
+import dk.ku.di.dms.vms.marketplace.stock.infra.StockHttpServerVertx;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
@@ -18,6 +20,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Properties;
 import java.util.concurrent.ForkJoinPool;
 
 import static java.lang.System.Logger.Level.INFO;
@@ -27,28 +30,62 @@ public final class Main {
     private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
     public static void main(String[] ignoredArgs) throws Exception {
+        Properties properties = ConfigUtils.loadProperties();
+        VmsApplication vms = initVms(properties);
+        initHttpServer(properties, vms);
+    }
 
+    private static VmsApplication initVms(Properties properties) throws Exception {
         VmsApplicationOptions options = VmsApplicationOptions.build(
+                properties,
                 "0.0.0.0",
                 Constants.STOCK_VMS_PORT, new String[]{
-                "dk.ku.di.dms.vms.marketplace.stock",
-                "dk.ku.di.dms.vms.marketplace.common"
-        });
-
+                        "dk.ku.di.dms.vms.marketplace.stock",
+                        "dk.ku.di.dms.vms.marketplace.common"
+                });
         VmsApplication vms = VmsApplication.build(options);
         vms.start();
+        return vms;
+    }
 
+    private static void initHttpServer(Properties properties, VmsApplication vms) throws IOException {
+        String httpServer = properties.getProperty("http_server");
+        if(httpServer == null || httpServer.isEmpty()){
+            throw new RuntimeException("http_server property is missing");
+        }
+        if(httpServer.equalsIgnoreCase("vertx")){
+            int numVertices = Integer.parseInt( properties.getProperty("num_vertices") );
+            boolean nativeTransport = Boolean.parseBoolean( properties.getProperty("native_transport") );
+            initHttpServerVertx(vms, numVertices, nativeTransport);
+            LOGGER.log(INFO,"Stock: Vertx HTTP Server started");
+            return;
+        }
+        if(httpServer.equalsIgnoreCase("jdk")){
+            int backlog = Integer.parseInt( properties.getProperty("backlog") );
+            initHttpServerJdk(vms, backlog);
+            LOGGER.log(INFO,"Stock: JDK HTTP Server started");
+            return;
+        }
+        throw new RuntimeException("http_server property is unknown: "+ httpServer);
+    }
+
+    private static void initHttpServerJdk(VmsApplication vms, int backlog) throws IOException {
+        // initialize HTTP server for data ingestion
         System.setProperty("sun.net.httpserver.nodelay","true");
-        HttpServer httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", Constants.STOCK_HTTP_PORT), 0);
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", Constants.STOCK_HTTP_PORT), backlog);
         httpServer.createContext("/stock", new StockHttpHandler(vms));
         httpServer.setExecutor(ForkJoinPool.commonPool());
         httpServer.start();
     }
 
+    private static void initHttpServerVertx(VmsApplication vms, int numVertices, boolean nativeTransport){
+        StockHttpServerVertx.init(vms, numVertices, nativeTransport);
+    }
+
     private static class StockHttpHandler implements HttpHandler {
         private final Table table;
         private final AbstractProxyRepository<StockItem.StockId, StockItem> repository;
-        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+        private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         @SuppressWarnings("unchecked")
         public StockHttpHandler(VmsApplication vms){
@@ -90,7 +127,7 @@ public final class Main {
 
                     LOGGER.log(INFO, "APP: POST request for stock item: \n" + str);
 
-                    StockItem stock = this.serdes.deserialize(str, StockItem.class);
+                    StockItem stock = serdes.deserialize(str, StockItem.class);
                     Object[] obj = this.repository.extractFieldValuesFromEntityObject(stock);
                     IKey key = KeyUtils.buildRecordKey( this.table.schema().getPrimaryKeyColumns(), obj );
                     this.table.underlyingPrimaryKeyIndex().insert(key, obj);

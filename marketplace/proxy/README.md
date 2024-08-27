@@ -1,41 +1,15 @@
-# OnlineMarketplace Proxy - Coordinator Service
+# OnlineMarketplace Proxy aka Coordinator Service
 
-order not progressing… usually stops processing at tid 692
--> probably some problem with scheduling/sending delivery
--> test checkout solo
-PROBLEM is probably order is producer and consumer of shipment if both checkout and shipment are active!
+## Running the project
 
-
-json exception in dependence map (maybe linked to below)
-
-precedence size is getting bigger than any possible packet… how is cart even streaming that?
-problem is another: the message is not being processed correctly
-
-another problem is unknown message type on recursion
-but i think this is happening in the last recursion? not sure
-even though the last event is delivered to order, the stock still has more than 400 recursions to finish...
-
-## How to compile the project
-
-First make sure the dependencies are installed in your file system. This can be accomplished via running the following command in the root folder:
-
+Run the project with the following command:
 ```
-clean install -DskipTests=true
-```
-
-The command will generate the dependencies required to compile the <i>Proxy</i>. Then you can just run the following command:
-```
-clean package -DskipTests=true
-```
-
-And then run the project with the command as follows:
-```
-java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar proxy-1.0-SNAPSHOT-jar-with-dependencies.jar
+java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar target/proxy-1.0-SNAPSHOT-jar-with-dependencies.jar
 ```
 
 ## Prerequisites
 
-Make sure all the microservices involved in the defined transactional DAGs are up and running before spawning the <i>Proxy</i>
+Make sure all the microservices involved in the defined transactional DAGs are up and running before spawning the <i>Proxy</i>.
 
 In particular, the <i>Product Management</i> guide requires that at least the <i>Product</i> microservice is deployed and the associated DAGs that involve <i>Product</i> do not involve any other microservice that is not running at the moment.
 
@@ -46,12 +20,12 @@ In particular, the <i>Product Management</i> guide requires that at least the <i
 #### Adding a product 
 Let's start adding a <b>product</b> to the <i>Product</i> microservice
 ```
-curl -X POST -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "name" : "productTest", "sku" : "skuTest", "category" : "categoryTest", "status" : "approved", "description": "descriptionTest", "price" : 10, "freight_value" : 0, "version": "1"}' localhost:8001/product
+curl -X POST -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "name" : "productTest", "sku" : "skuTest", "category" : "categoryTest", "status" : "approved", "description": "descriptionTest", "price" : 10, "freight_value" : 0, "version": "1"}' http://localhost:8001/product
 ```
 
 Let's send a GET request to verify whether the function have successfully stored the state
 ```
-curl -X GET localhost:8001/product/1/1
+curl -X GET http://localhost:8001/product/1/1
 ```
 
 If everything worked, you should see the following output:
@@ -66,7 +40,7 @@ There are two ways we can update a <b>product</b>: updating its price or overwri
 
 To submit a <b>price update</b>, a user must send the following request:
 ```
-curl -X PATCH -H "Content-Type: application/json" -d '{ "sellerId" : 1, "productId" : 1, "price" : 100, "instanceId" : "1" }' localhost:8090/product/1/1
+curl -X PATCH -H "Content-Type: application/json" -d '{ "sellerId" : 1, "productId" : 1, "price" : 100, "instanceId" : "1" }' http://localhost:8090/product/1/1
 ```
 
 After an epoch completion, by querying the product again, we will be able to see the updated price, like below:
@@ -78,6 +52,6 @@ After an epoch completion, by querying the product again, we will be able to see
 To substitute the product and trigger referential integrity enforcement in stock, we use another HTTP method and content:
 
 ```
-curl -X PUT -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "name" : "productTest", "sku" : "skuTest", "category" : "categoryTest", "status" : "approved", "description": "descriptionTest", "price" : 10, "freight_value" : 0, "version": "2"}' localhost:8090/product/1/1
+curl -X PUT -H "Content-Type: application/json" -d '{"seller_id": "1", "product_id": "1", "name" : "productTest", "sku" : "skuTest", "category" : "categoryTest", "status" : "approved", "description": "descriptionTest", "price" : 10, "freight_value" : 0, "version": "2"}' http://localhost:8090/product/1/1
 ```
 

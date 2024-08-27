@@ -63,28 +63,24 @@ public class SellerHttpServerVertx extends AbstractVerticle {
     public static class VertxHandler implements Handler<HttpServerRequest> {
         @Override
         public void handle(HttpServerRequest exchange) {
+            assert (exchange.method().name().equals("GET"));
             String[] uriSplit = exchange.uri().split("/");
-            exchange.bodyHandler(buff -> {
-                assert uriSplit[1].equals("seller");
-                assert (exchange.method().name().equals("GET"));
-                String[] split = exchange.uri().split("/");
-                assert split[2].contentEquals("dashboard");
-                int sellerId = Integer.parseInt(split[split.length - 1]);
-                // picking the last tid "finished"
-                long tid = SELLER_VMS.lastTidFinished();
-                try (var txCtx = SELLER_VMS.getTransactionManager().beginTransaction(tid, 0, tid, true)) {
-                    var view = SELLER_SERVICE.queryDashboard(sellerId);
-                    exchange.response().setChunked(true);
-                    exchange.response().setStatusCode(200);
-                    exchange.response().write(view.toString());
-                    exchange.response().end();
-                } catch (IOException e) {
-                    exchange.response().setChunked(true);
-                    exchange.response().setStatusCode(500);
-                    exchange.response().write(e.getMessage());
-                    exchange.response().end();
-                }
-            });
+            assert uriSplit[1].equals("seller") && uriSplit[2].equals("dashboard");
+            int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
+            // picking the last tid "finished"
+            long tid = SELLER_VMS.lastTidFinished();
+            try (var _ = SELLER_VMS.getTransactionManager().beginTransaction(tid, 0, tid, true)) {
+                var view = SELLER_SERVICE.queryDashboard(sellerId);
+                exchange.response().setChunked(true);
+                exchange.response().setStatusCode(200);
+                exchange.response().write(view.toString());
+                exchange.response().end();
+            } catch (IOException e) {
+                exchange.response().setChunked(true);
+                exchange.response().setStatusCode(500);
+                exchange.response().write(e.getMessage());
+                exchange.response().end();
+            }
         }
     }
 

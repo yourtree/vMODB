@@ -4,8 +4,10 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
+import dk.ku.di.dms.vms.marketplace.product.infra.ProductHttpServerVertx;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
@@ -19,41 +21,67 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.Properties;
 import java.util.concurrent.ForkJoinPool;
 
-import static dk.ku.di.dms.vms.marketplace.common.Constants.PRODUCT_HTTP_PORT;
+import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.INFO;
 
 public final class Main {
 
     private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
-    public static VmsApplication init(){
+    public static void main(String[] ignoredArgs) throws Exception {
+        Properties properties = ConfigUtils.loadProperties();
+        VmsApplication vms = initVms(properties);
+        initHttpServer(properties, vms);
+    }
+
+    public static VmsApplication initVms(Properties properties) throws Exception {
         VmsApplicationOptions options = VmsApplicationOptions.build(
+                properties,
                 "0.0.0.0",
                 Constants.PRODUCT_VMS_PORT, new String[]{
                         "dk.ku.di.dms.vms.marketplace.product",
                         "dk.ku.di.dms.vms.marketplace.common"
                 });
-        // initialize threads
-        try {
-            VmsApplication vms = VmsApplication.build(options);
-            vms.start();
-            // initialize HTTP server for data ingestion
-            System.setProperty("sun.net.httpserver.nodelay","true");
-            HttpServer httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", PRODUCT_HTTP_PORT), 0);
-            httpServer.createContext("/product", new ProductHttpHandler(vms));
-            httpServer.setExecutor(ForkJoinPool.commonPool());
-            httpServer.start();
-            LOGGER.log(INFO,"Product HTTP Server initialized");
-            return vms;
-        } catch (Exception e){
-            throw new RuntimeException(e);
-        }
+        VmsApplication vms = VmsApplication.build(options);
+        vms.start();
+        return vms;
     }
 
-    public static void main(String[] ignoredArgs) {
-        init();
+    private static void initHttpServer(Properties properties, VmsApplication vms) throws IOException {
+        String httpServer = properties.getProperty("http_server");
+        if(httpServer == null || httpServer.isEmpty()){
+            throw new RuntimeException("http_server property is missing");
+        }
+        if(httpServer.equalsIgnoreCase("vertx")){
+            int numVertices = Integer.parseInt( properties.getProperty("num_vertices") );
+            boolean nativeTransport = Boolean.parseBoolean( properties.getProperty("native_transport") );
+            initHttpServerVertx(vms, numVertices, nativeTransport);
+            LOGGER.log(INFO,"Product: Vertx HTTP Server started");
+            return;
+        }
+        if(httpServer.equalsIgnoreCase("jdk")){
+            int backlog = Integer.parseInt( properties.getProperty("backlog") );
+            initHttpServerJdk(vms, backlog);
+            LOGGER.log(INFO,"Product: JDK HTTP Server started");
+            return;
+        }
+        throw new RuntimeException("http_server property is unknown: "+ httpServer);
+    }
+
+    private static void initHttpServerJdk(VmsApplication vms, int backlog) throws IOException {
+        // initialize HTTP server for data ingestion
+        System.setProperty("sun.net.httpserver.nodelay","true");
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", Constants.PRODUCT_HTTP_PORT), backlog);
+        httpServer.createContext("/product", new ProductHttpHandler(vms));
+        httpServer.setExecutor(ForkJoinPool.commonPool());
+        httpServer.start();
+    }
+
+    private static void initHttpServerVertx(VmsApplication vms, int numVertices, boolean nativeTransport){
+        ProductHttpServerVertx.init(vms, numVertices, nativeTransport);
     }
 
     private static class ProductHttpHandler implements HttpHandler {
@@ -81,13 +109,11 @@ public final class Main {
                         IKey key = CompositeKey.of(obj);
                         // bypass transaction manager
                         Object[] record = this.table.underlyingPrimaryKeyIndex().lookupByKey(key);
-
-                    /*
-                    // the statement won't work because this is not part of transaction
-                    // Product.ProductId id = new Product.ProductId(sellerId, productId);
-                    // var entity = this.repository.lookupByKey(id);
-                    */
-
+                        /*
+                        // the statement won't work because this is not part of transaction
+                        // Product.ProductId id = new Product.ProductId(sellerId, productId);
+                        // var entity = this.repository.lookupByKey(id);
+                        */
                         try {
                             var entity = this.repository.parseObjectIntoEntity(record);
                             OutputStream outputStream = exchange.getResponseBody();
@@ -103,7 +129,7 @@ public final class Main {
                     }
                     case "POST": {
                         String str = new String(exchange.getRequestBody().readAllBytes());
-                        LOGGER.log(INFO, "APP: POST request for product: \n" + str);
+                        LOGGER.log(DEBUG, "APP: POST request for product: \n" + str);
                         Product product = SERDES.deserialize(str, Product.class);
                         Object[] obj = this.repository.extractFieldValuesFromEntityObject(product);
                         IKey key = KeyUtils.buildRecordKey(this.table.schema().getPrimaryKeyColumns(), obj);
@@ -117,7 +143,7 @@ public final class Main {
                         exchange.sendResponseHeaders(200, 0);
                         exchange.getResponseBody().close();
 
-                        LOGGER.log(INFO, "APP: POST request suceeded for product: \n" + str);
+                        LOGGER.log(DEBUG, "APP: POST request succeeded for product: \n" + str);
                         break;
                     }
                     default: {
