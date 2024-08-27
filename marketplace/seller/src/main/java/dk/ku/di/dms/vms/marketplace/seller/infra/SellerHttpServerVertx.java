@@ -75,7 +75,7 @@ public class SellerHttpServerVertx extends AbstractVerticle {
                 exchange.response().setStatusCode(200);
                 exchange.response().write(view.toString());
                 exchange.response().end();
-            } catch (IOException e) {
+            } catch (Exception e) {
                 exchange.response().setChunked(true);
                 exchange.response().setStatusCode(500);
                 exchange.response().write(e.getMessage());

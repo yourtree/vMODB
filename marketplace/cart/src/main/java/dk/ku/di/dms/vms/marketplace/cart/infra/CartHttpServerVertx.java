@@ -85,7 +85,7 @@ public final class CartHttpServerVertx extends AbstractVerticle {
                                 exchange.response().write(cartItem.toString());
                                 exchange.response().end();
                             }
-                        } catch (IOException e) {
+                        } catch (Exception e) {
                             handleError(exchange, e.getMessage());
                         }
                     }
@@ -101,7 +101,7 @@ public final class CartHttpServerVertx extends AbstractVerticle {
                             CART_REPO.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
                             CART_VMS.getTransactionManager().commit();
                             exchange.response().setStatusCode(200).end();
-                        } catch (IOException e){
+                        } catch (Exception e){
                             handleError(exchange, e.getMessage());
                         }
                     }

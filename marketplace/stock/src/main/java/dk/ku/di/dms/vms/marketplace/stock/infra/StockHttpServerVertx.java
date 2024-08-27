@@ -2,8 +2,6 @@ package dk.ku.di.dms.vms.marketplace.stock.infra;
 
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.stock.StockItem;
-import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 import io.vertx.core.*;
@@ -11,7 +9,6 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
 
@@ -19,7 +16,6 @@ public final class StockHttpServerVertx extends AbstractVerticle {
 
     static VmsApplication STOCK_VMS;
     static AbstractProxyRepository<StockItem.StockId, StockItem> STOCK_REPO;
-    static IVmsSerdesProxy SERDES = VmsSerdesProxyBuilder.build();
 
     @SuppressWarnings("unchecked")
     public static void init(VmsApplication stockVms, int numVertices, boolean nativeTransport){
@@ -65,37 +61,36 @@ public final class StockHttpServerVertx extends AbstractVerticle {
     public static class VertxHandler implements Handler<HttpServerRequest> {
         @Override
         public void handle(HttpServerRequest exchange) {
-            String[] uriSplit = exchange.uri().split("/");
+            final String[] uriSplit = exchange.uri().split("/");
+            if (uriSplit.length == 0 || !uriSplit[1].equals("stock")) {
+                handleError(exchange, "Invalid URI");
+                return;
+            }
             exchange.bodyHandler(buff -> {
-                if (!uriSplit[1].equals("stock")) {
-                    handleError(exchange, "Invalid URI");
-                    return;
-                }
                 switch (exchange.method().name()) {
                     case "GET" -> {
-                        String[] split = exchange.uri().split("/");
-                        int sellerId = Integer.parseInt(split[split.length - 2]);
-                        int productId = Integer.parseInt(split[split.length - 1]);
+                        int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
+                        int productId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
                         try(var _ = STOCK_VMS.getTransactionManager().beginTransaction(0, 0, 0,true)) {
                             StockItem stockItem = STOCK_REPO.lookupByKey(new StockItem.StockId(sellerId, productId));
-                            if (stockItem != null) {
-                                exchange.response().setChunked(true);
-                                exchange.response().setStatusCode(200);
-                                exchange.response().write(stockItem.toString());
-                                exchange.response().end();
+                            if (stockItem == null) {
+                                handleError(exchange, "Stock item does not exists");
+                                return;
                             }
-                        } catch (IOException e) {
+                            exchange.response().setChunked(true);
+                            exchange.response().setStatusCode(200);
+                            exchange.response().write(stockItem.toString());
+                            exchange.response().end();
+                        } catch (Exception e) {
                             handleError(exchange, e.getMessage());
                         }
                     }
                     case "POST" -> {
-                        String payload = buff.toString(StandardCharsets.UTF_8);
-                        StockItem stockItem = SERDES.deserialize(payload, StockItem.class);
-                        try(var _ = STOCK_VMS.getTransactionManager().beginTransaction(0, 0, 0, false)){
-                            STOCK_REPO.insert(stockItem);
-                            STOCK_VMS.getTransactionManager().commit();
+                        try {
+                            String payload = buff.toString(StandardCharsets.UTF_8);
+                            StockDbUtils.addStockItem(payload, STOCK_REPO, STOCK_VMS.getTable("stock_items"));
                             exchange.response().setStatusCode(200).end();
-                        } catch (IOException e){
+                        } catch (Exception e) {
                             handleError(exchange, e.getMessage());
                         }
                     }

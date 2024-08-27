@@ -72,7 +72,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
             Set<IKey> set = this.keyMap.get(secKey);
             set.remove(entry.getKey());
         }
-        this.clearAndReturnMapToBuffer(txWriteSet);
+        this.clearAndReturnWriteSetToBuffer(txWriteSet);
     }
 
     @Override
@@ -89,8 +89,8 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     }
 
     public boolean remove(TransactionContext txCtx, IKey key, Object[] record){
-        IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
-        var txWriteSet = this.writeSet.computeIfAbsent(txCtx.tid, k ->
+        // IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
+        var txWriteSet = this.writeSet.computeIfAbsent(txCtx.tid, _ ->
                 Objects.requireNonNullElseGet(WRITE_SET_BUFFER.poll(), HashMap::new));
         txWriteSet.put(key, new Tuple<>(record, WriteType.DELETE));
         return true;
@@ -104,19 +104,23 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     @Override
     public void installWrites(TransactionContext txCtx) {
         // just remove the delete since the insert is already in the keyMap
-        Map<IKey, Tuple<Object[], WriteType>> map = this.writeSet.remove(txCtx.tid);
-        for(var entry : map.entrySet()){
+        Map<IKey, Tuple<Object[], WriteType>> writeSet = this.writeSet.remove(txCtx.tid);
+        if(writeSet == null) {
+            System.out.println("Transaction ID "+txCtx.tid+" could not be found in write set. Perhaps concurrent threads are set to the same TID?");
+            return;
+        }
+        for(var entry : writeSet.entrySet()){
             if(entry.getValue().t2() != WriteType.DELETE) continue;
             IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), entry.getValue().t1() );
             Set<IKey> set = this.keyMap.get(secKey);
             set.remove(entry.getKey());
         }
-        this.clearAndReturnMapToBuffer(map);
+        this.clearAndReturnWriteSetToBuffer(writeSet);
     }
 
-    private void clearAndReturnMapToBuffer(Map<IKey, Tuple<Object[], WriteType>> map) {
-        map.clear();
-        WRITE_SET_BUFFER.addLast(map);
+    private void clearAndReturnWriteSetToBuffer(Map<IKey, Tuple<Object[], WriteType>> writeSet) {
+        writeSet.clear();
+        WRITE_SET_BUFFER.addLast(writeSet);
     }
 
     @Override

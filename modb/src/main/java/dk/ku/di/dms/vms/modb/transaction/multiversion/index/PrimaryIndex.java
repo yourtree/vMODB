@@ -45,6 +45,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     private final Map<IKey, OperationSetOfKey> updatesPerKeyMap;
 
     // for PK generation. for now, all strategies use sequence
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     private final Optional<IPrimaryKeyGenerator<?>> primaryKeyGenerator;
 
     private final Set<IKey> keysToFlush = ConcurrentHashMap.newKeySet();
@@ -323,7 +324,6 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         if (operationSet != null && operationSet.lastWriteType != WriteType.DELETE){
             var entrySet = operationSet.updateHistoryMap.peak();
             Object[] lastRecord = entrySet.val().record;
-            var lastWriteType = entrySet.val().type;
             TransactionWrite entry = TransactionWrite.delete(WriteType.DELETE);
             operationSet.updateHistoryMap.put(txCtx.tid, entry);
             operationSet.lastWriteType = WriteType.DELETE;
@@ -359,7 +359,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      * Called when a constraint is violated, leading to a transaction abort
      */
     public void undoTransactionWrites(TransactionContext txCtx){
-        var writeSet = this.removeWriteSet(txCtx);
+        Set<IKey> writeSet = this.removeWriteSet(txCtx);
         if(writeSet == null) return;
         for(var key : writeSet) {
             // do we have a record written in the corresponding index? always yes. if no, it is a bug
@@ -423,13 +423,17 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     public void installWrites(TransactionContext txCtx){
         Set<IKey> writeSet = this.removeWriteSet(txCtx);
+        if(writeSet == null) {
+            System.out.println("Transaction ID "+txCtx.tid+" could not be found in write set. Perhaps concurrent threads are set to the same TID?");
+            return;
+        }
         this.keysToFlush.addAll(writeSet);
         writeSet.clear();
         WRITE_SET_BUFFER.addLast(writeSet);
     }
 
     public void appendWrite(TransactionContext txCtx, IKey key){
-        this.writeSet.computeIfAbsent(txCtx.tid, k ->
+        this.writeSet.computeIfAbsent(txCtx.tid, _ ->
                 Objects.requireNonNullElseGet(WRITE_SET_BUFFER.poll(), HashSet::new)).add(key);
     }
 

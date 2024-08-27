@@ -2,8 +2,6 @@ package dk.ku.di.dms.vms.marketplace.product.infra;
 
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.product.Product;
-import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 import io.vertx.core.*;
@@ -11,7 +9,6 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
 
@@ -19,7 +16,6 @@ public final class ProductHttpServerVertx extends AbstractVerticle {
 
     static VmsApplication PRODUCT_VMS;
     static AbstractProxyRepository<Product.ProductId, Product> PRODUCT_REPO;
-    static IVmsSerdesProxy SERDES = VmsSerdesProxyBuilder.build();
 
     @SuppressWarnings("unchecked")
     public static void init(VmsApplication productVms, int numVertices, boolean nativeTransport){
@@ -65,37 +61,36 @@ public final class ProductHttpServerVertx extends AbstractVerticle {
     public static class VertxHandler implements Handler<HttpServerRequest> {
         @Override
         public void handle(HttpServerRequest exchange) {
-            String[] uriSplit = exchange.uri().split("/");
+            final String[] uriSplit = exchange.uri().split("/");
+            if (uriSplit.length == 0 || !uriSplit[1].equals("product")) {
+                handleError(exchange, "Invalid URI");
+                return;
+            }
             exchange.bodyHandler(buff -> {
-                if (!uriSplit[1].equals("product")) {
-                    handleError(exchange, "Invalid URI");
-                    return;
-                }
                 switch (exchange.method().name()) {
                     case "GET" -> {
-                        String[] split = exchange.uri().split("/");
-                        int sellerId = Integer.parseInt(split[split.length - 2]);
-                        int productId = Integer.parseInt(split[split.length - 1]);
+                        int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
+                        int productId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
                         try(var _ = PRODUCT_VMS.getTransactionManager().beginTransaction(0, 0, 0,true)) {
                             Product product = PRODUCT_REPO.lookupByKey(new Product.ProductId(sellerId, productId));
-                            if (product != null) {
-                                exchange.response().setChunked(true);
-                                exchange.response().setStatusCode(200);
-                                exchange.response().write(product.toString());
-                                exchange.response().end();
+                            if (product == null) {
+                                handleError(exchange, "Product does not exists");
+                                return;
                             }
-                        } catch (IOException e) {
+                            exchange.response().setChunked(true);
+                            exchange.response().setStatusCode(200);
+                            exchange.response().write(product.toString());
+                            exchange.response().end();
+                        } catch (Exception e) {
                             handleError(exchange, e.getMessage());
                         }
                     }
                     case "POST" -> {
-                        String payload = buff.toString(StandardCharsets.UTF_8);
-                        Product product = SERDES.deserialize(payload, Product.class);
-                        try(var _ = PRODUCT_VMS.getTransactionManager().beginTransaction(0, 0, 0, false)){
-                            PRODUCT_REPO.insert(product);
-                            PRODUCT_VMS.getTransactionManager().commit();
+                        try {
+                            String payload = buff.toString(StandardCharsets.UTF_8);
+                            ProductDbUtils.addProduct(payload, PRODUCT_REPO, PRODUCT_VMS.getTable("products"));
                             exchange.response().setStatusCode(200).end();
-                        } catch (IOException e){
+                        } catch (Exception e) {
                             handleError(exchange, e.getMessage());
                         }
                     }

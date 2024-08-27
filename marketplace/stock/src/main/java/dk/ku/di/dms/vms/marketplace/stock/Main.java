@@ -4,14 +4,12 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
+import dk.ku.di.dms.vms.marketplace.stock.infra.StockDbUtils;
 import dk.ku.di.dms.vms.marketplace.stock.infra.StockHttpServerVertx;
-import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
-import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
@@ -23,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.ForkJoinPool;
 
+import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.INFO;
 
 public final class Main {
@@ -85,7 +84,6 @@ public final class Main {
     private static class StockHttpHandler implements HttpHandler {
         private final Table table;
         private final AbstractProxyRepository<StockItem.StockId, StockItem> repository;
-        private static final IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         @SuppressWarnings("unchecked")
         public StockHttpHandler(VmsApplication vms){
@@ -96,7 +94,7 @@ public final class Main {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             switch (exchange.getRequestMethod()) {
-                case "GET": {
+                case "GET" -> {
                     String[] split = exchange.getRequestURI().toString().split("/");
                     int sellerId = Integer.parseInt(split[split.length - 2]);
                     int productId = Integer.parseInt(split[split.length - 1]);
@@ -120,26 +118,18 @@ public final class Main {
                         outputStream.flush();
                         outputStream.close();
                     }
-                    break;
                 }
-                case "POST": {
-                    String str = new String( exchange.getRequestBody().readAllBytes() );
-
-                    LOGGER.log(INFO, "APP: POST request for stock item: \n" + str);
-
-                    StockItem stock = serdes.deserialize(str, StockItem.class);
-                    Object[] obj = this.repository.extractFieldValuesFromEntityObject(stock);
-                    IKey key = KeyUtils.buildRecordKey( this.table.schema().getPrimaryKeyColumns(), obj );
-                    this.table.underlyingPrimaryKeyIndex().insert(key, obj);
-
+                case "POST" -> {
+                    String payload = new String( exchange.getRequestBody().readAllBytes() );
+                    LOGGER.log(DEBUG, "APP: POST request for stock item: \n" + payload);
+                    StockDbUtils.addStockItem(payload, this.repository, this.table);
                     // response
                     OutputStream outputStream = exchange.getResponseBody();
                     exchange.sendResponseHeaders(200, 0);
                     outputStream.flush();
                     outputStream.close();
-                    break;
                 }
-                default: {
+                default -> {
                     // failed response
                     OutputStream outputStream = exchange.getResponseBody();
                     exchange.sendResponseHeaders(404, 0);

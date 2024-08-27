@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
+import dk.ku.di.dms.vms.marketplace.product.infra.ProductDbUtils;
 import dk.ku.di.dms.vms.marketplace.product.infra.ProductHttpServerVertx;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
@@ -128,22 +129,12 @@ public final class Main {
                         break;
                     }
                     case "POST": {
-                        String str = new String(exchange.getRequestBody().readAllBytes());
-                        LOGGER.log(DEBUG, "APP: POST request for product: \n" + str);
-                        Product product = SERDES.deserialize(str, Product.class);
-                        Object[] obj = this.repository.extractFieldValuesFromEntityObject(product);
-                        IKey key = KeyUtils.buildRecordKey(this.table.schema().getPrimaryKeyColumns(), obj);
-
-                        // created and update at
-                        Date dt = new Date();
-                        obj[obj.length - 1] = dt;
-                        obj[obj.length - 2] = dt;
-                        this.table.underlyingPrimaryKeyIndex().insert(key, obj);
-
+                        String payload = new String(exchange.getRequestBody().readAllBytes());
+                        LOGGER.log(DEBUG, "APP: POST request for product: \n" + payload);
+                        ProductDbUtils.addProduct(payload, this.repository, this.table);
                         exchange.sendResponseHeaders(200, 0);
                         exchange.getResponseBody().close();
-
-                        LOGGER.log(DEBUG, "APP: POST request succeeded for product: \n" + str);
+                        LOGGER.log(DEBUG, "APP: POST request succeeded for product: \n" + payload);
                         break;
                     }
                     default: {
