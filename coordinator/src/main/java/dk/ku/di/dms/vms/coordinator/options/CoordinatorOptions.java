@@ -10,8 +10,8 @@ public final class CoordinatorOptions {
 
     private static final int NUM_CPUS = Runtime.getRuntime().availableProcessors();
 
-    // the batch window. a minute by default
-    private int batchWindow = 60000;
+    // the batch window. a second by default
+    private int batchWindow = 1000;
 
     private int maxTransactionsPerBatch = Integer.MAX_VALUE;
 
@@ -32,7 +32,7 @@ public final class CoordinatorOptions {
 
     private int numTransactionWorkers = 1;
 
-    private int maxSleep = 1000;
+    private int maxSleep = 0;
 
     private int numQueuesVmsWorker = 1;
 

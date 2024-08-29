@@ -298,7 +298,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             return;
         }
         this.undoTransactionWrites(txCtx);
-        throw new RuntimeException("Constraint violation: "+(pkViolationFree ? "Primary key" : "Foreign key"));
+        throw new RuntimeException("Constraint violation: "+(pkViolationFree ? "Foreign key" : "Primary key"));
     }
 
     /**

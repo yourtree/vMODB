@@ -315,7 +315,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             LOGGER.log(WARNING, this.vmsIdentifier+": Event TID has already been processed! Queue '" + inboundEvent.event() + "' Batch: " + inboundEvent.batch() + " TID: " + inboundEvent.tid());
             return;
         }
-
         this.transactionTaskMap.put(inboundEvent.tid(), this.vmsTransactionTaskBuilder.build(
                 inboundEvent.tid(),
                 inboundEvent.lastTid(),
@@ -325,11 +324,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                         .signatures.getFirst().object(),
                 inboundEvent.input()
         ));
-
         // mark the last tid, so we can get the next to execute when appropriate
         if(this.lastTidToTidMap.containsKey(inboundEvent.lastTid())){
-            LOGGER.log(ERROR, "Inbound event is attempting to overwrite precedence of TIDs: "+
-                    inboundEvent);
+            LOGGER.log(ERROR, "Inbound event is attempting to overwrite precedence of TIDs: "+inboundEvent);
         } else {
             this.lastTidToTidMap.put(inboundEvent.lastTid(), inboundEvent.tid());
         }

@@ -26,6 +26,31 @@ import static java.lang.Thread.sleep;
 public final class CartTest {
 
     @Test
+    public void testRetrieveCartsForPriceUpdate() throws Exception {
+        VmsApplication vms = loadCartVms();
+        IProductReplicaRepository productReplicaRepository = (IProductReplicaRepository) vms.getRepositoryProxy("product_replicas");
+        try(var txCtx = (TransactionContext) vms.getTransactionManager().beginTransaction( 1, 0, 0, false )) {
+            productReplicaRepository.insert(new ProductReplica(
+                    1, 1, "test", "test", "test",
+                    "test", 10, 0, "test", "0"
+            ));
+            Object[] cartItemRow1 = new Object[]{1, 1, 1, "test", 10, 10, 1, 0, "0"};
+            Object[] cartItemRow2 = new Object[]{1, 1, 2, "test", 10, 10, 1, 0, "0"};
+            insertCartItem(vms, txCtx, cartItemRow1);
+            insertCartItem(vms, txCtx, cartItemRow2);
+        }
+        ICartItemRepository cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
+        try(var _ = vms.getTransactionManager().beginTransaction(2,0,1, false)) {
+            cartItemRepository.delete(new CartItem( 1, 1, 1, "test", 10, 10, 1, 0, "0" ));
+        }
+
+        try(var _ = vms.getTransactionManager().beginTransaction(3,0,2, true)) {
+            var items = cartItemRepository.getCartItemsBySellerIdAndProductIdAndVersion(1, 1, "0");
+            Assert.assertEquals(1, items.size());
+        }
+    }
+
+    @Test
     public void testPriceUpdate() throws Exception {
         VmsApplication vms = loadCartVms();
         IProductReplicaRepository productReplicaRepository = (IProductReplicaRepository) vms.getRepositoryProxy("product_replicas");
@@ -35,10 +60,8 @@ public final class CartTest {
                     1, 1, "test", "test", "test",
                     "test", 10, 0, "test", "0"
             ));
-
             Object[] cartItemRow1 = new Object[]{1, 1, 1, "test", 10, 10, 1, 0, "0"};
             Object[] cartItemRow2 = new Object[]{1, 1, 2, "test", 10, 10, 1, 0, "0"};
-
             insertCartItem(vms, txCtx, cartItemRow1);
             insertCartItem(vms, txCtx, cartItemRow2);
         }
@@ -88,7 +111,7 @@ public final class CartTest {
         ICartItemRepository cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
 
         // register tid 2 and query the state of customer 1 cart items to see if they are deleted
-        try(var txCtx = vms.getTransactionManager().beginTransaction( 2, 0, 1, true )) {
+        try(var _ = vms.getTransactionManager().beginTransaction( 2, 0, 1, true )) {
             List<CartItem> list = cartItemRepository.getCartItemsByCustomerId(1);
             Assert.assertTrue(list.isEmpty());
         }
@@ -152,7 +175,7 @@ public final class CartTest {
         ICartItemRepository cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
 
         // register tid 2 and query the state of customer 1 cart items to see if they are deleted
-        try(var txCtx = vms.getTransactionManager().beginTransaction( 3, 0, 2, true )) {
+        try(var _ = vms.getTransactionManager().beginTransaction( 3, 0, 2, true )) {
             List<CartItem> list = cartItemRepository.getCartItemsByCustomerId(1);
             Assert.assertTrue(list.isEmpty());
         }

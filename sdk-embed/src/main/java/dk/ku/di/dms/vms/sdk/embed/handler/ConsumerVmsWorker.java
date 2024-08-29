@@ -165,8 +165,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
                 do {
                     this.transactionEvents.add(payloadRaw);
                     sumTotal += payloadRaw.totalSize();
-                } while ( sumTotal < maxSize
-                        || (payloadRaw = this.transactionEventQueue.poll()) != null);
+                } while (sumTotal < maxSize && (payloadRaw = this.transactionEventQueue.poll()) != null);
                 this.sendBatchOfEvents();
 //                } else {
 //                    this.sendEvent(payloadRaw);

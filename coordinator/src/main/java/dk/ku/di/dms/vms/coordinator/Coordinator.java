@@ -668,7 +668,7 @@ public final class Coordinator extends StoppableRunnable {
     private void updateBatchOffsetPendingCommit(BatchContext batchContext) {
         LOGGER.log(INFO,"Leader: Received all missing votes of batch: "+ batchContext.batchOffset);
         if(batchContext.batchOffset == this.batchOffsetPendingCommit){
-            this.numTIDsCompleted.updateAndGet(i -> i + batchContext.numTidsOverall);
+            this.numTIDsCompleted.updateAndGet(i -> i + batchContext.numTIDsOverall);
             this.sendCommitCommandToVMSs(batchContext);
             this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
             // making this implement order-independent, so not assuming batch commit are received in order,

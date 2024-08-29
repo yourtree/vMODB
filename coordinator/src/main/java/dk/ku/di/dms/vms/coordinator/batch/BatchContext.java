@@ -25,7 +25,7 @@ public final class BatchContext {
 
     public long tidAborted;
 
-    public volatile long numTidsOverall;
+    public volatile long numTIDsOverall;
 
     public long lastTid;
 
@@ -36,9 +36,9 @@ public final class BatchContext {
     }
 
     // called when the batch is over
-    public void seal(long numTidsOverall, long lastTid,
+    public void seal(long numTIDsOverall, long lastTid,
                      Map<String, Long> previousBatchPerVms, Map<String,Integer> numberOfTIDsPerVms){
-        this.numTidsOverall = numTidsOverall;
+        this.numTIDsOverall = numTIDsOverall;
         this.lastTid = lastTid;
         // immutable
         this.previousBatchPerVms = previousBatchPerVms;

@@ -543,6 +543,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         private void processBatchOfEvents(ByteBuffer readBuffer) {
             List<InboundEvent> inboundEvents = LIST_BUFFER.poll();
+            // TODO reuse list to avoid creating for every batch
             if(inboundEvents == null) inboundEvents = new ArrayList<>(1024);
             try {
                 int count = readBuffer.getInt();

@@ -323,7 +323,7 @@ public final class TransactionWorker extends StoppableRunnable {
 
         // send batch precedence map for next worker in the ring
         this.precedenceMapOutputQueue.add(precedenceMap);
-        this.batchContext.seal(this.tid - this.startingTidBatch - 1, this.tid - 1, previousBatchPerVms, numberOfTIDsPerVms);
+        this.batchContext.seal(this.tid - this.startingTidBatch, this.tid - 1, previousBatchPerVms, numberOfTIDsPerVms);
         this.coordinatorQueue.add(this.batchContext);
 
         // optimization: iterate over all vms in the last batch, filter those which last tid != this.tid
