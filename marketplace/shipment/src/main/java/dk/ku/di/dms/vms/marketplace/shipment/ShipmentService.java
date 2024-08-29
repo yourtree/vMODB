@@ -47,6 +47,55 @@ public final class ShipmentService {
         this.packageRepository = packageRepository;
     }
 
+    @Inbound(values = {PAYMENT_CONFIRMED})
+    @Transactional(type=W)
+    @Parallel
+    public void processShipment(PaymentConfirmed paymentConfirmed){
+        LOGGER.log(INFO, "APP: Shipment received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
+        Date now = new Date();
+        Shipment shipment = new Shipment(
+                paymentConfirmed.customerCheckout.CustomerId,
+                paymentConfirmed.orderId,
+                paymentConfirmed.items.size(),
+                (float) paymentConfirmed.items.stream().mapToDouble(OrderItem::getFreightValue).sum(),
+                now,
+                ShipmentStatus.APPROVED,
+                paymentConfirmed.customerCheckout.FirstName,
+                paymentConfirmed.customerCheckout.LastName,
+                paymentConfirmed.customerCheckout.Street,
+                paymentConfirmed.customerCheckout.Complement,
+                paymentConfirmed.customerCheckout.ZipCode,
+                paymentConfirmed.customerCheckout.City,
+                paymentConfirmed.customerCheckout.State
+        );
+        this.shipmentRepository.insert(shipment);
+        List<Package> packages = getPackageList(paymentConfirmed, now);
+        this.packageRepository.insertAll(packages);
+    }
+
+    private static List<Package> getPackageList(PaymentConfirmed paymentConfirmed, Date now) {
+        int packageId = 1;
+        List<Package> packages = new ArrayList<>();
+        for (OrderItem orderItem : paymentConfirmed.items) {
+            Package pkg = new Package(
+                    paymentConfirmed.customerCheckout.CustomerId,
+                    paymentConfirmed.orderId,
+                    packageId,
+                    orderItem.seller_id,
+                    orderItem.product_id,
+                    orderItem.product_name,
+                    orderItem.getFreightValue(),
+                    now,
+                    null,
+                    orderItem.quantity,
+                    PackageStatus.shipped
+            );
+            packages.add(pkg);
+            packageId++;
+        }
+        return packages;
+    }
+
     @Inbound(values = {UPDATE_DELIVERY})
     @Outbound(SHIPMENT_UPDATED)
     @Transactional(type=RW)
@@ -102,60 +151,6 @@ public final class ShipmentService {
         }
 
         return new ShipmentUpdated(deliveryNotifications, shipmentNotifications, updateDelivery.instanceId);
-    }
-
-    @Inbound(values = {PAYMENT_CONFIRMED})
-    @Transactional(type=W)
-    @Parallel
-    public void processShipment(PaymentConfirmed paymentConfirmed){
-        LOGGER.log(INFO, "APP: Shipment received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
-        Date now = new Date();
-
-        Shipment shipment = new Shipment(
-                paymentConfirmed.customerCheckout.CustomerId,
-                paymentConfirmed.orderId,
-                paymentConfirmed.items.size(),
-                (float) paymentConfirmed.items.stream().mapToDouble(OrderItem::getFreightValue).sum(),
-                now,
-                ShipmentStatus.APPROVED,
-                paymentConfirmed.customerCheckout.FirstName,
-                paymentConfirmed.customerCheckout.LastName,
-                paymentConfirmed.customerCheckout.Street,
-                paymentConfirmed.customerCheckout.Complement,
-                paymentConfirmed.customerCheckout.ZipCode,
-                paymentConfirmed.customerCheckout.City,
-                paymentConfirmed.customerCheckout.State
-        );
-
-        this.shipmentRepository.insert( shipment );
-
-        List<Package> packages = getPackageList(paymentConfirmed, now);
-
-        this.packageRepository.insertAll( packages );
-    }
-
-    private static List<Package> getPackageList(PaymentConfirmed paymentConfirmed, Date now) {
-        int packageId = 1;
-        List<Package> packages = new ArrayList<>();
-        for (OrderItem orderItem : paymentConfirmed.items) {
-            Package pkg
-                    = new Package(
-                    paymentConfirmed.customerCheckout.CustomerId,
-                    paymentConfirmed.orderId,
-                    packageId,
-                    orderItem.seller_id,
-                    orderItem.product_id,
-                    orderItem.product_name,
-                    orderItem.getFreightValue(),
-                    now,
-                    null,
-                    orderItem.quantity,
-                    PackageStatus.shipped
-            );
-            packages.add(pkg);
-            packageId++;
-        }
-        return packages;
     }
 
 }

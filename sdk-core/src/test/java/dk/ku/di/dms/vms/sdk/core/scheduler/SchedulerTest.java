@@ -38,7 +38,7 @@ public class SchedulerTest {
         VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example");
 
         var scheduler = VmsTransactionScheduler.build("example1", vmsInternalChannels,
-                vmsRuntimeMetadata.queueToVmsTransactionMap(), new ITransactionManager() { }, 4);
+                vmsRuntimeMetadata.queueToVmsTransactionMap(), new ITransactionManager() { }, 4, 0);
 
         for(int i = 1; i <= 4; i++){
             InputEventExample1 eventExample = new InputEventExample1(i);

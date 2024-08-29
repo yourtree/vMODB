@@ -33,7 +33,6 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static java.lang.System.Logger.Level.*;
-import static java.lang.Thread.sleep;
 
 /**
  * This default event handler connects direct to the coordinator
@@ -63,10 +62,10 @@ public final class VmsEventHandler extends StoppableRunnable {
     private final VmsRuntimeMetadata vmsMetadata;
 
     /** EXTERNAL VMSs **/
-    private final Map<String, List<ConsumerVmsContainer>> eventToConsumersMap;
+    private final Map<String, List<IVmsContainer>> eventToConsumersMap;
 
     // built while connecting to the consumers
-    private final Map<IdentifiableNode, ConsumerVmsContainer> consumerVmsContainerMap;
+    private final Map<IdentifiableNode, IVmsContainer> consumerVmsContainerMap;
 
     // built dynamically as new producers request connection
     private final Map<Integer, ConnectionMetadata> producerConnectionMetadataMap;
@@ -157,7 +156,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
     }
 
-    record VmsHandlerOptions(int maxSleep,
+    public record VmsHandlerOptions(int maxSleep,
                             int networkBufferSize,
                             int osBufferSize,
                             int networkThreadPoolSize,
@@ -231,44 +230,6 @@ public final class VmsEventHandler extends StoppableRunnable {
     }
 
     /**
-     * A container of consumer VMS workers to facilitate
-     * scalable pushing of transaction events
-     */
-    private static final class ConsumerVmsContainer {
-
-        private final IdentifiableNode node;
-        private final ConsumerVmsWorker[] consumerVmsWorkers;
-        private int next;
-
-        // init a container with the initial consumer VMS
-        ConsumerVmsContainer(ConsumerVmsWorker initialConsumerVms, IdentifiableNode node, int numVmsWorkers) {
-            this.consumerVmsWorkers = new ConsumerVmsWorker[numVmsWorkers];
-            this.consumerVmsWorkers[0] = initialConsumerVms;
-            this.next = 0;
-            this.node = node;
-        }
-
-        public synchronized void addConsumerVms(ConsumerVmsWorker vmsWorker) {
-            this.next++;
-            this.consumerVmsWorkers[this.next] = vmsWorker;
-            if(this.next == this.consumerVmsWorkers.length-1) this.next = 0;
-        }
-
-        public void queue(TransactionEvent.PayloadRaw payload){
-            this.consumerVmsWorkers[this.next].queueTransactionEvent(payload);
-            if(this.next == this.consumerVmsWorkers.length-1){
-                this.next = 0;
-            } else {
-                this.next += 1;
-            }
-        }
-
-        public String identifier(){
-            return this.node.identifier;
-        }
-    }
-
-    /**
      * From <a href="https://docs.oracle.com/javase/tutorial/networking/sockets/clientServer.html">...</a>
      * "The Java runtime automatically closes the input and output streams, the client socket,
      * and the server socket because they have been created in the try-with-resources statement."
@@ -288,56 +249,46 @@ public final class VmsEventHandler extends StoppableRunnable {
      * A batch strategy for sending would involve sleeping until the next timeout for batch,
      * send and set up the next. Do that iteratively
      */
-    @SuppressWarnings({"BusyWait"})
     private void eventLoop(){
-        List<IVmsTransactionResult> transactionResults = new ArrayList<>(1024);
         int pollTimeout = 1;
-        IVmsTransactionResult txResult_;
+        IVmsTransactionResult txResult;
         while(this.isRunning()){
-            // can acknowledge batch completion even though no event from next batch has arrived
-            // but if blocking, only upon a new event such method will be invoked
-            // that will jeopardize the batch process
-            this.moveBatchIfNecessary();
             try {
-                txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll();
-                if (txResult_ == null) {
+                // can acknowledge batch completion even though no event from next batch has arrived
+                // but if blocking, only upon a new event such method will be invoked
+                // that will jeopardize the batch process
+                this.moveBatchIfNecessary();
+
+                while((txResult = this.vmsInternalChannels.transactionOutputQueue().poll()) == null) {
                     pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep);
-                    sleep(pollTimeout);
-                    continue;
+                    this.giveUpCpu(pollTimeout);
                 }
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
 
-                LOGGER.log(DEBUG,this.me.identifier+": New transaction result in event handler. TID = "+txResult_.tid());
+                LOGGER.log(DEBUG,this.me.identifier+": New transaction result in event handler. TID = "+txResult.tid());
 
-                // it is better to get all the results of a given transaction instead of one by one.
-                do {
-                    transactionResults.add(txResult_);
-                } while((txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll()) != null);
+                // assuming is a simple transaction result, not complex, so no need to iterate
+                OutboundEventResult outputEvent = txResult.getOutboundEventResult();
 
-                for(IVmsTransactionResult txResult : transactionResults) {
-                    // assuming is a simple transaction result, not complex, so no need to iterate
-                    OutboundEventResult outputEvent = txResult.getOutboundEventResult();
-
-                    // scheduler can be way ahead of the last batch committed
-                    BatchMetadata batchMetadata = this.volatileBatchMetadataMap.computeIfAbsent(outputEvent.batch(), ignored -> new BatchMetadata());
-                    batchMetadata.numberTIDsExecuted += 1;
-                    if(batchMetadata.maxTidExecuted < outputEvent.tid()){
-                        batchMetadata.maxTidExecuted = outputEvent.tid();
-                    }
-
-                    // it is a void method that executed, nothing to send
-                    if (outputEvent.outputQueue() == null) continue;
-                    Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(txResult.tid());
-                    if (precedenceMap == null) {
-                        LOGGER.log(WARNING,this.me.identifier + ": No precedence map found for TID: " + txResult.tid());
-                        continue;
-                    }
-                    // remove ourselves (which also saves some bytes)
-                    precedenceMap.remove(this.me.identifier);
-                    String precedenceMapUpdated = this.serdesProxy.serializeMap(precedenceMap);
-                    this.processOutputEvent(outputEvent, precedenceMapUpdated);
+                // scheduler can be way ahead of the last batch committed
+                BatchMetadata batchMetadata = this.volatileBatchMetadataMap.computeIfAbsent(outputEvent.batch(), ignored -> new BatchMetadata());
+                batchMetadata.numberTIDsExecuted += 1;
+                if(batchMetadata.maxTidExecuted < outputEvent.tid()){
+                    batchMetadata.maxTidExecuted = outputEvent.tid();
                 }
-                transactionResults.clear();
+
+                // it is a void method that executed, nothing to send
+                if (outputEvent.outputQueue() == null) continue;
+                Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(txResult.tid());
+                if (precedenceMap == null) {
+                    LOGGER.log(WARNING,this.me.identifier + ": No precedence map found for TID: " + txResult.tid());
+                    continue;
+                }
+                // remove ourselves (which also saves some bytes)
+                precedenceMap.remove(this.me.identifier);
+                String precedenceMapUpdated = this.serdesProxy.serializeMap(precedenceMap);
+                this.processOutputEvent(outputEvent, precedenceMapUpdated);
+
             } catch (Exception e) {
                 LOGGER.log(ERROR, this.me.identifier+": Problem on handling event\n"+e);
             }
@@ -425,7 +376,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         }
         */
 
-        List<ConsumerVmsContainer> consumerVMSs = this.eventToConsumersMap.get(outputEvent.outputQueue());
+        List<IVmsContainer> consumerVMSs = this.eventToConsumersMap.get(outputEvent.outputQueue());
         if(consumerVMSs == null || consumerVMSs.isEmpty()){
             LOGGER.log(DEBUG,this.me.identifier+": An output event (queue: "+outputEvent.outputQueue()+") has no target virtual microservices.");
             return;
@@ -436,7 +387,7 @@ public final class VmsEventHandler extends StoppableRunnable {
         TransactionEvent.PayloadRaw payload = TransactionEvent.of(
                 outputEvent.tid(), outputEvent.batch(), outputEvent.outputQueue(), objStr, precedenceMap );
 
-        for(ConsumerVmsContainer consumerVmsContainer : consumerVMSs) {
+        for(IVmsContainer consumerVmsContainer : consumerVMSs) {
             LOGGER.log(DEBUG,this.me.identifier+": An output event (queue: " + outputEvent.outputQueue() + ") will be queued to VMS: " + consumerVmsContainer.identifier());
             consumerVmsContainer.queue(payload);
         }
@@ -462,19 +413,22 @@ public final class VmsEventHandler extends StoppableRunnable {
         thread.setName("vms-consumer-"+node.identifier+"-"+identifier);
         thread.start();
 
-        ConsumerVmsContainer consumerVmsContainer;
         if(!this.consumerVmsContainerMap.containsKey(node)){
-            consumerVmsContainer = new ConsumerVmsContainer(consumerVmsWorker, node, this.options.numVmsWorkers);
-            this.consumerVmsContainerMap.put(node, consumerVmsContainer);
-            // add to tracked VMSs...
+            if(this.options.numVmsWorkers == 1) {
+                this.consumerVmsContainerMap.put(node, consumerVmsWorker);
+            } else {
+                MultiVmsContainer multiVmsContainer = new MultiVmsContainer(consumerVmsWorker, node, this.options.numVmsWorkers);
+                this.consumerVmsContainerMap.put(node, multiVmsContainer);
+            }
+            // add to tracked VMSs
             for (String outputEvent : outputEvents) {
                 LOGGER.log(INFO,me.identifier+ " adding "+outputEvent+" to consumers map with "+node.identifier);
                 this.eventToConsumersMap.computeIfAbsent(outputEvent, (ignored) -> new ArrayList<>());
-                this.eventToConsumersMap.get(outputEvent).add(consumerVmsContainer);
+                this.eventToConsumersMap.get(outputEvent).add(consumerVmsWorker);
             }
         } else {
-            consumerVmsContainer = this.consumerVmsContainerMap.get(node);
-            consumerVmsContainer.addConsumerVms(consumerVmsWorker);
+            MultiVmsContainer multiVmsContainer = (MultiVmsContainer) this.consumerVmsContainerMap.get(node);
+            multiVmsContainer.addConsumerVms(consumerVmsWorker);
         }
 
         // set up read from consumer vms? we read nothing from consumer vms. maybe in the future can negotiate amount of data to avoid performance problems

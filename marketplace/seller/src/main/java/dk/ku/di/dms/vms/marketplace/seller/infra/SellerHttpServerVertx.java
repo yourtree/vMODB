@@ -8,7 +8,6 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 
-import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 
 public class SellerHttpServerVertx extends AbstractVerticle {

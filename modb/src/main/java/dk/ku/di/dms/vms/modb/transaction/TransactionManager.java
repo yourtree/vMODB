@@ -98,7 +98,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             IKey key = this.getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexMultiAggregationScan().index());
             return scanOperator.asIndexMultiAggregationScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), key);
         } else {
-            // future optimization is filter not incuding the columns of partial or non-unique index
+            // future optimization is filter not including the columns of partial or non-unique index
             FilterContext filterContext = FilterContextBuilder.build(wherePredicates);
             return scanOperator.asFullScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), filterContext);
         }
@@ -292,12 +292,13 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     public void update(TransactionContext txCtx, Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), values);
-        if(this.fkConstraintViolationFree(txCtx, table, values) && index.update(txCtx, pk, values)){
+        boolean pkViolationFree = index.update(txCtx, pk, values);
+        if(pkViolationFree && this.fkConstraintViolationFree(txCtx, table, values)){
             txCtx.indexes.add(index);
             return;
         }
         this.undoTransactionWrites(txCtx);
-        throw new RuntimeException("Constraint violation.");
+        throw new RuntimeException("Constraint violation: "+(pkViolationFree ? "Primary key" : "Foreign key"));
     }
 
     /**

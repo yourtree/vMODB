@@ -43,7 +43,7 @@ import static java.lang.Thread.sleep;
  *  main loop schedule the timer again. set the network node to off
  */
 @SuppressWarnings("SequencedCollectionMethodCanBeUsed")
-final class ConsumerVmsWorker extends StoppableRunnable {
+public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsContainer {
 
     private static final System.Logger LOGGER = System.getLogger(ConsumerVmsWorker.class.getName());
 
@@ -86,6 +86,8 @@ final class ConsumerVmsWorker extends StoppableRunnable {
     protected enum State { NEW, CONNECTED, PRESENTATION_SENT, READY }
 
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
+
+    private final List<TransactionEvent.PayloadRaw> transactionEvents = new ArrayList<>(10000);
 
     public static ConsumerVmsWorker build(
                                   VmsNode me,
@@ -141,28 +143,31 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         LOGGER.log(INFO, this.me.identifier+ ": Finishing worker for consumer VMS: "+this.consumerVms.identifier);
     }
 
-    @SuppressWarnings("BusyWait")
     private void eventLoop() {
         int pollTimeout = 1;
         TransactionEvent.PayloadRaw payloadRaw;
         while(this.isRunning()){
             try {
-                payloadRaw = this.transactionEventQueue.poll();
-                if (payloadRaw == null) {
+                while((payloadRaw = this.transactionEventQueue.poll()) == null) {
                     pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep());
                     // guarantees pending writes will be retired even though there is no new event to process
                     this.processPendingWrites();
                     this.processPendingLogging();
-                    sleep(pollTimeout);
-                    continue;
+                    this.giveUpCpu(pollTimeout);
                 }
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
 
+                // use first as estimation to avoid sending a single event
+                int maxSize = this.options.networkBufferSize() - payloadRaw.totalSize();
+
 //                if(!this.transactionEventQueue.isEmpty()){
-                    do {
-                        this.transactionEvents.add(payloadRaw);
-                    } while ((payloadRaw = this.transactionEventQueue.poll()) != null);
-                    this.sendBatchOfEvents();
+                int sumTotal = 0;
+                do {
+                    this.transactionEvents.add(payloadRaw);
+                    sumTotal += payloadRaw.totalSize();
+                } while ( sumTotal < maxSize
+                        || (payloadRaw = this.transactionEventQueue.poll()) != null);
+                this.sendBatchOfEvents();
 //                } else {
 //                    this.sendEvent(payloadRaw);
 //                }
@@ -257,8 +262,6 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         this.acquireLock();
         this.channel.write(writeBuffer, this.options.networkSendTimeout(), TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
     }
-
-    private final List<TransactionEvent.PayloadRaw> transactionEvents = new ArrayList<>(1024);
 
     private void sendBatchOfEvents() {
         int remaining = this.transactionEvents.size();
@@ -359,8 +362,14 @@ final class ConsumerVmsWorker extends StoppableRunnable {
         }
     }
 
-    public void queueTransactionEvent(TransactionEvent.PayloadRaw eventPayload){
+    @Override
+    public void queue(TransactionEvent.PayloadRaw eventPayload){
         this.transactionEventQueue.offer(eventPayload);
     }
-    
+
+    @Override
+    public String identifier() {
+        return this.consumerVms.identifier;
+    }
+
 }

@@ -37,7 +37,8 @@ import java.net.URL;
 import java.util.*;
 import java.util.stream.Stream;
 
-import static java.lang.System.Logger.Level.*;
+import static java.lang.System.Logger.Level.DEBUG;
+import static java.lang.System.Logger.Level.WARNING;
 
 public final class VmsMetadataLoader {
 

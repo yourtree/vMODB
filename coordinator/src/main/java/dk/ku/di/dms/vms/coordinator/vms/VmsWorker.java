@@ -117,16 +117,14 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     private final Consumer<Object> queueMessage_;
 
     private interface IVmsDeque {
-        void drain(List<TransactionEvent.PayloadRaw> list);
+        void drain(List<TransactionEvent.PayloadRaw> list, int maxSize);
         void insert(TransactionEvent.PayloadRaw payloadRaw);
     }
 
-    @SuppressWarnings("FieldCanBeLocal")
     private static final class MultiDeque implements IVmsDeque {
         private final int numQueues;
         private int nextPos;
         private final List<Deque<TransactionEvent.PayloadRaw>> queues;
-        private TransactionEvent.PayloadRaw obj;
         private MultiDeque(int numQueues) {
             this.numQueues = numQueues;
             this.nextPos = 0;
@@ -142,27 +140,39 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             this.queues.get(pos).add(payloadRaw);
         }
         @Override
-        public void drain(List<TransactionEvent.PayloadRaw> list){
-            while ((this.obj = this.queues.get(this.nextPos).poll()) != null){
-                list.add(this.obj);
+        public void drain(List<TransactionEvent.PayloadRaw> list, int maxSize){
+            int totalSize = 0;
+            TransactionEvent.PayloadRaw txEvent;
+            while ((txEvent = this.queues.get(this.nextPos).poll()) != null){
+                list.add(txEvent);
+                totalSize += txEvent.totalSize();
+                if(totalSize >= maxSize) break;
             }
             this.nextPos++;
-            if(this.nextPos == this.numQueues){this.nextPos=0;}
+            if(this.nextPos == this.numQueues){ this.nextPos=0; }
         }
     }
 
-    @SuppressWarnings("FieldCanBeLocal")
     private static final class SingleDeque implements IVmsDeque {
-        private TransactionEvent.PayloadRaw obj;
         private final ConcurrentLinkedDeque<TransactionEvent.PayloadRaw> queue = new ConcurrentLinkedDeque<>();
         @Override
         public void insert(TransactionEvent.PayloadRaw payloadRaw) {
             this.queue.add(payloadRaw);
         }
         @Override
-        public void drain(List<TransactionEvent.PayloadRaw> list){
-            while ((this.obj = this.queue.poll()) != null){
-                list.add(this.obj);
+        public void drain(List<TransactionEvent.PayloadRaw> list, int maxSize){
+            int totalSize = 0;
+            TransactionEvent.PayloadRaw txEvent = this.queue.poll();
+            if(txEvent == null) return;
+            totalSize += txEvent.totalSize();
+            while(true) {
+                list.add(txEvent);
+                totalSize += txEvent.totalSize();
+                if(totalSize >= maxSize){
+                    break;
+                }
+                txEvent = this.queue.poll();
+                if(txEvent == null) break;
             }
         }
     }
@@ -338,21 +348,20 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
     /**
      * Event loop performs some tasks:
-     * (a) get and process batch-tracking messages from coordinator
-     * (b) process transaction input events
-     * (c) logging
+     * (a) Receive and process batch-tracking messages from coordinator
+     * (b) Process transaction input events
+     * (c) Logging
      */
-    @SuppressWarnings("BusyWait")
     private void eventLoop() {
         int pollTimeout = 1;
         while (this.isRunning()){
             try {
-                this.transactionEventQueue.drain(this.transactionEvents);
+                this.transactionEventQueue.drain(this.transactionEvents, this.options.networkBufferSize());
                 if(this.transactionEvents.isEmpty()){
                     pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep());
                     this.processPendingNetworkTasks();
                     this.processPendingLogging();
-                    sleep(pollTimeout);
+                    this.giveUpCpu(pollTimeout);
                     continue;
                 }
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
@@ -363,9 +372,6 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 //                }
                 this.processPendingNetworkTasks();
                 this.processPendingLogging();
-            } catch (InterruptedException e) {
-                LOGGER.log(ERROR, "Leader: VMS worker for "+this.consumerVms.identifier+" has been interrupted: \n"+e);
-                this.stop();
             } catch (Exception e) {
                 LOGGER.log(ERROR, "Leader: VMS worker for "+this.consumerVms.identifier+" has caught an exception: \n"+e);
             }

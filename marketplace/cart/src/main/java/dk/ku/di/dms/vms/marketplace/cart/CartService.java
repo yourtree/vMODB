@@ -49,7 +49,10 @@ public final class CartService {
         return new ReserveStock(new Date(), checkout, CartUtils.convertCartItems( cartItems ), checkout.instanceId);
     }
 
-    // @PartitionBy(clazz = PriceUpdated.class, method = "getId") // partitioned execution can lead to abortion if conflicts with checkout
+    /**
+     * Partitioned execution can lead to abortion if conflicts with checkout
+     * @ PartitionBy(clazz = PriceUpdated.class, method = "getId")
+      */
     @Inbound(values = {PRICE_UPDATED})
     @Transactional(type=RW)
     public void updateProductPrice(PriceUpdated priceUpdated) {

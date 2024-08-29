@@ -11,7 +11,6 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
 
@@ -94,12 +93,12 @@ public final class CartHttpServerVertx extends AbstractVerticle {
                         int customerId = Integer.parseInt(split[split.length - 2]);
                         String payload = buff.toString(StandardCharsets.UTF_8);
                         dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
-                                SERDES.deserialize(payload,
-                                        dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
+                                SERDES.deserialize(payload, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
                         long tid = CART_VMS.lastTidFinished();
                         try(var _ = CART_VMS.getTransactionManager().beginTransaction(tid, 0, 0, false)){
                             CART_REPO.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
-                            CART_VMS.getTransactionManager().commit();
+                            // prevent conflicting with other threads on installing writes
+                            // CART_VMS.getTransactionManager().commit();
                             exchange.response().setStatusCode(200).end();
                         } catch (Exception e){
                             handleError(exchange, e.getMessage());

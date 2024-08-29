@@ -12,16 +12,19 @@ import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder.VmsTransa
 import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static java.lang.System.Logger.Level.*;
-import static java.lang.Thread.sleep;
 
 /**
  * A transaction scheduler aware of partitioned and parallel tasks.
@@ -60,32 +63,36 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     // transaction metadata mapping
     private final Map<String, VmsTransactionMetadata> transactionMetadataMap;
 
-    private final Collection<InboundEvent> localInputEvents;
-
     // used to identify in which VMS this scheduler is running
     private final String vmsIdentifier;
 
     private final VmsTransactionTaskBuilder vmsTransactionTaskBuilder;
 
+    private final int maxSleep;
+
+    private final int maxToDrain;
+
     public static VmsTransactionScheduler build(String vmsIdentifier,
                                                 IVmsInternalChannels vmsChannels,
                                                 Map<String, VmsTransactionMetadata> transactionMetadataMap,
                                                 ITransactionManager transactionalHandler,
-                                                int vmsThreadPoolSize){
+                                                int vmsThreadPoolSize,
+                                                int maxSleep){
         LOGGER.log(INFO, vmsIdentifier+ ": Building transaction scheduler with thread pool size of "+ vmsThreadPoolSize);
         return new VmsTransactionScheduler(
                 vmsIdentifier,
-                Executors.newWorkStealingPool(vmsThreadPoolSize),
+                vmsThreadPoolSize == 0 ? ForkJoinPool.commonPool() : Executors.newWorkStealingPool(vmsThreadPoolSize),
                 vmsChannels,
                 transactionMetadataMap,
-                transactionalHandler);
+                transactionalHandler,
+                maxSleep);
     }
 
     private VmsTransactionScheduler(String vmsIdentifier,
                                     ExecutorService sharedTaskPool,
                                     IVmsInternalChannels vmsChannels,
                                     Map<String, VmsTransactionMetadata> transactionMetadataMap,
-                                    ITransactionManager transactionalHandler){
+                                    ITransactionManager transactionalHandler, int maxSleep){
         super();
 
         this.vmsIdentifier = vmsIdentifier;
@@ -102,9 +109,10 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         this.vmsTransactionTaskBuilder = new VmsTransactionTaskBuilder(transactionalHandler, callback);
         this.transactionTaskMap.put( 0L, this.vmsTransactionTaskBuilder.buildFinished(0) );
         this.lastTidToTidMap = new HashMap<>(100000);
-        this.localInputEvents = new ArrayList<>(100000);
 
         this.lastTidFinished = new AtomicLong(0);
+        this.maxSleep = maxSleep;
+        this.maxToDrain = Runtime.getRuntime().availableProcessors() * 2;
     }
 
     /**
@@ -158,8 +166,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         @Override
         public void error(ExecutionModeEnum executionMode, long tid, Exception e) {
-            // a simple mechanism to handle error is by reexecuting, depending on the nature of the error
-            // if constraint violation, it cannot be reexecuted
+            // a simple mechanism to handle error is by re-executing, depending on the nature of the error
+            // if constraint violation, it cannot be re-executed
             // in this case, the error must be informed to the event handler, so the event handler
             // can forward the error to downstream VMSs. if input VMS, easier to handle, just send a noop to them
 
@@ -196,20 +204,18 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     }
 
     /**
-     * To avoid the scheduler to remain in a busy loop
-     * while no new input events arrive
+     * To avoid the scheduler to remain in a busy loop while no new input events arrive
      */
-    private boolean BLOCKING = false;
+    private boolean mustWaitForInputEvent = false;
 
     private void executeReadyTasks() {
         Long nextTid = this.lastTidToTidMap.get(this.lastTidFinished.get());
         // if nextTid == null then the scheduler must block until a new event arrive to progress
         if(nextTid == null) {
             // keep scheduler sleeping since next tid is unknown
-            this.BLOCKING = true;
+            this.mustWaitForInputEvent = true;
             return;
         }
-
         VmsTransactionTask task = this.transactionTaskMap.get( nextTid );
         while(true) {
             if(task.isScheduled()){
@@ -243,7 +249,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     if (this.singleThreadTaskRunning.get() || this.numParallelTasksRunning.get() > 0) {
                         return;
                     }
-
                     if(task.partitionId().isEmpty()){
                         // logger.warning(this.vmsIdentifier + ": Task "+task.tid()+" will run as single-threaded even though it is marked as partitioned");
                         if (this.canSingleThreadTaskRun()) {
@@ -252,7 +257,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                             return;
                         }
                     }
-
                     if (!this.partitionKeyTrackingMap.contains(task.partitionId().get())) {
                         this.partitionKeyTrackingMap.add(task.partitionId().get());
                         this.numPartitionedTasksRunning.incrementAndGet();
@@ -264,19 +268,18 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     }
                 }
             }
-
             // bypass the single-thread execution if possible
             if(!this.singleThreadTaskRunning.get() && this.lastTidToTidMap.get( task.tid() ) != null ){
                 task = this.transactionTaskMap.get( this.lastTidToTidMap.get( task.tid() ) );
             }
 
         }
-
     }
 
     private void submitSingleThreadTaskForExecution(VmsTransactionTask task) {
         this.singleThreadTaskRunning.set(true);
         task.signalReady();
+        // can the scheduler itself run it? task.run();
         this.sharedTaskPool.submit(task);
     }
 
@@ -284,38 +287,27 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         return this.numParallelTasksRunning.get() == 0 && numPartitionedTasksRunning.get() == 0;
     }
 
-    private static final int MAX_SLEEP = 500;
-
-    @SuppressWarnings("BusyWait")
-    private void checkForNewEvents() throws InterruptedException {
-        InboundEvent e;
-        if(this.vmsChannels.transactionInputQueue().isEmpty()){
-            if(this.BLOCKING) {
-                int pollTimeout = 1;
-                while((e = this.vmsChannels.transactionInputQueue().poll()) == null) {
-                    pollTimeout = Math.min(pollTimeout * 2, MAX_SLEEP);
-                    LOGGER.log(DEBUG,this.vmsIdentifier+": Transaction scheduler going to sleep for "+pollTimeout+" until new event arrives");
-                    sleep(pollTimeout);
-                }
-                this.localInputEvents.add(e);
-                // disable block
-                this.BLOCKING = false;
-            } else {
-                return;
+    private void checkForNewEvents() {
+        InboundEvent inboundEvent;
+        if(this.mustWaitForInputEvent) {
+            int pollTimeout = Math.min(1, this.maxSleep);
+            while((inboundEvent = this.vmsChannels.transactionInputQueue().poll()) == null) {
+                LOGGER.log(DEBUG,this.vmsIdentifier+": Transaction scheduler going to sleep for "+pollTimeout+" until new event arrives");
+                this.giveUpCpu(pollTimeout);
+                pollTimeout = Math.min(pollTimeout + pollTimeout, this.maxSleep);
             }
+            // disable block
+            this.mustWaitForInputEvent = false;
+        } else {
+            inboundEvent = this.vmsChannels.transactionInputQueue().poll();
+            if(inboundEvent == null) return;
         }
-
         // drain all
-        while((e = this.vmsChannels.transactionInputQueue().poll()) != null) {
-            this.localInputEvents.add(e);
-        }
-
-        for (InboundEvent input : this.localInputEvents) {
-            this.processNewEvent(input);
-        }
-
-        // clear previous round
-        this.localInputEvents.clear();
+        int drained = 0;
+        do {
+            this.processNewEvent(inboundEvent);
+            drained++;
+        } while(drained < this.maxToDrain && (inboundEvent = this.vmsChannels.transactionInputQueue().poll()) != null);
     }
 
     private void processNewEvent(InboundEvent inboundEvent) {
