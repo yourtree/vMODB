@@ -25,3 +25,7 @@ If everything worked, you should see the following output:
 {"seller_id":1, "product_id":1, "qty_available":10, "qty_reserved":0, "order_count":0, "ytd":0, "data":"test", "version":"0"}
 ```
 
+To reset the products, simply issue the following request:
+```
+curl -X PATCH http://localhost:8002/stock/reset
+```

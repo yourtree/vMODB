@@ -44,4 +44,6 @@ public sealed interface OperationalAPI permits TransactionManager {
 
     void insertAll(Table table, List<Object[]> parsedEntities);
 
+    List<Object[]> getAll(Table table);
+
 }

@@ -25,6 +25,7 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIn
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -160,19 +161,35 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     /****** ENTITY *******/
 
+    @Override
+    public List<Object[]> getAll(Table table){
+        List<Object[]> res = new ArrayList<>();
+        Iterator<Object[]> iterator = table.primaryKeyIndex().iterator(TRANSACTION_CONTEXT.get());
+        while(iterator.hasNext()){
+            res.add(iterator.next());
+        }
+        return res;
+    }
+
+    @Override
     public void insertAll(Table table, List<Object[]> objects){
         // get tid, do all the checks, etc
+        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
         for(Object[] entry : objects) {
-            this.insert(table, entry);
+            this.doInsert(txCtx, table, entry);
         }
     }
 
+    @Override
     public void deleteAll(Table table, List<Object[]> objects) {
+        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
         for(Object[] entry : objects) {
-            this.delete(table, entry);
+            IKey pk = KeyUtils.buildRecordKey(table.schema().getPrimaryKeyColumns(), entry);
+            this.deleteByKey(txCtx, table, pk);
         }
     }
 
+    @Override
     public void updateAll(Table table, List<Object[]> objects) {
         TransactionContext txCtx = TRANSACTION_CONTEXT.get();
         for(Object[] entry : objects) {
@@ -183,22 +200,24 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     /**
      * Not yet considering this record can serve as FK to a record in another table.
      */
+    @Override
     public void delete(Table table, Object[] values) {
+        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
         IKey pk = KeyUtils.buildRecordKey(table.schema().getPrimaryKeyColumns(), values);
-        this.deleteByKey(table, pk);
+        this.deleteByKey(txCtx, table, pk);
     }
 
+    @Override
     public void deleteByKey(Table table, Object[] keyValues) {
         IKey pk = KeyUtils.buildIndexKey(keyValues);
-        this.deleteByKey(table, pk);
+        this.deleteByKey(TRANSACTION_CONTEXT.get(), table, pk);
     }
 
     /**
      * @param table The corresponding table
      * @param pk The primary key
      */
-    private void deleteByKey(Table table, IKey pk){
-        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
+    private void deleteByKey(TransactionContext txCtx, Table table, IKey pk){
         var opt = table.primaryKeyIndex().removeOpt(txCtx, pk);
         if(opt.isPresent()){
             txCtx.indexes.add(table.primaryKeyIndex());
@@ -217,11 +236,13 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         }
     }
 
+    @Override
     public boolean exists(PrimaryIndex primaryKeyIndex, Object[] valuesOfKey){
         IKey pk = KeyUtils.buildIndexKey(valuesOfKey);
         return primaryKeyIndex.exists(TRANSACTION_CONTEXT.get(), pk);
     }
 
+    @Override
     public Object[] lookupByKey(PrimaryIndex index, Object[] valuesOfKey){
         IKey pk = KeyUtils.buildIndexKey(valuesOfKey);
         return index.lookupByKey(TRANSACTION_CONTEXT.get(), pk);
@@ -268,6 +289,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         return this.doInsert(TRANSACTION_CONTEXT.get(), table, values);
     }
 
+    @Override
     public void upsert(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), values);
@@ -289,7 +311,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      * Iterate over all indexes, get the corresponding writes of this tid and remove them
      * This method can be called in parallel by transaction facade without any risk
      */
-    public void update(TransactionContext txCtx, Table table, Object[] values){
+    private void update(TransactionContext txCtx, Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), values);
         boolean pkViolationFree = index.update(txCtx, pk, values);

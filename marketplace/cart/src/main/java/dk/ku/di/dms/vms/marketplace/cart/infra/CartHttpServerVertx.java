@@ -65,11 +65,11 @@ public final class CartHttpServerVertx extends AbstractVerticle {
         @Override
         public void handle(HttpServerRequest exchange) {
             String[] uriSplit = exchange.uri().split("/");
+            if (uriSplit.length < 2 || !uriSplit[1].equals("cart")) {
+                handleError(exchange, "Invalid URI");
+                return;
+            }
             exchange.bodyHandler(buff -> {
-                if (!uriSplit[1].equals("cart")) {
-                    handleError(exchange, "Invalid URI");
-                    return;
-                }
                 switch (exchange.method().name()) {
                     case "GET" -> {
                         String[] split = exchange.uri().split("/");

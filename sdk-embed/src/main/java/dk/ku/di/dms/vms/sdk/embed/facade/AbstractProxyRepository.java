@@ -116,6 +116,17 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         return result;
     }
 
+    @Override
+    public final List<T> getAll(){
+        List<Object[]> records = this.operationalAPI.getAll(this.table);
+        List<T> resultList = new ArrayList<>(records.size());
+        for (var record : records){
+            resultList.add(this.parseObjectIntoEntity(record));
+        }
+        return resultList;
+    }
+
+    @Override
     public final boolean exists(PK key){
         Object[] valuesOfKey = this.extractFieldValuesFromKeyObject(key);
         return this.operationalAPI.exists(this.table.primaryKeyIndex(), valuesOfKey);

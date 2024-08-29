@@ -457,21 +457,13 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         @Override
         public void completed(Integer result, Integer startPos) {
-
             if(result == -1){
-                LOGGER.log(INFO,me.identifier+": VMS "+node.identifier+" has disconnected");
-                try{
-                    this.connectionMetadata.channel.close();
-                } catch (IOException e) {
-                    e.printStackTrace(System.out);
-                }
+                LOGGER.log(WARNING,me.identifier+": VMS "+node.identifier+" has disconnected?");
                 return;
             }
-
             if(startPos == 0){
                 this.readBuffer.flip();
             }
-
             byte messageType = readBuffer.get();
             switch (messageType) {
                 //noinspection DuplicatedCode
@@ -493,7 +485,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                 }
                 default -> LOGGER.log(ERROR,me.identifier+": Unknown message type "+messageType+" received from: "+node.identifier);
             }
-
             if(readBuffer.hasRemaining()){
                 this.completed(result, this.readBuffer.position());
             } else {
@@ -543,7 +534,6 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         private void processBatchOfEvents(ByteBuffer readBuffer) {
             List<InboundEvent> inboundEvents = LIST_BUFFER.poll();
-            // TODO reuse list to avoid creating for every batch
             if(inboundEvents == null) inboundEvents = new ArrayList<>(1024);
             try {
                 int count = readBuffer.getInt();

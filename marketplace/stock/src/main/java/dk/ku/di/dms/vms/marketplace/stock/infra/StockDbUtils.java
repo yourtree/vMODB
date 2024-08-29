@@ -15,11 +15,16 @@ public final class StockDbUtils {
     /**
      * Bypass the transaction manager safely on data ingestion
      */
-    public static void addStockItem(String str, AbstractProxyRepository<StockItem.StockId, StockItem> repository, Table table){
-        StockItem stock = SERDES.deserialize(str, StockItem.class);
-        Object[] obj = repository.extractFieldValuesFromEntityObject(stock);
+    public static void addStockItem(String payload, AbstractProxyRepository<StockItem.StockId, StockItem> repository, Table table){
+        StockItem stockItem = deserializeStockItem(payload);
+        Object[] obj = repository.extractFieldValuesFromEntityObject(stockItem);
         IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), obj );
         table.underlyingPrimaryKeyIndex().insert(key, obj);
     }
+
+    public static StockItem deserializeStockItem(String payload) {
+        return SERDES.deserialize(payload, StockItem.class);
+    }
+
 
 }

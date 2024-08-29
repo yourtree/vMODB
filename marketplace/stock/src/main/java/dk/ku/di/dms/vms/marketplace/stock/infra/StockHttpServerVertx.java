@@ -62,8 +62,8 @@ public final class StockHttpServerVertx extends AbstractVerticle {
         @Override
         public void handle(HttpServerRequest exchange) {
             final String[] uriSplit = exchange.uri().split("/");
-            if (uriSplit.length == 0 || !uriSplit[1].equals("stock")) {
-                handleError(exchange, "Invalid URI");
+            if (uriSplit.length < 2 || !uriSplit[1].equals("stock")) {
+                handleError(exchange, "Invalid URI: "+exchange.uri());
                 return;
             }
             exchange.bodyHandler(buff -> {
@@ -85,11 +85,31 @@ public final class StockHttpServerVertx extends AbstractVerticle {
                             handleError(exchange, e.getMessage());
                         }
                     }
+                    case "PATCH" -> {
+                        try(var _ = STOCK_VMS.getTransactionManager().beginTransaction(0, 0, 0,false)){
+                            var stockItems = STOCK_REPO.getAll();
+                            for(StockItem item : stockItems){
+                                item.qty_available = 10000;
+                                item.version = "0";
+                                item.qty_reserved = 0;
+                                STOCK_REPO.upsert(item);
+                            }
+                            exchange.response().setStatusCode(200).end();
+                        } catch (Exception e) {
+                            handleError(exchange, e.getMessage());
+                        }
+                    }
                     case "POST" -> {
                         try {
                             String payload = buff.toString(StandardCharsets.UTF_8);
-                            StockDbUtils.addStockItem(payload, STOCK_REPO, STOCK_VMS.getTable("stock_items"));
-                            exchange.response().setStatusCode(200).end();
+                            // StockDbUtils.addStockItem(payload, STOCK_REPO, STOCK_VMS.getTable("stock_items"));
+                            StockItem stockItem = StockDbUtils.deserializeStockItem(payload);
+                            try(var _ = STOCK_VMS.getTransactionManager().beginTransaction(0, 0, 0, false)) {
+                                STOCK_REPO.upsert(stockItem);
+                                exchange.response().setStatusCode(200).end();
+                            } catch (Exception e){
+                                handleError(exchange, e.getMessage());
+                            }
                         } catch (Exception e) {
                             handleError(exchange, e.getMessage());
                         }

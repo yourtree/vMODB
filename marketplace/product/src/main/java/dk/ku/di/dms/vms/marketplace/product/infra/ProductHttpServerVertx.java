@@ -62,8 +62,8 @@ public final class ProductHttpServerVertx extends AbstractVerticle {
         @Override
         public void handle(HttpServerRequest exchange) {
             final String[] uriSplit = exchange.uri().split("/");
-            if (uriSplit.length == 0 || !uriSplit[1].equals("product")) {
-                handleError(exchange, "Invalid URI");
+            if (uriSplit.length < 2 || !uriSplit[1].equals("product")) {
+                handleError(exchange, "Invalid URI: "+exchange.uri());
                 return;
             }
             exchange.bodyHandler(buff -> {
@@ -85,11 +85,29 @@ public final class ProductHttpServerVertx extends AbstractVerticle {
                             handleError(exchange, e.getMessage());
                         }
                     }
+                    case "PATCH" -> {
+                        try(var _ = PRODUCT_VMS.getTransactionManager().beginTransaction(0, 0, 0,false)){
+                            var products = PRODUCT_REPO.getAll();
+                            for(Product product : products){
+                                product.version = "0";
+                                PRODUCT_REPO.upsert(product);
+                            }
+                            exchange.response().setStatusCode(200).end();
+                        } catch (Exception e) {
+                            handleError(exchange, e.getMessage());
+                        }
+                    }
                     case "POST" -> {
                         try {
                             String payload = buff.toString(StandardCharsets.UTF_8);
-                            ProductDbUtils.addProduct(payload, PRODUCT_REPO, PRODUCT_VMS.getTable("products"));
-                            exchange.response().setStatusCode(200).end();
+                            // ProductDbUtils.addProduct(payload, PRODUCT_REPO, PRODUCT_VMS.getTable("products"));
+                            Product product = ProductDbUtils.deserializeProduct(payload);
+                            try(var _ = PRODUCT_VMS.getTransactionManager().beginTransaction(0, 0, 0, false)) {
+                                PRODUCT_REPO.upsert(product);
+                                exchange.response().setStatusCode(200).end();
+                            } catch (Exception e){
+                                handleError(exchange, e.getMessage());
+                            }
                         } catch (Exception e) {
                             handleError(exchange, e.getMessage());
                         }

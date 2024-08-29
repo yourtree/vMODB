@@ -522,7 +522,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         @Override
         public void completed(Integer result, Integer startPos) {
             if(result == -1){
-                LOGGER.log(INFO, "Leader: " + consumerVms.identifier+" has disconnected");
+                LOGGER.log(WARNING, "Leader: " + consumerVms.identifier+" has disconnected?");
                 return;
             }
             if(startPos == 0){

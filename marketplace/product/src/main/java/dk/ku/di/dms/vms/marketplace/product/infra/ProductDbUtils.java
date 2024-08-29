@@ -26,4 +26,7 @@ public final class ProductDbUtils {
         table.underlyingPrimaryKeyIndex().insert(key, obj);
     }
 
+    public static Product deserializeProduct(String payload) {
+        return SERDES.deserialize(payload, Product.class);
+    }
 }
