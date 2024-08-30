@@ -241,10 +241,10 @@ public final class Coordinator extends StoppableRunnable {
         LOGGER.log(INFO,"Leader: Finished execution.");
     }
 
-    private Map<String, TransactionWorker.PrecendenceInfo> buildStarterPrecedenceMap() {
-        Map<String, TransactionWorker.PrecendenceInfo> precedenceMap = new HashMap<>();
+    private Map<String, TransactionWorker.PrecedenceInfo> buildStarterPrecedenceMap() {
+        Map<String, TransactionWorker.PrecedenceInfo> precedenceMap = new HashMap<>();
         for(var vms : this.vmsMetadataMap.entrySet()){
-            precedenceMap.put(vms.getKey(), new TransactionWorker.PrecendenceInfo(0, 0, 0));
+            precedenceMap.put(vms.getKey(), new TransactionWorker.PrecedenceInfo(0, 0, 0));
         }
         return precedenceMap;
     }
@@ -254,9 +254,9 @@ public final class Coordinator extends StoppableRunnable {
         int idx = 1;
         long initTid = 1;
 
-        var firstPrecedenceInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        var firstPrecedenceInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
         var precedenceMapInputQueue = firstPrecedenceInputQueue;
-        ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>> precedenceMapOutputQueue;
+        ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>> precedenceMapOutputQueue;
 
         var starterPrecedenceMap = buildStarterPrecedenceMap();
         firstPrecedenceInputQueue.add(starterPrecedenceMap);

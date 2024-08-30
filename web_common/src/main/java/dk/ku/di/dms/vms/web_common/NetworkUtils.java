@@ -15,7 +15,7 @@ public final class NetworkUtils {
     private static final System.Logger LOGGER = System.getLogger(NetworkUtils.class.getName());
 
     public static void configure(AsynchronousSocketChannel channel, int osBufferSize) throws IOException {
-        channel.setOption(TCP_NODELAY, false);
+        channel.setOption(TCP_NODELAY, true);
         channel.setOption(SO_KEEPALIVE, true);
         if (channel.supportedOptions().contains(ExtendedSocketOptions.TCP_QUICKACK)) {
             channel.setOption(ExtendedSocketOptions.TCP_QUICKACK, false);

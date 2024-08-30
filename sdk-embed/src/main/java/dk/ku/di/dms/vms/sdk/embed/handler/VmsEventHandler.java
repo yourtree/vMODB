@@ -458,7 +458,11 @@ public final class VmsEventHandler extends StoppableRunnable {
         @Override
         public void completed(Integer result, Integer startPos) {
             if(result == -1){
-                LOGGER.log(WARNING,me.identifier+": VMS "+node.identifier+" has disconnected?");
+                // end-of-stream signal, no more data can be read
+                LOGGER.log(WARNING,me.identifier+": VMS "+node.identifier+" has disconnected!");
+                try {
+                    this.connectionMetadata.channel.close();
+                } catch (IOException ignored) { }
                 return;
             }
             if(startPos == 0){
@@ -864,18 +868,16 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         @Override
         public void completed(Integer result, Integer startPos) {
-
             if(result == -1){
                 LOGGER.log(INFO,me.identifier+": Leader has disconnected");
                 leader.off();
-                try{
+                try {
                     this.connectionMetadata.channel.close();
                 } catch (IOException e) {
                     e.printStackTrace(System.out);
                 }
                 return;
             }
-
             if(startPos == 0){
                 // sets the position to 0 and sets the limit to the current position
                 this.readBuffer.flip();

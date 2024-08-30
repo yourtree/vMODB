@@ -522,7 +522,8 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         @Override
         public void completed(Integer result, Integer startPos) {
             if(result == -1){
-                LOGGER.log(WARNING, "Leader: " + consumerVms.identifier+" has disconnected?");
+                LOGGER.log(WARNING, "Leader: " + consumerVms.identifier+" has disconnected!");
+                channel.close();
                 return;
             }
             if(startPos == 0){
@@ -587,9 +588,13 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             if(readBuffer.hasRemaining()){
                 this.completed(result, readBuffer.position());
             } else {
-                readBuffer.clear();
-                channel.read( readBuffer, 0, this );
+                this.setUpNewRead();
             }
+        }
+
+        private void setUpNewRead() {
+            readBuffer.clear();
+            channel.read(readBuffer, 0, this);
         }
 
         @Override
@@ -604,8 +609,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                     LOGGER.log(WARNING,"Read has failed and channel is closed: " + consumerVms);
                 }
             }
-            readBuffer.clear();
-            channel.read(readBuffer, 0, this);
+            this.setUpNewRead();
         }
 
         private void processVmsIdentifier() {

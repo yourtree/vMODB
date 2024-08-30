@@ -185,12 +185,12 @@ public final class Main {
         int idx = 1;
         long initTid = 1;
 
-        var firstPrecedenceInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        var firstPrecedenceInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
         var precedenceMapInputQueue = firstPrecedenceInputQueue;
-        ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>> precedenceMapOutputQueue;
+        ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>> precedenceMapOutputQueue;
 
-        Map<String, TransactionWorker.PrecendenceInfo> precedenceMap = new HashMap<>();
-        precedenceMap.put("product", new TransactionWorker.PrecendenceInfo(0, 0, 0));
+        Map<String, TransactionWorker.PrecedenceInfo> precedenceMap = new HashMap<>();
+        precedenceMap.put("product", new TransactionWorker.PrecedenceInfo(0, 0, 0));
         precedenceMapInputQueue.add(precedenceMap);
 
         var serdesProxy = VmsSerdesProxyBuilder.build();

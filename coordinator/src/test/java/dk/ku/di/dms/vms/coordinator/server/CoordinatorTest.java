@@ -50,6 +50,7 @@ public final class CoordinatorTest {
         }
     }
 
+    @SuppressWarnings("BusyWait")
     @Test
     public void testComplexWorkflow() throws InterruptedException {
         HashMap<String, VmsNode> vmsMetadataMap = new HashMap<>();
@@ -86,13 +87,13 @@ public final class CoordinatorTest {
         var vmsNodePerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
 
         var txInputQueue = new ConcurrentLinkedDeque<TransactionInput>();
-        var precedenceMapInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
-        var precedenceMapOutputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        var precedenceMapInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
+        var precedenceMapOutputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
 
-        Map<String, TransactionWorker.PrecendenceInfo> precedenceMap = new HashMap<>();
-        precedenceMap.put("product", new TransactionWorker.PrecendenceInfo(0, 0, 0));
-        precedenceMap.put("cart", new TransactionWorker.PrecendenceInfo(0, 0, 0));
-        precedenceMap.put("stock", new TransactionWorker.PrecendenceInfo(0, 0, 0));
+        Map<String, TransactionWorker.PrecedenceInfo> precedenceMap = new HashMap<>();
+        precedenceMap.put("product", new TransactionWorker.PrecedenceInfo(0, 0, 0));
+        precedenceMap.put("cart", new TransactionWorker.PrecedenceInfo(0, 0, 0));
+        precedenceMap.put("stock", new TransactionWorker.PrecedenceInfo(0, 0, 0));
         precedenceMapInputQueue.add(precedenceMap);
 
         var txWorker = TransactionWorker.build(1, txInputQueue, 1, MAX_NUM_TID_BATCH, 1000,
@@ -117,7 +118,7 @@ public final class CoordinatorTest {
         var input4 = new TransactionInput("customer_checkout", new TransactionInput.Event("customer_checkout", ""));
         txInputQueue.add(input4);
 
-        Map<String, TransactionWorker.PrecendenceInfo> precedenceInfo;
+        Map<String, TransactionWorker.PrecedenceInfo> precedenceInfo;
         while((precedenceInfo = precedenceMapOutputQueue.poll()) == null){
             // do nothing
             sleep(10);
@@ -200,12 +201,12 @@ public final class CoordinatorTest {
         var vmsNodePerDAG = buildTestVmsPerDagMap(transactionMap, vmsMetadataMap);
 
         var txInputQueue = new ConcurrentLinkedDeque<TransactionInput>();
-        var precedenceMapInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
-        var precedenceMapOutputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
-        Map<String, TransactionWorker.PrecendenceInfo> precedenceMap = new HashMap<>();
-        precedenceMap.put("product", new TransactionWorker.PrecendenceInfo(10, 1, 0));
-        precedenceMap.put("cart", new TransactionWorker.PrecendenceInfo(10, 1, 0));
-        precedenceMap.put("stock", new TransactionWorker.PrecendenceInfo(1, 1, 0));
+        var precedenceMapInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
+        var precedenceMapOutputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
+        Map<String, TransactionWorker.PrecedenceInfo> precedenceMap = new HashMap<>();
+        precedenceMap.put("product", new TransactionWorker.PrecedenceInfo(10, 1, 0));
+        precedenceMap.put("cart", new TransactionWorker.PrecedenceInfo(10, 1, 0));
+        precedenceMap.put("stock", new TransactionWorker.PrecedenceInfo(1, 1, 0));
         precedenceMapInputQueue.add(precedenceMap);
 
         var txWorker = TransactionWorker.build(1, txInputQueue, 11, MAX_NUM_TID_BATCH, 1000,
@@ -223,7 +224,7 @@ public final class CoordinatorTest {
         txWorkerThread.start();
 
         // check if the last tid was generated correctly
-        Map<String, TransactionWorker.PrecendenceInfo> precedenceInfo;
+        Map<String, TransactionWorker.PrecedenceInfo> precedenceInfo;
         while((precedenceInfo = precedenceMapOutputQueue.poll()) == null){
             // do nothing
             sleep(10);
@@ -265,9 +266,9 @@ public final class CoordinatorTest {
         int idx = 1;
         long initTid = 1;
 
-        var firstPrecedenceInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        var firstPrecedenceInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
         var precedenceMapInputQueue = firstPrecedenceInputQueue;
-        ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>> precedenceMapOutputQueue;
+        ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>> precedenceMapOutputQueue;
         buildAndQueueStarterPrecedenceMap(precedenceMapInputQueue);
         var serdesProxy = VmsSerdesProxyBuilder.build();
         List<Tuple<TransactionWorker,Thread>> txWorkers = new ArrayList<>();
@@ -330,10 +331,10 @@ public final class CoordinatorTest {
         Map<String, IVmsWorker> workers = buildTestVmsWorker();
 
         var txInputQueue1 = new ConcurrentLinkedDeque<TransactionInput>();
-        var precedenceMapQueue1 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        var precedenceMapQueue1 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
 
         var txInputQueue2 = new ConcurrentLinkedDeque<TransactionInput>();
-        var precedenceMapQueue2 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        var precedenceMapQueue2 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
 
         Queue<Object> coordinatorQueue = new ConcurrentLinkedDeque<>();
 
@@ -389,10 +390,10 @@ public final class CoordinatorTest {
         Map<String, IVmsWorker> workers = buildTestVmsWorker();
 
         var txInputQueue1 = new ConcurrentLinkedDeque<TransactionInput>();
-        var precedenceMapQueue1 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        var precedenceMapQueue1 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
 
         var txInputQueue2 = new ConcurrentLinkedDeque<TransactionInput>();
-        var precedenceMapQueue2 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        var precedenceMapQueue2 = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
 
         Queue<Object> coordinatorQueue = new ConcurrentLinkedDeque<>();
 
@@ -439,9 +440,9 @@ public final class CoordinatorTest {
         Assert.assertTrue(txWorker1Tid == 10 && txWorker2Tid == 20);
     }
 
-    private static void buildAndQueueStarterPrecedenceMap(ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>> precedenceMapQueue1) {
-        Map<String, TransactionWorker.PrecendenceInfo> precedenceMap = new HashMap<>();
-        precedenceMap.put("product", new TransactionWorker.PrecendenceInfo(0, 0, 0));
+    private static void buildAndQueueStarterPrecedenceMap(ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>> precedenceMapQueue1) {
+        Map<String, TransactionWorker.PrecedenceInfo> precedenceMap = new HashMap<>();
+        precedenceMap.put("product", new TransactionWorker.PrecedenceInfo(0, 0, 0));
         precedenceMapQueue1.add(precedenceMap);
     }
 
@@ -453,7 +454,7 @@ public final class CoordinatorTest {
         Map<String, IVmsWorker> workers = buildTestVmsWorker();
 
         var txInputQueue = new ConcurrentLinkedDeque<TransactionInput>();
-        var precedenceMapQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecendenceInfo>>();
+        var precedenceMapQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
         Queue<Object> coordinatorQueue = new ConcurrentLinkedDeque<>();
         var txWorker = TransactionWorker.build(1, txInputQueue, 1, MAX_NUM_TID_BATCH, 1000,
                 1, precedenceMapQueue, precedenceMapQueue, transactionMap, vmsNodesPerDAG, workers,
