@@ -671,7 +671,7 @@ public final class Coordinator extends StoppableRunnable {
             this.numTIDsCompleted.updateAndGet(i -> i + batchContext.numTIDsOverall);
             this.sendCommitCommandToVMSs(batchContext);
             this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
-            // making this implement order-independent, so not assuming batch commit are received in order,
+            // making this implementation order-independent, so not assuming batch commit are received in order,
             BatchContext nextBatchContext = this.batchContextMap.get( this.batchOffsetPendingCommit );
             if(nextBatchContext != null && nextBatchContext.missingVotes.isEmpty()){
                 this.updateBatchOffsetPendingCommit(nextBatchContext);

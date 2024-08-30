@@ -21,12 +21,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.ForkJoinPool;
 
+import java.lang.System.Logger;
 import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.INFO;
 
 public final class Main {
 
-    private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
+    private static final Logger LOGGER = System.getLogger(Main.class.getName());
 
     public static void main(String[] ignoredArgs) throws Exception {
         Properties properties = ConfigUtils.loadProperties();

@@ -427,8 +427,14 @@ public final class VmsEventHandler extends StoppableRunnable {
                 this.eventToConsumersMap.get(outputEvent).add(consumerVmsWorker);
             }
         } else {
-            MultiVmsContainer multiVmsContainer = (MultiVmsContainer) this.consumerVmsContainerMap.get(node);
-            multiVmsContainer.addConsumerVms(consumerVmsWorker);
+            IVmsContainer vmsContainer = this.consumerVmsContainerMap.get(node);
+            if(vmsContainer instanceof MultiVmsContainer multiVmsContainer){
+                multiVmsContainer.addConsumerVms(consumerVmsWorker);
+            } else {
+                // stop previous, replace by the new one
+                ((ConsumerVmsWorker)vmsContainer).stop();
+                this.consumerVmsContainerMap.put(node, consumerVmsWorker);
+            }
         }
 
         // set up read from consumer vms? we read nothing from consumer vms. maybe in the future can negotiate amount of data to avoid performance problems
