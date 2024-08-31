@@ -30,6 +30,8 @@ import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static java.lang.System.Logger.Level.*;
@@ -340,19 +342,21 @@ public final class VmsEventHandler extends StoppableRunnable {
                 // must be queued in case leader is off and comes back online
                 this.leaderWorker.queueMessage(BatchComplete.of(this.currentBatch.batch, this.me.identifier));
             }
+            // clear map --> WARN: lead to bug!
+            // this.volatileBatchMetadataMap.remove(this.currentBatch.batch);
             // this is necessary to move the batch to committed and allow the batches to progress
-            this.checkpoint();
+            // ForkJoinPool.commonPool().execute(()-> checkpoint(this.volatileBatchMetadataMap.get(this.currentBatch.batch).maxTidExecuted));
         }
     }
 
     private static final boolean INFORM_BATCH_ACK = false;
 
-    private void checkpoint() {
+    private void checkpoint(long maxTid) {
         this.currentBatch.setStatus(BatchContext.CHECKPOINTING);
         // of course, I do not need to stop the scheduler on commit
         // I need to make access to the data versions data race free
         // so new transactions get data versions from the version map or the store
-        this.transactionManager.checkpoint(this.volatileBatchMetadataMap.get(this.currentBatch.batch).maxTidExecuted);
+        this.transactionManager.checkpoint(maxTid);
         this.currentBatch.setStatus(BatchContext.BATCH_COMMITTED);
         // it may not be necessary. the leader has already moved on at this point
         if(INFORM_BATCH_ACK) {
@@ -409,9 +413,9 @@ public final class VmsEventHandler extends StoppableRunnable {
                         this.loggingHandler,
                         this.serdesProxy
                         );
-        Thread thread = Thread.ofPlatform().factory().newThread(consumerVmsWorker);
-        thread.setName("vms-consumer-"+node.identifier+"-"+identifier);
-        thread.start();
+        Thread.ofPlatform().name("vms-consumer-"+node.identifier+"-"+identifier)
+                .inheritInheritableThreadLocals(false)
+                .start(consumerVmsWorker);
 
         if(!this.consumerVmsContainerMap.containsKey(node)){
             if(this.options.numVmsWorkers == 1) {
@@ -774,7 +778,6 @@ public final class VmsEventHandler extends StoppableRunnable {
             public void completed(Integer result, Void attachment) {
                 state = State.PRESENTATION_SENT;
                 LOGGER.log(INFO,me.identifier+": Message sent to Leader successfully = "+state);
-
                 // set up leader worker
                 leaderWorker = new LeaderWorker(me, leader,
                         leaderConnectionMetadata.channel,
@@ -810,7 +813,6 @@ public final class VmsEventHandler extends StoppableRunnable {
             }
 
             // only connects to all VMSs on first leader connection
-
             if(leaderConnectionMetadata != null) {
                 // considering the leader has replicated the metadata before failing
                 // so no need to send metadata again. but it may be necessary...
@@ -825,7 +827,6 @@ public final class VmsEventHandler extends StoppableRunnable {
             );
             leader.on();
             this.buffer.clear();
-
             if(includeMetadata) {
                 String vmsDataSchemaStr = serdesProxy.serializeDataSchema(me.dataSchema);
                 String vmsInputEventSchemaStr = serdesProxy.serializeEventSchema(me.inputEventSchema);

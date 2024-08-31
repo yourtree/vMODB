@@ -119,7 +119,7 @@ public final class Main {
                         // register a transaction with the last tid finished
                         // this allows to get the freshest view, bypassing the scheduler
                         long lastTid = this.vms.lastTidFinished();
-                        try(var _ = this.vms.getTransactionManager().beginTransaction(lastTid, 0, lastTid, true)) {
+                        try(var txCtx = this.vms.getTransactionManager().beginTransaction(lastTid, 0, lastTid, true)) {
                             SellerDashboard view = this.sellerService.queryDashboard(sellerId);
                             // parse and return result
                             OutputStream outputStream = exchange.getResponseBody();

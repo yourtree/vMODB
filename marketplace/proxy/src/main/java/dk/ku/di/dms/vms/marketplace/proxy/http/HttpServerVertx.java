@@ -106,18 +106,9 @@ public final class HttpServerVertx extends AbstractVerticle {
         public void handle(HttpServerRequest exchange) {
             String[] uriSplit = exchange.uri().split("/");
             if (uriSplit[1].equals("status")) {
-                // assumed to be a get request
-                // assert exchange.getRequestMethod().equals("GET");
-                byte[] b = this.getLastTidBytes();
-
-                Buffer buf = this.retrieveBuffer();
-                buf.setBytes(0, b);
-
-                exchange.response().setStatusCode(200);
-                exchange.response().end(buf).onComplete(ignored -> BUFFER_POOL.add(buf));
+                this.handleStatusRequest(exchange, uriSplit);
                 return;
             }
-
             exchange.bodyHandler(buff -> {
                 String payload = buff.toString(StandardCharsets.UTF_8);
                 switch (uriSplit[1]) {
@@ -157,6 +148,26 @@ public final class HttpServerVertx extends AbstractVerticle {
                 }
                 exchange.response().setStatusCode(200).end();
             });
+        }
+
+        private void handleStatusRequest(HttpServerRequest exchange, String[] uriSplit) {
+            if(uriSplit[2].equals("committed")) {
+                // assumed to be a get request
+                // assert exchange.getRequestMethod().equals("GET");
+                byte[] b = this.getLastTidCommittedBytes();
+                Buffer buf = this.retrieveBuffer();
+                buf.setBytes(0, b);
+                exchange.response().setStatusCode(200);
+                exchange.response().end(buf).onComplete(ignored -> BUFFER_POOL.add(buf));
+            } else if(uriSplit[2].equals("submitted")) {
+                byte[] b = this.getLastTidSubmittedBytes();
+                Buffer buf = this.retrieveBuffer();
+                buf.setBytes(0, b);
+                exchange.response().setStatusCode(200);
+                exchange.response().end(buf).onComplete(ignored -> BUFFER_POOL.add(buf));
+            } else {
+                exchange.response().setStatusCode(500);
+            }
         }
 
         private Buffer retrieveBuffer() {

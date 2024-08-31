@@ -153,8 +153,6 @@ public final class VmsApplication {
 //                        vmsMetadata.queueToVmsTransactionMap(),
 //                        eventHandler.schedulerHandler());
 
-        // could be higher. must adjust according to the number of cores available
-        // why minus 2? to account for the event handler and the scheduler
         StoppableRunnable transactionScheduler = VmsTransactionScheduler.build(
                 vmsName,
                 vmsInternalPubSubService,
@@ -170,12 +168,12 @@ public final class VmsApplication {
      * Setting high priority can increase the garbage size, leading to larger garbage collection times
      */
     public void start(){
-        Thread eventHandlerThread = new Thread(this.eventHandler);
-        eventHandlerThread.setName("vms-event-handler-"+this.name);
-        eventHandlerThread.start();
-        Thread transactionSchedulerThread = new Thread(this.transactionScheduler);
-        eventHandlerThread.setName("vms-transaction-scheduler-"+this.name);
-        transactionSchedulerThread.start();
+        Thread.ofPlatform().name("vms-event-handler-"+this.name)
+                .inheritInheritableThreadLocals(false)
+                .start(this.eventHandler);
+        Thread.ofPlatform().name("vms-transaction-scheduler-"+this.name)
+                .inheritInheritableThreadLocals(false)
+                .start(this.transactionScheduler);
     }
 
     public void stop(){

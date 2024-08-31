@@ -90,7 +90,7 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
     public boolean remove(TransactionContext txCtx, IKey key, Object[] record){
         // IKey secKey = KeyUtils.buildRecordKey( this.underlyingIndex.columns(), record );
-        var txWriteSet = this.writeSet.computeIfAbsent(txCtx.tid, _ ->
+        var txWriteSet = this.writeSet.computeIfAbsent(txCtx.tid, k ->
                 Objects.requireNonNullElseGet(WRITE_SET_BUFFER.poll(), HashMap::new));
         txWriteSet.put(key, new Tuple<>(record, WriteType.DELETE));
         return true;
@@ -99,6 +99,12 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     @Override
     public Object[] lookupByKey(TransactionContext txCtx, IKey key) {
         throw new RuntimeException("Not supported");
+    }
+
+    @Override
+    public void reset(){
+        this.writeSet.clear();
+        this.keyMap.clear();
     }
 
     @Override

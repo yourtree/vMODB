@@ -36,10 +36,6 @@ public final class Main {
         Properties properties = ConfigUtils.loadProperties();
         VmsApplication vms = initVmsApplication(properties);
         initHttpServer(properties, vms);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            vms.stop();
-            LOGGER.log(INFO, "Cart terminating ...");
-        }));
     }
 
     private static VmsApplication initVmsApplication(Properties properties) throws Exception {
@@ -137,7 +133,7 @@ public final class Main {
                         this.processAddCartItem(customerId, cartItemAPI);
                         // response
                         OutputStream outputStream = exchange.getResponseBody();
-                        exchange.sendResponseHeaders(200, 0);
+                        exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, 0);
                         outputStream.close();
                     } catch(Exception e){
                         returnFailed(exchange);

@@ -21,6 +21,18 @@ curl -X GET http://localhost:8000/cart/1/1/1
 
 If everything worked, you should see the following output:
 ```
-{"customer_id":"1", "seller_id":"1", "product_id":"1", "product_name":"test", "unit_price":"10.0", "freight_value":"0.0", "quantity":"3", "voucher":"0.0", "version":"0"}
+[{"customer_id":"1", "seller_id":"1", "product_id":"1", "product_name":"test", "unit_price":"10.0", "freight_value":"0.0", "quantity":"3", "voucher":"0.0", "version":"0"}]
+```
+
+## Monitoring
+
+To expose metrics for VisualVM, run with the following JVM options:
+```
+java -Dcom.sun.management.jmxremote-Dcom.sun.management.jmxremote.port=8009 -Dcom.sun.management.jmxremote.rmi.port=8009-Dcom.sun.management.jmxremote.ssl=false-Dcom.sun.management.jmxremote.authenticate=false-Djava.rmi.server.hostname=dseval7.example.com --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar target/cart-1.0-SNAPSHOT-jar-with-dependencies.jar
+```
+
+## Resetting State
+```
+curl -X PATCH http://localhost:8000/cart/reset
 ```
 

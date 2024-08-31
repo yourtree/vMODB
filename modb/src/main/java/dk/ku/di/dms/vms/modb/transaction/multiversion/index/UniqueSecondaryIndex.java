@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
-import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIFO;
+import dk.ku.di.dms.vms.modb.transaction.internal.Entry;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
@@ -118,8 +118,7 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
                     return null;
                 key = entryCurr.getKey();
             }
-            SingleWriterMultipleReadersFIFO.Entry<Long, TransactionWrite> entry =
-                    this.primaryIndex.getFloorEntry(this.txCtx, key);
+            Entry<Long, TransactionWrite> entry = this.primaryIndex.getFloorEntry(this.txCtx, key);
             if (entry != null)
                 return entry.val().record;
             return null;
@@ -130,6 +129,11 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
     @Override
     public Iterator<Object[]> iterator(TransactionContext txCtx, IKey... keys) {
         return new KeyMultiVersionIterator(txCtx, keys);
+    }
+
+    @Override
+    public void reset() {
+        this.keyMap.clear();
     }
 
     private class KeyMultiVersionIterator implements Iterator<Object[]> {
@@ -159,7 +163,7 @@ public final class UniqueSecondaryIndex implements IMultiVersionIndex {
 
         @Override
         public Object[] next() {
-            var obj = primaryIndex.getFloorEntry(txCtx, keys[idx]);
+            Entry<Long, TransactionWrite> obj = primaryIndex.getFloorEntry(txCtx, keys[idx]);
             return obj.val().record;
         }
 

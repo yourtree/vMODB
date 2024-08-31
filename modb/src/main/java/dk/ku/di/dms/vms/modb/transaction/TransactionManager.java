@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static java.lang.System.Logger.Level.INFO;
+
 /**
  * A transaction management facade
  * Responsibilities:
@@ -43,6 +45,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class TransactionManager implements OperationalAPI, ITransactionManager {
 
+    private static final System.Logger LOGGER = System.getLogger(TransactionManager.class.getName());
+
     private static final ThreadLocal<TransactionContext> TRANSACTION_CONTEXT = new ThreadLocal<>();
 
     private final Analyzer analyzer;
@@ -55,17 +59,14 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      */
     private final Map<String, AbstractSimpleOperator> queryPlanCacheMap;
 
-    private final List<PrimaryIndex> primaryIndexes;
+    private final Map<String, Table> catalog;
 
     private final boolean checkpointing;
 
     public TransactionManager(Map<String, Table> catalog, boolean checkpointing){
         this.planner = new SimplePlanner();
         this.analyzer = new Analyzer(catalog);
-        this.primaryIndexes = new ArrayList<>();
-        for(var table : catalog.values()){
-            this.primaryIndexes.add(table.primaryKeyIndex());
-        }
+        this.catalog = catalog;
         this.queryPlanCacheMap = new ConcurrentHashMap<>();
         this.checkpointing = checkpointing;
     }
@@ -404,13 +405,15 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      */
     @Override
     public void checkpoint(long maxTid){
+        LOGGER.log(INFO, "Checkpoint called for max TID "+maxTid);
         if(this.checkpointing) {
-            for (var index : this.primaryIndexes) {
-                index.checkpoint(maxTid);
+            for (Table table : this.catalog.values()) {
+                table.primaryKeyIndex().checkpoint(maxTid);
             }
         } else {
-            for (var index : this.primaryIndexes) {
-                index.garbageCollection(maxTid);
+            LOGGER.log(INFO, "Checkpoint disabled. Starting only garbage collection for max TID "+maxTid);
+            for (Table table : this.catalog.values()) {
+                table.primaryKeyIndex().garbageCollection(maxTid);
             }
         }
     }
@@ -433,6 +436,21 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         TransactionContext txCtx = new TransactionContext(tid, lastTid, readOnly);
         TRANSACTION_CONTEXT.set(txCtx);
         return txCtx;
+    }
+
+    @Override
+    public void reset() {
+        LOGGER.log(INFO, "Reset triggered.");
+        for (Table table : this.catalog.values()) {
+            table.primaryKeyIndex().reset();
+            for(var secIdx : table.secondaryIndexMap.values()){
+                secIdx.reset();
+            }
+        }
+        LOGGER.log(INFO, "Reset finished.");
+        LOGGER.log(INFO, "GC triggered.");
+        System.gc();
+        LOGGER.log(INFO, "GC finished.");
     }
 
 }

@@ -1,6 +1,7 @@
-package dk.ku.di.dms.vms.modb.transaction.multiversion;
+package dk.ku.di.dms.vms.modb.transaction.internal;
 
-import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIFO;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 
 /**
  * The set of operations applied to a given index key
@@ -8,15 +9,7 @@ import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIF
  * Since we have the last write type and the cached entity,
  * they naturally reference the insert (or last updated)...
  */
-public final class OperationSetOfKey {
-
-    /**
-     * Maybe the entry of this map can be a thread local variable?
-     * To save the log(n) on the subsequent operations...
-     * Contains the write (insert, delete, update) operations of records.
-     * If delete operation, no new records can be added to the key.
-     */
-    public final SingleWriterMultipleReadersFIFO<Long, TransactionWrite> updateHistoryMap;
+public final class OperationSetOfKey extends OneWriterMultiReadersLIFO<Long, TransactionWrite> {
 
     /**
      * Nothing impedes the user from deleting and inserting again the same record.
@@ -26,8 +19,6 @@ public final class OperationSetOfKey {
      */
     public volatile WriteType lastWriteType;
 
-    public OperationSetOfKey(){
-        this.updateHistoryMap = new SingleWriterMultipleReadersFIFO<>();
-    }
+    public OperationSetOfKey(){ }
 
 }

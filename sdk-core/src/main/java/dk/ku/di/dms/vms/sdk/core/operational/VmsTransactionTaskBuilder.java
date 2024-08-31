@@ -85,12 +85,10 @@ public final class VmsTransactionTaskBuilder {
         @Override
         public void run() {
             this.signalRunning();
-            try(var _ = transactionManager.beginTransaction(this.tid, -1, this.lastTid, this.signature.transactionType() == TransactionTypeEnum.R)){
+            try(var txCtx = transactionManager.beginTransaction(this.tid, -1, this.lastTid, this.signature.transactionType() == TransactionTypeEnum.R)){
                 Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.input);
                 OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
-                if(this.signature.transactionType() != TransactionTypeEnum.R){
-                    transactionManager.commit();
-                }
+                // if(this.signature.transactionType() != TransactionTypeEnum.R) transactionManager.commit();
                 schedulerCallback.success(signature.executionMode(), eventOutput);
             } catch (IllegalAccessException | InvocationTargetException e) {
                 LOGGER.log(ERROR, "Error during invoking task "+this.toString()+"\n"+ e);

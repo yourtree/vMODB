@@ -71,7 +71,7 @@ public final class StockHttpServerVertx extends AbstractVerticle {
                     case "GET" -> {
                         int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
                         int productId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
-                        try(var _ = STOCK_VMS.getTransactionManager().beginTransaction(0, 0, 0,true)) {
+                        try(var txCtx = STOCK_VMS.getTransactionManager().beginTransaction(0, 0, 0,true)) {
                             StockItem stockItem = STOCK_REPO.lookupByKey(new StockItem.StockId(sellerId, productId));
                             if (stockItem == null) {
                                 handleError(exchange, "Stock item does not exists");
@@ -86,7 +86,18 @@ public final class StockHttpServerVertx extends AbstractVerticle {
                         }
                     }
                     case "PATCH" -> {
-                        try(var _ = STOCK_VMS.getTransactionManager().beginTransaction(0, 0, 0,false)){
+                        String op = uriSplit[uriSplit.length - 1];
+                        if(op.contentEquals("reset")){
+                            // path: /stock/reset
+                            try {
+                                STOCK_VMS.getTransactionManager().reset();
+                                exchange.response().setStatusCode(200).end();
+                            } catch (Exception e){
+                                handleError(exchange, e.getMessage());
+                            }
+                            return;
+                        }
+                        try(var txCtx = STOCK_VMS.getTransactionManager().beginTransaction(0, 0, 0,false)){
                             var stockItems = STOCK_REPO.getAll();
                             for(StockItem item : stockItems){
                                 item.qty_available = 10000;
@@ -104,7 +115,7 @@ public final class StockHttpServerVertx extends AbstractVerticle {
                             String payload = buff.toString(StandardCharsets.UTF_8);
                             // StockDbUtils.addStockItem(payload, STOCK_REPO, STOCK_VMS.getTable("stock_items"));
                             StockItem stockItem = StockDbUtils.deserializeStockItem(payload);
-                            try(var _ = STOCK_VMS.getTransactionManager().beginTransaction(0, 0, 0, false)) {
+                            try(var txCtx = STOCK_VMS.getTransactionManager().beginTransaction(0, 0, 0, false)) {
                                 STOCK_REPO.upsert(stockItem);
                                 exchange.response().setStatusCode(200).end();
                             } catch (Exception e){

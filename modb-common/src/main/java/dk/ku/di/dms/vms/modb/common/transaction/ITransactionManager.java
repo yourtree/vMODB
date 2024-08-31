@@ -11,4 +11,6 @@ public interface ITransactionManager {
 
     default TransactionContextBase beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) { return null; }
 
+    default void reset() { }
+
 }

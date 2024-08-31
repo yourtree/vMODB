@@ -71,7 +71,7 @@ public final class ProductHttpServerVertx extends AbstractVerticle {
                     case "GET" -> {
                         int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
                         int productId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
-                        try(var _ = PRODUCT_VMS.getTransactionManager().beginTransaction(0, 0, 0,true)) {
+                        try(var txCtx = PRODUCT_VMS.getTransactionManager().beginTransaction(0, 0, 0,true)) {
                             Product product = PRODUCT_REPO.lookupByKey(new Product.ProductId(sellerId, productId));
                             if (product == null) {
                                 handleError(exchange, "Product does not exists");
@@ -86,7 +86,18 @@ public final class ProductHttpServerVertx extends AbstractVerticle {
                         }
                     }
                     case "PATCH" -> {
-                        try(var _ = PRODUCT_VMS.getTransactionManager().beginTransaction(0, 0, 0,false)){
+                        String op = uriSplit[uriSplit.length - 1];
+                        if(op.contentEquals("reset")){
+                            // path: /product/reset
+                            try {
+                                PRODUCT_VMS.getTransactionManager().reset();
+                                exchange.response().setStatusCode(200).end();
+                            } catch (Exception e){
+                                handleError(exchange, e.getMessage());
+                            }
+                            return;
+                        }
+                        try(var txCtx = PRODUCT_VMS.getTransactionManager().beginTransaction(0, 0, 0,false)){
                             var products = PRODUCT_REPO.getAll();
                             for(Product product : products){
                                 product.version = "0";
@@ -102,7 +113,7 @@ public final class ProductHttpServerVertx extends AbstractVerticle {
                             String payload = buff.toString(StandardCharsets.UTF_8);
                             // ProductDbUtils.addProduct(payload, PRODUCT_REPO, PRODUCT_VMS.getTable("products"));
                             Product product = ProductDbUtils.deserializeProduct(payload);
-                            try(var _ = PRODUCT_VMS.getTransactionManager().beginTransaction(0, 0, 0, false)) {
+                            try(var txCtx = PRODUCT_VMS.getTransactionManager().beginTransaction(0, 0, 0, false)) {
                                 PRODUCT_REPO.upsert(product);
                                 exchange.response().setStatusCode(200).end();
                             } catch (Exception e){

@@ -84,7 +84,7 @@ final class HttpServerJdk {
                 case "status" : {
                     // assumed to be a get request
                     // assert exchange.getRequestMethod().equals("GET");
-                    byte[] b = this.getLastTidBytes();
+                    byte[] b = this.getLastTidCommittedBytes();
                     OutputStream outputStream = exchange.getResponseBody();
                     // b.length always equals to 8
                     exchange.sendResponseHeaders(200, Long.BYTES);

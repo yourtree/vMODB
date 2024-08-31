@@ -68,7 +68,7 @@ public class SellerHttpServerVertx extends AbstractVerticle {
             int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
             // picking the last tid "finished"
             long tid = SELLER_VMS.lastTidFinished();
-            try (var _ = SELLER_VMS.getTransactionManager().beginTransaction(tid, 0, tid, true)) {
+            try (var txCtx = SELLER_VMS.getTransactionManager().beginTransaction(tid, 0, tid, true)) {
                 var view = SELLER_SERVICE.queryDashboard(sellerId);
                 exchange.response().setChunked(true);
                 exchange.response().setStatusCode(200);

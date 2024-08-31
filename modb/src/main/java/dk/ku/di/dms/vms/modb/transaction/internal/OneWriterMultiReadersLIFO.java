@@ -13,32 +13,7 @@ package dk.ku.di.dms.vms.modb.transaction.internal;
  * @param <K> {@link dk.ku.di.dms.vms.modb.common.transaction.TransactionId}
  * @param <V> {@link dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite}
  */
-public final class SingleWriterMultipleReadersFIFO<K extends Comparable<K>,V> {
-
-    public static class Entry<K,V> {
-        private final K key;
-        private final V val;
-        private volatile Entry<K,V> next;
-
-        public Entry(K key, V val, Entry<K,V> next){
-            this.key = key;
-            this.val = val;
-            this.next = next;
-        }
-
-        public K key(){
-            return this.key;
-        }
-
-        public V val(){
-            return this.val;
-        }
-
-        public Entry<K,V> next(){
-            return this.next;
-        }
-
-    }
+public sealed class OneWriterMultiReadersLIFO<K extends Comparable<K>,V> permits OperationSetOfKey {
 
     private volatile Entry<K,V> head;
 

@@ -148,7 +148,6 @@ public final class TransactionWorker extends StoppableRunnable {
 
             this.tid = this.getTidNextBatch();
             lastTidBatch = this.getLastTidNextBatch();
-            LOGGER.log(DEBUG, "Worker #" + id+" assigning TID "+this.tid);
             this.startingTidBatch = this.tid;
         }
     }
@@ -321,6 +320,10 @@ public final class TransactionWorker extends StoppableRunnable {
         this.batchContext = new BatchContext(this.batchContext.batchOffset + this.numWorkers);
 
         return true;
+    }
+
+    public long getTid() {
+        return this.tid;
     }
 
 }

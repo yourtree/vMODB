@@ -20,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -50,7 +49,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     private final AtomicInteger numPartitionedTasksRunning = new AtomicInteger(0);
 
-    private final AtomicBoolean singleThreadTaskRunning = new AtomicBoolean(false);
+    private volatile boolean singleThreadTaskRunning = false;
 
     // the callback atomically updates this variable
     // used to track progress in the presence of parallel and partitioned tasks
@@ -104,11 +103,11 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         this.vmsChannels = vmsChannels;
 
         // operational (internal control of transactions and tasks)
-        this.transactionTaskMap = new ConcurrentHashMap<>(100000);
+        this.transactionTaskMap = new ConcurrentHashMap<>(1000000);
         SchedulerCallback callback = new SchedulerCallback();
         this.vmsTransactionTaskBuilder = new VmsTransactionTaskBuilder(transactionalHandler, callback);
         this.transactionTaskMap.put( 0L, this.vmsTransactionTaskBuilder.buildFinished(0) );
-        this.lastTidToTidMap = new HashMap<>(100000);
+        this.lastTidToTidMap = new HashMap<>(1000000);
 
         this.lastTidFinished = new AtomicLong(0);
         this.maxSleep = maxSleep;
@@ -124,33 +123,30 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     public void run() {
         LOGGER.log(INFO,this.vmsIdentifier+": Transaction scheduler has started");
         while(this.isRunning()) {
-            try{
+            try {
                 this.checkForNewEvents();
                 this.executeReadyTasks();
             } catch(Exception e){
-                LOGGER.log(WARNING, this.vmsIdentifier+": Error on scheduler loop: "+e.getCause().getMessage());
+                e.printStackTrace(System.out);
+                LOGGER.log(ERROR, this.vmsIdentifier+": Error on scheduler loop: "+(e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
             }
         }
         LOGGER.log(INFO,this.vmsIdentifier+": Transaction scheduler has terminated");
     }
 
     private final class SchedulerCallback implements ISchedulerCallback, Thread.UncaughtExceptionHandler {
-
         @Override
         public void success(ExecutionModeEnum executionMode, OutboundEventResult outboundEventResult) {
-
             VmsTransactionTask task = transactionTaskMap.get(outboundEventResult.tid());
             task.signalFinished();
             updateLastFinishedTid(outboundEventResult.tid());
-
             // my previous has sent the event already?
             VmsTransactionResult resultToQueue = new VmsTransactionResult(
                     outboundEventResult.tid(),
                     outboundEventResult);
             vmsChannels.transactionOutputQueue().add(resultToQueue);
-
             if(executionMode == ExecutionModeEnum.SINGLE_THREADED) {
-                singleThreadTaskRunning.set(false);
+                singleThreadTaskRunning = false;
             } else if (executionMode == ExecutionModeEnum.PARALLEL) {
                 numParallelTasksRunning.decrementAndGet();
             } else {
@@ -159,7 +155,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     numPartitionedTasksRunning.decrementAndGet();
                     LOGGER.log(DEBUG, vmsIdentifier+": Partitioned task "+task.tid()+" finished execution.");
                 } else {
-                    singleThreadTaskRunning.set(false);
+                    singleThreadTaskRunning = false;
                 }
             }
         }
@@ -170,10 +166,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             // if constraint violation, it cannot be re-executed
             // in this case, the error must be informed to the event handler, so the event handler
             // can forward the error to downstream VMSs. if input VMS, easier to handle, just send a noop to them
-
             LOGGER.log(WARNING, "Error captured during application execution: \n"+e.getCause().getMessage());
             if(executionMode == ExecutionModeEnum.SINGLE_THREADED) {
-                singleThreadTaskRunning.set(false);
+                singleThreadTaskRunning = false;
             } else if (executionMode == ExecutionModeEnum.PARALLEL) {
                 numParallelTasksRunning.decrementAndGet();
             } else {
@@ -182,7 +177,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     partitionKeyTrackingMap.remove(task.partitionId().get());
                     numPartitionedTasksRunning.decrementAndGet();
                 } else {
-                    singleThreadTaskRunning.set(false);
+                    singleThreadTaskRunning = false;
                 }
             }
         }
@@ -191,7 +186,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         public void uncaughtException(Thread t, Throwable e) {
             LOGGER.log(ERROR, "Uncaught exception captured during application execution: \n"+e.getCause().getMessage());
         }
-
     }
 
     /**
@@ -236,7 +230,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     }
                 }
                 case PARALLEL -> {
-                    if (!this.singleThreadTaskRunning.get() && this.numPartitionedTasksRunning.get() == 0) {
+                    if (!this.singleThreadTaskRunning && this.numPartitionedTasksRunning.get() == 0) {
                         this.numParallelTasksRunning.incrementAndGet();
                         task.signalReady();
                         LOGGER.log(DEBUG, this.vmsIdentifier+": Scheduling parallel task "+task.tid()+" for execution...");
@@ -246,7 +240,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     }
                 }
                 case PARTITIONED -> {
-                    if (this.singleThreadTaskRunning.get() || this.numParallelTasksRunning.get() > 0) {
+                    if (this.singleThreadTaskRunning || this.numParallelTasksRunning.get() > 0) {
                         return;
                     }
                     if(task.partitionId().isEmpty()){
@@ -269,18 +263,18 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 }
             }
             // bypass the single-thread execution if possible
-            if(!this.singleThreadTaskRunning.get() && this.lastTidToTidMap.get( task.tid() ) != null ){
+            if(!this.singleThreadTaskRunning && this.lastTidToTidMap.get( task.tid() ) != null ){
                 task = this.transactionTaskMap.get( this.lastTidToTidMap.get( task.tid() ) );
             }
-
         }
     }
 
     private void submitSingleThreadTaskForExecution(VmsTransactionTask task) {
-        this.singleThreadTaskRunning.set(true);
+        this.singleThreadTaskRunning = true;
         task.signalReady();
         // can the scheduler itself run it? task.run();
-        this.sharedTaskPool.submit(task);
+        // this.sharedTaskPool.submit(task);
+        task.run();
     }
 
     private boolean canSingleThreadTaskRun() {

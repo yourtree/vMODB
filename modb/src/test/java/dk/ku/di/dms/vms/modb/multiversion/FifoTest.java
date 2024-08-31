@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.multiversion;
 
 import dk.ku.di.dms.vms.modb.common.transaction.TransactionId;
-import dk.ku.di.dms.vms.modb.transaction.internal.SingleWriterMultipleReadersFIFO;
+import dk.ku.di.dms.vms.modb.transaction.internal.OneWriterMultiReadersLIFO;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -23,7 +23,7 @@ public class FifoTest {
     @Test
     public void test() throws ExecutionException, InterruptedException {
 
-        SingleWriterMultipleReadersFIFO<TransactionId,Integer> fifo = new SingleWriterMultipleReadersFIFO<>();
+        OneWriterMultiReadersLIFO<TransactionId,Integer> fifo = new OneWriterMultiReadersLIFO<>();
 
         fifo.put( new TransactionId(1,0), 1 );
         fifo.put( new TransactionId(2,0), 2 );

@@ -115,6 +115,8 @@ public final class Coordinator extends StoppableRunnable {
 
     private final Map<String, IVmsWorker> vmsWorkerContainerMap;
 
+    private final List<Tuple<TransactionWorker, Thread>> txWorkers;
+
     public static Coordinator build(// obtained from leader election or passed by parameter on setup
                                     Map<Integer, ServerNode> servers,
                                     // passed by parameter
@@ -204,6 +206,7 @@ public final class Coordinator extends StoppableRunnable {
         this.batchContextMap.put(dummyBatchOffset, currentBatch);
 
         this.vmsWorkerContainerMap = new HashMap<>();
+        this.txWorkers = new ArrayList<>();
     }
 
     private final Map<String, VmsNode[]> vmsIdentifiersPerDAG = new HashMap<>();
@@ -219,24 +222,18 @@ public final class Coordinator extends StoppableRunnable {
      */
     @Override
     public void run() {
-
         // setup asynchronous listener for new connections
         this.serverSocket.accept(null, new AcceptCompletionHandler());
-
         // connect to all virtual microservices
         this.setupStarterVMSs();
-
         this.preprocessDAGs();
-
         this.setUpTransactionWorkers();
-
         Object message;
         do {
             while ((message = this.coordinatorQueue.poll()) != null) {
                 this.processVmsMessage(message);
             }
         } while (this.isRunning());
-
         this.failSafeClose();
         LOGGER.log(INFO,"Leader: Finished execution.");
     }
@@ -251,7 +248,6 @@ public final class Coordinator extends StoppableRunnable {
 
     private void setUpTransactionWorkers() {
         int numWorkers = this.options.getNumTransactionWorkers();
-        int idx = 1;
         long initTid = 1;
 
         var firstPrecedenceInputQueue = new ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>>();
@@ -261,7 +257,7 @@ public final class Coordinator extends StoppableRunnable {
         var starterPrecedenceMap = buildStarterPrecedenceMap();
         firstPrecedenceInputQueue.add(starterPrecedenceMap);
 
-        List<Tuple<TransactionWorker,Thread>> txWorkers = new ArrayList<>();
+        int idx = 1;
         do {
             if(idx < numWorkers){
                 precedenceMapOutputQueue = new ConcurrentLinkedDeque<>();
@@ -269,13 +265,15 @@ public final class Coordinator extends StoppableRunnable {
                 // complete the ring
                 precedenceMapOutputQueue = firstPrecedenceInputQueue;
             }
-
             var txInputQueue = this.transactionInputDeques.get(idx-1);
             TransactionWorker txWorker = TransactionWorker.build(idx, txInputQueue, initTid,
                     this.options.getMaxTransactionsPerBatch(), this.options.getBatchWindow(),
                     numWorkers, precedenceMapInputQueue, precedenceMapOutputQueue, this.transactionMap,
                     this.vmsIdentifiersPerDAG, this.vmsWorkerContainerMap, this.coordinatorQueue, this.serdesProxy);
-            Thread txWorkerThread = Thread.ofPlatform().factory().newThread(txWorker);
+            Thread txWorkerThread = Thread.ofPlatform()
+                    .name("tx-worker-"+idx)
+                    .inheritInheritableThreadLocals(false)
+                    .unstarted(txWorker);
 
             initTid = initTid + this.options.getMaxTransactionsPerBatch();
             precedenceMapInputQueue = precedenceMapOutputQueue;
@@ -579,7 +577,8 @@ public final class Coordinator extends StoppableRunnable {
             } else { // no need for locking here
                 servers.put( newServer.hashCode(), newServer );
                 LockConnectionMetadata connectionMetadata = new LockConnectionMetadata(
-                        newServer.hashCode(), SERVER,
+                        newServer.hashCode(),
+                        SERVER,
                         buffer,
                         MemoryManager.getTemporaryDirectBuffer(options.getNetworkBufferSize()),
                         channel,
@@ -623,7 +622,7 @@ public final class Coordinator extends StoppableRunnable {
         switch (message) {
             // receive metadata from all microservices
             case BatchContext batchContext -> this.processNewBatchContext(batchContext);
-            case VmsNode vmsIdentifier_ -> this.processVmsIdentifier(vmsIdentifier_);
+            case VmsNode vmsNode -> this.processVmsIdentifier(vmsNode);
             case TransactionAbort.Payload txAbort -> this.processTransactionAbort(txAbort);
             case BatchComplete.Payload batchComplete -> this.processBatchComplete(batchComplete);
             case BatchCommitAck.Payload msg ->
@@ -772,6 +771,14 @@ public final class Coordinator extends StoppableRunnable {
 
     public long getLastTidOfLastCompletedBatch() {
         return this.numTIDsCompleted.get();
+    }
+
+    public long getLastTidSubmitted(){
+        long maxTid = 0;
+        for(var txWorker : this.txWorkers){
+            maxTid = Long.max(maxTid, txWorker.t1().getTid());
+        }
+        return maxTid;
     }
 
     public Map<String, VmsNode> getConnectedVMSs() {

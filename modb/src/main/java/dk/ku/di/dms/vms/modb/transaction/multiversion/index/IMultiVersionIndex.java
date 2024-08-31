@@ -63,4 +63,6 @@ public interface IMultiVersionIndex {
         return conditionHolds;
     }
 
+    void reset();
+
 }
