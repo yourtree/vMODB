@@ -20,7 +20,6 @@ import java.net.InetSocketAddress;
 public final class Main {
 
     public static void main(String[] args) throws Exception {
-
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 "0.0.0.0",
                 Constants.CUSTOMER_VMS_PORT,
@@ -28,24 +27,21 @@ public final class Main {
                 "dk.ku.di.dms.vms.marketplace.customer",
                 "dk.ku.di.dms.vms.marketplace.common"}
         );
-
         VmsApplication vms = VmsApplication.build(options);
         vms.start();
-
         HttpServer httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", Constants.CUSTOMER_HTTP_PORT), 0);
-        httpServer.createContext("/customer", new StockHttpHandler(vms));
+        httpServer.createContext("/customer", new CustomerHttpHandler(vms));
         httpServer.start();
-
     }
 
-    private static class StockHttpHandler implements HttpHandler {
+    private static class CustomerHttpHandler implements HttpHandler {
         private final Table table;
         private final AbstractProxyRepository<Integer, Customer> repository;
         VmsApplication vms;
         IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         @SuppressWarnings("unchecked")
-        public StockHttpHandler(VmsApplication vms){
+        public CustomerHttpHandler(VmsApplication vms){
             this.vms = vms;
             this.table = vms.getTable("customers");
             this.repository = (AbstractProxyRepository<Integer, Customer>) vms.getRepositoryProxy("customers");

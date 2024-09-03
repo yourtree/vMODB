@@ -32,7 +32,6 @@ public final class ProductService {
         LOGGER.log(INFO,"APP-"+Thread.currentThread().threadId()+": Product received a product update event with version: "+updateProduct.version);
 
         Product oldProduct = this.productRepository.lookupByKey(new Product.ProductId(updateProduct.seller_id, updateProduct.product_id));
-
         if (oldProduct == null)
         {
             throw new RuntimeException("Product not found "+updateProduct.seller_id +"-"+updateProduct.product_id);
@@ -59,6 +58,10 @@ public final class ProductService {
 
         // could use issue statement for faster update
         Product product = this.productRepository.lookupByKey(new Product.ProductId(priceUpdate.sellerId, priceUpdate.productId));
+        if (product == null)
+        {
+            throw new RuntimeException("Product not found "+priceUpdate.sellerId +"-"+priceUpdate.productId);
+        }
 
         // check if versions match
         if (product.version.contentEquals(priceUpdate.version)) {

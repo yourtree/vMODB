@@ -17,8 +17,10 @@ public final class Constants {
     public static final int ORDER_HTTP_PORT = 8003;
     public static final int ORDER_VMS_PORT = 8083;
 
+    public static final int PAYMENT_HTTP_PORT = 8004;
     public static final int PAYMENT_VMS_PORT = 8084;
 
+    public static final int SHIPMENT_HTTP_PORT = 8005;
     public static final int SHIPMENT_VMS_PORT = 8085;
 
     public static final int CUSTOMER_HTTP_PORT = 8006;

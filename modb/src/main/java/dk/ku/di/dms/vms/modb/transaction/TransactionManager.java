@@ -446,6 +446,9 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             for(var secIdx : table.secondaryIndexMap.values()){
                 secIdx.reset();
             }
+            for(var uniqIdx : table.partialIndexMap.values()){
+                uniqIdx.reset();
+            }
         }
         LOGGER.log(INFO, "Reset finished.");
         LOGGER.log(INFO, "GC triggered.");

@@ -361,7 +361,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public void undoTransactionWrites(TransactionContext txCtx){
         Set<IKey> writeSet = this.removeWriteSet(txCtx);
         if(writeSet == null) return;
-        for(var key : writeSet) {
+        for(IKey key : writeSet) {
             // do we have a record written in the corresponding index? always yes. if no, it is a bug
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             operationSetOfKey.poll();
@@ -397,7 +397,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             if(operationSetOfKey == null){
                 throw new RuntimeException("Error on retrieving operation set for key "+key);
             }
-            var entry = operationSetOfKey.removeUpToEntry(maxTid);
+            Entry<Long, TransactionWrite> entry = operationSetOfKey.removeUpToEntry(maxTid);
             if (entry == null) continue;
             this.keysToFlush.remove(key);
             switch (operationSetOfKey.lastWriteType) {
@@ -469,7 +469,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         Map<IKey, Object[]> freshSet = new HashMap<>();
         // iterate over keys
         for(IKey key : keys){
-            var operation = this.updatesPerKeyMap.get(key);
+            OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
             Entry<Long, TransactionWrite> obj = operation.floorEntry(txCtx.tid);
             if (obj != null && obj.val().type != WriteType.DELETE) {
                 freshSet.put(key, obj.val().record);
@@ -481,7 +481,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public Object[] getRecord(TransactionContext txCtx, IKey key){
         OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
         if(operation != null){
-            var entry = operation.floorEntry(txCtx.tid);
+            Entry<Long, TransactionWrite> entry = operation.floorEntry(txCtx.tid);
             if(entry != null && entry.val().type != WriteType.DELETE) {
                 return entry.val().record;
             }
@@ -517,7 +517,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         public boolean hasNext() {
             while(this.iterator.hasNext()){
                 Map.Entry<IKey, OperationSetOfKey> next = this.iterator.next();
-                var entry = next.getValue().floorEntry(this.txCtx.tid);
+                Entry<Long, TransactionWrite> entry = next.getValue().floorEntry(this.txCtx.tid);
                 if(entry == null) {
                     this.currRecord = primaryKeyIndex.lookupByKey(next.getKey());
                     if(this.currRecord == null){

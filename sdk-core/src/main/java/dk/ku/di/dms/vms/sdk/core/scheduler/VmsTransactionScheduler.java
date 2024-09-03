@@ -320,7 +320,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         ));
         // mark the last tid, so we can get the next to execute when appropriate
         if(this.lastTidToTidMap.containsKey(inboundEvent.lastTid())){
-            LOGGER.log(ERROR, "Inbound event is attempting to overwrite precedence of TIDs: "+inboundEvent);
+            LOGGER.log(ERROR, "Inbound event is attempting to overwrite precedence of TIDs. \nOriginal last TID:" +
+                    this.lastTidToTidMap.get(inboundEvent.lastTid()) + "\n Corrupt event:" + inboundEvent);
         } else {
             this.lastTidToTidMap.put(inboundEvent.lastTid(), inboundEvent.tid());
         }

@@ -62,24 +62,44 @@ public class SellerHttpServerVertx extends AbstractVerticle {
     public static class VertxHandler implements Handler<HttpServerRequest> {
         @Override
         public void handle(HttpServerRequest exchange) {
-            assert (exchange.method().name().equals("GET"));
             String[] uriSplit = exchange.uri().split("/");
-            assert uriSplit[1].equals("seller") && uriSplit[2].equals("dashboard");
-            int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
-            // picking the last tid "finished"
-            long tid = SELLER_VMS.lastTidFinished();
-            try (var txCtx = SELLER_VMS.getTransactionManager().beginTransaction(tid, 0, tid, true)) {
-                var view = SELLER_SERVICE.queryDashboard(sellerId);
-                exchange.response().setChunked(true);
-                exchange.response().setStatusCode(200);
-                exchange.response().write(view.toString());
-                exchange.response().end();
-            } catch (Exception e) {
-                exchange.response().setChunked(true);
-                exchange.response().setStatusCode(500);
-                exchange.response().write(e.getMessage());
-                exchange.response().end();
+            switch (exchange.method().name()){
+                case "GET" -> {
+                    // assert uriSplit[1].equals("seller") && uriSplit[2].equals("dashboard");
+                    int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
+                    // picking the last tid "finished"
+                    long tid = SELLER_VMS.lastTidFinished();
+                    try (var txCtx = SELLER_VMS.getTransactionManager().beginTransaction(tid, 0, tid, true)) {
+                        var view = SELLER_SERVICE.queryDashboard(sellerId);
+                        exchange.response().setChunked(true);
+                        exchange.response().setStatusCode(200);
+                        exchange.response().write(view.toString());
+                        exchange.response().end();
+                    } catch (Exception e) {
+                        exchange.response().setChunked(true);
+                        exchange.response().setStatusCode(500);
+                        exchange.response().write(e.getMessage());
+                        exchange.response().end();
+                    }
+                }
+                case "PATCH" -> {
+                    // path: /seller/reset
+                    try {
+                        SELLER_VMS.getTransactionManager().reset();
+                        exchange.response().setStatusCode(200).end();
+                    } catch (Exception e){
+                        handleError(exchange, e.getMessage());
+                    }
+                }
+                default -> handleError(exchange, "Invalid URI");
             }
+        }
+
+        private static void handleError(HttpServerRequest exchange, String msg) {
+            exchange.response().setChunked(true);
+            exchange.response().setStatusCode(500);
+            exchange.response().write(msg);
+            exchange.response().end();
         }
     }
 

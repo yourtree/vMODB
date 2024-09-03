@@ -77,7 +77,7 @@ public final class TransactionWorker extends StoppableRunnable {
             var list = new ArrayList<VmsTracking>();
             for(VmsNode vmsNode : txEntry.getValue()){
                 if(!vmsTrackingMap.containsKey(vmsNode.identifier)){
-                    vmsTrackingMap.putIfAbsent(vmsNode.identifier, new VmsTracking(vmsNode));
+                    vmsTrackingMap.put(vmsNode.identifier, new VmsTracking(vmsNode));
                 }
                 list.add(vmsTrackingMap.get(vmsNode.identifier));
             }
@@ -281,7 +281,7 @@ public final class TransactionWorker extends StoppableRunnable {
         if(!this.precedenceMapCache.containsKey(this.batchContext.batchOffset - this.numWorkers)) {
             return false;
         }
-        var precedenceMap = this.precedenceMapCache.get(this.batchContext.batchOffset - this.numWorkers);
+        Map<String, PrecedenceInfo> precedenceMap = this.precedenceMapCache.get(this.batchContext.batchOffset - this.numWorkers);
         // cannot issue a batch if we don't know the last batch of each VMS in this batch
         // the last batch might have been updated by previous workers in the ring
         // update for those vms that have not participated in this batch

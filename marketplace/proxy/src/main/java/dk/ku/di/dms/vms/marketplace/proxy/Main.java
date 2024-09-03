@@ -84,15 +84,12 @@ public final class Main {
         if(transactions.contains(CUSTOMER_CHECKOUT)) {
             TransactionDAG checkoutDag = TransactionBootstrap.name(CUSTOMER_CHECKOUT)
                     .input("a", "cart", CUSTOMER_CHECKOUT)
-                    .terminal("b", "stock", "a")
-                    /*
                     .internal("b", "stock", RESERVE_STOCK, "a")
                     .internal("c", "order", STOCK_CONFIRMED, "b")
                     .internal("d", "payment", INVOICE_ISSUED, "c")
                     //.terminal("any", "customer", "b")
                     .terminal("e", "seller", "c")
                     .terminal("f", "shipment", "d")
-                    */
                     .build();
             transactionMap.put(checkoutDag.name, checkoutDag);
         }
@@ -197,7 +194,7 @@ public final class Main {
 
     private static Map<String, IdentifiableNode> buildStarterVMSsFull(Properties properties) {
         Map<String, IdentifiableNode> starterVMSs = buildStarterVMSsBasic(properties);
-/*
+
         String orderHost = properties.getProperty("order_host");
         String paymentHost = properties.getProperty("payment_host");
         String shipmentHost = properties.getProperty("shipment_host");
@@ -217,7 +214,6 @@ public final class Main {
         starterVMSs.putIfAbsent(paymentAddress.identifier, paymentAddress);
         starterVMSs.putIfAbsent(shipmentAddress.identifier, shipmentAddress);
         starterVMSs.putIfAbsent(sellerAddress.identifier, sellerAddress);
- */
         return starterVMSs;
     }
 
