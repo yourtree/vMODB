@@ -88,7 +88,9 @@ public final class Main {
                     .internal("c", "order", STOCK_CONFIRMED, "b")
                     .internal("d", "payment", INVOICE_ISSUED, "c")
                     //.terminal("any", "customer", "b")
-                    .terminal("e", "seller", "c")
+                    // .internal("e", "seller", "c")
+                    // opt to minimize number of votes
+                    .internal("e", "seller", INVOICE_ISSUED, "c")
                     .terminal("f", "shipment", "d")
                     .build();
             transactionMap.put(checkoutDag.name, checkoutDag);
