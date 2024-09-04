@@ -517,7 +517,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         public boolean hasNext() {
             while(this.iterator.hasNext()){
                 Map.Entry<IKey, OperationSetOfKey> next = this.iterator.next();
-                Entry<Long, TransactionWrite> entry = next.getValue().floorEntry(this.txCtx.tid);
+                Entry<Long, TransactionWrite> entry = next.getValue().getHigherEntryUpToKey(this.txCtx.tid);
                 if(entry == null) {
                     this.currRecord = primaryKeyIndex.lookupByKey(next.getKey());
                     if(this.currRecord == null){

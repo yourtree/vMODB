@@ -47,7 +47,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     private static final System.Logger LOGGER = System.getLogger(TransactionManager.class.getName());
 
-    private static final ThreadLocal<TransactionContext> TRANSACTION_CONTEXT = new ThreadLocal<>();
+    private final Map<Long, TransactionContext> txCtxMap;
 
     private final Analyzer analyzer;
 
@@ -69,6 +69,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         this.catalog = catalog;
         this.queryPlanCacheMap = new ConcurrentHashMap<>();
         this.checkpointing = checkpointing;
+        this.txCtxMap = new ConcurrentHashMap<>();
     }
 
     private boolean fkConstraintViolationFree(TransactionContext txCtx, Table table, Object[] values){
@@ -93,16 +94,16 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
         if(scanOperator.isIndexScan()){
             IKey key = this.getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
-            return scanOperator.asIndexScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), key);
+            return scanOperator.asIndexScan().runAsEmbedded(this.txCtxMap.get(Thread.currentThread().threadId()), key);
         } else if(scanOperator.isIndexAggregationScan()){
-            return scanOperator.asIndexAggregationScan().runAsEmbedded(TRANSACTION_CONTEXT.get());
+            return scanOperator.asIndexAggregationScan().runAsEmbedded(this.txCtxMap.get(Thread.currentThread().threadId()));
         } else if(scanOperator.isIndexMultiAggregationScan()){
             IKey key = this.getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexMultiAggregationScan().index());
-            return scanOperator.asIndexMultiAggregationScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), key);
+            return scanOperator.asIndexMultiAggregationScan().runAsEmbedded(this.txCtxMap.get(Thread.currentThread().threadId()), key);
         } else {
             // future optimization is filter not including the columns of partial or non-unique index
             FilterContext filterContext = FilterContextBuilder.build(wherePredicates);
-            return scanOperator.asFullScan().runAsEmbedded(TRANSACTION_CONTEXT.get(), filterContext);
+            return scanOperator.asFullScan().runAsEmbedded(this.txCtxMap.get(Thread.currentThread().threadId()), filterContext);
         }
     }
 
@@ -165,7 +166,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     @Override
     public List<Object[]> getAll(Table table){
         List<Object[]> res = new ArrayList<>();
-        Iterator<Object[]> iterator = table.primaryKeyIndex().iterator(TRANSACTION_CONTEXT.get());
+        Iterator<Object[]> iterator = table.primaryKeyIndex().iterator(this.txCtxMap.get(Thread.currentThread().threadId()));
         while(iterator.hasNext()){
             res.add(iterator.next());
         }
@@ -175,7 +176,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     @Override
     public void insertAll(Table table, List<Object[]> objects){
         // get tid, do all the checks, etc
-        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
+        TransactionContext txCtx = this.txCtxMap.get(Thread.currentThread().threadId());
         for(Object[] entry : objects) {
             this.doInsert(txCtx, table, entry);
         }
@@ -183,7 +184,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     @Override
     public void deleteAll(Table table, List<Object[]> objects) {
-        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
+        TransactionContext txCtx = this.txCtxMap.get(Thread.currentThread().threadId());
         for(Object[] entry : objects) {
             IKey pk = KeyUtils.buildRecordKey(table.schema().getPrimaryKeyColumns(), entry);
             this.deleteByKey(txCtx, table, pk);
@@ -192,7 +193,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     @Override
     public void updateAll(Table table, List<Object[]> objects) {
-        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
+        TransactionContext txCtx = this.txCtxMap.get(Thread.currentThread().threadId());
         for(Object[] entry : objects) {
             this.update(txCtx, table, entry);
         }
@@ -203,7 +204,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      */
     @Override
     public void delete(Table table, Object[] values) {
-        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
+        TransactionContext txCtx = this.txCtxMap.get(Thread.currentThread().threadId());
         IKey pk = KeyUtils.buildRecordKey(table.schema().getPrimaryKeyColumns(), values);
         this.deleteByKey(txCtx, table, pk);
     }
@@ -211,7 +212,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     @Override
     public void deleteByKey(Table table, Object[] keyValues) {
         IKey pk = KeyUtils.buildIndexKey(keyValues);
-        this.deleteByKey(TRANSACTION_CONTEXT.get(), table, pk);
+        this.deleteByKey(this.txCtxMap.get(Thread.currentThread().threadId()), table, pk);
     }
 
     /**
@@ -240,13 +241,13 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     @Override
     public boolean exists(PrimaryIndex primaryKeyIndex, Object[] valuesOfKey){
         IKey pk = KeyUtils.buildIndexKey(valuesOfKey);
-        return primaryKeyIndex.exists(TRANSACTION_CONTEXT.get(), pk);
+        return primaryKeyIndex.exists(this.txCtxMap.get(Thread.currentThread().threadId()), pk);
     }
 
     @Override
     public Object[] lookupByKey(PrimaryIndex index, Object[] valuesOfKey){
         IKey pk = KeyUtils.buildIndexKey(valuesOfKey);
-        return index.lookupByKey(TRANSACTION_CONTEXT.get(), pk);
+        return index.lookupByKey(this.txCtxMap.get(Thread.currentThread().threadId()), pk);
     }
 
     /**
@@ -255,7 +256,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      */
     @Override
     public void insert(Table table, Object[] values){
-        this.doInsert(TRANSACTION_CONTEXT.get(), table, values);
+        this.doInsert(this.txCtxMap.get(Thread.currentThread().threadId()), table, values);
     }
 
     private Object[] doInsert(TransactionContext txCtx, Table table, Object[] values) {
@@ -287,14 +288,14 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     @Override
     public Object[] insertAndGet(Table table, Object[] values){
-        return this.doInsert(TRANSACTION_CONTEXT.get(), table, values);
+        return this.doInsert(this.txCtxMap.get(Thread.currentThread().threadId()), table, values);
     }
 
     @Override
     public void upsert(Table table, Object[] values){
         PrimaryIndex index = table.primaryKeyIndex();
         IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), values);
-        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
+        TransactionContext txCtx = this.txCtxMap.get(Thread.currentThread().threadId());
         if(index.upsert(txCtx, pk, values)) {
             txCtx.indexes.add(index);
             return;
@@ -305,7 +306,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     @Override
     public void update(Table table, Object[] values) {
-        this.update(TRANSACTION_CONTEXT.get(), table, values);
+        this.update(this.txCtxMap.get(Thread.currentThread().threadId()), table, values);
     }
 
     /**
@@ -321,7 +322,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             return;
         }
         this.undoTransactionWrites(txCtx);
-        throw new RuntimeException("Constraint violation: "+(pkViolationFree ? "Foreign key" : "Primary key"));
+        throw new RuntimeException("Constraint violation: "+(pkViolationFree ? "Foreign key" : "Primary key")+ " Table: "+table.getName()+" Key: "+pk);
     }
 
     /**
@@ -425,7 +426,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      */
     @Override
     public void commit(){
-        TransactionContext txCtx = TRANSACTION_CONTEXT.get();
+        TransactionContext txCtx = this.txCtxMap.get(Thread.currentThread().threadId());
         for(var index : txCtx.indexes){
             index.installWrites(txCtx);
         }
@@ -433,9 +434,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     @Override
     public TransactionContextBase beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) {
-        TransactionContext txCtx = new TransactionContext(tid, lastTid, readOnly);
-        TRANSACTION_CONTEXT.set(txCtx);
-        return txCtx;
+        return this.txCtxMap.put(Thread.currentThread().threadId(), new TransactionContext(tid, lastTid, readOnly));
     }
 
     @Override

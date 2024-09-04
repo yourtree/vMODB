@@ -140,7 +140,7 @@ public final class TransactionWorker extends StoppableRunnable {
             } while (this.tid <= lastTidBatch && System.currentTimeMillis() < end);
 
             // no tid was processed in this batch
-            if(this.tid == startingTidBatch) continue;
+            if(this.tid == this.startingTidBatch) continue;
 
             do {
                 this.processPendingInput();

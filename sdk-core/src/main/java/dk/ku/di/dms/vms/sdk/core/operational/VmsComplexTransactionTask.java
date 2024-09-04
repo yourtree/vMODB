@@ -73,29 +73,21 @@ public final class VmsComplexTransactionTask implements Callable<VmsTransactionT
 
     @Override
     public VmsTransactionTaskResult call() {
-
         // register thread in the transaction facade
-        this.transactionalHandler.beginTransaction(this.tid, this.identifier, this.lastTid, this.signature.transactionType() == TransactionTypeEnum.R);
-
-        try {
-
+        try(var txCtx = this.transactionalHandler.beginTransaction(this.tid, this.identifier, this.lastTid, this.signature.transactionType() == TransactionTypeEnum.R)){
             Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.inputs);
-
             // can be null, given we have terminal events (void method)
             // could also be terminal and generate event... maybe an external system wants to consume
             // then send to the leader...
             OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
-
             if(this.signature.transactionType() != TransactionTypeEnum.R){
                 this.transactionalHandler.commit();
             }
-
             return new VmsTransactionTaskResult(
                     this.tid,
                     this.identifier,
                     eventOutput,
                     VmsTransactionTaskResult.Status.SUCCESS);
-
         } catch (Exception e) {
             // (i) whether to return to the scheduler or (ii) to push to the payload handler for forwarding it to the queue
             // we can only notify it because the scheduler does not need to know the events. the scheduler just needs to
