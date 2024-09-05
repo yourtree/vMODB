@@ -42,10 +42,12 @@ public final class CartService {
         List<CartItem> cartItems = this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
         if(cartItems == null || cartItems.isEmpty()) {
             LOGGER.log(ERROR, "APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
-            throw new RuntimeException("APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
+            // throw new RuntimeException("APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
+            // this is only supposed to happen if the number of customers is
+            // lower than the rate on which checkouts are submitted by the driver
+            return new ReserveStock(new Date(), checkout, List.of(), checkout.instanceId);
         }
         this.cartItemRepository.deleteAll(cartItems);
-        // LOGGER.log(INFO, "APP: Cart finished a checkout request with TID: "+checkout.instanceId);
         return new ReserveStock(new Date(), checkout, CartUtils.convertCartItems( cartItems ), checkout.instanceId);
     }
 

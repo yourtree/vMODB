@@ -16,8 +16,7 @@ import java.util.stream.Collectors;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
-import static java.lang.System.Logger.Level.INFO;
-import static java.lang.System.Logger.Level.WARNING;
+import static java.lang.System.Logger.Level.*;
 
 @Microservice("stock")
 public final class StockService {
@@ -63,7 +62,7 @@ public final class StockService {
         List<StockItem> items = this.stockRepository.lookupByKeys(cartItemMap.keySet());
 
         if(items.isEmpty()) {
-            throw new RuntimeException("No items found in private state");
+            LOGGER.log(ERROR, "APP: No items found in private state.\nTID "+reserveStock.instanceId+"\nCustomer ID "+reserveStock.customerCheckout.CustomerId);
         }
 
         List<CartItem> unavailableItems = new ArrayList<>(reserveStock.items.size());
@@ -84,6 +83,8 @@ public final class StockService {
             }
 
             if(item.qty_reserved + cartItem.Quantity > item.qty_available){
+                LOGGER.log(INFO,"The stock item ("+item.seller_id+"-"+item.product_id+") no longer available.\n" +
+                        "Stock item: "+ item.version+ " Cart item: "+cartItem.Version);
                 unavailableItems.add(cartItem);
                 continue;
             }
@@ -95,7 +96,10 @@ public final class StockService {
         }
 
         if(cartItemsReserved.isEmpty()){
-            LOGGER.log(WARNING, "No items were reserved for instanceId = "+reserveStock.instanceId);
+            LOGGER.log(WARNING, "APP: No items were reserved for instanceId = "+reserveStock.instanceId);
+            if(!unavailableItems.isEmpty()) {
+                LOGGER.log(WARNING, "APP: Unavailable items:\n"+unavailableItems);
+            }
         }
 
         // LOGGER.log(INFO,"APP: Stock finished a reserve stock event with TID: "+reserveStock.instanceId);

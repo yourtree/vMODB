@@ -8,8 +8,8 @@ import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
 import dk.ku.di.dms.vms.modb.transaction.internal.Entry;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.IPrimaryKeyGenerator;
 import dk.ku.di.dms.vms.modb.transaction.internal.OperationSetOfKey;
+import dk.ku.di.dms.vms.modb.transaction.multiversion.IPrimaryKeyGenerator;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.TransactionWrite;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 

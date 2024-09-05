@@ -146,7 +146,7 @@ public final class TransactionWorker extends StoppableRunnable {
                 this.processPendingInput();
             } while(!this.advanceCurrentBatch() && this.isRunning());
 
-            this.tid = this.getTidNextBatch();
+            this.tid = this.getTidNextBatch(lastTidBatch);
             lastTidBatch = this.getLastTidNextBatch();
             this.startingTidBatch = this.tid;
         }
@@ -156,8 +156,8 @@ public final class TransactionWorker extends StoppableRunnable {
         return this.tid + this.maxNumberOfTIDsBatch - 1;
     }
 
-    private long getTidNextBatch() {
-        if(this.numWorkers == 1) return this.tid;
+    private long getTidNextBatch(long lastTidBatch) {
+        if(this.numWorkers == 1 && this.tid < lastTidBatch) return this.tid;
         return this.startingTidBatch + ((long) this.numWorkers * this.maxNumberOfTIDsBatch);
     }
 

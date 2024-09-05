@@ -24,10 +24,7 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.index.IMultiVersionIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static java.lang.System.Logger.Level.INFO;
@@ -220,7 +217,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      * @param pk The primary key
      */
     private void deleteByKey(TransactionContext txCtx, Table table, IKey pk){
-        var opt = table.primaryKeyIndex().removeOpt(txCtx, pk);
+        Optional<Object[]> opt = table.primaryKeyIndex().removeOpt(txCtx, pk);
         if(opt.isPresent()){
             txCtx.indexes.add(table.primaryKeyIndex());
             for (NonUniqueSecondaryIndex secIndex : table.secondaryIndexMap.values()) {

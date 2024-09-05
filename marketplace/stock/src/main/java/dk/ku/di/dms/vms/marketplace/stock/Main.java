@@ -16,12 +16,12 @@ import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.System.Logger;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.ForkJoinPool;
 
-import java.lang.System.Logger;
 import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.INFO;
 
