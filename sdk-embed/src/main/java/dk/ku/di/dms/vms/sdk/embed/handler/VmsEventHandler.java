@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -619,7 +620,8 @@ public final class VmsEventHandler extends StoppableRunnable {
             // message identifier
             byte messageIdentifier = this.buffer.get(0);
             if(messageIdentifier != PRESENTATION){
-                LOGGER.log(WARNING,me.identifier+": A node is trying to connect without a presentation message");
+                String request = StandardCharsets.UTF_8.decode(this.buffer).toString();
+                LOGGER.log(WARNING,me.identifier+": A node is trying to connect without a presentation message. \n"+request);
                 this.buffer.clear();
                 MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
                 try { this.channel.close(); } catch (IOException ignored) {}
