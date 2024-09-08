@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
-import java.util.concurrent.ForkJoinPool;
 
 public final class HttpServerJdk {
 
@@ -18,7 +17,6 @@ public final class HttpServerJdk {
         System.setProperty("sun.net.httpserver.nodelay","true");
         HttpServer httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
         httpServer.createContext(context, new HttpHandlerJdk(vms));
-        httpServer.setExecutor(ForkJoinPool.commonPool());
         httpServer.start();
     }
 

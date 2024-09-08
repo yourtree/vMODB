@@ -71,6 +71,7 @@ public final class HttpServerVertx extends AbstractVerticle {
         options.setPort(config.getInteger("http_port"));
         options.setHost("0.0.0.0");
         options.setTcpKeepAlive(true);
+        options.setTcpNoDelay(true);
         HttpServer server = this.vertx.createHttpServer(options);
 
         // only with linux native transport

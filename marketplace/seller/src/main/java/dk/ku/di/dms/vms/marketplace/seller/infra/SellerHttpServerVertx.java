@@ -15,20 +15,22 @@ public class SellerHttpServerVertx extends AbstractVerticle {
     static VmsApplication SELLER_VMS;
     static SellerService SELLER_SERVICE;
 
-    public static void init(VmsApplication sellerVms, int numVertices, boolean nativeTransport){
+    public static void init(VmsApplication sellerVms, int numVertices, int httpThreadPoolSize, boolean nativeTransport){
         SELLER_VMS = sellerVms;
         var optService = SELLER_VMS.<SellerService>getService();
         if(optService.isEmpty()){
             throw new RuntimeException("Could not find service for SellerService");
         }
         SELLER_SERVICE = optService.get();
-        Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(nativeTransport));
+        VertxOptions vertxOptions = new VertxOptions().setPreferNativeTransport(nativeTransport);
+        if(httpThreadPoolSize > 0){
+            vertxOptions.setEventLoopPoolSize(httpThreadPoolSize);
+        }
+        Vertx vertx = Vertx.vertx(vertxOptions);
         boolean usingNative = vertx.isNativeTransportEnabled();
-        System.out.println("Vertx is running with native: " + usingNative);
         DeploymentOptions deploymentOptions = new DeploymentOptions()
                 .setThreadingModel(ThreadingModel.EVENT_LOOP)
                 .setInstances(numVertices);
-
         try {
             vertx.deployVerticle(SellerHttpServerVertx.class,
                             deploymentOptions
@@ -48,6 +50,7 @@ public class SellerHttpServerVertx extends AbstractVerticle {
         options.setPort(Constants.SELLER_HTTP_PORT);
         options.setHost("0.0.0.0");
         options.setTcpKeepAlive(true);
+        options.setTcpNoDelay(true);
         HttpServer server = this.vertx.createHttpServer(options);
         server.requestHandler(new VertxHandler());
         server.listen(res -> {

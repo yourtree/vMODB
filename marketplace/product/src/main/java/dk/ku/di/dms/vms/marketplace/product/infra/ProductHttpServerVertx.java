@@ -18,16 +18,18 @@ public final class ProductHttpServerVertx extends AbstractVerticle {
     static AbstractProxyRepository<Product.ProductId, Product> PRODUCT_REPO;
 
     @SuppressWarnings("unchecked")
-    public static void init(VmsApplication productVms, int numVertices, boolean nativeTransport){
+    public static void init(VmsApplication productVms, int numVertices, int httpThreadPoolSize, boolean nativeTransport){
         PRODUCT_VMS = productVms;
         PRODUCT_REPO = (AbstractProxyRepository<Product.ProductId, Product>) PRODUCT_VMS.getRepositoryProxy("products");
-        Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(nativeTransport));
+        VertxOptions vertxOptions = new VertxOptions().setPreferNativeTransport(nativeTransport);
+        if(httpThreadPoolSize > 0){
+            vertxOptions.setEventLoopPoolSize(httpThreadPoolSize);
+        }
+        Vertx vertx = Vertx.vertx(vertxOptions);
         boolean usingNative = vertx.isNativeTransportEnabled();
-        System.out.println("Vertx is running with native: " + usingNative);
         DeploymentOptions deploymentOptions = new DeploymentOptions()
                 .setThreadingModel(ThreadingModel.EVENT_LOOP)
                 .setInstances(numVertices);
-
         try {
             vertx.deployVerticle(ProductHttpServerVertx.class,
                             deploymentOptions
@@ -47,6 +49,7 @@ public final class ProductHttpServerVertx extends AbstractVerticle {
         options.setPort(Constants.PRODUCT_HTTP_PORT);
         options.setHost("0.0.0.0");
         options.setTcpKeepAlive(true);
+        options.setTcpNoDelay(true);
         HttpServer server = this.vertx.createHttpServer(options);
         server.requestHandler(new VertxHandler());
         server.listen(res -> {

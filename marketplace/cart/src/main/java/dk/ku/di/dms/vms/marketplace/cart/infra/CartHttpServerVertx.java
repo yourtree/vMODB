@@ -21,16 +21,18 @@ public final class CartHttpServerVertx extends AbstractVerticle {
     static ICartItemRepository CART_REPO;
     static IVmsSerdesProxy SERDES = VmsSerdesProxyBuilder.build();
 
-    public static void init(VmsApplication cartVms, int numVertices, boolean nativeTransport){
+    public static void init(VmsApplication cartVms, int numVertices, int httpThreadPoolSize, boolean nativeTransport){
         CART_VMS = cartVms;
         CART_REPO = (ICartItemRepository) CART_VMS.getRepositoryProxy("cart_items");
-        Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(nativeTransport));
+        VertxOptions vertxOptions = new VertxOptions().setPreferNativeTransport(nativeTransport);
+        if(httpThreadPoolSize > 0){
+            vertxOptions.setEventLoopPoolSize(httpThreadPoolSize);
+        }
+        Vertx vertx = Vertx.vertx(vertxOptions);
         boolean usingNative = vertx.isNativeTransportEnabled();
-        System.out.println("Vertx is running with native: " + usingNative);
         DeploymentOptions deploymentOptions = new DeploymentOptions()
                 .setThreadingModel(ThreadingModel.EVENT_LOOP)
                 .setInstances(numVertices);
-
         try {
             vertx.deployVerticle(CartHttpServerVertx.class,
                             deploymentOptions
@@ -42,6 +44,10 @@ public final class CartHttpServerVertx extends AbstractVerticle {
             e.printStackTrace(System.out);
             throw new RuntimeException(e);
         }
+        System.out.println("Vertx is running with the following options:\n" +
+                "vertices: "+ numVertices +
+                "\nevent loop size: "+httpThreadPoolSize +
+                "\nnative: " + usingNative);
     }
 
     @Override
@@ -50,6 +56,7 @@ public final class CartHttpServerVertx extends AbstractVerticle {
         options.setPort(Constants.CART_HTTP_PORT);
         options.setHost("0.0.0.0");
         options.setTcpKeepAlive(true);
+        options.setTcpNoDelay(true);
         HttpServer server = this.vertx.createHttpServer(options);
         server.requestHandler(new VertxHandler());
         server.listen(res -> {

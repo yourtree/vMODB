@@ -54,9 +54,10 @@ public final class Main {
             throw new RuntimeException("http_server property is missing");
         }
         if(httpServer.equalsIgnoreCase("vertx")){
+            int httpThreadPoolSize = Integer.parseInt( properties.getProperty("http_thread_pool_size") );
             int numVertices = Integer.parseInt( properties.getProperty("num_vertices") );
             boolean nativeTransport = Boolean.parseBoolean( properties.getProperty("native_transport") );
-            initHttpServerVertx(vms, numVertices, nativeTransport);
+            StockHttpServerVertx.init(vms, numVertices, httpThreadPoolSize, nativeTransport);
             LOGGER.log(INFO,"Stock: Vertx HTTP Server started");
             return;
         }
@@ -76,10 +77,6 @@ public final class Main {
         httpServer.createContext("/stock", new StockHttpHandler(vms));
         httpServer.setExecutor(ForkJoinPool.commonPool());
         httpServer.start();
-    }
-
-    private static void initHttpServerVertx(VmsApplication vms, int numVertices, boolean nativeTransport){
-        StockHttpServerVertx.init(vms, numVertices, nativeTransport);
     }
 
     private static class StockHttpHandler implements HttpHandler {

@@ -57,9 +57,10 @@ public final class Main {
             throw new RuntimeException("http_server property is missing");
         }
         if(httpServer.equalsIgnoreCase("vertx")){
+            int httpThreadPoolSize = Integer.parseInt( properties.getProperty("http_thread_pool_size") );
             int numVertices = Integer.parseInt( properties.getProperty("num_vertices") );
             boolean nativeTransport = Boolean.parseBoolean( properties.getProperty("native_transport") );
-            initHttpServerVertx(vms, numVertices, nativeTransport);
+            CartHttpServerVertx.init(vms, numVertices, httpThreadPoolSize, nativeTransport);
             LOGGER.log(INFO,"Cart: Vertx HTTP Server started");
             return;
         }
@@ -70,10 +71,6 @@ public final class Main {
             return;
         }
         throw new RuntimeException("http_server property is unknown: "+ httpServer);
-    }
-
-    private static void initHttpServerVertx(VmsApplication vms, int numVertices, boolean nativeTransport){
-        CartHttpServerVertx.init(vms, numVertices, nativeTransport);
     }
 
     private static void initHttpServerJdk(VmsApplication vms, int backlog) throws IOException {

@@ -18,16 +18,18 @@ public final class StockHttpServerVertx extends AbstractVerticle {
     static AbstractProxyRepository<StockItem.StockId, StockItem> STOCK_REPO;
 
     @SuppressWarnings("unchecked")
-    public static void init(VmsApplication stockVms, int numVertices, boolean nativeTransport){
+    public static void init(VmsApplication stockVms, int numVertices, int httpThreadPoolSize, boolean nativeTransport){
         STOCK_VMS = stockVms;
         STOCK_REPO = (AbstractProxyRepository<StockItem.StockId, StockItem>) STOCK_VMS.getRepositoryProxy("stock_items");
-        Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(nativeTransport));
+        VertxOptions vertxOptions = new VertxOptions().setPreferNativeTransport(nativeTransport);
+        if(httpThreadPoolSize > 0){
+            vertxOptions.setEventLoopPoolSize(httpThreadPoolSize);
+        }
+        Vertx vertx = Vertx.vertx(vertxOptions);
         boolean usingNative = vertx.isNativeTransportEnabled();
-        System.out.println("Vertx is running with native: " + usingNative);
         DeploymentOptions deploymentOptions = new DeploymentOptions()
                 .setThreadingModel(ThreadingModel.EVENT_LOOP)
                 .setInstances(numVertices);
-
         try {
             vertx.deployVerticle(StockHttpServerVertx.class,
                             deploymentOptions
@@ -47,6 +49,7 @@ public final class StockHttpServerVertx extends AbstractVerticle {
         options.setPort(Constants.STOCK_HTTP_PORT);
         options.setHost("0.0.0.0");
         options.setTcpKeepAlive(true);
+        options.setTcpNoDelay(true);
         HttpServer server = this.vertx.createHttpServer(options);
         server.requestHandler(new VertxHandler());
         server.listen(res -> {
