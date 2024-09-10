@@ -13,7 +13,6 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionSchedule
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,7 +54,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     // used to track progress in the presence of parallel and partitioned tasks
     private final AtomicLong lastTidFinished;
 
-    private final Set<Object> partitionKeyTrackingMap = new HashSet<>();
+    private final Set<Object> partitionKeyTrackingMap = ConcurrentHashMap.newKeySet();
 
     private final IVmsInternalChannels vmsChannels;
 
@@ -151,9 +150,11 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 numParallelTasksRunning.decrementAndGet();
             } else {
                 if(task.partitionId().isPresent()){
-                    partitionKeyTrackingMap.remove(task.partitionId().get());
+                    if(!partitionKeyTrackingMap.remove(task.partitionId().get())){
+                        LOGGER.log(WARNING, vmsIdentifier+": Partitioned task "+task.tid()+" did not find its partition ID ("+task.partitionId().get()+") in the tracking map!");
+                    }
                     numPartitionedTasksRunning.decrementAndGet();
-                    LOGGER.log(DEBUG, vmsIdentifier+": Partitioned task "+task.tid()+" finished execution.");
+                    LOGGER.log(DEBUG, vmsIdentifier + ": Partitioned task " + task.tid() + " finished execution.");
                 } else {
                     singleThreadTaskRunning = false;
                 }
@@ -174,7 +175,9 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             } else {
                 VmsTransactionTask task = transactionTaskMap.get(tid);
                 if(task.partitionId().isPresent()){
-                    partitionKeyTrackingMap.remove(task.partitionId().get());
+                    if(!partitionKeyTrackingMap.remove(task.partitionId().get())){
+                        LOGGER.log(WARNING, vmsIdentifier+": Partitioned task "+task.tid()+" did not find its partition ID ("+task.partitionId().get()+") in the tracking map!");
+                    }
                     numPartitionedTasksRunning.decrementAndGet();
                 } else {
                     singleThreadTaskRunning = false;
