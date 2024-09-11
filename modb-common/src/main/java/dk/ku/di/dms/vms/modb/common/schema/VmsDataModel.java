@@ -7,7 +7,7 @@ import dk.ku.di.dms.vms.modb.common.type.DataType;
 /**
  * The <code>VmsDataModel</code> record describes the schema of VmsTable.
  */
-public class VmsDataModel {
+public final class VmsDataModel {
 
     // possibly a code might have more than a vms to execute
     // co-locate services
@@ -50,8 +50,8 @@ public class VmsDataModel {
     }
 
     public int findColumnPosition(String columnName){
-        for(int i = 0; i < columnNames.length; i++){
-            if(columnNames[i].contentEquals(columnName)) return i;
+        for(int i = 0; i < this.columnNames.length; i++){
+            if(this.columnNames[i].contentEquals(columnName)) return i;
         }
         return -1;
     }

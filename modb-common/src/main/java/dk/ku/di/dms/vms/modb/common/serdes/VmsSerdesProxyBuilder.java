@@ -1,8 +1,5 @@
 package dk.ku.di.dms.vms.modb.common.serdes;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-
 /**
  * A builder of serialization and deserialization capabilities
  * The idea is to abstract in this class the procedures to transform objects,
@@ -15,9 +12,14 @@ import com.google.gson.GsonBuilder;
 public final class VmsSerdesProxyBuilder {
 
     public static IVmsSerdesProxy build(){
-        GsonBuilder builder = new GsonBuilder();
-        Gson gson1 = builder.serializeNulls().create();
-        return new DefaultVmsSerdes( gson1 );
+        IVmsSerdesProxy proxy;
+        try {
+            proxy = new JacksonVmsSerdes();
+        } catch (NoClassDefFoundError | Exception e){
+            System.out.println("Failed to load default proxy: \n"+e);
+            proxy = new GsonVmsSerdes();
+        }
+        return proxy;
     }
 
 }

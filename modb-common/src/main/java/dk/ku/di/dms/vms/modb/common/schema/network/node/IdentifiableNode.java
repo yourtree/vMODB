@@ -1,9 +1,14 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.node;
 
-public class IdentifiableNode extends NetworkNode {
+import dk.ku.di.dms.vms.modb.common.schema.network.meta.NetworkAddress;
+
+public class IdentifiableNode extends NetworkAddress {
 
     // identifier is the vms name
-    public final String identifier;
+    public String identifier;
+
+    // for JSON parsing
+    public IdentifiableNode(){ }
 
     public IdentifiableNode(String identifier, String host, int port) {
         super(host, port);

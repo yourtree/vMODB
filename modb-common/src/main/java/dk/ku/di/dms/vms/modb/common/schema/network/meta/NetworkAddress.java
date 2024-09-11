@@ -7,10 +7,12 @@ import java.util.Objects;
 
 public class NetworkAddress {
 
-    private final int hashCode;
+    private int hashCode;
 
-    public final String host;
-    public final int port;
+    public String host;
+    public int port;
+
+    public NetworkAddress(){}
 
     public NetworkAddress(String host, int port) {
         this.host = host;

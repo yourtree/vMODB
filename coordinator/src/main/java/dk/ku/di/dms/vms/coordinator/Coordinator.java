@@ -278,11 +278,11 @@ public final class Coordinator extends StoppableRunnable {
             initTid = initTid + this.options.getMaxTransactionsPerBatch();
             precedenceMapInputQueue = precedenceMapOutputQueue;
             idx++;
-            txWorkers.add(Tuple.of( txWorker, txWorkerThread ));
+            this.txWorkers.add(Tuple.of( txWorker, txWorkerThread ));
         } while (idx <= numWorkers);
 
         // start them all
-        for(var txWorker : txWorkers){
+        for(var txWorker : this.txWorkers){
             txWorker.t2().start();
         }
     }
@@ -443,7 +443,7 @@ public final class Coordinator extends StoppableRunnable {
         // can be the leader or a vms
         for(VmsNode vms : this.vmsMetadataMap.values()){
             if(vms.inputEventSchema.containsKey(outputEvent)){
-                list.add(vms);
+                list.add(vms.asIdentifiableNode());
             }
         }
         // assumed to be terminal? maybe yes.

@@ -16,18 +16,23 @@
 
   <name>modb-api</name>
 
+  <properties>
+    <javax.validation.version>2.0.1.Final</javax.validation.version>
+    <javax.persistence.version>2.2</javax.persistence.version>
+  </properties>
+
   <dependencies>
 
     <dependency>
       <groupId>javax.validation</groupId>
       <artifactId>validation-api</artifactId>
-      <version>2.0.1.Final</version>
+      <version>${javax.validation.version}</version>
     </dependency>
 
     <dependency>
       <groupId>javax.persistence</groupId>
       <artifactId>javax.persistence-api</artifactId>
-      <version>2.2</version>
+      <version>${javax.persistence.version}</version>
     </dependency>
 
   </dependencies>

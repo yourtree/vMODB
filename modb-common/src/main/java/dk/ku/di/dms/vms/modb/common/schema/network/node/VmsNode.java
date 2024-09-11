@@ -76,4 +76,8 @@ public final class VmsNode extends IdentifiableNode {
                 '}';
     }
 
+    public IdentifiableNode asIdentifiableNode(){
+        return new IdentifiableNode(this.identifier, this.host, this.port);
+    }
+
 }

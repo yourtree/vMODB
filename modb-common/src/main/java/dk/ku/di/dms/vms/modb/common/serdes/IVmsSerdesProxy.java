@@ -15,7 +15,7 @@ import java.util.Set;
 public interface IVmsSerdesProxy {
 
     String serializeEventSchema(Map<String, VmsEventSchema> vmsEventSchema);
-    Map<String, VmsEventSchema> deserializeEventSchema(String json);
+    Map<String, VmsEventSchema> deserializeEventSchema(String vmsEventSchema);
 
     String serializeDataSchema(Map<String, VmsDataModel> vmsDataSchema);
     Map<String, VmsDataModel> deserializeDataSchema(String vmsDataSchema);
@@ -23,7 +23,7 @@ public interface IVmsSerdesProxy {
     <K,V> String serializeMap(Map<K,V> map);
     <K,V> Map<K,V> deserializeMap(String mapStr);
 
-    <V> String serializeSet(Set<V> map);
+    <V> String serializeSet(Set<V> set);
     <V> Set<V> deserializeSet(String setStr);
 
     String serializeConsumerSet(Map<String, List<IdentifiableNode>> map);
@@ -31,12 +31,10 @@ public interface IVmsSerdesProxy {
 
     Map<String, Long> deserializeDependenceMap(String dependenceMapStr);
 
-    <V> String serializeList(List<V> map);
+    <V> String serializeList(List<V> list);
     <V> List<V> deserializeList(String listStr);
 
     String serialize(Object value, Class<?> clazz);
     <T> T deserialize( String valueStr, Class<T> clazz);
-
-    String fromJson(String str);
 
 }

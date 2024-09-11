@@ -14,6 +14,8 @@ public class NetworkNode extends NetworkAddress {
     // whether this node is active
     private volatile transient boolean active;
 
+    public NetworkNode(){}
+
     public NetworkNode(String host, int port) {
         super(host, port);
         this.active = false;
