@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.TimeUnit;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static java.lang.System.Logger.Level.*;
@@ -183,10 +184,11 @@ public final class VmsEventHandler extends ModbHttpServer {
         // network and executor
         if(options.networkThreadPoolSize > 0){
             // at least two, one for acceptor and one for new events
-            this.group = AsynchronousChannelGroup.withFixedThreadPool(options.networkThreadPoolSize, Thread.ofPlatform().factory());
+            this.group = AsynchronousChannelGroup.withFixedThreadPool(options.networkThreadPoolSize,
+                    Thread.ofPlatform().name("vms-network-thread").factory()
+            );
             this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
         } else {
-            // by default, server socket creates a cached thread pool. better to avoid successive creation of threads
             this.group = null;
             this.serverSocket = AsynchronousServerSocketChannel.open(null);
         }
@@ -249,6 +251,8 @@ public final class VmsEventHandler extends ModbHttpServer {
         }
     }
 
+
+    private final List<IVmsTransactionResult> drained = new ArrayList<>(1024*10);
     /**
      * A thread that basically writes events to other VMSs and the Leader
      * Retrieves data from all output queues
@@ -257,48 +261,54 @@ public final class VmsEventHandler extends ModbHttpServer {
      * send and set up the next. Do that iteratively
      */
     private void eventLoop(){
-        int pollTimeout = 1;
-        IVmsTransactionResult txResult;
+        // int pollTimeout = 1;
+        IVmsTransactionResult txResult_;
         while(this.isRunning()){
             try {
-
-                while((txResult = this.vmsInternalChannels.transactionOutputQueue().poll()) == null) {
-                     pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep);
-                     this.giveUpCpu(pollTimeout);
+                while((txResult_ = this.vmsInternalChannels.transactionOutputQueue().poll(this.options.maxSleep, TimeUnit.MILLISECONDS)) == null) {
+                     // pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep);
+                     // this.giveUpCpu(pollTimeout);
                      this.moveBatchIfNecessary();
                 }
-                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
-
-                LOGGER.log(DEBUG,this.me.identifier+": New transaction result in event handler. TID = "+txResult.tid());
-
-                // assuming is a simple transaction result, not complex, so no need to iterate
-                OutboundEventResult outputEvent = txResult.getOutboundEventResult();
-
-                // scheduler can be way ahead of the last batch committed
-                BatchMetadata batchMetadata = this.volatileBatchMetadataMap.computeIfAbsent(outputEvent.batch(), ignored -> new BatchMetadata());
-                batchMetadata.numberTIDsExecuted += 1;
-                if(batchMetadata.maxTidExecuted < outputEvent.tid()){
-                    batchMetadata.maxTidExecuted = outputEvent.tid();
+                // pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+                drained.add(txResult_);
+                this.vmsInternalChannels.transactionOutputQueue().drainTo(drained);
+                for(var txResult : drained){
+                    this.processOutputEvent(txResult);
                 }
-
-                // it is a void method that executed, nothing to send
-                if (outputEvent.outputQueue() == null) continue;
-                Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(txResult.tid());
-                if (precedenceMap == null) {
-                    LOGGER.log(WARNING,this.me.identifier + ": No precedence map found for TID: " + txResult.tid());
-                    continue;
-                }
-                // remove ourselves (which also saves some bytes)
-                precedenceMap.remove(this.me.identifier);
-                String precedenceMapUpdated = this.serdesProxy.serializeMap(precedenceMap);
-                this.processOutputEvent(outputEvent, precedenceMapUpdated);
+                drained.clear();
 
                 this.moveBatchIfNecessary();
-
             } catch (Exception e) {
                 LOGGER.log(ERROR, this.me.identifier+": Problem on handling event\n"+e);
             }
         }
+    }
+
+    private void processOutputEvent(IVmsTransactionResult txResult) {
+        LOGGER.log(DEBUG,this.me.identifier+": New transaction result in event handler. TID = "+ txResult.tid());
+
+        // assuming is a simple transaction result, not complex, so no need to iterate
+        OutboundEventResult outputEvent = txResult.getOutboundEventResult();
+
+        // scheduler can be way ahead of the last batch committed
+        BatchMetadata batchMetadata = this.volatileBatchMetadataMap.computeIfAbsent(outputEvent.batch(), ignored -> new BatchMetadata());
+        batchMetadata.numberTIDsExecuted += 1;
+        if(batchMetadata.maxTidExecuted < outputEvent.tid()){
+            batchMetadata.maxTidExecuted = outputEvent.tid();
+        }
+
+        // it is a void method that executed, nothing to send
+        if (outputEvent.outputQueue() == null) return;
+        Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(txResult.tid());
+        if (precedenceMap == null) {
+            LOGGER.log(WARNING,this.me.identifier + ": No precedence map found for TID: " + txResult.tid());
+            return;
+        }
+        // remove ourselves (which also saves some bytes)
+        precedenceMap.remove(this.me.identifier);
+        String precedenceMapUpdated = this.serdesProxy.serializeMap(precedenceMap);
+        this.processOutputEvent(outputEvent, precedenceMapUpdated);
     }
 
     private void connectToReceivedConsumerSet(Map<String, List<IdentifiableNode>> receivedConsumerVms) {
@@ -396,7 +406,7 @@ public final class VmsEventHandler extends ModbHttpServer {
         // right now just including the original precedence map. ideally we must reduce the size by removing this vms
         // however, modifying the map incurs deserialization and serialization costs
         TransactionEvent.PayloadRaw payload = TransactionEvent.of(
-                outputEvent.tid(), outputEvent.batch(), outputEvent.outputQueue(), objStr, precedenceMap );
+                outputEvent.tid(), outputEvent.batch(), outputEvent.outputQueue(), objStr, precedenceMap);
 
         for(IVmsContainer consumerVmsContainer : consumerVMSs) {
             LOGGER.log(DEBUG,this.me.identifier+": An output event (queue: " + outputEvent.outputQueue() + ") will be queued to VMS: " + consumerVmsContainer.identifier());
@@ -731,7 +741,6 @@ public final class VmsEventHandler extends ModbHttpServer {
      * Class is iteratively called by the socket pool threads.
      */
     private final class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, Void> {
-
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
             LOGGER.log(DEBUG,me.identifier+": An unknown host has started a connection attempt.");
@@ -763,7 +772,6 @@ public final class VmsEventHandler extends ModbHttpServer {
                     message = "No cause identified";
                 }
             }
-
             LOGGER.log(WARNING,me.identifier+": Error on accepting connection: "+ message);
             if (serverSocket.isOpen()){
                 serverSocket.accept(null, this);

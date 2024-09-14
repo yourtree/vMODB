@@ -1,16 +1,8 @@
 package dk.ku.di.dms.vms.marketplace.product.infra;
 
-import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.product.Product;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
-//import io.vertx.core.*;
-//import io.vertx.core.http.HttpServer;
-//import io.vertx.core.http.HttpServerOptions;
-//import io.vertx.core.http.HttpServerRequest;
-
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.ExecutionException;
 
 public final class ProductHttpServerVertx { //extends AbstractVerticle {
 

@@ -1,22 +1,9 @@
 package dk.ku.di.dms.vms.marketplace.cart.infra;
 
-import dk.ku.di.dms.vms.marketplace.cart.entities.CartItem;
 import dk.ku.di.dms.vms.marketplace.cart.repositories.ICartItemRepository;
-import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
-//import io.vertx.core.*;
-//import io.vertx.core.http.HttpServer;
-//import io.vertx.core.http.HttpServerOptions;
-//import io.vertx.ext.web.Router;
-//import io.vertx.ext.web.handler.BodyHandler;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
-
-import static dk.ku.di.dms.vms.marketplace.cart.infra.CartUtils.CART_ITEMS;
 
 public final class CartHttpServerVertx { //extends AbstractVerticle {
 

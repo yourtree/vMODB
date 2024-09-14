@@ -6,35 +6,36 @@ import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
 
 import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public final class VmsEmbedInternalChannels implements IVmsInternalChannels {
 
-    private final Queue<InboundEvent> transactionInputQueue;
+    private final BlockingQueue<InboundEvent> transactionInputQueue;
 
-    private final Queue<IVmsTransactionResult> transactionOutputQueue;
+    private final BlockingQueue<IVmsTransactionResult> transactionOutputQueue;
 
     private final Queue<TransactionAbort.Payload> transactionAbortInputQueue;
 
     private final Queue<TransactionAbort.Payload> transactionAbortOutputQueue;
 
     public VmsEmbedInternalChannels() {
-        // linked blocking queue because method size is a constant time operation
         /* transaction **/
-        this.transactionInputQueue = new ConcurrentLinkedQueue<>();
-        this.transactionOutputQueue = new ConcurrentLinkedQueue<>();
+        this.transactionInputQueue = new LinkedBlockingQueue<>();
+        this.transactionOutputQueue = new LinkedBlockingQueue<>();
         /* abort **/
         this.transactionAbortInputQueue = new ConcurrentLinkedQueue<>();
         this.transactionAbortOutputQueue = new ConcurrentLinkedQueue<>();
     }
 
     @Override
-    public Queue<InboundEvent> transactionInputQueue() {
+    public BlockingQueue<InboundEvent> transactionInputQueue() {
         return this.transactionInputQueue;
     }
 
     @Override
-    public Queue<IVmsTransactionResult> transactionOutputQueue() {
+    public BlockingQueue<IVmsTransactionResult> transactionOutputQueue() {
         return this.transactionOutputQueue;
     }
 

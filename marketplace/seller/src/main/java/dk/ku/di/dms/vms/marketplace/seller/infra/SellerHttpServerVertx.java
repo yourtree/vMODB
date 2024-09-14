@@ -1,14 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.seller.infra;
 
-import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.seller.SellerService;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
-//import io.vertx.core.*;
-//import io.vertx.core.http.HttpServer;
-//import io.vertx.core.http.HttpServerOptions;
-//import io.vertx.core.http.HttpServerRequest;
-
-import java.util.concurrent.ExecutionException;
 
 public class SellerHttpServerVertx  { //extends AbstractVerticle {
 

@@ -10,6 +10,6 @@ public interface IVmsTransactionResult {
 
     OutboundEventResult getOutboundEventResult();
 
-    List<OutboundEventResult> getOutboundEventResults();
+    default List<OutboundEventResult> getOutboundEventResults() { return List.of(); }
 
 }

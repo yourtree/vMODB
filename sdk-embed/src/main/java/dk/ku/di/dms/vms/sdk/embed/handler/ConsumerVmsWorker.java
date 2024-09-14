@@ -21,9 +21,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.function.Supplier;
 
 import static dk.ku.di.dms.vms.sdk.embed.handler.ConsumerVmsWorker.State.*;
@@ -79,7 +77,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 
     private final Deque<ByteBuffer> pendingWritesBuffer = new ConcurrentLinkedDeque<>();
 
-    private final Queue<TransactionEvent.PayloadRaw> transactionEventQueue;
+    private final BlockingQueue<TransactionEvent.PayloadRaw> transactionEventQueue;
 
     private State state;
 
@@ -87,7 +85,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
 
-    private final List<TransactionEvent.PayloadRaw> transactionEvents = new ArrayList<>(10000);
+    private final List<TransactionEvent.PayloadRaw> transactionEvents = new ArrayList<>(1024*10);
 
     public static ConsumerVmsWorker build(
                                   VmsNode me,
@@ -115,7 +113,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
         this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize()) );
         this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize()) );
         this.options = options;
-        this.transactionEventQueue = new ConcurrentLinkedQueue<>();
+        this.transactionEventQueue = new LinkedBlockingQueue<>();
         this.state = NEW;
     }
 
@@ -144,34 +142,36 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     }
 
     private void eventLoop() {
-        int pollTimeout = 1;
-        TransactionEvent.PayloadRaw payloadRaw;
+        // int pollTimeout = 1;
+        // TransactionEvent.PayloadRaw payloadRaw;
         while(this.isRunning()){
             try {
-                while((payloadRaw = this.transactionEventQueue.poll()) == null) {
-                    pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep());
-                    // guarantees pending writes will be retired even though there is no new event to process
-                    this.processPendingWrites();
-                    this.processPendingLogging();
-                    this.giveUpCpu(pollTimeout);
-                }
-                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+//                while((payloadRaw = this.transactionEventQueue.poll()) == null) {
+//                    pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep());
+//                    // guarantees pending writes will be retired even though there is no new event to process
+//                    this.processPendingWrites();
+//                    this.processPendingLogging();
+//                    this.giveUpCpu(pollTimeout);
+//                }
+//                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
+                this.transactionEvents.add(this.transactionEventQueue.take());
+                this.transactionEventQueue.drainTo( this.transactionEvents );
 
                 // use first as estimation to avoid sending a single event
-                int maxSize = this.options.networkBufferSize() - payloadRaw.totalSize();
+//                int maxSize = this.options.networkBufferSize() - payloadRaw.totalSize();
 
 //                if(!this.transactionEventQueue.isEmpty()){
-                int sumTotal = 0;
-                do {
-                    this.transactionEvents.add(payloadRaw);
-                    sumTotal += payloadRaw.totalSize();
-                } while (sumTotal < maxSize && (payloadRaw = this.transactionEventQueue.poll()) != null);
+//                int sumTotal = 0;
+//                do {
+//                    this.transactionEvents.add(payloadRaw);
+//                    sumTotal += payloadRaw.totalSize();
+//                } while (sumTotal < maxSize && (payloadRaw = this.transactionEventQueue.poll()) != null);
                 this.sendBatchOfEvents();
 //                } else {
 //                    this.sendEvent(payloadRaw);
 //                }
-                this.processPendingWrites();
-                this.processPendingLogging();
+//                this.processPendingWrites();
+//                this.processPendingLogging();
             } catch (Exception e) {
                 LOGGER.log(ERROR, this.me.identifier+ ": Error captured in event loop \n"+e);
             }
@@ -275,20 +275,17 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
                 count = remaining;
                 writeBuffer.flip();
 
-                /* Blocking
-                this.channel.write(writeBuffer).get();
                 // drain buffer
-                while(writeBuffer.hasRemaining()){
+                do {
                     this.channel.write(writeBuffer).get();
-                }
+                }while(writeBuffer.hasRemaining());
                 this.returnByteBuffer(writeBuffer);
-                */
 
                 // maximize useful work
-                while(!this.tryAcquireLock()){
-                    this.processPendingLogging();
-                }
-                this.channel.write(writeBuffer, this.options.networkSendTimeout(), TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
+//                while(!this.tryAcquireLock()){
+//                    this.processPendingLogging();
+//                }
+//                this.channel.write(writeBuffer, this.options.networkSendTimeout(), TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
             } catch (Exception e) {
                 LOGGER.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier+"\n"+e);
                 // return non-processed events to original location or what?
@@ -363,7 +360,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 
     @Override
     public void queue(TransactionEvent.PayloadRaw eventPayload){
-        this.transactionEventQueue.offer(eventPayload);
+        this.transactionEventQueue.add(eventPayload);
     }
 
     @Override

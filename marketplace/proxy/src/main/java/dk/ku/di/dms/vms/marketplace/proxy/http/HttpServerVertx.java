@@ -1,17 +1,8 @@
 package dk.ku.di.dms.vms.marketplace.proxy.http;
 
 import dk.ku.di.dms.vms.coordinator.Coordinator;
-//import io.vertx.core.*;
-//import io.vertx.core.buffer.Buffer;
-//import io.vertx.core.http.HttpServer;
-//import io.vertx.core.http.HttpServerOptions;
-//import io.vertx.core.http.HttpServerRequest;
-//import io.vertx.core.json.JsonObject;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ExecutionException;
 
 //import static io.vertx.core.Future.await;
 

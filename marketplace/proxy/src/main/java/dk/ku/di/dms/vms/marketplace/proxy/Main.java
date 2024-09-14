@@ -69,7 +69,7 @@ public final class Main {
             TransactionDAG updateProductDag = TransactionBootstrap.name(UPDATE_PRODUCT)
                     .input("a", "product", UPDATE_PRODUCT)
                     .terminal("b", "stock", "a")
-                    .terminal("c", "cart", "a")
+//                    .terminal("c", "cart", "a")
                     .build();
             transactionMap.put(updateProductDag.name, updateProductDag);
         }
@@ -85,7 +85,7 @@ public final class Main {
         if(transactions.contains(CUSTOMER_CHECKOUT)) {
             TransactionDAG checkoutDag = TransactionBootstrap.name(CUSTOMER_CHECKOUT)
                     .input("a", "cart", CUSTOMER_CHECKOUT)
-                    .terminal("b", "stock", "a")
+                    .terminal("b", "cart", "a")
                     /*
                     .internal("b", "stock", RESERVE_STOCK, "a")
                     .internal("c", "order", STOCK_CONFIRMED, "b")
@@ -122,7 +122,7 @@ public final class Main {
 
         Map<String, IdentifiableNode> starterVMSs;
         if(Arrays.stream(transactions).anyMatch(p->p.contentEquals(CUSTOMER_CHECKOUT))) {
-            starterVMSs = buildStarterVMSsFull(properties);
+            starterVMSs = buildStarterVMSsBasic(properties);// buildStarterVMSsFull(properties);
         } else {
             starterVMSs = buildStarterVMSsBasic(properties);
         }
@@ -180,21 +180,18 @@ public final class Main {
         String cartHost = properties.getProperty("cart_host");
         String productHost = properties.getProperty("product_host");
         String stockHost = properties.getProperty("stock_host");
-
         if(productHost == null) throw new RuntimeException("Product host is null");
         if(cartHost == null) throw new RuntimeException("Cart host is null");
         if(stockHost == null) throw new RuntimeException("Stock host is null");
-
-        return getIdentifiableNodeMap(cartHost, productHost, stockHost);
+        return getBasicVmsMap(cartHost, productHost, stockHost);
     }
 
-    private static Map<String, IdentifiableNode> getIdentifiableNodeMap(String cartHost, String productHost, String stockHost) {
+    private static Map<String, IdentifiableNode> getBasicVmsMap(String cartHost, String productHost, String stockHost) {
         IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, Constants.CART_VMS_PORT);
         IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, Constants.STOCK_VMS_PORT);
-
         Map<String, IdentifiableNode> starterVMSs = new HashMap<>();
-        starterVMSs.putIfAbsent(cartAddress.identifier, cartAddress);
+//        starterVMSs.putIfAbsent(cartAddress.identifier, cartAddress);
         starterVMSs.putIfAbsent(productAddress.identifier, productAddress);
         starterVMSs.putIfAbsent(stockAddress.identifier, stockAddress);
         return starterVMSs;
@@ -202,7 +199,7 @@ public final class Main {
 
     private static Map<String, IdentifiableNode> buildStarterVMSsFull(Properties properties) {
         Map<String, IdentifiableNode> starterVMSs = buildStarterVMSsBasic(properties);
-        /*
+
         String orderHost = properties.getProperty("order_host");
         String paymentHost = properties.getProperty("payment_host");
         String shipmentHost = properties.getProperty("shipment_host");
@@ -222,7 +219,7 @@ public final class Main {
         starterVMSs.putIfAbsent(paymentAddress.identifier, paymentAddress);
         starterVMSs.putIfAbsent(shipmentAddress.identifier, shipmentAddress);
         starterVMSs.putIfAbsent(sellerAddress.identifier, sellerAddress);
-         */
+
         return starterVMSs;
     }
 

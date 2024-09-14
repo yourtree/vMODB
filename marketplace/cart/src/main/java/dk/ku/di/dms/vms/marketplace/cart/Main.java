@@ -27,7 +27,6 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Properties;
 
 import static dk.ku.di.dms.vms.marketplace.cart.infra.CartUtils.CART_ITEMS;

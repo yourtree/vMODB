@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
+import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.enums.ExecutionModeEnum;
 import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
@@ -12,9 +13,7 @@ import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder;
 import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder.VmsTransactionTask;
 import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -140,10 +139,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             task.signalFinished();
             updateLastFinishedTid(outboundEventResult.tid());
             // my previous has sent the event already?
-            VmsTransactionResult resultToQueue = new VmsTransactionResult(
-                    outboundEventResult.tid(),
-                    outboundEventResult);
-            vmsChannels.transactionOutputQueue().add(resultToQueue);
+            vmsChannels.transactionOutputQueue().add(outboundEventResult);
             if(executionMode == ExecutionModeEnum.SINGLE_THREADED) {
                 singleThreadTaskRunning = false;
             } else if (executionMode == ExecutionModeEnum.PARALLEL) {
@@ -284,15 +280,18 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         return this.numParallelTasksRunning.get() == 0 && numPartitionedTasksRunning.get() == 0;
     }
 
-    private void checkForNewEvents() {
+    List<InboundEvent> drained = new ArrayList<>(1024*10);
+
+    private void checkForNewEvents() throws InterruptedException {
         InboundEvent inboundEvent;
         if(this.mustWaitForInputEvent) {
-            int pollTimeout = Math.min(1, this.maxSleep);
-            while((inboundEvent = this.vmsChannels.transactionInputQueue().poll()) == null) {
-                LOGGER.log(DEBUG,this.vmsIdentifier+": Transaction scheduler going to sleep for "+pollTimeout+" until new event arrives");
-                this.giveUpCpu(pollTimeout);
-                pollTimeout = Math.min(pollTimeout + pollTimeout, this.maxSleep);
-            }
+            inboundEvent = this.vmsChannels.transactionInputQueue().take();
+//            int pollTimeout = Math.min(1, this.maxSleep);
+//            while((inboundEvent = this.vmsChannels.transactionInputQueue().poll()) == null) {
+//                LOGGER.log(DEBUG,this.vmsIdentifier+": Transaction scheduler going to sleep for "+pollTimeout+" until new event arrives");
+//                this.giveUpCpu(pollTimeout);
+//                pollTimeout = Math.min(pollTimeout + pollTimeout, this.maxSleep);
+//            }
             // disable block
             this.mustWaitForInputEvent = false;
         } else {
@@ -300,11 +299,19 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             if(inboundEvent == null) return;
         }
         // drain all
-        int drained = 0;
-        do {
-            this.processNewEvent(inboundEvent);
-            drained++;
-        } while(drained < this.maxToDrain && (inboundEvent = this.vmsChannels.transactionInputQueue().poll()) != null);
+        drained.add(inboundEvent);
+
+        this.vmsChannels.transactionInputQueue().drainTo(drained);
+
+        for(InboundEvent inboundEvent_ : drained){
+            this.processNewEvent(inboundEvent_);
+        }
+        drained.clear();
+//        int drained = 0;
+//        do {
+//            this.processNewEvent(inboundEvent);
+//            drained++;
+//        } while(drained < this.maxToDrain && (inboundEvent = this.vmsChannels.transactionInputQueue().poll()) != null);
     }
 
     private void processNewEvent(InboundEvent inboundEvent) {

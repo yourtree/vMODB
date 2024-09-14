@@ -55,7 +55,7 @@ public final class VmsInternalChannels implements IVmsInternalChannels {
     }
 
     @Override
-    public Queue<InboundEvent> transactionInputQueue() {
+    public BlockingQueue<InboundEvent> transactionInputQueue() {
         return transactionInputQueue;
     }
 

@@ -6,6 +6,7 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
 
 import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 
 /**
  * In a virtual microservice paradigm, internal components exchange a lot of internal events.
@@ -31,7 +32,7 @@ public interface IVmsInternalChannels {
     /**
      * It represents events ready for scheduler consumption
      */
-    Queue<InboundEvent> transactionInputQueue();
+    BlockingQueue<InboundEvent> transactionInputQueue();
 
     /**
      *  It represents events ready for delivery
