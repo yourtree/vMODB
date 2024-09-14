@@ -26,10 +26,12 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.transaction.LoggingHandler;
+import dk.ku.di.dms.vms.web_common.IHttpHandler;
+import dk.ku.di.dms.vms.web_common.ModbHttpServer;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.channel.JdkAsyncChannel;
+import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -37,10 +39,12 @@ import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.PRESENTATION;
@@ -53,7 +57,7 @@ import static java.lang.System.Logger.Level.*;
  * Class that encapsulates all logic related to issuing of
  * transactions, batch commits, transaction aborts, ...
  */
-public final class Coordinator extends StoppableRunnable {
+public final class Coordinator extends ModbHttpServer {
 
     private static final System.Logger LOGGER = System.getLogger(Coordinator.class.getName());
     
@@ -64,9 +68,6 @@ public final class Coordinator extends StoppableRunnable {
 
     // group for channels
     private final AsynchronousChannelGroup group;
-
-    // general tasks, like sending info to VMSs and other servers
-    // private final ExecutorService taskExecutor;
 
     // even though we can start with a known number of servers, their payload may have changed after a crash
     private final Map<Integer, ServerNode> servers;
@@ -111,11 +112,15 @@ public final class Coordinator extends StoppableRunnable {
     // serialization and deserialization of complex objects
     private final IVmsSerdesProxy serdesProxy;
 
-    private final Queue<Object> coordinatorQueue;
+    private final BlockingQueue<Object> coordinatorQueue;
 
     private final Map<String, IVmsWorker> vmsWorkerContainerMap;
 
-    private final List<Tuple<TransactionWorker, Thread>> txWorkers;
+    private final List<Tuple<TransactionWorker, Thread>> transactionWorkers;
+
+    private final Consumer<TransactionInput> transactionInputConsumer;
+
+    private final IHttpHandler httpHandler;
 
     public static Coordinator build(// obtained from leader election or passed by parameter on setup
                                     Map<Integer, ServerNode> servers,
@@ -129,11 +134,12 @@ public final class Coordinator extends StoppableRunnable {
                                     long startingBatchOffset,
                                     // starting tid (may come from storage after a crash)
                                     long startingTid,
+                                    Function<Coordinator, IHttpHandler> httpHandlerSupplier,
                                     IVmsSerdesProxy serdesProxy) throws IOException {
         return new Coordinator(servers == null ? new ConcurrentHashMap<>() : servers,
                 new HashMap<>(), startersVMSs, transactionMap,
                 me, options, startingBatchOffset, startingTid,
-                serdesProxy);
+                httpHandlerSupplier, serdesProxy);
     }
 
     private Coordinator(Map<Integer, ServerNode> servers,
@@ -144,6 +150,7 @@ public final class Coordinator extends StoppableRunnable {
                         CoordinatorOptions options,
                         long startingBatchOffset,
                         long startingTid,
+                        Function<Coordinator, IHttpHandler> httpHandlerSupplier,
                         IVmsSerdesProxy serdesProxy) throws IOException {
         super();
 
@@ -189,6 +196,16 @@ public final class Coordinator extends StoppableRunnable {
             this.transactionInputDeques.add(new ConcurrentLinkedDeque<>());
         }
 
+        if(options.getNumTransactionWorkers() == 1){
+            var inputQueue = this.transactionInputDeques.getFirst();
+            transactionInputConsumer = inputQueue::add;
+        } else {
+            transactionInputConsumer = transactionInput -> {
+                int idx = ThreadLocalRandom.current().nextInt(0, options.getNumTransactionWorkers());
+                transactionInputDeques.get(idx).offerLast(transactionInput);
+            };
+        }
+
         // in production, it requires receiving new transaction definitions
         this.transactionMap = transactionMap;
 
@@ -206,7 +223,8 @@ public final class Coordinator extends StoppableRunnable {
         this.batchContextMap.put(dummyBatchOffset, currentBatch);
 
         this.vmsWorkerContainerMap = new HashMap<>();
-        this.txWorkers = new ArrayList<>();
+        this.transactionWorkers = new ArrayList<>();
+        this.httpHandler = httpHandlerSupplier.apply(this);
     }
 
     private final Map<String, VmsNode[]> vmsIdentifiersPerDAG = new HashMap<>();
@@ -230,7 +248,12 @@ public final class Coordinator extends StoppableRunnable {
         this.setUpTransactionWorkers();
         Object message;
         do {
-            while ((message = this.coordinatorQueue.poll()) != null) {
+//            try {
+//                message = this.coordinatorQueue.take();
+//                this.processVmsMessage(message);
+//            } catch (InterruptedException ignored) { }
+            // tends to be faster than blocking
+            while((message = this.coordinatorQueue.poll()) != null){
                 this.processVmsMessage(message);
             }
         } while (this.isRunning());
@@ -278,11 +301,11 @@ public final class Coordinator extends StoppableRunnable {
             initTid = initTid + this.options.getMaxTransactionsPerBatch();
             precedenceMapInputQueue = precedenceMapOutputQueue;
             idx++;
-            this.txWorkers.add(Tuple.of( txWorker, txWorkerThread ));
+            this.transactionWorkers.add(Tuple.of( txWorker, txWorkerThread ));
         } while (idx <= numWorkers);
 
         // start them all
-        for(var txWorker : this.txWorkers){
+        for(var txWorker : this.transactionWorkers){
             txWorker.t2().start();
         }
     }
@@ -537,14 +560,32 @@ public final class Coordinator extends StoppableRunnable {
 
             if(messageIdentifier == LEADER_REQUEST){
                 // buggy node intending to pose as leader...
+                LOGGER.log(WARNING,"Leader: A node is trying to present itself as leader!");
                 try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored){}
                 return;
             }
 
             // if it is not a presentation, drop connection
             if(messageIdentifier != PRESENTATION){
-                LOGGER.log(WARNING,"A node is trying to connect without a presentation message:");
-                try (channel) { MemoryManager.releaseTemporaryDirectBuffer(buffer); } catch(Exception ignored){}
+                buffer.flip();
+                String request = StandardCharsets.UTF_8.decode(buffer).toString();
+                if(isHttpClient(request)){
+                    var readCompletionHandler = new HttpReadCompletionHandler(
+                            new ConnectionMetadata("http_client".hashCode(),
+                                    ConnectionMetadata.NodeType.HTTP_CLIENT,
+                                    channel),
+                            buffer,
+                            MemoryManager.getTemporaryDirectBuffer(options.getNetworkBufferSize()),
+                            httpHandler
+                    );
+                    try { NetworkUtils.configure(channel, options.getOsBufferSize()); } catch (IOException ignored) { }
+                    readCompletionHandler.process(request);
+                } else {
+                    LOGGER.log(WARNING,"Leader: A node is trying to connect without a presentation message. \n" + request);
+                    buffer.clear();
+                    MemoryManager.releaseTemporaryDirectBuffer(buffer);
+                    try { channel.close(); } catch (IOException ignored) { }
+                }
                 return;
             }
 
@@ -598,8 +639,7 @@ public final class Coordinator extends StoppableRunnable {
      * having this info avoids having to contact all internal/terminal nodes to inform the precedence of events
      */
     public void queueTransactionInput(TransactionInput transactionInput){
-        int idx = ThreadLocalRandom.current().nextInt(0, this.options.getNumTransactionWorkers());
-        this.transactionInputDeques.get(idx).offerLast(transactionInput);
+        this.transactionInputConsumer.accept(transactionInput);
     }
 
     /**
@@ -778,7 +818,7 @@ public final class Coordinator extends StoppableRunnable {
 
     public long getNumTIDsSubmitted(){
         long sumTIDs = 0;
-        for(var txWorker : this.txWorkers){
+        for(var txWorker : this.transactionWorkers){
             sumTIDs += txWorker.t1().getNumTIDsSubmitted();
         }
         return sumTIDs;

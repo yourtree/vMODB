@@ -4,15 +4,15 @@ import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.product.Product;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
-import io.vertx.core.*;
-import io.vertx.core.http.HttpServer;
-import io.vertx.core.http.HttpServerOptions;
-import io.vertx.core.http.HttpServerRequest;
+//import io.vertx.core.*;
+//import io.vertx.core.http.HttpServer;
+//import io.vertx.core.http.HttpServerOptions;
+//import io.vertx.core.http.HttpServerRequest;
 
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
 
-public final class ProductHttpServerVertx extends AbstractVerticle {
+public final class ProductHttpServerVertx { //extends AbstractVerticle {
 
     static VmsApplication PRODUCT_VMS;
     static AbstractProxyRepository<Product.ProductId, Product> PRODUCT_REPO;
@@ -21,28 +21,28 @@ public final class ProductHttpServerVertx extends AbstractVerticle {
     public static void init(VmsApplication productVms, int numVertices, int httpThreadPoolSize, boolean nativeTransport){
         PRODUCT_VMS = productVms;
         PRODUCT_REPO = (AbstractProxyRepository<Product.ProductId, Product>) PRODUCT_VMS.getRepositoryProxy("products");
-        VertxOptions vertxOptions = new VertxOptions().setPreferNativeTransport(nativeTransport);
-        if(httpThreadPoolSize > 0){
-            vertxOptions.setEventLoopPoolSize(httpThreadPoolSize);
-        }
-        Vertx vertx = Vertx.vertx(vertxOptions);
-        boolean usingNative = vertx.isNativeTransportEnabled();
-        DeploymentOptions deploymentOptions = new DeploymentOptions()
-                .setThreadingModel(ThreadingModel.EVENT_LOOP)
-                .setInstances(numVertices);
-        try {
-            vertx.deployVerticle(ProductHttpServerVertx.class,
-                            deploymentOptions
-                    )
-                    .toCompletionStage()
-                    .toCompletableFuture()
-                    .get();
-        } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace(System.out);
-            throw new RuntimeException(e);
-        }
+//        VertxOptions vertxOptions = new VertxOptions().setPreferNativeTransport(nativeTransport);
+//        if(httpThreadPoolSize > 0){
+//            vertxOptions.setEventLoopPoolSize(httpThreadPoolSize);
+//        }
+//        Vertx vertx = Vertx.vertx(vertxOptions);
+//        boolean usingNative = vertx.isNativeTransportEnabled();
+//        DeploymentOptions deploymentOptions = new DeploymentOptions()
+//                .setThreadingModel(ThreadingModel.EVENT_LOOP)
+//                .setInstances(numVertices);
+//        try {
+//            vertx.deployVerticle(ProductHttpServerVertx.class,
+//                            deploymentOptions
+//                    )
+//                    .toCompletionStage()
+//                    .toCompletableFuture()
+//                    .get();
+//        } catch (InterruptedException | ExecutionException e) {
+//            e.printStackTrace(System.out);
+//            throw new RuntimeException(e);
+//        }
     }
-
+/*
     @Override
     public void start(Promise<Void> startPromise) {
         HttpServerOptions options = new HttpServerOptions();
@@ -139,4 +139,6 @@ public final class ProductHttpServerVertx extends AbstractVerticle {
         exchange.response().end();
     }
 
+
+ */
 }

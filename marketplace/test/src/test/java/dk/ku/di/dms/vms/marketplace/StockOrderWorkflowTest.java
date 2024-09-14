@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -115,7 +116,7 @@ public final class StockOrderWorkflowTest extends AbstractWorkflowTest {
                 serverIdentifier,
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
-                1, 
+                1,  _ -> new IHttpHandler() { },
                 serdes
         );
     }

@@ -3,14 +3,14 @@ package dk.ku.di.dms.vms.marketplace.seller.infra;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.seller.SellerService;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
-import io.vertx.core.*;
-import io.vertx.core.http.HttpServer;
-import io.vertx.core.http.HttpServerOptions;
-import io.vertx.core.http.HttpServerRequest;
+//import io.vertx.core.*;
+//import io.vertx.core.http.HttpServer;
+//import io.vertx.core.http.HttpServerOptions;
+//import io.vertx.core.http.HttpServerRequest;
 
 import java.util.concurrent.ExecutionException;
 
-public class SellerHttpServerVertx extends AbstractVerticle {
+public class SellerHttpServerVertx  { //extends AbstractVerticle {
 
     static VmsApplication SELLER_VMS;
     static SellerService SELLER_SERVICE;
@@ -22,28 +22,28 @@ public class SellerHttpServerVertx extends AbstractVerticle {
             throw new RuntimeException("Could not find service for SellerService");
         }
         SELLER_SERVICE = optService.get();
-        VertxOptions vertxOptions = new VertxOptions().setPreferNativeTransport(nativeTransport);
-        if(httpThreadPoolSize > 0){
-            vertxOptions.setEventLoopPoolSize(httpThreadPoolSize);
-        }
-        Vertx vertx = Vertx.vertx(vertxOptions);
-        boolean usingNative = vertx.isNativeTransportEnabled();
-        DeploymentOptions deploymentOptions = new DeploymentOptions()
-                .setThreadingModel(ThreadingModel.EVENT_LOOP)
-                .setInstances(numVertices);
-        try {
-            vertx.deployVerticle(SellerHttpServerVertx.class,
-                            deploymentOptions
-                    )
-                    .toCompletionStage()
-                    .toCompletableFuture()
-                    .get();
-        } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace(System.out);
-            throw new RuntimeException(e);
-        }
+//        VertxOptions vertxOptions = new VertxOptions().setPreferNativeTransport(nativeTransport);
+//        if(httpThreadPoolSize > 0){
+//            vertxOptions.setEventLoopPoolSize(httpThreadPoolSize);
+//        }
+//        Vertx vertx = Vertx.vertx(vertxOptions);
+//        boolean usingNative = vertx.isNativeTransportEnabled();
+//        DeploymentOptions deploymentOptions = new DeploymentOptions()
+//                .setThreadingModel(ThreadingModel.EVENT_LOOP)
+//                .setInstances(numVertices);
+//        try {
+//            vertx.deployVerticle(SellerHttpServerVertx.class,
+//                            deploymentOptions
+//                    )
+//                    .toCompletionStage()
+//                    .toCompletableFuture()
+//                    .get();
+//        } catch (InterruptedException | ExecutionException e) {
+//            e.printStackTrace(System.out);
+//            throw new RuntimeException(e);
+//        }
     }
-
+/*
     @Override
     public void start(Promise<Void> startPromise) {
         HttpServerOptions options = new HttpServerOptions();
@@ -106,4 +106,6 @@ public class SellerHttpServerVertx extends AbstractVerticle {
         }
     }
 
+
+ */
 }

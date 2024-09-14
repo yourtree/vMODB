@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.modb.common.serdes;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
@@ -14,14 +14,18 @@ import java.util.Set;
 
 final class JacksonVmsSerdes implements IVmsSerdesProxy {
 
-    private static final ObjectMapper mapper = new ObjectMapper().configure(MapperFeature.AUTO_DETECT_GETTERS, false);
+    private static final ObjectMapper mapper = new ObjectMapper().
+            configure(MapperFeature.AUTO_DETECT_GETTERS, false)
+            .configure(DeserializationFeature.ACCEPT_FLOAT_AS_INT, true)
+        ;
 
     @Override
     public String serializeEventSchema(Map<String, VmsEventSchema> vmsEventSchema) {
         try {
             return mapper.writeValueAsString(vmsEventSchema);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+             e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -31,8 +35,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public Map<String, VmsEventSchema> deserializeEventSchema(String json) {
         try {
             return mapper.readValue(json, EVENT_SCHEMA_CLAZZ);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -42,8 +47,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public String serializeDataSchema(Map<String, VmsDataModel> vmsDataSchema) {
         try {
             return mapper.writeValueAsString(vmsDataSchema);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -51,8 +57,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public Map<String, VmsDataModel> deserializeDataSchema(String vmsDataSchema) {
         try {
             return mapper.readValue(vmsDataSchema, DATA_MODEL_CLAZZ);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -60,8 +67,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public <K, V> String serializeMap(Map<K, V> map) {
         try {
             return mapper.writeValueAsString(map);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -70,8 +78,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
         try {
             TypeReference<Map<K, V>> clazz = new TypeReference<>() { };
             return mapper.readValue(mapStr, clazz);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -79,8 +88,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public <V> String serializeSet(Set<V> set) {
         try {
             return mapper.writeValueAsString(set);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -89,8 +99,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
         try {
             TypeReference<Set<V>> clazz = new TypeReference<>() { };
             return mapper.readValue(setStr, clazz);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -100,8 +111,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public String serializeConsumerSet(Map<String, List<IdentifiableNode>> map) {
         try {
             return mapper.writeValueAsString(map);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -109,8 +121,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public Map<String, List<IdentifiableNode>> deserializeConsumerSet(String mapStr) {
         try {
             return mapper.readValue(mapStr, CONSUMER_SET_CLAZZ);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -121,8 +134,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public Map<String, Long> deserializeDependenceMap(String dependenceMapStr) {
         try {
             return mapper.readValue(dependenceMapStr, DEP_MAP_CLAZZ);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -130,8 +144,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public <V> String serializeList(List<V> list) {
         try {
             return mapper.writeValueAsString(list);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -140,8 +155,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
         try {
             TypeReference<List<V>> clazz = new TypeReference<>() { };
             return mapper.readValue(listStr, clazz);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -149,8 +165,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public String serialize(Object value, Class<?> clazz) {
         try {
             return mapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 
@@ -158,8 +175,9 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public <T> T deserialize(String valueStr, Class<T> clazz) {
         try {
             return mapper.readValue(valueStr, clazz);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+        } catch (Throwable e) {
+            e.printStackTrace(System.out);
+            return null;
         }
     }
 

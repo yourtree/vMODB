@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.sdk.embed.client;
 
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
-import dk.ku.di.dms.vms.modb.api.interfaces.IHttpHandler;
+import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -19,7 +19,7 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.VmsEventHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
-import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
+import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import org.reflections.Reflections;
 
 import java.util.*;

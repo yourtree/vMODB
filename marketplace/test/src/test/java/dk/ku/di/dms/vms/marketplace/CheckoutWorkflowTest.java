@@ -10,12 +10,14 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static java.lang.System.Logger.Level.INFO;
@@ -128,7 +130,8 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
                 serverIdentifier,
                 new CoordinatorOptions().withBatchWindow(BATCH_WINDOW_INTERVAL),
                 1,
-                1, 
+                1,
+                _ -> new IHttpHandler() { },
                 serdes
         );
     }

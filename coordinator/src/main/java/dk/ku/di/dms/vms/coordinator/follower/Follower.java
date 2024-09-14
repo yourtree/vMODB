@@ -5,15 +5,14 @@ import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import dk.ku.di.dms.vms.coordinator.options.FollowerOptions;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
+import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.schema.network.Constants;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplication;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.follower.BatchReplicationAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
-import dk.ku.di.dms.vms.web_common.meta.Issue;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -33,7 +32,7 @@ import static java.net.StandardSocketOptions.SO_KEEPALIVE;
  * Initial design: sit idle and wait for new election in case heartbeat does not arrive on time
  * TODO finish when a new leader is elected needs to send a batch abort request. but this is in the coordinator class...
  */
-public final class Follower extends SignalingStoppableRunnable {
+public final class Follower extends StoppableRunnable {
 
     private final AsynchronousServerSocketChannel serverSocket;
 
@@ -102,7 +101,7 @@ public final class Follower extends SignalingStoppableRunnable {
 
         // connect to leader
         if(!connectToLeader()) {
-            this.signal.add( NO_RESULT );
+            //this.signal.add( NO_RESULT );
             return;
         }
 
@@ -116,9 +115,9 @@ public final class Follower extends SignalingStoppableRunnable {
 
         while(isRunning()) {
 
-            try {
-                Issue issue = issueQueue.take();
-            } catch (InterruptedException ignored) { }
+//            try {
+//                Issue issue = issueQueue.take();
+//            } catch (InterruptedException ignored) { }
 
         }
 
@@ -144,7 +143,7 @@ public final class Follower extends SignalingStoppableRunnable {
 
         if(!leaderConnectionMetadata.channel.isOpen()){
             stop();
-            this.signal.add( NO_RESULT );
+            // this.signal.add( NO_RESULT );
         }
 
     }

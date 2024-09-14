@@ -1,21 +1,21 @@
 package dk.ku.di.dms.vms.marketplace.proxy.http;
 
 import dk.ku.di.dms.vms.coordinator.Coordinator;
-import io.vertx.core.*;
-import io.vertx.core.buffer.Buffer;
-import io.vertx.core.http.HttpServer;
-import io.vertx.core.http.HttpServerOptions;
-import io.vertx.core.http.HttpServerRequest;
-import io.vertx.core.json.JsonObject;
+//import io.vertx.core.*;
+//import io.vertx.core.buffer.Buffer;
+//import io.vertx.core.http.HttpServer;
+//import io.vertx.core.http.HttpServerOptions;
+//import io.vertx.core.http.HttpServerRequest;
+//import io.vertx.core.json.JsonObject;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 
-import static io.vertx.core.Future.await;
+//import static io.vertx.core.Future.await;
 
-public final class HttpServerVertx extends AbstractVerticle {
+public final class HttpServerVertx { //extends AbstractVerticle {
 
     static Coordinator COORD;
 
@@ -25,45 +25,46 @@ public final class HttpServerVertx extends AbstractVerticle {
         String executor = properties.getProperty("executor");
         int http_port = Integer.parseInt( properties.getProperty("http_port") );
         int num_vertices = Integer.parseInt( properties.getProperty("num_vertices") );
-        JsonObject json = new JsonObject();
-        json.put("http_port", http_port);
-
-        ThreadingModel threadingModel;
-        if(executor.equals("vthread")) {
-            threadingModel = ThreadingModel.VIRTUAL_THREAD;
-        } else {
-            // leads to higher throughput
-            threadingModel = ThreadingModel.EVENT_LOOP;
-        }
-
-        boolean nativeTransport = Boolean.parseBoolean( properties.getProperty("native_transport") );
-        Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(nativeTransport));
-        boolean usingNative = vertx.isNativeTransportEnabled();
-        System.out.println("Vertx is running with native: " + usingNative);
-
-        var deploymentOptions = new DeploymentOptions()
-                                    .setThreadingModel(threadingModel)
-                                    .setConfig(json);
+//        JsonObject json = new JsonObject();
+//        json.put("http_port", http_port);
+//
+//        ThreadingModel threadingModel;
+//        if(executor.equals("vthread")) {
+//            threadingModel = ThreadingModel.VIRTUAL_THREAD;
+//        } else {
+//            // leads to higher throughput
+//            threadingModel = ThreadingModel.EVENT_LOOP;
+//        }
+//
+//        boolean nativeTransport = Boolean.parseBoolean( properties.getProperty("native_transport") );
+//        Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(nativeTransport));
+//        boolean usingNative = vertx.isNativeTransportEnabled();
+//        System.out.println("Vertx is running with native: " + usingNative);
+//
+//        var deploymentOptions = new DeploymentOptions()
+//                                    .setThreadingModel(threadingModel)
+//                                    .setConfig(json);
 
         // https://vertx.io/docs/vertx-core/java/#_specifying_number_of_verticle_instances
-        if(num_vertices > 1){
-            // deploymentOptions.setWorkerPoolSize(num_http_workers);
-            deploymentOptions.setInstances(num_vertices);
-        }
-
-        try {
-            vertx.deployVerticle(HttpServerVertx.class,
-                        deploymentOptions
-                )
-                .toCompletionStage()
-                .toCompletableFuture()
-                .get();
-        } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace(System.out);
-            throw new RuntimeException(e);
-        }
+//        if(num_vertices > 1){
+//            // deploymentOptions.setWorkerPoolSize(num_http_workers);
+//            deploymentOptions.setInstances(num_vertices);
+//        }
+//
+//        try {
+//            vertx.deployVerticle(HttpServerVertx.class,
+//                        deploymentOptions
+//                )
+//                .toCompletionStage()
+//                .toCompletableFuture()
+//                .get();
+//        } catch (InterruptedException | ExecutionException e) {
+//            e.printStackTrace(System.out);
+//            throw new RuntimeException(e);
+//        }
     }
 
+    /*
     @Override
     public void start(Promise<Void> startPromise) {
         HttpServerOptions options = new HttpServerOptions();
@@ -181,4 +182,6 @@ public final class HttpServerVertx extends AbstractVerticle {
 
     }
 
+
+     */
 }

@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
+import dk.ku.di.dms.vms.marketplace.proxy.http.HttpServerAsyncJdk;
 import dk.ku.di.dms.vms.marketplace.proxy.http.HttpServerBuilder;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
@@ -32,7 +33,7 @@ public final class Main {
     public static void main(String[] ignoredArgs) throws IOException, InterruptedException {
         Properties properties = ConfigUtils.loadProperties();
         Coordinator coordinator = loadCoordinator(properties);
-        initHttpServer(properties, coordinator);
+        //initHttpServer(properties, coordinator);
     }
 
     private static void initHttpServer(Properties properties, Coordinator coordinator) throws IOException, InterruptedException {
@@ -166,6 +167,7 @@ public final class Main {
                         ,
                 STARTING_BATCH_ID,
                 STARTING_TID,
+                HttpServerAsyncJdk::new,
                 serdes
         );
 

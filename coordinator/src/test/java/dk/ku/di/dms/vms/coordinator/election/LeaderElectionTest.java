@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.coordinator.election;
 
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
-import dk.ku.di.dms.vms.web_common.runnable.VmsDaemonThreadFactory;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -14,8 +13,8 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 
 import static dk.ku.di.dms.vms.coordinator.election.Constants.LEADER_REQUEST;
-import static dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable.FINISHED;
-import static dk.ku.di.dms.vms.web_common.runnable.SignalingStoppableRunnable.NO_RESULT;
+import static dk.ku.di.dms.vms.coordinator.election.SignalingStoppableRunnable.FINISHED;
+import static dk.ku.di.dms.vms.coordinator.election.SignalingStoppableRunnable.NO_RESULT;
 import static java.lang.System.Logger.Level.INFO;
 import static java.lang.Thread.sleep;
 

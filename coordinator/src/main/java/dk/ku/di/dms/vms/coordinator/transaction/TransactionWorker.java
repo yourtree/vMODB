@@ -2,10 +2,10 @@ package dk.ku.di.dms.vms.coordinator.transaction;
 
 import dk.ku.di.dms.vms.coordinator.batch.BatchContext;
 import dk.ku.di.dms.vms.coordinator.vms.IVmsWorker;
+import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -160,8 +160,8 @@ public final class TransactionWorker extends StoppableRunnable {
     }
 
     private long getTidNextBatch(long lastTidBatch) {
-        if(this.numWorkers == 1 && this.tid < lastTidBatch) return this.tid;
         this.numTIDsSubmitted.updateAndGet(x -> x + (this.tid - this.startingTidBatch));
+        if(this.numWorkers == 1 && this.tid < lastTidBatch) return this.tid;
         return this.startingTidBatch + ((long) this.numWorkers * this.maxNumberOfTIDsBatch);
     }
 
@@ -338,7 +338,6 @@ public final class TransactionWorker extends StoppableRunnable {
     }
 
     public long getNumTIDsSubmitted() {
-        if(this.numWorkers == 1) return this.tid;
         return this.numTIDsSubmitted.get();
     }
 

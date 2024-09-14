@@ -6,7 +6,6 @@ import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.product.infra.ProductDbUtils;
 import dk.ku.di.dms.vms.marketplace.product.infra.ProductHttpServerVertx;
-import dk.ku.di.dms.vms.modb.api.interfaces.IHttpHandler;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
@@ -17,6 +16,7 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
+import dk.ku.di.dms.vms.web_common.IHttpHandler;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -113,7 +113,7 @@ public final class Main {
         }
 
         @Override
-        public String get(String uri) throws Exception {
+        public String getAsJson(String uri) throws Exception {
             String[] split = uri.split("/");
             int sellerId = Integer.parseInt(split[split.length - 2]);
             int productId = Integer.parseInt(split[split.length - 1]);

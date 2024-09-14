@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler.complex;
 
 import dk.ku.di.dms.vms.modb.common.data_structure.IdentifiableNode;
+import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.sdk.core.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsTransactionMetadata;
@@ -9,7 +10,6 @@ import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.ComplexVmsTransactionTrackin
 import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.IVmsTransactionTrackingContext;
 import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.OffsetTracker;
 import dk.ku.di.dms.vms.sdk.core.scheduler.tracking.SimpleVmsTransactionTrackingContext;
-import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;
 import java.util.concurrent.ExecutionException;

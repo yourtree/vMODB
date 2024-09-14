@@ -1,5 +1,6 @@
-package dk.ku.di.dms.vms.web_common.runnable;
+package dk.ku.di.dms.vms.coordinator.election;
 
+import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.web_common.meta.Issue;
 
 import java.util.concurrent.ArrayBlockingQueue;

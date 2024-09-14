@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
-import dk.ku.di.dms.vms.modb.api.interfaces.IHttpHandler;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.*;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
@@ -19,10 +18,11 @@ import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
+import dk.ku.di.dms.vms.web_common.IHttpHandler;
+import dk.ku.di.dms.vms.web_common.ModbHttpServer;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.channel.JdkAsyncChannel;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
-import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
@@ -32,7 +32,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.Future;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static java.lang.System.Logger.Level.*;
@@ -47,7 +46,7 @@ import static java.lang.System.Logger.Level.*;
  * Could also try to adapt to JNI:
  * <a href="https://nachtimwald.com/2017/06/17/calling-java-from-c/">...</a>
  */
-public final class VmsEventHandler extends StoppableRunnable {
+public final class VmsEventHandler extends ModbHttpServer {
 
     private static final System.Logger LOGGER = System.getLogger(VmsEventHandler.class.getName());
     
@@ -453,117 +452,6 @@ public final class VmsEventHandler extends StoppableRunnable {
         // channel.read(buffer, 0, new VmsReadCompletionHandler(this.node, connMetadata, buffer));
     }
 
-    private final class HttpReadCompletionHandler implements CompletionHandler<Integer, Integer> {
-
-        private final ConnectionMetadata connectionMetadata;
-        private final ByteBuffer readBuffer;
-        private final ByteBuffer writeBuffer;
-
-        public HttpReadCompletionHandler(ConnectionMetadata connectionMetadata, ByteBuffer readBuffer) {
-            this.connectionMetadata = connectionMetadata;
-            this.readBuffer = readBuffer;
-            this.writeBuffer = MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize);
-        }
-
-        private record HttpRequestInternal(String httpMethod, String uri, String body) {}
-
-        private static HttpRequestInternal parseRequest(String request){
-            String[] requestLines = request.split("\r\n");
-            String requestLine = requestLines[0];  // First line is the request line
-            String[] requestLineParts = requestLine.split(" ");
-            String method = requestLineParts[0];
-            String url = requestLineParts[1];
-            String httpVersion = requestLineParts[2];
-            if(method.contentEquals("GET")){
-                return new HttpRequestInternal(method, url, "");
-            }
-            // process header
-            int i = 1;
-            while (requestLines.length > i &&
-                            !requestLines[i].isEmpty()) {
-                    String[] headerParts = requestLines[i].split(": ");
-                    i++;
-                }
-            StringBuilder body = new StringBuilder();
-            for (i += 1; i < requestLines.length; i++) {
-                    body.append(requestLines[i]).append("\r\n");
-                }
-            String payload = body.toString().trim();
-            return new HttpRequestInternal(method, url, payload);
-        }
-
-        public void process(String request){
-            try {
-                HttpRequestInternal httpRequest = parseRequest(request);
-                Future<Integer> ft = null;
-                switch (httpRequest.httpMethod()){
-                    case "GET" -> {
-                        String respVms = httpHandler.get(httpRequest.uri());
-                        byte[] respBytes = respVms.getBytes(StandardCharsets.UTF_8);
-                        String response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
-                                + respBytes.length + "\r\n\r\n" + respVms;
-                        this.writeBuffer.put(response.getBytes(StandardCharsets.UTF_8));
-                        this.writeBuffer.flip();
-                        ft = this.connectionMetadata.channel.write(this.writeBuffer);
-                    }
-                    case "POST" -> {
-                        httpHandler.post(httpRequest.uri(), httpRequest.body());
-                        this.writeBuffer.put(OK_RESPONSE_BYTES);
-                        this.writeBuffer.flip();
-                        ft = this.connectionMetadata.channel.write(this.writeBuffer);
-                    }
-                    case "PATCH" -> {
-                        httpHandler.patch(httpRequest.uri(), httpRequest.body());
-                        this.writeBuffer.put(OK_RESPONSE_BYTES);
-                        this.writeBuffer.flip();
-                        ft = this.connectionMetadata.channel.write(this.writeBuffer);
-                    }
-                }
-                if(ft != null){
-                    int result = ft.get();
-                    // send remaining to avoid http client to hang
-                    while (result < this.writeBuffer.position()){
-                        result += this.connectionMetadata.channel.write(this.writeBuffer).get();
-                    }
-                }
-                this.writeBuffer.clear();
-            } catch (Exception e){
-                LOGGER.log(WARNING, me.identifier+": Error caught in HTTP handler.\n"+e);
-                this.writeBuffer.clear();
-                this.writeBuffer.put(ERROR_RESPONSE_BYTES);
-                this.writeBuffer.flip();
-                this.connectionMetadata.channel.write(writeBuffer);
-            }
-            this.readBuffer.clear();
-            this.connectionMetadata.channel.read(this.readBuffer, 0, this);
-        }
-
-        private static final byte[] OK_RESPONSE_BYTES = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
-
-        private static final byte[] ERROR_RESPONSE_BYTES = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nBad Request".getBytes(StandardCharsets.UTF_8);
-
-        @Override
-        public void completed(Integer result, Integer attachment) {
-            if(result == -1){
-                this.readBuffer.clear();
-                this.writeBuffer.clear();
-                MemoryManager.releaseTemporaryDirectBuffer(this.readBuffer);
-                MemoryManager.releaseTemporaryDirectBuffer(this.writeBuffer);
-                LOGGER.log(DEBUG,me.identifier+": HTTP client has disconnected!");
-                return;
-            }
-            this.readBuffer.flip();
-            String request = StandardCharsets.UTF_8.decode(this.readBuffer).toString();
-            this.process(request);
-        }
-
-        @Override
-        public void failed(Throwable exc, Integer attachment) {
-            this.readBuffer.clear();
-            this.connectionMetadata.channel.read(this.readBuffer, 0, this);
-        }
-    }
-
     /**
      * The completion handler must execute fast
      */
@@ -739,14 +627,17 @@ public final class VmsEventHandler extends StoppableRunnable {
             // message identifier
             byte messageIdentifier = this.buffer.get(0);
             if(messageIdentifier != PRESENTATION){
-                buffer.flip();
+                this.buffer.flip();
                 String request = StandardCharsets.UTF_8.decode(this.buffer).toString();
-                if(this.isHttpClient(request)){
+                if(isHttpClient(request)){
                     var readCompletionHandler = new HttpReadCompletionHandler(
                             new ConnectionMetadata("http_client".hashCode(),
                                     ConnectionMetadata.NodeType.HTTP_CLIENT,
                                     this.channel),
-                            this.buffer);
+                            this.buffer,
+                            MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize),
+                            httpHandler
+                            );
                     try { NetworkUtils.configure(this.channel, options.osBufferSize()); } catch (IOException ignored) { }
                     readCompletionHandler.process(request);
                 } else {
@@ -764,17 +655,6 @@ public final class VmsEventHandler extends StoppableRunnable {
                 case (Presentation.VMS_TYPE) -> this.processVmsPresentation();
                 default -> this.processUnknownNodeType(nodeTypeIdentifier);
             }
-        }
-
-        // POST, PATCH, GET
-        private boolean isHttpClient(String request) {
-            var substr = request.substring(0, request.indexOf(' '));
-            switch (substr){
-                case "GET", "PATCH", "POST" -> {
-                    return true;
-                }
-            }
-            return false;
         }
 
         private void processServerPresentation() {
@@ -845,7 +725,6 @@ public final class VmsEventHandler extends StoppableRunnable {
         public void failed(Throwable exc, Void void_) {
             LOGGER.log(WARNING,"Error on processing presentation message!");
         }
-
     }
 
     /**

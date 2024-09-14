@@ -7,7 +7,7 @@ import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 
 public abstract class AbstractHttpHandler {
 
-    private final Coordinator coordinator;
+    protected final Coordinator coordinator;
 
     public AbstractHttpHandler(Coordinator coordinator){
         this.coordinator = coordinator;
@@ -28,7 +28,7 @@ public abstract class AbstractHttpHandler {
     }
 
     protected byte[] getNumTIDsSubmittedBytes() {
-        long lng = this.coordinator.getNumTIDsSubmitted() - 1;
+        long lng = this.coordinator.getNumTIDsSubmitted();
         System.out.println("Number of TIDs submitted: "+lng);
         return new byte[] {
                 (byte) lng,

@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
-import dk.ku.di.dms.vms.modb.api.interfaces.IHttpHandler;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
@@ -25,6 +24,7 @@ import dk.ku.di.dms.vms.sdk.embed.events.InputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample1;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample2;
 import dk.ku.di.dms.vms.sdk.embed.events.OutputEventExample3;
+import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import org.junit.Test;
 

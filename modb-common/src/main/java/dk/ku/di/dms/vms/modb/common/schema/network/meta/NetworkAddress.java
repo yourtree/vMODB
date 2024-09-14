@@ -1,7 +1,5 @@
 package dk.ku.di.dms.vms.modb.common.schema.network.meta;
 
-import dk.ku.di.dms.vms.modb.common.schema.network.node.NetworkNode;
-
 import java.net.InetSocketAddress;
 import java.util.Objects;
 

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.web_common.runnable;
+package dk.ku.di.dms.vms.modb.common.runnable;
 
 import static java.lang.Thread.sleep;
 

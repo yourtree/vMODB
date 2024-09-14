@@ -6,11 +6,11 @@ import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
-import io.vertx.core.*;
-import io.vertx.core.http.HttpServer;
-import io.vertx.core.http.HttpServerOptions;
-import io.vertx.ext.web.Router;
-import io.vertx.ext.web.handler.BodyHandler;
+//import io.vertx.core.*;
+//import io.vertx.core.http.HttpServer;
+//import io.vertx.core.http.HttpServerOptions;
+//import io.vertx.ext.web.Router;
+//import io.vertx.ext.web.handler.BodyHandler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +18,7 @@ import java.util.concurrent.ExecutionException;
 
 import static dk.ku.di.dms.vms.marketplace.cart.infra.CartUtils.CART_ITEMS;
 
-public final class CartHttpServerVertx extends AbstractVerticle {
+public final class CartHttpServerVertx { //extends AbstractVerticle {
 
     static VmsApplication CART_VMS;
     static ICartItemRepository CART_REPO;
@@ -27,32 +27,33 @@ public final class CartHttpServerVertx extends AbstractVerticle {
     public static void init(VmsApplication cartVms, int numVertices, int httpThreadPoolSize, boolean nativeTransport){
         CART_VMS = cartVms;
         CART_REPO = (ICartItemRepository) CART_VMS.getRepositoryProxy("cart_items");
-        VertxOptions vertxOptions = new VertxOptions().setPreferNativeTransport(nativeTransport);
-        if(httpThreadPoolSize > 0){
-            vertxOptions.setEventLoopPoolSize(httpThreadPoolSize);
-        }
-        Vertx vertx = Vertx.vertx(vertxOptions);
-        boolean usingNative = vertx.isNativeTransportEnabled();
-        DeploymentOptions deploymentOptions = new DeploymentOptions()
-                .setThreadingModel(ThreadingModel.EVENT_LOOP)
-                .setInstances(numVertices);
-        try {
-            vertx.deployVerticle(CartHttpServerVertx.class,
-                            deploymentOptions
-                    )
-                    .toCompletionStage()
-                    .toCompletableFuture()
-                    .get();
-        } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace(System.out);
-            throw new RuntimeException(e);
-        }
-        System.out.println("Vertx is running with the following options:\n" +
-                "vertices: "+ numVertices +
-                "\nevent loop size: "+httpThreadPoolSize +
-                "\nnative: " + usingNative);
+//        VertxOptions vertxOptions = new VertxOptions().setPreferNativeTransport(nativeTransport);
+//        if(httpThreadPoolSize > 0){
+//            vertxOptions.setEventLoopPoolSize(httpThreadPoolSize);
+//        }
+//        Vertx vertx = Vertx.vertx(vertxOptions);
+//        boolean usingNative = vertx.isNativeTransportEnabled();
+//        DeploymentOptions deploymentOptions = new DeploymentOptions()
+//                .setThreadingModel(ThreadingModel.EVENT_LOOP)
+//                .setInstances(numVertices);
+//        try {
+//            vertx.deployVerticle(CartHttpServerVertx.class,
+//                            deploymentOptions
+//                    )
+//                    .toCompletionStage()
+//                    .toCompletableFuture()
+//                    .get();
+//        } catch (InterruptedException | ExecutionException e) {
+//            e.printStackTrace(System.out);
+//            throw new RuntimeException(e);
+//        }
+//        System.out.println("Vertx is running with the following options:\n" +
+//                "vertices: "+ numVertices +
+//                "\nevent loop size: "+httpThreadPoolSize +
+//                "\nnative: " + usingNative);
     }
 
+    /*
     @Override
     public void start(Promise<Void> startPromise) {
         HttpServerOptions options = new HttpServerOptions();
@@ -99,5 +100,5 @@ public final class CartHttpServerVertx extends AbstractVerticle {
             }
         });
     }
-
+*/
 }
