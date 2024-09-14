@@ -6,6 +6,8 @@ import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.stock.infra.StockDbUtils;
 import dk.ku.di.dms.vms.marketplace.stock.infra.StockHttpServerVertx;
+import dk.ku.di.dms.vms.modb.api.interfaces.IHttpHandler;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
@@ -19,6 +21,7 @@ import java.io.OutputStream;
 import java.lang.System.Logger;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ForkJoinPool;
 
@@ -32,7 +35,7 @@ public final class Main {
     public static void main(String[] ignoredArgs) throws Exception {
         Properties properties = ConfigUtils.loadProperties();
         VmsApplication vms = initVms(properties);
-        initHttpServer(properties, vms);
+        // initHttpServer(properties, vms);
     }
 
     private static VmsApplication initVms(Properties properties) throws Exception {
@@ -43,9 +46,61 @@ public final class Main {
                         "dk.ku.di.dms.vms.marketplace.stock",
                         "dk.ku.di.dms.vms.marketplace.common"
                 });
-        VmsApplication vms = VmsApplication.build(options);
+        VmsApplication vms = VmsApplication.build(options,
+                (x,y) -> new StockHttpHandlerJdk2(x, (IStockRepository) y.apply("stock_items")));
         vms.start();
         return vms;
+    }
+    
+    private static class StockHttpHandlerJdk2 implements IHttpHandler {
+
+        private final ITransactionManager transactionManager;
+        private final IStockRepository repository;
+
+        public StockHttpHandlerJdk2(ITransactionManager transactionManager,
+                                     IStockRepository repository){
+            this.transactionManager = transactionManager;
+            this.repository = repository;
+        }
+
+        @Override
+        public void post(String uri, String body) throws Exception {
+            StockItem stockItem = StockDbUtils.deserializeStockItem(body);
+            try(var txCtx = this.transactionManager.beginTransaction(0, 0, 0, false)) {
+                this.repository.upsert(stockItem);
+            }
+        }
+
+        @Override
+        public void patch(String uri, String body) throws Exception {
+            final String[] uriSplit = uri.split("/");
+            String op = uriSplit[uriSplit.length - 1];
+            if(op.contentEquals("reset")){
+                // path: /stock/reset
+                this.transactionManager.reset();
+                return;
+            }
+            try(var txCtx = this.transactionManager.beginTransaction(0, 0, 0,false)){
+                List<StockItem> stockItems = this.repository.getAll();
+                for(StockItem item : stockItems){
+                    item.qty_available = 10000;
+                    item.version = "0";
+                    item.qty_reserved = 0;
+                    this.repository.upsert(item);
+                }
+            }
+        }
+
+        @Override
+        public String get(String uri) throws Exception {
+            final String[] uriSplit = uri.split("/");
+            int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
+            int productId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
+            try (var txCtx = this.transactionManager.beginTransaction(0, 0, 0, true)) {
+                StockItem stockItem = this.repository.lookupByKey(new StockItem.StockId(sellerId, productId));
+                return stockItem.toString();
+            }
+        }
     }
 
     private static void initHttpServer(Properties properties, VmsApplication vms) throws IOException {

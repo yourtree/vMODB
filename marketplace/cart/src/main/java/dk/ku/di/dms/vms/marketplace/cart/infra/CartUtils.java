@@ -3,8 +3,12 @@ package dk.ku.di.dms.vms.marketplace.cart.infra;
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-public class CartUtils {
+public final class CartUtils {
+
+    public static final Map<Integer, List<dk.ku.di.dms.vms.marketplace.cart.entities.CartItem>> CART_ITEMS = new ConcurrentHashMap<>();
 
     public static List<CartItem> convertCartItems(List<dk.ku.di.dms.vms.marketplace.cart.entities.CartItem> cartItems){
         return cartItems.stream().map(CartUtils::convertCartItemEntity).toList();

@@ -238,14 +238,13 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     }
 
     public final T parseObjectIntoEntity(Object[] object){
-        Schema schema = this.table.underlyingPrimaryKeyIndex().schema();
         try {
             // all entities must have default constructor
             T entity = this.entityConstructor.newInstance();
             int i;
             for(Map.Entry<String,VarHandle> entry : this.entityFieldMap.entrySet()){
                 // must get the index of the column first
-                i = schema.columnPosition(entry.getKey());
+                i = this.table.underlyingPrimaryKeyIndex().schema().columnPosition(entry.getKey());
                 if(object[i] == null){
                     continue;
                 }

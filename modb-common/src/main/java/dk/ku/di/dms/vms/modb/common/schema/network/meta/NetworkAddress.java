@@ -7,8 +7,6 @@ import java.util.Objects;
 
 public class NetworkAddress {
 
-    private int hashCode;
-
     public String host;
     public int port;
 
@@ -17,7 +15,6 @@ public class NetworkAddress {
     public NetworkAddress(String host, int port) {
         this.host = host;
         this.port = port;
-        this.hashCode = Objects.hash(this.host, this.port);
     }
 
     @Override
@@ -35,12 +32,12 @@ public class NetworkAddress {
     // mutable since the VMS can crash
     @Override
     public int hashCode() {
-        return this.hashCode;
+        return Objects.hash(this.host, this.port);
     }
 
     @Override
     public boolean equals(Object o) {
-        return o instanceof NetworkNode && hashCode() == o.hashCode();
+        return o instanceof NetworkAddress o_ && this.host.contentEquals(o_.host) && this.port == o_.port;
     }
 
 }

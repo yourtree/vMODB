@@ -2,10 +2,12 @@ package dk.ku.di.dms.vms.modb.transaction.multiversion.index;
 
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintEnum;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
+import dk.ku.di.dms.vms.modb.common.data_structure.Set0;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
+import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
 import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
 import dk.ku.di.dms.vms.modb.transaction.internal.Entry;
 import dk.ku.di.dms.vms.modb.transaction.internal.OperationSetOfKey;
@@ -48,7 +50,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     private final Optional<IPrimaryKeyGenerator<?>> primaryKeyGenerator;
 
-    private final Set<IKey> keysToFlush = ConcurrentHashMap.newKeySet();
+    private final Set<IKey> keysToFlush;
 
     // write set of transactions
     private final Map<Long, Set<IKey>> writeSetMap;
@@ -66,6 +68,11 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         this.updatesPerKeyMap = new ConcurrentHashMap<>(100000);
         this.primaryKeyGenerator = Optional.ofNullable(primaryKeyGenerator);
         this.writeSetMap = new ConcurrentHashMap<>();
+        if(primaryKeyIndex instanceof UniqueHashBufferIndex){
+            this.keysToFlush = ConcurrentHashMap.newKeySet();
+        } else {
+            this.keysToFlush = new Set0<>();
+        }
     }
 
     @Override

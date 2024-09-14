@@ -6,8 +6,10 @@ import com.sun.net.httpserver.HttpServer;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.product.infra.ProductDbUtils;
 import dk.ku.di.dms.vms.marketplace.product.infra.ProductHttpServerVertx;
+import dk.ku.di.dms.vms.modb.api.interfaces.IHttpHandler;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.CompositeKey;
@@ -33,7 +35,7 @@ public final class Main {
     public static void main(String[] ignoredArgs) throws Exception {
         Properties properties = ConfigUtils.loadProperties();
         VmsApplication vms = initVms(properties);
-        initHttpServer(properties, vms);
+        // initHttpServer(properties, vms);
     }
 
     public static VmsApplication initVms(Properties properties) throws Exception {
@@ -44,7 +46,8 @@ public final class Main {
                         "dk.ku.di.dms.vms.marketplace.product",
                         "dk.ku.di.dms.vms.marketplace.common"
                 });
-        VmsApplication vms = VmsApplication.build(options);
+        VmsApplication vms = VmsApplication.build(options,
+                (x,y) -> new ProductHttpHandlerJdk2(x, (IProductRepository) y.apply("products")));
         vms.start();
         return vms;
     }
@@ -69,6 +72,56 @@ public final class Main {
             return;
         }
         throw new RuntimeException("http_server property is unknown: "+ httpServer);
+    }
+    
+    private static class ProductHttpHandlerJdk2 implements IHttpHandler {
+
+        private final ITransactionManager transactionManager;
+        private final IProductRepository repository;
+        private static final IVmsSerdesProxy SERDES = VmsSerdesProxyBuilder.build();
+
+        public ProductHttpHandlerJdk2(ITransactionManager transactionManager,
+                                        IProductRepository repository){
+            this.transactionManager = transactionManager;
+            this.repository = repository;
+        }
+
+        @Override
+        public void post(String uri, String payload) throws Exception {
+            Product product = ProductDbUtils.deserializeProduct(payload);
+            try(var txCtx = this.transactionManager.beginTransaction(0, 0, 0, false)) {
+                this.repository.upsert(product);
+            }
+        }
+
+        @Override
+        public void patch(String uri, String body) throws Exception {
+            String[] uriSplit = uri.split("/");
+            String op = uriSplit[uriSplit.length - 1];
+            if(op.contentEquals("reset")){
+                // path: /product/reset
+                this.transactionManager.reset();
+                return;
+            }
+            try(var txCtx = this.transactionManager.beginTransaction(0, 0, 0,false)){
+                var products = this.repository.getAll();
+                for(Product product : products){
+                    product.version = "0";
+                    this.repository.upsert(product);
+                }
+            }
+        }
+
+        @Override
+        public String get(String uri) throws Exception {
+            String[] split = uri.split("/");
+            int sellerId = Integer.parseInt(split[split.length - 2]);
+            int productId = Integer.parseInt(split[split.length - 1]);
+            try(var txCtx = this.transactionManager.beginTransaction(0, 0, 0,true)) {
+                Product product = this.repository.lookupByKey(new Product.ProductId(sellerId, productId));
+                return product.toString();
+            }
+        }
     }
 
     private static void initHttpServerJdk(VmsApplication vms, int backlog) throws IOException {

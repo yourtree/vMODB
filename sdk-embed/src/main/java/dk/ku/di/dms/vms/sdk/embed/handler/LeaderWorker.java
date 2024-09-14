@@ -96,18 +96,21 @@ final class LeaderWorker extends StoppableRunnable {
         try {
             this.writeBuffer.flip();
             do {
-                this.channel.write(this.writeBuffer).get();
+               // var initTs = System.currentTimeMillis();
+               this.channel.write(this.writeBuffer).get();
+               // LOGGER.log(WARNING, this.vmsNode.identifier+". Latency to send leader a message: "+(System.currentTimeMillis()-initTs));
             } while (this.writeBuffer.hasRemaining());
         } catch (Exception e){
             // queue to try insert again
             LOGGER.log(ERROR, this.vmsNode.identifier+": Error on writing message to Leader\n"+e.getCause().getMessage(), e);
             e.printStackTrace(System.out);
             this.queueMessage(message);
-            this.writeBuffer.clear();
             if(!this.channel.isOpen()) {
                 this.leader.off();
                 this.stop();
             }
+        } finally {
+            this.writeBuffer.clear();
         }
     }
 
@@ -129,12 +132,12 @@ final class LeaderWorker extends StoppableRunnable {
     }
 
     private void sendBatchCommitAck(BatchCommitAck.Payload payload) {
-        BatchCommitAck.write( writeBuffer, payload );
+        BatchCommitAck.write( this.writeBuffer, payload );
         this.write(payload);
     }
 
     private void sendTransactionAbort(TransactionAbort.Payload payload) {
-        TransactionAbort.write( writeBuffer, payload );
+        TransactionAbort.write( this.writeBuffer, payload );
         this.write(payload);
     }
 

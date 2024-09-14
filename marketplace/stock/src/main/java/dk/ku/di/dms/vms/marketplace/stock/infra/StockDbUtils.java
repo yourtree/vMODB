@@ -26,5 +26,4 @@ public final class StockDbUtils {
         return SERDES.deserialize(payload, StockItem.class);
     }
 
-
 }

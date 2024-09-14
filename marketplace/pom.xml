@@ -32,22 +32,7 @@
         <netty.version>4.1.110.Final</netty.version>
     </properties>
 
-    <!-- to use each profile, put -P <profile_name> in the mvn command -->
-    <profiles>
-        <profile>
-            <id>io_uring</id>
-            <dependencies>
-                <dependency>
-                    <groupId>io.vertx</groupId>
-                    <artifactId>vertx-io_uring-incubator</artifactId>
-                    <version>${vertx.version}</version>
-                </dependency>
-            </dependencies>
-        </profile>
-    </profiles>
-
     <dependencies>
-
         <!-- vertx http server -->
         <dependency>
             <groupId>io.vertx</groupId>
@@ -89,6 +74,7 @@
             <artifactId>sdk-embed</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
+
     </dependencies>
 
 </project>

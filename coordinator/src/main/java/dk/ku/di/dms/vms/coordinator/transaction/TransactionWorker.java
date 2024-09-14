@@ -8,6 +8,7 @@ import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.web_common.runnable.StoppableRunnable;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static java.lang.System.Logger.Level.*;
 
@@ -120,13 +121,16 @@ public final class TransactionWorker extends StoppableRunnable {
         this.coordinatorQueue = coordinatorQueue;
     }
 
+    private final AtomicLong numTIDsSubmitted = new AtomicLong(0);
+
     @Override
     public void run() {
         LOGGER.log(INFO, "Starting transaction worker # " + this.id);
         TransactionInput data;
-        long lastTidBatch = this.getLastTidNextBatch();
+        long lastTidBatch;
         long end;
         while (this.isRunning()) {
+            lastTidBatch = this.getLastTidNextBatch();
             end = System.currentTimeMillis() + this.batchWindow;
             do {
                 // drain transaction inputs
@@ -147,7 +151,6 @@ public final class TransactionWorker extends StoppableRunnable {
             } while(!this.advanceCurrentBatch() && this.isRunning());
 
             this.tid = this.getTidNextBatch(lastTidBatch);
-            lastTidBatch = this.getLastTidNextBatch();
             this.startingTidBatch = this.tid;
         }
     }
@@ -158,6 +161,7 @@ public final class TransactionWorker extends StoppableRunnable {
 
     private long getTidNextBatch(long lastTidBatch) {
         if(this.numWorkers == 1 && this.tid < lastTidBatch) return this.tid;
+        this.numTIDsSubmitted.updateAndGet(x -> x + (this.tid - this.startingTidBatch));
         return this.startingTidBatch + ((long) this.numWorkers * this.maxNumberOfTIDsBatch);
     }
 
@@ -204,7 +208,7 @@ public final class TransactionWorker extends StoppableRunnable {
             String precedenceMapStr = this.serdesProxy.serializeMap(previousTidPerVms);
             TransactionEvent.PayloadRaw txEvent = TransactionEvent.of(this.tid, this.batchContext.batchOffset,
                     transactionInput.event.name, transactionInput.event.payload, precedenceMapStr);
-            LOGGER.log(DEBUG,"Leader: Transaction worker "+id+" adding event "+event.name+" to "+inputVms.identifier+" worker:\n"+txEvent);
+            LOGGER.log(DEBUG,"Leader: Transaction worker "+id+" adding event "+event.name+" to "+inputVms.identifier+" worker:\n"+txEvent+"\n"+previousTidPerVms);
             this.vmsWorkerContainerMap.get(inputVms.identifier).queueTransactionEvent(txEvent);
         }
         this.tid++;
@@ -219,7 +223,7 @@ public final class TransactionWorker extends StoppableRunnable {
     }
 
     public static class PrecedenceInfo {
-        long lastTid;
+        volatile long lastTid;
         final long lastBatch;
         final long previousToLastBatch;
         public PrecedenceInfo(long lastTid, long lastBatch, long previousToLastBatch) {
@@ -236,6 +240,14 @@ public final class TransactionWorker extends StoppableRunnable {
         public long previousToLastBatch() {
             return previousToLastBatch;
         }
+        @Override
+        public String toString() {
+            return "{"
+                    + "\"lastBatch\":\"" + lastBatch + "\""
+                    + ",\"lastTid\":\"" + lastTid + "\""
+                    + ",\"previousToLastBatch\":\"" + previousToLastBatch + "\""
+                    + "}";
+        }
     }
 
     private void processPendingInput() {
@@ -243,7 +255,9 @@ public final class TransactionWorker extends StoppableRunnable {
         Map<String, PrecedenceInfo> precedenceMap = this.precedenceMapInputQueue.peek();
         if(precedenceMap == null){ return; }
 
-        var entry = this.pendingInputMap.firstEntry();
+        LOGGER.log(INFO, "Tx_Worker "+id+": Received a precedence map\n"+precedenceMap);
+
+        Map.Entry<Long, List<PendingTransactionInput>> entry = this.pendingInputMap.firstEntry();
         if(entry == null) return;
         this.precedenceMapInputQueue.poll();
 
@@ -267,6 +281,7 @@ public final class TransactionWorker extends StoppableRunnable {
             VmsTracking inputVms = this.vmsTrackingMap.get(event.targetVms);
             TransactionEvent.PayloadRaw txEvent = TransactionEvent.of(pendingInput.tid, pendingInput.batch,
                     pendingInput.input.event.name, pendingInput.input.event.payload, precedenceMapStr);
+            LOGGER.log(DEBUG,"Leader: Transaction worker "+id+" adding event "+event.name+" to "+inputVms.identifier+" worker:\n"+txEvent+"\n"+pendingInput.previousTidPerVms);
             this.vmsWorkerContainerMap.get(inputVms.identifier).queueTransactionEvent(txEvent);
         }
 
@@ -322,8 +337,9 @@ public final class TransactionWorker extends StoppableRunnable {
         return true;
     }
 
-    public long getTid() {
-        return this.tid;
+    public long getNumTIDsSubmitted() {
+        if(this.numWorkers == 1) return this.tid;
+        return this.numTIDsSubmitted.get();
     }
 
 }

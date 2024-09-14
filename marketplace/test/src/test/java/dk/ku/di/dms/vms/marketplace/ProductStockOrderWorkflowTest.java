@@ -61,7 +61,7 @@ public final class ProductStockOrderWorkflowTest extends AbstractWorkflowTest {
         sleep(BATCH_WINDOW_INTERVAL * 3);
 
         Assert.assertEquals(2, coordinator.getBatchOffsetPendingCommit());
-        Assert.assertEquals(20, coordinator.getLastTidOfLastCompletedBatch());
+        Assert.assertEquals(20, coordinator.getNumTIDsCommitted());
     }
 
     private static class ProductUpdateAndCheckoutProducer implements Runnable {

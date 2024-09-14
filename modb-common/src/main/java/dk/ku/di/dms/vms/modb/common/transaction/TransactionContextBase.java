@@ -16,4 +16,7 @@ public abstract class TransactionContextBase implements Closeable {
         this.readOnly = readOnly;
     }
 
+//    @Override
+//    public void close() throws IOException { }
+
 }

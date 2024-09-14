@@ -13,9 +13,9 @@ public abstract class AbstractHttpHandler {
         this.coordinator = coordinator;
     }
 
-    protected byte[] getLastTidCommittedBytes() {
-        long lng = this.coordinator.getLastTidOfLastCompletedBatch();
-        System.out.println("Last TID committed: "+lng);
+    protected byte[] getNumTIDsCommittedBytes() {
+        long lng = this.coordinator.getNumTIDsCommitted();
+        System.out.println("Number of TIDs committed: "+lng);
         return new byte[] {
                 (byte) lng,
                 (byte) (lng >> 8),
@@ -27,9 +27,9 @@ public abstract class AbstractHttpHandler {
                 (byte) (lng >> 56)};
     }
 
-    protected byte[] getLastTidSubmittedBytes() {
-        long lng = this.coordinator.getLastTidSubmitted() - 1;
-        System.out.println("Last TID submitted: "+lng);
+    protected byte[] getNumTIDsSubmittedBytes() {
+        long lng = this.coordinator.getNumTIDsSubmitted() - 1;
+        System.out.println("Number of TIDs submitted: "+lng);
         return new byte[] {
                 (byte) lng,
                 (byte) (lng >> 8),

@@ -241,7 +241,7 @@ public final class Coordinator extends StoppableRunnable {
     private Map<String, TransactionWorker.PrecedenceInfo> buildStarterPrecedenceMap() {
         Map<String, TransactionWorker.PrecedenceInfo> precedenceMap = new HashMap<>();
         for(var vms : this.vmsMetadataMap.entrySet()){
-            precedenceMap.put(vms.getKey(), new TransactionWorker.PrecedenceInfo(0, 0, 0));
+            precedenceMap.put(vms.getKey(), new TransactionWorker.PrecedenceInfo(0, 0, -1));
         }
         return precedenceMap;
     }
@@ -658,27 +658,30 @@ public final class Coordinator extends StoppableRunnable {
         // only if it is not a duplicate vote
         batchContext.missingVotes.remove( batchComplete.vms() );
         if(batchContext.missingVotes.isEmpty()){
+            LOGGER.log(INFO,"Leader: Received all missing votes of batch: "+ batchContext.batchOffset);
             this.updateBatchOffsetPendingCommit(batchContext);
         }
     }
 
-    private final AtomicLong numTIDsCompleted = new AtomicLong(0);
+    private final AtomicLong numTIDsCommitted = new AtomicLong(0);
 
     private void updateBatchOffsetPendingCommit(BatchContext batchContext) {
-        LOGGER.log(INFO,"Leader: Received all missing votes of batch: "+ batchContext.batchOffset);
         if(batchContext.batchOffset == this.batchOffsetPendingCommit){
-            this.numTIDsCompleted.updateAndGet(i -> i + batchContext.numTIDsOverall);
+            this.numTIDsCommitted.updateAndGet(i -> i + batchContext.numTIDsOverall);
             this.sendCommitCommandToVMSs(batchContext);
             this.batchOffsetPendingCommit = batchContext.batchOffset + 1;
-            // making this implementation order-independent, so not assuming batch commit are received in order,
+            // making this implementation order-independent, so not assuming batch commit are received in order
             BatchContext nextBatchContext = this.batchContextMap.get( this.batchOffsetPendingCommit );
             if(nextBatchContext != null && nextBatchContext.missingVotes.isEmpty()){
                 this.updateBatchOffsetPendingCommit(nextBatchContext);
             }
-        } else {
-            // probably some batch complete message got lost or received out of order
-            LOGGER.log(WARNING,"Leader: Batch ("+ batchContext.batchOffset +") is not the pending one. Still has to wait for the pending batch ("+this.batchOffsetPendingCommit+") to finish before progressing...");
+            return;
         }
+        // probably some batch complete message got lost or received out of order
+        LOGGER.log(WARNING,"Leader: Batch ("+ batchContext.batchOffset +
+                ") is not the pending one.\nStill has to wait for the pending batch ("+
+                this.batchOffsetPendingCommit+") to finish before progressing. Nodes that still need to vote:\n"+
+                this.batchContextMap.get( this.batchOffsetPendingCommit ).missingVotes);
     }
 
     // seal batch and send batch complete to all terminals...
@@ -769,16 +772,16 @@ public final class Coordinator extends StoppableRunnable {
         }
     }
 
-    public long getLastTidOfLastCompletedBatch() {
-        return this.numTIDsCompleted.get();
+    public long getNumTIDsCommitted() {
+        return this.numTIDsCommitted.get();
     }
 
-    public long getLastTidSubmitted(){
-        long maxTid = 0;
+    public long getNumTIDsSubmitted(){
+        long sumTIDs = 0;
         for(var txWorker : this.txWorkers){
-            maxTid = Long.max(maxTid, txWorker.t1().getTid());
+            sumTIDs += txWorker.t1().getNumTIDsSubmitted();
         }
-        return maxTid;
+        return sumTIDs;
     }
 
     public Map<String, VmsNode> getConnectedVMSs() {

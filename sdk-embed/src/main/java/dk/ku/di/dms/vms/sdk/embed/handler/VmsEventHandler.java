@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
+import dk.ku.di.dms.vms.modb.api.interfaces.IHttpHandler;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.*;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
@@ -31,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.Future;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static java.lang.System.Logger.Level.*;
@@ -81,6 +83,8 @@ public final class VmsEventHandler extends StoppableRunnable {
 
     private final ILoggingHandler loggingHandler;
 
+    private final IHttpHandler httpHandler;
+    
     /** COORDINATOR **/
     private ServerNode leader;
 
@@ -143,6 +147,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                                         VmsRuntimeMetadata vmsMetadata,
                                         VmsApplicationOptions options,
                                         ILoggingHandler loggingHandler,
+                                        IHttpHandler httpHandler,
                                         // serialization/deserialization of objects
                                         IVmsSerdesProxy serdesProxy){
         try {
@@ -151,7 +156,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                     new VmsEventHandler.VmsHandlerOptions( options.maxSleep(), options.networkBufferSize(),
                             options.osBufferSize(), options.networkThreadPoolSize(), options.networkSendTimeout(),
                             options.vmsThreadPoolSize(), options.numVmsWorkers(), options.isLogging()),
-                    loggingHandler, serdesProxy);
+                    loggingHandler, httpHandler, serdesProxy);
         } catch (IOException e){
             throw new RuntimeException("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
@@ -172,6 +177,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                             VmsEmbedInternalChannels vmsInternalChannels,
                             VmsHandlerOptions options,
                             ILoggingHandler loggingHandler,
+                            IHttpHandler httpHandler,
                             IVmsSerdesProxy serdesProxy) throws IOException {
         super();
 
@@ -216,6 +222,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         this.options = options;
         this.loggingHandler = loggingHandler;
+        this.httpHandler = httpHandler;
     }
 
     @Override
@@ -255,14 +262,11 @@ public final class VmsEventHandler extends StoppableRunnable {
         IVmsTransactionResult txResult;
         while(this.isRunning()){
             try {
-                // can acknowledge batch completion even though no event from next batch has arrived
-                // but if blocking, only upon a new event such method will be invoked
-                // that will jeopardize the batch process
-                this.moveBatchIfNecessary();
 
                 while((txResult = this.vmsInternalChannels.transactionOutputQueue().poll()) == null) {
-                    pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep);
-                    this.giveUpCpu(pollTimeout);
+                     pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep);
+                     this.giveUpCpu(pollTimeout);
+                     this.moveBatchIfNecessary();
                 }
                 pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
 
@@ -289,6 +293,8 @@ public final class VmsEventHandler extends StoppableRunnable {
                 precedenceMap.remove(this.me.identifier);
                 String precedenceMapUpdated = this.serdesProxy.serializeMap(precedenceMap);
                 this.processOutputEvent(outputEvent, precedenceMapUpdated);
+
+                this.moveBatchIfNecessary();
 
             } catch (Exception e) {
                 LOGGER.log(ERROR, this.me.identifier+": Problem on handling event\n"+e);
@@ -321,6 +327,9 @@ public final class VmsEventHandler extends StoppableRunnable {
     }
 
     /**
+     * Can acknowledge batch completion even though no event from next batch has arrived
+     * But if blocking, only upon a new event such method will be invoked
+     * That will jeopardize the batch process
      * It may be the case that, due to an abort of the last tid, the last tid changes
      * the current code is not incorporating that
      */
@@ -337,7 +346,7 @@ public final class VmsEventHandler extends StoppableRunnable {
             this.currentBatch.setStatus(BatchContext.BATCH_COMPLETED);
             // if terminal, must send batch complete
             if(this.currentBatch.terminal) {
-                // LOGGER.log(INFO,this.me.identifier+": Requesting leader worker to send batch ("+this.currentBatch.batch+") complete");
+                LOGGER.log(INFO,this.me.identifier+": Requesting leader worker to send batch ("+this.currentBatch.batch+") complete");
                 // must be queued in case leader is off and comes back online
                 this.leaderWorker.queueMessage(BatchComplete.of(this.currentBatch.batch, this.me.identifier));
             }
@@ -444,6 +453,117 @@ public final class VmsEventHandler extends StoppableRunnable {
         // channel.read(buffer, 0, new VmsReadCompletionHandler(this.node, connMetadata, buffer));
     }
 
+    private final class HttpReadCompletionHandler implements CompletionHandler<Integer, Integer> {
+
+        private final ConnectionMetadata connectionMetadata;
+        private final ByteBuffer readBuffer;
+        private final ByteBuffer writeBuffer;
+
+        public HttpReadCompletionHandler(ConnectionMetadata connectionMetadata, ByteBuffer readBuffer) {
+            this.connectionMetadata = connectionMetadata;
+            this.readBuffer = readBuffer;
+            this.writeBuffer = MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize);
+        }
+
+        private record HttpRequestInternal(String httpMethod, String uri, String body) {}
+
+        private static HttpRequestInternal parseRequest(String request){
+            String[] requestLines = request.split("\r\n");
+            String requestLine = requestLines[0];  // First line is the request line
+            String[] requestLineParts = requestLine.split(" ");
+            String method = requestLineParts[0];
+            String url = requestLineParts[1];
+            String httpVersion = requestLineParts[2];
+            if(method.contentEquals("GET")){
+                return new HttpRequestInternal(method, url, "");
+            }
+            // process header
+            int i = 1;
+            while (requestLines.length > i &&
+                            !requestLines[i].isEmpty()) {
+                    String[] headerParts = requestLines[i].split(": ");
+                    i++;
+                }
+            StringBuilder body = new StringBuilder();
+            for (i += 1; i < requestLines.length; i++) {
+                    body.append(requestLines[i]).append("\r\n");
+                }
+            String payload = body.toString().trim();
+            return new HttpRequestInternal(method, url, payload);
+        }
+
+        public void process(String request){
+            try {
+                HttpRequestInternal httpRequest = parseRequest(request);
+                Future<Integer> ft = null;
+                switch (httpRequest.httpMethod()){
+                    case "GET" -> {
+                        String respVms = httpHandler.get(httpRequest.uri());
+                        byte[] respBytes = respVms.getBytes(StandardCharsets.UTF_8);
+                        String response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                                + respBytes.length + "\r\n\r\n" + respVms;
+                        this.writeBuffer.put(response.getBytes(StandardCharsets.UTF_8));
+                        this.writeBuffer.flip();
+                        ft = this.connectionMetadata.channel.write(this.writeBuffer);
+                    }
+                    case "POST" -> {
+                        httpHandler.post(httpRequest.uri(), httpRequest.body());
+                        this.writeBuffer.put(OK_RESPONSE_BYTES);
+                        this.writeBuffer.flip();
+                        ft = this.connectionMetadata.channel.write(this.writeBuffer);
+                    }
+                    case "PATCH" -> {
+                        httpHandler.patch(httpRequest.uri(), httpRequest.body());
+                        this.writeBuffer.put(OK_RESPONSE_BYTES);
+                        this.writeBuffer.flip();
+                        ft = this.connectionMetadata.channel.write(this.writeBuffer);
+                    }
+                }
+                if(ft != null){
+                    int result = ft.get();
+                    // send remaining to avoid http client to hang
+                    while (result < this.writeBuffer.position()){
+                        result += this.connectionMetadata.channel.write(this.writeBuffer).get();
+                    }
+                }
+                this.writeBuffer.clear();
+            } catch (Exception e){
+                LOGGER.log(WARNING, me.identifier+": Error caught in HTTP handler.\n"+e);
+                this.writeBuffer.clear();
+                this.writeBuffer.put(ERROR_RESPONSE_BYTES);
+                this.writeBuffer.flip();
+                this.connectionMetadata.channel.write(writeBuffer);
+            }
+            this.readBuffer.clear();
+            this.connectionMetadata.channel.read(this.readBuffer, 0, this);
+        }
+
+        private static final byte[] OK_RESPONSE_BYTES = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+
+        private static final byte[] ERROR_RESPONSE_BYTES = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nBad Request".getBytes(StandardCharsets.UTF_8);
+
+        @Override
+        public void completed(Integer result, Integer attachment) {
+            if(result == -1){
+                this.readBuffer.clear();
+                this.writeBuffer.clear();
+                MemoryManager.releaseTemporaryDirectBuffer(this.readBuffer);
+                MemoryManager.releaseTemporaryDirectBuffer(this.writeBuffer);
+                LOGGER.log(DEBUG,me.identifier+": HTTP client has disconnected!");
+                return;
+            }
+            this.readBuffer.flip();
+            String request = StandardCharsets.UTF_8.decode(this.readBuffer).toString();
+            this.process(request);
+        }
+
+        @Override
+        public void failed(Throwable exc, Integer attachment) {
+            this.readBuffer.clear();
+            this.connectionMetadata.channel.read(this.readBuffer, 0, this);
+        }
+    }
+
     /**
      * The completion handler must execute fast
      */
@@ -479,7 +599,6 @@ public final class VmsEventHandler extends StoppableRunnable {
             }
             byte messageType = readBuffer.get();
             switch (messageType) {
-                //noinspection DuplicatedCode
                 case (BATCH_OF_EVENTS) -> {
                     int bufferSize = this.getBufferSize();
                     if(this.readBuffer.remaining() < bufferSize){
@@ -620,11 +739,22 @@ public final class VmsEventHandler extends StoppableRunnable {
             // message identifier
             byte messageIdentifier = this.buffer.get(0);
             if(messageIdentifier != PRESENTATION){
+                buffer.flip();
                 String request = StandardCharsets.UTF_8.decode(this.buffer).toString();
-                LOGGER.log(WARNING,me.identifier+": A node is trying to connect without a presentation message. \n"+request);
-                this.buffer.clear();
-                MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
-                try { this.channel.close(); } catch (IOException ignored) {}
+                if(this.isHttpClient(request)){
+                    var readCompletionHandler = new HttpReadCompletionHandler(
+                            new ConnectionMetadata("http_client".hashCode(),
+                                    ConnectionMetadata.NodeType.HTTP_CLIENT,
+                                    this.channel),
+                            this.buffer);
+                    try { NetworkUtils.configure(this.channel, options.osBufferSize()); } catch (IOException ignored) { }
+                    readCompletionHandler.process(request);
+                } else {
+                    LOGGER.log(WARNING, me.identifier + ": A node is trying to connect without a presentation message. \n" + request);
+                    this.buffer.clear();
+                    MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
+                    try { this.channel.close(); } catch (IOException ignored) { }
+                }
                 return;
             }
             byte nodeTypeIdentifier = this.buffer.get(1);
@@ -634,6 +764,17 @@ public final class VmsEventHandler extends StoppableRunnable {
                 case (Presentation.VMS_TYPE) -> this.processVmsPresentation();
                 default -> this.processUnknownNodeType(nodeTypeIdentifier);
             }
+        }
+
+        // POST, PATCH, GET
+        private boolean isHttpClient(String request) {
+            var substr = request.substring(0, request.indexOf(' '));
+            switch (substr){
+                case "GET", "PATCH", "POST" -> {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private void processServerPresentation() {
@@ -714,7 +855,7 @@ public final class VmsEventHandler extends StoppableRunnable {
 
         @Override
         public void completed(AsynchronousSocketChannel channel, Void void_) {
-            LOGGER.log(INFO,me.identifier+": An unknown host has started a connection attempt.");
+            LOGGER.log(DEBUG,me.identifier+": An unknown host has started a connection attempt.");
             final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize);
             try {
                 NetworkUtils.configure(channel, options.osBufferSize);
@@ -725,7 +866,7 @@ public final class VmsEventHandler extends StoppableRunnable {
                 buffer.clear();
                 MemoryManager.releaseTemporaryDirectBuffer(buffer);
             } finally {
-                LOGGER.log(INFO,me.identifier+": Accept handler set up again for listening to new connections");
+                LOGGER.log(DEBUG,me.identifier+": Accept handler set up again for listening to new connections");
                 // continue listening
                 serverSocket.accept(null, this);
             }

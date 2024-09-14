@@ -155,13 +155,13 @@ public final class HttpServerVertx extends AbstractVerticle {
             if(uriSplit[2].equals("committed")) {
                 // assumed to be a get request
                 // assert exchange.getRequestMethod().equals("GET");
-                byte[] b = this.getLastTidCommittedBytes();
+                byte[] b = this.getNumTIDsCommittedBytes();
                 Buffer buf = this.retrieveBuffer();
                 buf.setBytes(0, b);
                 exchange.response().setStatusCode(200);
                 exchange.response().end(buf).onComplete(ignored -> BUFFER_POOL.add(buf));
             } else if(uriSplit[2].equals("submitted")) {
-                byte[] b = this.getLastTidSubmittedBytes();
+                byte[] b = this.getNumTIDsSubmittedBytes();
                 Buffer buf = this.retrieveBuffer();
                 buf.setBytes(0, b);
                 exchange.response().setStatusCode(200);

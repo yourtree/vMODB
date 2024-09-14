@@ -39,7 +39,8 @@ public final class CartService {
     public ReserveStock checkout(CustomerCheckout checkout) {
         LOGGER.log(INFO, "APP: Cart received a checkout request with TID: "+checkout.instanceId);
         // get cart items from the given customer
-        List<CartItem> cartItems = this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
+        List<CartItem> cartItems = CartUtils.CART_ITEMS.remove(checkout.CustomerId);
+                // this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);
         if(cartItems == null || cartItems.isEmpty()) {
             LOGGER.log(ERROR, "APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
             // throw new RuntimeException("APP: No cart items found for customer ID "+checkout.CustomerId+" TID: "+checkout.instanceId);
@@ -47,7 +48,7 @@ public final class CartService {
             // lower than the rate on which checkouts are submitted by the driver
             return new ReserveStock(new Date(), checkout, List.of(), checkout.instanceId);
         }
-        this.cartItemRepository.deleteAll(cartItems);
+        // this.cartItemRepository.deleteAll(cartItems);
         return new ReserveStock(new Date(), checkout, CartUtils.convertCartItems( cartItems ), checkout.instanceId);
     }
 

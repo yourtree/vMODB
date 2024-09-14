@@ -20,8 +20,12 @@ public final class TransactionEvent {
         // since the original {@PayloadRaw} goes into a batch,
         // it does not take into account the event type and the size of the payload correctly
         // for individual events, both must be included in the total size
-        buffer.putInt(payload.totalSize() + 1 + Integer.BYTES);
+        // jump one integer
+        buffer.position(1 + Integer.BYTES);
         writeWithinBatch(buffer, payload);
+        int position = buffer.position();
+        buffer.putInt(1, position);
+        buffer.position(position);
     }
 
     public static void writeWithinBatch(ByteBuffer buffer, PayloadRaw payload){
@@ -61,7 +65,6 @@ public final class TransactionEvent {
             return "{"
                     + "\"tid\":\"" + tid + "\""
                     + ",\"batch\":\"" + batch + "\""
-                    + ",\"totalSize\":\"" + totalSize + "\""
                     + "}";
         }
     }

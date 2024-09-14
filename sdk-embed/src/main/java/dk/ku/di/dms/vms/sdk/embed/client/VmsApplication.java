@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.sdk.embed.client;
 
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.api.interfaces.IHttpHandler;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -58,12 +59,16 @@ public final class VmsApplication {
         this.internalChannels = internalChannels;
     }
 
+    public static VmsApplication build(VmsApplicationOptions options) throws Exception {
+           return build(options, (transactionManager, repository) -> new IHttpHandler() { });
+    }
+
     /**
      * This method initializes two threads:
      * (i) EventHandler, responsible for communicating with the external world
      * (ii) Scheduler, responsible for scheduling transactions and returning resulting events
      */
-    public static VmsApplication build(VmsApplicationOptions options) throws Exception {
+    public static VmsApplication build(VmsApplicationOptions options, HttpHandlerBuilder builder) throws Exception {
         // check first whether we are in decoupled or embed mode
         Optional<Package> optional = Arrays.stream(Package.getPackages()).filter(p ->
                          !p.getName().contains("dk.ku.di.dms.vms.sdk.embed")
@@ -142,9 +147,10 @@ public final class VmsApplication {
                 loggingHandler = new ILoggingHandler() { };
             }
         }
+        var httpHandler = builder.build(transactionManager, tableToRepositoryMap::get);
 
         VmsEventHandler eventHandler = VmsEventHandler.build(
-                vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, options, loggingHandler, serdes);
+                vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, options, loggingHandler, httpHandler, serdes);
 
 //        VmsComplexTransactionScheduler scheduler =
 //                VmsComplexTransactionScheduler.build(

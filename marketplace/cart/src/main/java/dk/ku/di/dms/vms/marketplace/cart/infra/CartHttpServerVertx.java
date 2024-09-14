@@ -9,11 +9,14 @@ import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import io.vertx.core.*;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
-import io.vertx.core.http.HttpServerRequest;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.handler.BodyHandler;
 
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+
+import static dk.ku.di.dms.vms.marketplace.cart.infra.CartUtils.CART_ITEMS;
 
 public final class CartHttpServerVertx extends AbstractVerticle {
 
@@ -57,8 +60,37 @@ public final class CartHttpServerVertx extends AbstractVerticle {
         options.setHost("0.0.0.0");
         options.setTcpKeepAlive(true);
         options.setTcpNoDelay(true);
-        HttpServer server = this.vertx.createHttpServer(options);
-        server.requestHandler(new VertxHandler());
+        Router router = Router.router(vertx);
+        router.route().handler(BodyHandler.create());
+        router.get("/cart/:customerId").handler(ctx -> {
+            int customerId = Integer.parseInt(ctx.pathParam("customerId"));
+            long tid = CART_VMS.lastTidFinished();
+            try(var txCtx = CART_VMS.getTransactionManager().beginTransaction(tid, 0, 0,true)) {
+                List<CartItem> cartItems = CART_REPO.getCartItemsByCustomerId(customerId);
+                ctx.response()
+                        .putHeader("content-type", "application/json")
+                        .setStatusCode(200)
+                        .end(cartItems.toString());
+            } catch (Exception e) {
+                ctx.response().putHeader("content-type", "text/plain")
+                        .setStatusCode(500).end(e.getMessage());
+            }
+        });
+        router.patch("/cart/reset").handler(ctx -> {
+            CART_VMS.getTransactionManager().reset();
+            ctx.response().setStatusCode(204).end();
+        });
+        router.patch("/cart/:customerId/add").handler(ctx -> {
+            int customerId = Integer.parseInt(ctx.pathParam("customerId"));
+            var payload = ctx.body().asString();
+            dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
+                    SERDES.deserialize(payload, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
+            CART_ITEMS.computeIfAbsent(customerId, (x) -> new ArrayList<>()).add(
+                    CartUtils.convertCartItemAPI(customerId, cartItemAPI)
+            );
+            ctx.response().setStatusCode(204).end();
+        });
+        HttpServer server = this.vertx.createHttpServer(options).requestHandler(router);
         server.listen(res -> {
             if (res.succeeded()) {
                 startPromise.complete();
@@ -66,72 +98,6 @@ public final class CartHttpServerVertx extends AbstractVerticle {
                 startPromise.fail(res.cause());
             }
         });
-    }
-
-    public static class VertxHandler implements Handler<HttpServerRequest> {
-        @Override
-        public void handle(HttpServerRequest exchange) {
-            String[] uriSplit = exchange.uri().split("/");
-            if (uriSplit.length < 2 || !uriSplit[1].equals("cart")) {
-                handleError(exchange, "Invalid URI");
-                return;
-            }
-            exchange.bodyHandler(buff -> {
-                switch (exchange.method().name()) {
-                    case "GET" -> {
-                        int customerId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
-                        long tid = CART_VMS.lastTidFinished();
-                        try(var txCtx = CART_VMS.getTransactionManager().beginTransaction(tid, 0, 0,true)) {
-                            List<CartItem> cartItems = CART_REPO.getCartItemsByCustomerId(customerId);
-                            exchange.response().setChunked(true);
-                            exchange.response().setStatusCode(200);
-                            if (cartItems != null) {
-                                String payload = SERDES.serializeList(cartItems);
-                                exchange.response().write(payload);
-                            }
-                            exchange.response().end();
-                        } catch (Exception e) {
-                            handleError(exchange, e.getMessage());
-                        }
-                    }
-                    case "PATCH" -> {
-                        String op = uriSplit[uriSplit.length - 1];
-                        if(op.contentEquals("reset")){
-                            // path: /cart/reset
-                            try {
-                                CART_VMS.getTransactionManager().reset();
-                                exchange.response().setStatusCode(200).end();
-                            } catch (Exception e){
-                                handleError(exchange, e.getMessage());
-                            }
-                            return;
-                        }
-                        // path: /cart/<customer_id>/add
-                        int customerId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
-                        String payload = buff.toString(StandardCharsets.UTF_8);
-                        dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
-                                SERDES.deserialize(payload, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
-                        long tid = CART_VMS.lastTidFinished();
-                        try(var txCtx = CART_VMS.getTransactionManager().beginTransaction(tid, 0, 0, false)){
-                            CART_REPO.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
-                            // prevent conflicting with other threads on installing writes
-                            // CART_VMS.getTransactionManager().commit();
-                            exchange.response().setStatusCode(200).end();
-                        } catch (Exception e){
-                            handleError(exchange, e.getMessage());
-                        }
-                    }
-                    default -> handleError(exchange, "Invalid URI");
-                }
-            });
-        }
-    }
-
-    private static void handleError(HttpServerRequest exchange, String msg) {
-        exchange.response().setChunked(true);
-        exchange.response().setStatusCode(500);
-        exchange.response().write(msg);
-        exchange.response().end();
     }
 
 }
