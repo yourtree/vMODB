@@ -21,7 +21,9 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static dk.ku.di.dms.vms.sdk.embed.handler.ConsumerVmsWorker.State.*;
@@ -69,7 +71,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 
     private final IVmsSerdesProxy serdesProxy;
 
-    private final Deque<ByteBuffer> writeBufferPool;
+    private static final Deque<ByteBuffer> WRITE_BUFFER_POOL = new ConcurrentLinkedDeque<>();
 
     private final VmsEventHandler.VmsHandlerOptions options;
 
@@ -77,7 +79,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 
     private final Deque<ByteBuffer> pendingWritesBuffer = new ConcurrentLinkedDeque<>();
 
-    private final BlockingQueue<TransactionEvent.PayloadRaw> transactionEventQueue;
+    private final CustomBlockingQueue transactionEventQueue;
 
     private State state;
 
@@ -109,11 +111,8 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
         this.channel = channel;
         this.loggingHandler = loggingHandler;
         this.serdesProxy = serdesProxy;
-        this.writeBufferPool = new ConcurrentLinkedDeque<>();
-        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize()) );
-        this.writeBufferPool.addFirst( MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize()) );
         this.options = options;
-        this.transactionEventQueue = new LinkedBlockingQueue<>();
+        this.transactionEventQueue = new CustomBlockingQueue();
         this.state = NEW;
     }
 
@@ -144,6 +143,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     private void eventLoop() {
         // int pollTimeout = 1;
         // TransactionEvent.PayloadRaw payloadRaw;
+        this.transactionEventQueue.registerAsWaiter();
         while(this.isRunning()){
             try {
 //                while((payloadRaw = this.transactionEventQueue.poll()) == null) {
@@ -154,9 +154,8 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 //                    this.giveUpCpu(pollTimeout);
 //                }
 //                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
-                this.transactionEvents.add(this.transactionEventQueue.take());
-                this.transactionEventQueue.drainTo( this.transactionEvents );
-
+                // this.transactionEvents.add(this.transactionEventQueue.take());
+                this.transactionEventQueue.drainTo( this.transactionEvents, this.options.networkBufferSize() );
 
                 // use first as estimation to avoid sending a single event
 //                int maxSize = this.options.networkBufferSize() - payloadRaw.totalSize();
@@ -279,7 +278,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
                 // drain buffer
                 do {
                     this.channel.write(writeBuffer).get();
-                }while(writeBuffer.hasRemaining());
+                } while(writeBuffer.hasRemaining());
                 this.returnByteBuffer(writeBuffer);
 
                 // maximize useful work
@@ -320,14 +319,14 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     }
 
     private ByteBuffer retrieveByteBuffer(){
-        ByteBuffer bb = this.writeBufferPool.poll();
+        ByteBuffer bb = WRITE_BUFFER_POOL.poll();
         if(bb != null) return bb;
         return MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize());
     }
 
     private void returnByteBuffer(ByteBuffer bb) {
         bb.clear();
-        this.writeBufferPool.add(bb);
+        WRITE_BUFFER_POOL.add(bb);
     }
 
     private final class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {

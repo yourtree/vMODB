@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.sdk.core.scheduler;
 
-import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.api.enums.ExecutionModeEnum;
 import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
@@ -282,7 +281,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     private void submitSingleThreadTaskForExecution(VmsTransactionTask task) {
         this.singleThreadTaskRunning = true;
         task.signalReady();
-        // can the scheduler itself run it? task.run();
+        // can the scheduler itself run it? if so, avoid a context switch cost
         // this.sharedTaskPool.submit(task);
         task.run();
     }
@@ -297,12 +296,6 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         InboundEvent inboundEvent;
         if(this.mustWaitForInputEvent) {
             inboundEvent = this.vmsChannels.transactionInputQueue().take();
-//            int pollTimeout = Math.min(1, this.maxSleep);
-//            while((inboundEvent = this.vmsChannels.transactionInputQueue().poll()) == null) {
-//                LOGGER.log(DEBUG,this.vmsIdentifier+": Transaction scheduler going to sleep for "+pollTimeout+" until new event arrives");
-//                this.giveUpCpu(pollTimeout);
-//                pollTimeout = Math.min(pollTimeout + pollTimeout, this.maxSleep);
-//            }
             // disable block
             this.mustWaitForInputEvent = false;
         } else {
@@ -310,19 +303,12 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
             if(inboundEvent == null) return;
         }
         // drain all
-        drained.add(inboundEvent);
-
+        this.drained.add(inboundEvent);
         this.vmsChannels.transactionInputQueue().drainTo(drained);
-
         for(InboundEvent inboundEvent_ : drained){
             this.processNewEvent(inboundEvent_);
         }
-        drained.clear();
-//        int drained = 0;
-//        do {
-//            this.processNewEvent(inboundEvent);
-//            drained++;
-//        } while(drained < this.maxToDrain && (inboundEvent = this.vmsChannels.transactionInputQueue().poll()) != null);
+        this.drained.clear();
     }
 
     private void processNewEvent(InboundEvent inboundEvent) {

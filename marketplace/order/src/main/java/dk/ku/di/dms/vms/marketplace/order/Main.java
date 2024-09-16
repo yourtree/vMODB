@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.order;
 
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.common.infra.HttpServerJdk;
+import dk.ku.di.dms.vms.marketplace.common.infra.DefaultHttpHandlerJdk;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 
@@ -14,10 +14,9 @@ public final class Main {
                 "dk.ku.di.dms.vms.marketplace.order",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
-        VmsApplication vms = VmsApplication.build(options);
+        VmsApplication vms = VmsApplication.build(options,
+                (x,z) -> new DefaultHttpHandlerJdk(x));
         vms.start();
-        HttpServerJdk.init(vms, "/order", Constants.ORDER_HTTP_PORT);
-        System.out.println("Order: JDK HTTP Server started");
     }
 
 }

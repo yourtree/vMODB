@@ -25,8 +25,8 @@ public final class SellerDashboard {
         }
         sb.append("]");
         return "{"
-                + "\"entries\":" + sb
-                + ",\"view\":" + this.view
+                + "\"view\":" + view
+                + ",\"entries\":" + sb
                 + "}";
     }
 }

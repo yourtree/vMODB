@@ -7,12 +7,12 @@ public class IntegerPrimaryKeyGenerator implements IPrimaryKeyGenerator<Integer>
     private final AtomicInteger sequencer;
 
     public IntegerPrimaryKeyGenerator() {
-        this.sequencer = new AtomicInteger(1);
+        this.sequencer = new AtomicInteger(0);
     }
 
     @Override
     public Integer next() {
-        return this.sequencer.getAndAdd(1);
+        return this.sequencer.addAndGet(1);
     }
 
 }

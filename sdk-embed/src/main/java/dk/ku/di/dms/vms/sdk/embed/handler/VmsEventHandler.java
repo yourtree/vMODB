@@ -324,7 +324,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             if (thisBatch.setStatus(BatchContext.OPEN, BatchContext.BATCH_COMPLETED)
                     // if terminal, must send batch complete
                     && thisBatch.terminal) {
-                LOGGER.log(WARNING, this.me.identifier + ": Requesting leader worker to send batch (" + thisBatch.batch + ") complete");
+                LOGGER.log(INFO, this.me.identifier + ": Requesting leader worker to send batch (" + thisBatch.batch + ") complete");
                 // must be queued in case leader is off and comes back online
                 this.leaderWorker.queueMessage(BatchComplete.of(thisBatch.batch, this.me.identifier));
             }

@@ -69,7 +69,7 @@ public final class Main {
             TransactionDAG updateProductDag = TransactionBootstrap.name(UPDATE_PRODUCT)
                     .input("a", "product", UPDATE_PRODUCT)
                     .terminal("b", "stock", "a")
-//                    .terminal("c", "cart", "a")
+                    .terminal("c", "cart", "a")
                     .build();
             transactionMap.put(updateProductDag.name, updateProductDag);
         }
@@ -85,18 +85,15 @@ public final class Main {
         if(transactions.contains(CUSTOMER_CHECKOUT)) {
             TransactionDAG checkoutDag = TransactionBootstrap.name(CUSTOMER_CHECKOUT)
                     .input("a", "cart", CUSTOMER_CHECKOUT)
-                    .terminal("b", "cart", "a")
-                    /*
+//                    .terminal("b", "cart", "a")
                     .internal("b", "stock", RESERVE_STOCK, "a")
                     .internal("c", "order", STOCK_CONFIRMED, "b")
                     .internal("d", "payment", INVOICE_ISSUED, "c")
                     //.terminal("any", "customer", "b")
                     // .internal("e", "seller", "c")
                     // opt to minimize number of votes
-                    .internal("e", "seller", INVOICE_ISSUED, "c")
+                    //.internal("e", "seller", INVOICE_ISSUED, "c")
                     .terminal("f", "shipment", "d")
-
-                     */
                     .build();
             transactionMap.put(checkoutDag.name, checkoutDag);
         }
@@ -122,7 +119,7 @@ public final class Main {
 
         Map<String, IdentifiableNode> starterVMSs;
         if(Arrays.stream(transactions).anyMatch(p->p.contentEquals(CUSTOMER_CHECKOUT))) {
-            starterVMSs = buildStarterVMSsBasic(properties);// buildStarterVMSsFull(properties);
+            starterVMSs = buildStarterVMSsFull(properties);
         } else {
             starterVMSs = buildStarterVMSsBasic(properties);
         }
@@ -191,7 +188,7 @@ public final class Main {
         IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
         IdentifiableNode stockAddress = new IdentifiableNode("stock", stockHost, Constants.STOCK_VMS_PORT);
         Map<String, IdentifiableNode> starterVMSs = new HashMap<>();
-//        starterVMSs.putIfAbsent(cartAddress.identifier, cartAddress);
+        starterVMSs.putIfAbsent(cartAddress.identifier, cartAddress);
         starterVMSs.putIfAbsent(productAddress.identifier, productAddress);
         starterVMSs.putIfAbsent(stockAddress.identifier, stockAddress);
         return starterVMSs;
@@ -218,7 +215,7 @@ public final class Main {
         starterVMSs.putIfAbsent(orderAddress.identifier, orderAddress);
         starterVMSs.putIfAbsent(paymentAddress.identifier, paymentAddress);
         starterVMSs.putIfAbsent(shipmentAddress.identifier, shipmentAddress);
-        starterVMSs.putIfAbsent(sellerAddress.identifier, sellerAddress);
+        //starterVMSs.putIfAbsent(sellerAddress.identifier, sellerAddress);
 
         return starterVMSs;
     }

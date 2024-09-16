@@ -1,12 +1,16 @@
 package dk.ku.di.dms.vms.modb.common.constraint;
 
 public final class ForeignKeyReference {
+
     // this is always part of the same virtual microservice
-    private final String parentTableName;
+    private String parentTableName;
 
-    private final String parentColumnName;
+    private String parentColumnName;
 
-    private final String localColumnName;
+    private String localColumnName;
+
+    // for json parsing
+    public ForeignKeyReference(){}
 
     public ForeignKeyReference(String parentTableName, String parentColumnName, String localColumnName) {
         this.parentTableName = parentTableName;

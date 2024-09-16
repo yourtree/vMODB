@@ -13,7 +13,7 @@ import java.util.concurrent.locks.LockSupport;
 @SuppressWarnings("NullableProblems")
 public class CustomBlockingQueue extends ConcurrentLinkedQueue<TransactionEvent.PayloadRaw> implements BlockingQueue<TransactionEvent.PayloadRaw> {
 
-    AtomicInteger batchSize = new AtomicInteger(0);
+    private final AtomicInteger batchSize = new AtomicInteger(0);
 
     private volatile AtomicBoolean unparkPermission = new AtomicBoolean(false);
 
@@ -47,8 +47,8 @@ public class CustomBlockingQueue extends ConcurrentLinkedQueue<TransactionEvent.
         }
         // has the batch size reached?
         if(batchSize.get() < maxSize){
-            long start = System.currentTimeMillis();
-            LockSupport.parkUntil( start + 300 );
+            // long start = System.currentTimeMillis();
+            LockSupport.parkNanos( 300 );
         }
         TransactionEvent.PayloadRaw event_;
         int sizeRemoved = 0;
@@ -66,17 +66,17 @@ public class CustomBlockingQueue extends ConcurrentLinkedQueue<TransactionEvent.
     }
 
     @Override
-    public boolean offer(TransactionEvent.PayloadRaw payloadRaw, long timeout, TimeUnit unit) throws InterruptedException {
+    public boolean offer(TransactionEvent.PayloadRaw payloadRaw, long timeout, TimeUnit unit) {
         throw new RuntimeException("Not implemented");
     }
 
     @Override
-    public TransactionEvent.PayloadRaw take() throws InterruptedException {
+    public TransactionEvent.PayloadRaw take() {
         throw new RuntimeException("Not implemented");
     }
 
     @Override
-    public TransactionEvent.PayloadRaw poll(long timeout, TimeUnit unit) throws InterruptedException {
+    public TransactionEvent.PayloadRaw poll(long timeout, TimeUnit unit) {
         throw new RuntimeException("Not implemented");
     }
 

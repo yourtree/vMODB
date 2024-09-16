@@ -277,10 +277,14 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
                     }
                 }
                 return values;
+            } else {
+                this.undoTransactionWrites(txCtx);
+                throw new RuntimeException("Primary key constraint violation in table " + table.getName()+". Record:\n"+ Arrays.stream(values).toList());
             }
+        } else {
+            this.undoTransactionWrites(txCtx);
+            throw new RuntimeException("Foreign key constraint violation in table " + table.getName());
         }
-        this.undoTransactionWrites(txCtx);
-        throw new RuntimeException("Constraint violation in table "+table.getName());
     }
 
     @Override

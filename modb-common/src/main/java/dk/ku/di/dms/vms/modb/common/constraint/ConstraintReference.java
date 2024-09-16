@@ -2,10 +2,12 @@ package dk.ku.di.dms.vms.modb.common.constraint;
 
 public sealed class ConstraintReference permits ValueConstraintReference {
 
-    public final ConstraintEnum constraint;
+    public ConstraintEnum constraint;
 
     // for now only supporting one column, but a constraint may apply to several columns
-    public final int column;
+    public int column;
+
+    public ConstraintReference(){}
 
     public ConstraintReference(ConstraintEnum constraint, int column) {
         this.constraint = constraint;

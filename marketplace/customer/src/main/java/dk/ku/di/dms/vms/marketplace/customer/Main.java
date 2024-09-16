@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.marketplace.customer;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.common.infra.HttpServerJdk;
+import dk.ku.di.dms.vms.marketplace.common.infra.DefaultHttpHandlerJdk;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.definition.Table;
@@ -26,10 +26,9 @@ public final class Main {
                 "dk.ku.di.dms.vms.marketplace.customer",
                 "dk.ku.di.dms.vms.marketplace.common"}
         );
-        VmsApplication vms = VmsApplication.build(options);
+        VmsApplication vms = VmsApplication.build(options,
+                (x,z) -> new DefaultHttpHandlerJdk(x));
         vms.start();
-        HttpServerJdk.init(vms, "/customer", Constants.CUSTOMER_HTTP_PORT);
-        System.out.println("Customer: JDK HTTP Server started");
     }
 
     private static class CustomerHttpHandler implements HttpHandler {

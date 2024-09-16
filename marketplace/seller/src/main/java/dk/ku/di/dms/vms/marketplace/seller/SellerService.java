@@ -125,7 +125,7 @@ public final class SellerService {
         }
     }
 
-    private static final SellerDashboard EMPTY_DASHBOARD = new SellerDashboard(new OrderSellerView(), List.of());
+    public static final SellerDashboard EMPTY_DASHBOARD = new SellerDashboard(new OrderSellerView(), List.of());
 
     /**
      * Parallel by default -- http clients trigger it

@@ -246,17 +246,22 @@ public final class Coordinator extends ModbHttpServer {
         this.setupStarterVMSs();
         this.preprocessDAGs();
         this.setUpTransactionWorkers();
-        Object message;
-        do {
+
+        // event loop
+        try {
+            Object message;
+            do {
 //            try {
 //                message = this.coordinatorQueue.take();
 //                this.processVmsMessage(message);
 //            } catch (InterruptedException ignored) { }
-            // tends to be faster than blocking
-            while((message = this.coordinatorQueue.poll()) != null){
-                this.processVmsMessage(message);
-            }
-        } while (this.isRunning());
+                // tends to be faster than blocking
+                while ((message = this.coordinatorQueue.poll(250, TimeUnit.MILLISECONDS)) != null) {
+                    this.processVmsMessage(message);
+                }
+            } while (this.isRunning());
+        } catch (Exception ignored){}
+
         this.failSafeClose();
         LOGGER.log(INFO,"Leader: Finished execution.");
     }

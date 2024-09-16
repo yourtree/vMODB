@@ -69,7 +69,6 @@ public final class TransactionEvent {
         }
     }
 
-    //
     public record Payload(
             long tid, long batch, String event, String payload, String precedenceMap
     ){
@@ -85,11 +84,11 @@ public final class TransactionEvent {
         }
     }
 
+    /**
+     * <a href="https://www.quora.com/How-many-bytes-can-a-string-hold">Considering UTF-8</a>
+     */
     public static PayloadRaw of(long tid, long batch, String event, String payload, String precedenceMap){
-        // considering UTF-8
-        // https://www.quora.com/How-many-bytes-can-a-string-hold
         byte[] eventBytes = event.getBytes(StandardCharsets.UTF_8);
-        // System.out.println("Leader : Payload written for TID "+tid+" \n"+payload);
         byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
         byte[] precedenceMapBytes = precedenceMap.getBytes(StandardCharsets.UTF_8);
         return new PayloadRaw(tid, batch, eventBytes, payloadBytes, precedenceMapBytes,
