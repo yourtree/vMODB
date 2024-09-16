@@ -16,6 +16,7 @@ import org.junit.Test;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.function.Consumer;
 
 import static java.lang.Thread.sleep;
 
@@ -38,7 +39,7 @@ public class SchedulerTest {
         VmsRuntimeMetadata vmsRuntimeMetadata = VmsMetadataLoader.load("dk.ku.di.dms.vms.sdk.core.example");
 
         var scheduler = VmsTransactionScheduler.build("example1", vmsInternalChannels,
-                vmsRuntimeMetadata.queueToVmsTransactionMap(), new ITransactionManager() { }, 4, 0);
+                vmsRuntimeMetadata.queueToVmsTransactionMap(), new ITransactionManager() {}, x -> { }, 4);
 
         for(int i = 1; i <= 4; i++){
             InputEventExample1 eventExample = new InputEventExample1(i);

@@ -164,8 +164,8 @@ public final class VmsApplication {
                 vmsInternalPubSubService,
                 vmsMetadata.queueToVmsTransactionMap(),
                 transactionManager,
-                options.vmsThreadPoolSize(),
-                options.maxSleep());
+                eventHandler::processOutputEvent,
+                options.vmsThreadPoolSize());
 
         return new VmsApplication( vmsName, vmsMetadata, catalog, eventHandler, transactionManager, transactionScheduler, vmsInternalPubSubService );
     }

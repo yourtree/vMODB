@@ -20,6 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import static java.lang.System.Logger.Level.*;
 
@@ -65,31 +66,32 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     private final VmsTransactionTaskBuilder vmsTransactionTaskBuilder;
 
-    private final int maxSleep;
-
-    private final int maxToDrain;
-
     public static VmsTransactionScheduler build(String vmsIdentifier,
                                                 IVmsInternalChannels vmsChannels,
                                                 Map<String, VmsTransactionMetadata> transactionMetadataMap,
                                                 ITransactionManager transactionalHandler,
-                                                int vmsThreadPoolSize,
-                                                int maxSleep){
+                                                Consumer<IVmsTransactionResult> eventHandler,
+                                                int vmsThreadPoolSize){
         LOGGER.log(INFO, vmsIdentifier+ ": Building transaction scheduler with thread pool size of "+ vmsThreadPoolSize);
         return new VmsTransactionScheduler(
                 vmsIdentifier,
-                vmsThreadPoolSize == 0 ? ForkJoinPool.commonPool() : Executors.newWorkStealingPool(vmsThreadPoolSize),
+                vmsThreadPoolSize == 0 ? ForkJoinPool.commonPool() :
+                        Executors.newFixedThreadPool( vmsThreadPoolSize,
+                                Thread.ofPlatform().name("vms-task-thread")
+                                        //.priority(Thread.MAX_PRIORITY)
+                                        .factory() ),
                 vmsChannels,
                 transactionMetadataMap,
                 transactionalHandler,
-                maxSleep);
+                eventHandler);
     }
 
     private VmsTransactionScheduler(String vmsIdentifier,
                                     ExecutorService sharedTaskPool,
                                     IVmsInternalChannels vmsChannels,
                                     Map<String, VmsTransactionMetadata> transactionMetadataMap,
-                                    ITransactionManager transactionalHandler, int maxSleep){
+                                    ITransactionManager transactionalHandler,
+                                    Consumer<IVmsTransactionResult> eventHandler){
         super();
 
         this.vmsIdentifier = vmsIdentifier;
@@ -102,14 +104,12 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         // operational (internal control of transactions and tasks)
         this.transactionTaskMap = new ConcurrentHashMap<>(1000000);
-        SchedulerCallback callback = new SchedulerCallback();
+        SchedulerCallback callback = new SchedulerCallback(eventHandler);
         this.vmsTransactionTaskBuilder = new VmsTransactionTaskBuilder(transactionalHandler, callback);
         this.transactionTaskMap.put( 0L, this.vmsTransactionTaskBuilder.buildFinished(0) );
         this.lastTidToTidMap = new HashMap<>(1000000);
 
         this.lastTidFinished = new AtomicLong(0);
-        this.maxSleep = maxSleep;
-        this.maxToDrain = Runtime.getRuntime().availableProcessors() * 2;
     }
 
     /**
@@ -133,13 +133,24 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     }
 
     private final class SchedulerCallback implements ISchedulerCallback, Thread.UncaughtExceptionHandler {
+
+        private final Consumer<IVmsTransactionResult> eventHandler;
+
+        private SchedulerCallback(Consumer<IVmsTransactionResult> eventHandler) {
+            this.eventHandler = eventHandler;
+        }
+
         @Override
         public void success(ExecutionModeEnum executionMode, OutboundEventResult outboundEventResult) {
             VmsTransactionTask task = transactionTaskMap.get(outboundEventResult.tid());
             task.signalFinished();
             updateLastFinishedTid(outboundEventResult.tid());
+
             // my previous has sent the event already?
-            vmsChannels.transactionOutputQueue().add(outboundEventResult);
+            // vmsChannels.transactionOutputQueue().add(outboundEventResult);
+            //
+            this.eventHandler.accept(outboundEventResult);
+
             if(executionMode == ExecutionModeEnum.SINGLE_THREADED) {
                 singleThreadTaskRunning = false;
             } else if (executionMode == ExecutionModeEnum.PARALLEL) {

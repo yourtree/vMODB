@@ -122,7 +122,7 @@ public final class VmsEventHandler extends ModbHttpServer {
      * batch has completed using the number of TIDs executed.
      * It must be separated from batchContextMap due to different timing of batch context sending
      */
-    public final Map<Long, BatchMetadata> volatileBatchMetadataMap;
+    public final Map<Long, BatchMetadata> trackingBatchMap;
 
     public static final class BatchMetadata {
         public int numberTIDsExecuted;
@@ -184,7 +184,8 @@ public final class VmsEventHandler extends ModbHttpServer {
         // network and executor
         if(options.networkThreadPoolSize > 0){
             // at least two, one for acceptor and one for new events
-            this.group = AsynchronousChannelGroup.withFixedThreadPool(options.networkThreadPoolSize,
+            this.group = AsynchronousChannelGroup.withFixedThreadPool(
+                    options.networkThreadPoolSize,
                     Thread.ofPlatform().name("vms-network-thread").factory()
             );
             this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
@@ -209,7 +210,7 @@ public final class VmsEventHandler extends ModbHttpServer {
         this.currentBatch = BatchContext.buildAsStarter(me.batch, me.previousBatch, me.numberOfTIDsCurrentBatch);
         this.currentBatch.setStatus(BatchContext.BATCH_COMMITTED);
         this.batchContextMap = new ConcurrentHashMap<>();
-        this.volatileBatchMetadataMap = new HashMap<>();
+        this.trackingBatchMap = new ConcurrentHashMap<>();
         this.batchToNextBatchMap = new ConcurrentHashMap<>();
         this.tidToPrecedenceMap = new ConcurrentHashMap<>();
 
@@ -233,24 +234,10 @@ public final class VmsEventHandler extends ModbHttpServer {
         this.serverSocket.accept(null, new AcceptCompletionHandler());
         LOGGER.log(INFO,this.me.identifier+": Accept handler has been setup");
         // init event loop
-        this.eventLoop();
-        this.failSafeClose();
+        // this.eventLoop();
+        // this.failSafeClose();
         LOGGER.log(INFO,this.me.identifier+": Event handler has finished execution.");
     }
-
-    /**
-     * From <a href="https://docs.oracle.com/javase/tutorial/networking/sockets/clientServer.html">...</a>
-     * "The Java runtime automatically closes the input and output streams, the client socket,
-     * and the server socket because they have been created in the try-with-resources statement."
-     * Which means that different tests must bind to different addresses
-     */
-    private void failSafeClose(){
-        // safe close
-        try { if(this.serverSocket.isOpen()) this.serverSocket.close(); } catch (IOException ignored) {
-            LOGGER.log(WARNING,this.me.identifier+": Could not close socket");
-        }
-    }
-
 
     private final List<IVmsTransactionResult> drained = new ArrayList<>(1024*10);
     /**
@@ -285,30 +272,63 @@ public final class VmsEventHandler extends ModbHttpServer {
         }
     }
 
-    private void processOutputEvent(IVmsTransactionResult txResult) {
+    /**
+     * From <a href="https://docs.oracle.com/javase/tutorial/networking/sockets/clientServer.html">...</a>
+     * "The Java runtime automatically closes the input and output streams, the client socket,
+     * and the server socket because they have been created in the try-with-resources statement."
+     * Which means that different tests must bind to different addresses
+     */
+    private void failSafeClose(){
+        // safe close
+        try { if(this.serverSocket.isOpen()) this.serverSocket.close(); } catch (IOException ignored) {
+            LOGGER.log(WARNING,this.me.identifier+": Could not close socket");
+        }
+    }
+
+    public void processOutputEvent(IVmsTransactionResult txResult) {
         LOGGER.log(DEBUG,this.me.identifier+": New transaction result in event handler. TID = "+ txResult.tid());
-
-        // assuming is a simple transaction result, not complex, so no need to iterate
-        OutboundEventResult outputEvent = txResult.getOutboundEventResult();
-
-        // scheduler can be way ahead of the last batch committed
-        BatchMetadata batchMetadata = this.volatileBatchMetadataMap.computeIfAbsent(outputEvent.batch(), ignored -> new BatchMetadata());
-        batchMetadata.numberTIDsExecuted += 1;
-        if(batchMetadata.maxTidExecuted < outputEvent.tid()){
-            batchMetadata.maxTidExecuted = outputEvent.tid();
-        }
-
         // it is a void method that executed, nothing to send
-        if (outputEvent.outputQueue() == null) return;
-        Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(txResult.tid());
-        if (precedenceMap == null) {
-            LOGGER.log(WARNING,this.me.identifier + ": No precedence map found for TID: " + txResult.tid());
-            return;
+        if (txResult.getOutboundEventResult().outputQueue() != null) {
+            Map<String, Long> precedenceMap = this.tidToPrecedenceMap.get(txResult.tid());
+            if (precedenceMap != null) {
+                // remove ourselves (which also saves some bytes)
+                precedenceMap.remove(this.me.identifier);
+                String precedenceMapUpdated = this.serdesProxy.serializeMap(precedenceMap);
+                this.processOutputEvent(txResult.getOutboundEventResult(), precedenceMapUpdated);
+            } else {
+                LOGGER.log(ERROR, this.me.identifier + ": No precedence map found for TID: " + txResult.tid());
+            }
         }
-        // remove ourselves (which also saves some bytes)
-        precedenceMap.remove(this.me.identifier);
-        String precedenceMapUpdated = this.serdesProxy.serializeMap(precedenceMap);
-        this.processOutputEvent(outputEvent, precedenceMapUpdated);
+        // scheduler can be way ahead of the last batch committed
+        this.updateBatchStats(txResult.getOutboundEventResult());
+    }
+
+    private void updateBatchStats(OutboundEventResult outputEvent) {
+        BatchMetadata batchMetadata = this.trackingBatchMap.compute(outputEvent.batch(),
+                (x,y) -> {
+                    BatchMetadata toMod = y;
+                    if(toMod == null){
+                        toMod = new BatchMetadata();
+                    }
+                    toMod.numberTIDsExecuted += 1;
+                    if(toMod.maxTidExecuted < outputEvent.tid()){
+                        toMod.maxTidExecuted = outputEvent.tid();
+                    }
+                    return toMod;
+        });
+        if(!this.batchContextMap.containsKey(outputEvent.batch())) return;
+        var thisBatch = this.batchContextMap.get(outputEvent.batch());
+        if(thisBatch.numberOfTIDsBatch == batchMetadata.numberTIDsExecuted) {
+            LOGGER.log(INFO, this.me.identifier + ": All TIDs for the current batch (" + thisBatch.batch + ") have been executed");
+            // many outputs from the same transaction may arrive here, but can only send the batch commit once
+            if (thisBatch.setStatus(BatchContext.OPEN, BatchContext.BATCH_COMPLETED)
+                    // if terminal, must send batch complete
+                    && thisBatch.terminal) {
+                LOGGER.log(WARNING, this.me.identifier + ": Requesting leader worker to send batch (" + thisBatch.batch + ") complete");
+                // must be queued in case leader is off and comes back online
+                this.leaderWorker.queueMessage(BatchComplete.of(thisBatch.batch, this.me.identifier));
+            }
+        }
     }
 
     private void connectToReceivedConsumerSet(Map<String, List<IdentifiableNode>> receivedConsumerVms) {
@@ -328,7 +348,7 @@ public final class VmsEventHandler extends ModbHttpServer {
     }
 
     private boolean currentBatchFinishedAllTIDs(){
-        BatchMetadata batchMetadata = this.volatileBatchMetadataMap.get(this.currentBatch.batch);
+        BatchMetadata batchMetadata = this.trackingBatchMap.get(this.currentBatch.batch);
         if(batchMetadata == null){
             return false;
         }
@@ -1103,6 +1123,15 @@ public final class VmsEventHandler extends ModbHttpServer {
             BatchContext batchContext = BatchContext.build(batchCommitInfo);
             batchContextMap.put(batchCommitInfo.batch(), batchContext);
             batchToNextBatchMap.put( batchCommitInfo.previousBatch(), batchCommitInfo.batch() );
+
+            // if it has been completed but not moved to status, then should send
+            if(trackingBatchMap.containsKey(batchCommitInfo.batch())
+                    && trackingBatchMap.get(batchCommitInfo.batch()).numberTIDsExecuted == batchCommitInfo.numberOfTIDsBatch()){
+                // send
+                LOGGER.log(INFO,me.identifier+": Requesting leader worker to send batch ("+
+                        batchCommitInfo.batch()+") complete (LATE)");
+                leaderWorker.queueMessage(BatchComplete.of(batchCommitInfo.batch(), me.identifier));
+            }
         }
 
         /**

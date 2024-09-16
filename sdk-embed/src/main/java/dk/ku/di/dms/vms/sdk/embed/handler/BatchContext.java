@@ -3,6 +3,8 @@ package dk.ku.di.dms.vms.sdk.embed.handler;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 public final class BatchContext {
 
     public final long batch;
@@ -13,7 +15,7 @@ public final class BatchContext {
 
     // if an external thread (i.e., scheduler) modifies
     // this attribute, it needs to change to volatile
-    private int status;
+    private AtomicInteger status = new AtomicInteger(OPEN);
 
     // whether this vms is a terminal for this batch
     public final boolean terminal;
@@ -59,15 +61,19 @@ public final class BatchContext {
     public static final int BATCH_COMMITTED = 3;
 
     public boolean isOpen(){
-        return this.status == OPEN;
+        return this.status.get() == OPEN;
     }
 
     public boolean isCompleted(){
-        return this.status > 0;
+        return this.status.get() > OPEN;
+    }
+
+    public boolean setStatus(int expected, int status){
+        return this.status.compareAndSet(expected, status);
     }
 
     public void setStatus(int status){
-        this.status = status;
+        this.status.set(status);
     }
 
 }

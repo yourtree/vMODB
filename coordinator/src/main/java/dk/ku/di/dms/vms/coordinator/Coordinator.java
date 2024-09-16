@@ -721,7 +721,9 @@ public final class Coordinator extends ModbHttpServer {
         LOGGER.log(WARNING,"Leader: Batch ("+ batchContext.batchOffset +
                 ") is not the pending one.\nStill has to wait for the pending batch ("+
                 this.batchOffsetPendingCommit+") to finish before progressing. Nodes that still need to vote:\n"+
-                this.batchContextMap.get( this.batchOffsetPendingCommit ).missingVotes);
+                (this.batchContextMap.containsKey( this.batchOffsetPendingCommit ) ?
+                        this.batchContextMap.get( this.batchOffsetPendingCommit )
+                                .missingVotes : Set.of()));
     }
 
     // seal batch and send batch complete to all terminals...

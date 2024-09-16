@@ -157,6 +157,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
                 this.transactionEvents.add(this.transactionEventQueue.take());
                 this.transactionEventQueue.drainTo( this.transactionEvents );
 
+
                 // use first as estimation to avoid sending a single event
 //                int maxSize = this.options.networkBufferSize() - payloadRaw.totalSize();
 

@@ -255,7 +255,7 @@ public final class TransactionWorker extends StoppableRunnable {
         Map<String, PrecedenceInfo> precedenceMap = this.precedenceMapInputQueue.peek();
         if(precedenceMap == null){ return; }
 
-        LOGGER.log(INFO, "Tx_Worker "+id+": Received a precedence map\n"+precedenceMap);
+        LOGGER.log(DEBUG, "Tx_Worker "+id+": Received a precedence map\n"+precedenceMap);
 
         Map.Entry<Long, List<PendingTransactionInput>> entry = this.pendingInputMap.firstEntry();
         if(entry == null) return;
