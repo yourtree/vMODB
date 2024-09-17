@@ -936,7 +936,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             if(startPos == 0){
                 // sets the position to 0 and sets the limit to the current position
                 this.readBuffer.flip();
-                LOGGER.log(DEBUG,me.identifier+": Leader has sent "+readBuffer.limit()+" bytes");
+                LOGGER.log(DEBUG,me.identifier+": Leader has sent "+this.readBuffer.limit()+" bytes");
             }
 
             // guaranteed we always have at least one byte to read

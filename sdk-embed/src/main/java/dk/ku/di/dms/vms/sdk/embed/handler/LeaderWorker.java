@@ -87,8 +87,6 @@ final class LeaderWorker extends StoppableRunnable {
     }
 
     public void queueMessage(Object message) {
-        // only after done one can clear the buffer
-        this.writeBuffer.clear();
         this.sendMessage(message);
     }
 

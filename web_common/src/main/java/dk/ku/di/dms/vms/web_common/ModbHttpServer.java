@@ -8,10 +8,15 @@ import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 public abstract class ModbHttpServer extends StoppableRunnable {
+
+    protected static final List<HttpReadCompletionHandler> sseClients = new CopyOnWriteArrayList<>();
 
     protected static final class HttpReadCompletionHandler implements CompletionHandler<Integer, Integer> {
 
@@ -77,12 +82,14 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                                 }
                                 case "application/octet-stream" -> {
                                     byte[] byteArray = httpHandler.getAsBytes(httpRequest.uri());
-                                    String headers = "HTTP/1.1 200 OK\r\n" +
-                                            "Content-Length: " + byteArray.length + "\r\n" +
-                                            "Content-Type: application/octet-stream\r\n" +  // Set Content-Type to octet-stream
-                                            "\r\n";  // End of headers
+                                    String headers = "HTTP/1.1 200 OK\r\nContent-Length: " + byteArray.length +
+                                            "\r\nContent-Type: application/octet-stream\r\n\r\n";
                                     this.writeBuffer.put(headers.getBytes(StandardCharsets.UTF_8));
                                     this.writeBuffer.put(byteArray);
+                                }
+                                case "text/event-stream" -> {
+                                    this.processSseClient();
+                                    return;
                                 }
                                 case null, default -> this.writeBuffer.put(ERROR_RESPONSE_BYTES);
                             }
@@ -128,6 +135,34 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             this.connectionMetadata.channel.read(this.readBuffer, 0, this);
         }
 
+        private void processSseClient() throws InterruptedException, ExecutionException {
+            // Write HTTP response headers for SSE
+            String headers = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n";
+            this.writeBuffer.put(headers.getBytes(StandardCharsets.UTF_8));
+            this.writeBuffer.flip();
+            this.connectionMetadata.channel.write(this.writeBuffer).get();
+            this.writeBuffer.clear();
+            this.readBuffer.clear();
+            this.connectionMetadata.channel.read(this.readBuffer, 0, this);
+            sseClients.add(this);
+        }
+
+        public void sendToSseClient(long numTIDsCommitted){
+            String eventData = "data: " + numTIDsCommitted + "\n\n";
+            this.writeBuffer.put(eventData.getBytes(StandardCharsets.UTF_8));
+            this.writeBuffer.flip();
+            try {
+                do {
+                    this.connectionMetadata.channel.write(this.writeBuffer).get();
+                } while (this.writeBuffer.hasRemaining());
+            } catch (InterruptedException | ExecutionException e) {
+                System.out.println("Error caught: "+e.getMessage());
+                sseClients.remove(this);
+                // e.printStackTrace(System.out);
+            }
+            this.writeBuffer.clear();
+        }
+
         private static final byte[] OK_RESPONSE_BYTES = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
         private static final byte[] ERROR_RESPONSE_BYTES = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nBad Request".getBytes(StandardCharsets.UTF_8);
@@ -140,6 +175,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 MemoryManager.releaseTemporaryDirectBuffer(this.readBuffer);
                 MemoryManager.releaseTemporaryDirectBuffer(this.writeBuffer);
                 // LOGGER.log(DEBUG,me.identifier+": HTTP client has disconnected!");
+                sseClients.remove(this);
                 return;
             }
             this.readBuffer.flip();

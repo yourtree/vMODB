@@ -260,7 +260,9 @@ public final class Coordinator extends ModbHttpServer {
                     this.processVmsMessage(message);
                 }
             } while (this.isRunning());
-        } catch (Exception ignored){}
+        } catch (Exception e){
+            e.printStackTrace(System.out);
+        }
 
         this.failSafeClose();
         LOGGER.log(INFO,"Leader: Finished execution.");
@@ -816,6 +818,10 @@ public final class Coordinator extends ModbHttpServer {
                         batchContext.previousBatchPerVms.get(vms.identifier),
                         batchContext.numberOfTIDsPerVms.get(vms.identifier)
             ));
+        }
+        // send to sse client if connected
+        if(!sseClients.isEmpty()){
+            sseClients.getFirst().sendToSseClient(this.numTIDsCommitted.get());
         }
     }
 

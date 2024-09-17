@@ -89,10 +89,9 @@ public final class Main {
                     .internal("b", "stock", RESERVE_STOCK, "a")
                     .internal("c", "order", STOCK_CONFIRMED, "b")
                     .internal("d", "payment", INVOICE_ISSUED, "c")
+                    // treated as internal to minimize number of votes
+                    .internal("e", "seller", INVOICE_ISSUED, "c")
                     //.terminal("any", "customer", "b")
-                    // .internal("e", "seller", "c")
-                    // opt to minimize number of votes
-                    //.internal("e", "seller", INVOICE_ISSUED, "c")
                     .terminal("f", "shipment", "d")
                     .build();
             transactionMap.put(checkoutDag.name, checkoutDag);
@@ -215,7 +214,7 @@ public final class Main {
         starterVMSs.putIfAbsent(orderAddress.identifier, orderAddress);
         starterVMSs.putIfAbsent(paymentAddress.identifier, paymentAddress);
         starterVMSs.putIfAbsent(shipmentAddress.identifier, shipmentAddress);
-        //starterVMSs.putIfAbsent(sellerAddress.identifier, sellerAddress);
+        starterVMSs.putIfAbsent(sellerAddress.identifier, sellerAddress);
 
         return starterVMSs;
     }
