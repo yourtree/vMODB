@@ -16,12 +16,13 @@ import static java.lang.System.Logger.Level.ERROR;
  */
 public final class VmsTransactionTaskBuilder {
 
-    private static final System.Logger LOGGER = System.getLogger(VmsTransactionTask.class.getSimpleName());
+    private static final System.Logger LOGGER = System.getLogger(VmsTransactionTaskBuilder.class.getSimpleName());
 
     private static final int NEW = 0;
     private static final int READY = 1;
     private static final int RUNNING = 2;
     private static final int FINISHED = 3;
+    private static final int FAILED = 4;
 
     private final ITransactionManager transactionManager;
 
@@ -136,6 +137,10 @@ public final class VmsTransactionTaskBuilder {
 
         public void signalFinished(){
             this.status = FINISHED;
+        }
+
+        public void signalFailed(){
+            this.status = FAILED;
         }
 
         public Optional<Object> partitionId() {

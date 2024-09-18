@@ -645,12 +645,18 @@ public final class VmsEventHandler extends ModbHttpServer {
 
         @Override
         public void completed(Integer result, Void void_) {
+
+            String remoteAddress = "";
+            try {
+                remoteAddress = channel.getRemoteAddress().toString();
+            } catch (IOException ignored) { }
+
             if(result == 0){
-                LOGGER.log(WARNING,me.identifier+": A node is trying to connect with an empty message!");
+                LOGGER.log(WARNING,me.identifier+": A node ("+remoteAddress+") is trying to connect with an empty message!");
                 try { this.channel.close(); } catch (IOException ignored) {}
                 return;
             } else if(result == -1){
-                LOGGER.log(WARNING,me.identifier+": A node died before sending the presentation message");
+                LOGGER.log(WARNING,me.identifier+": A node ("+remoteAddress+") died before sending the presentation message");
                 try { this.channel.close(); } catch (IOException ignored) {}
                 return;
             }
@@ -783,6 +789,7 @@ public final class VmsEventHandler extends ModbHttpServer {
         @Override
         public void failed(Throwable exc, Void attachment) {
             String message = exc.getMessage();
+            boolean logError = true;
             if(message == null){
                 if (exc.getCause() instanceof ClosedChannelException){
                     message = "Connection is closed";
@@ -791,13 +798,18 @@ public final class VmsEventHandler extends ModbHttpServer {
                 } else {
                     message = "No cause identified";
                 }
+                LOGGER.log(WARNING, me.identifier + ": Error on accepting connection: " + message);
+            } else if(message.equalsIgnoreCase("Too many open files")){
+                logError = false;
+                System.out.println("Too many open files error was caught. Cannot log the error appropriately.");
             }
-            LOGGER.log(WARNING,me.identifier+": Error on accepting connection: "+ message);
+
             if (serverSocket.isOpen()){
                 serverSocket.accept(null, this);
-            } else {
+            } else if(logError) {
                 LOGGER.log(WARNING,me.identifier+": Socket is not open anymore. Cannot set up accept again");
             }
+
         }
     }
 

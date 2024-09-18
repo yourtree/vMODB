@@ -78,7 +78,5 @@ public final class Set0<T> implements Set<T> {
     }
 
     @Override
-    public void clear() {
-
-    }
+    public void clear() { }
 }

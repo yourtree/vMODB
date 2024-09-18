@@ -12,4 +12,9 @@ public enum PaymentType {
     PaymentType(String type) {
         this.type = type;
     }
+
+    public boolean equals(String type){
+        return this.type.contentEquals(type);
+    }
+
 }

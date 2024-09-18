@@ -17,9 +17,7 @@ public final class CartItem implements IEntity<CartItem.CartItemId> {
         public int seller_id;
         public int product_id;
         public int customer_id;
-
         public CartItemId(){}
-
         public CartItemId(int seller_id, int product_id, int customer_id) {
             this.seller_id = seller_id;
             this.product_id = product_id;

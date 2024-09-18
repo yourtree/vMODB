@@ -44,49 +44,6 @@ public final class OrderService {
         this.orderHistoryRepository = orderHistoryRepository;
     }
 
-//    @Inbound(values = {PAYMENT_CONFIRMED})
-//    @Transactional(type=RW)
-    public void processPaymentConfirmed(PaymentConfirmed paymentConfirmed){
-
-    }
-
-    @Inbound(values = {SHIPMENT_UPDATED})
-    @Transactional(type=RW)
-    public void processShipmentNotification(ShipmentUpdated shipmentUpdated){
-        LOGGER.log(INFO,"APP: Order received a shipment updated event with TID: "+shipmentUpdated.instanceId);
-
-        Date now = new Date();
-        for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {
-            Order order = this.orderRepository.lookupByKey( new Order.OrderId(
-                    shipmentNotification.customerId, shipmentNotification.orderId
-            ) );
-            if(order == null) {
-                throw new RuntimeException("Cannot find order "+shipmentNotification.customerId+"-"+shipmentNotification.orderId);
-            }
-
-            OrderStatus status = OrderStatus.READY_FOR_SHIPMENT;
-            if(shipmentNotification.status == ShipmentStatus.DELIVERY_IN_PROGRESS) {
-                status = OrderStatus.IN_TRANSIT;
-                order.delivered_carrier_date = shipmentNotification.eventDate;
-            } else if(shipmentNotification.status == ShipmentStatus.CONCLUDED) {
-                status = OrderStatus.DELIVERED;
-                order.delivered_customer_date = shipmentNotification.eventDate;
-            }
-
-            OrderHistory orderHistory = new OrderHistory(
-                    order.customer_id,
-                    order.order_id,
-                    now,
-                    status);
-
-            order.status = status;
-            order.updated_at = now;
-
-            this.orderRepository.update(order);
-            this.orderHistoryRepository.insert( orderHistory );
-        }
-    }
-
     @Inbound(values = {STOCK_CONFIRMED})
     @Outbound(INVOICE_ISSUED)
     @Transactional(type=RW)
@@ -183,7 +140,6 @@ public final class OrderService {
                 item.UnitPrice * item.Quantity,
                 totalPerItem.get(item.ProductId)
             );
-
             orderItems.add(oim.toCommonOrderItem(item.Voucher));
             this.orderItemRepository.insert(oim);
             item_id++;
@@ -196,7 +152,8 @@ public final class OrderService {
                 OrderStatus.INVOICED);
         this.orderHistoryRepository.insert(oh);
 
-        return new InvoiceIssued( stockConfirmed.customerCheckout, customerOrder.next_order_id, invoiceNumber, now, order.total_invoice, orderItems, stockConfirmed.instanceId);
+        return new InvoiceIssued( stockConfirmed.customerCheckout, customerOrder.next_order_id, invoiceNumber,
+                now, order.total_invoice, orderItems, stockConfirmed.instanceId);
     }
 
     private static final DateFormat df = new SimpleDateFormat("MM/dd/yyyy");
@@ -206,6 +163,49 @@ public final class OrderService {
         return String.valueOf(customerId) + '-' +
                 df.format(timestamp) + '-' +
                 orderId;
+    }
+
+    //    @Inbound(values = {PAYMENT_CONFIRMED})
+//    @Transactional(type=RW)
+    public void processPaymentConfirmed(PaymentConfirmed paymentConfirmed){
+
+    }
+
+    @Inbound(values = {SHIPMENT_UPDATED})
+    @Transactional(type=RW)
+    public void processShipmentNotification(ShipmentUpdated shipmentUpdated){
+        LOGGER.log(INFO,"APP: Order received a shipment updated event with TID: "+shipmentUpdated.instanceId);
+
+        Date now = new Date();
+        for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {
+            Order order = this.orderRepository.lookupByKey( new Order.OrderId(
+                    shipmentNotification.customerId, shipmentNotification.orderId
+            ) );
+            if(order == null) {
+                throw new RuntimeException("Cannot find order "+shipmentNotification.customerId+"-"+shipmentNotification.orderId);
+            }
+
+            OrderStatus status = OrderStatus.READY_FOR_SHIPMENT;
+            if(shipmentNotification.status == ShipmentStatus.DELIVERY_IN_PROGRESS) {
+                status = OrderStatus.IN_TRANSIT;
+                order.delivered_carrier_date = shipmentNotification.eventDate;
+            } else if(shipmentNotification.status == ShipmentStatus.CONCLUDED) {
+                status = OrderStatus.DELIVERED;
+                order.delivered_customer_date = shipmentNotification.eventDate;
+            }
+
+            OrderHistory orderHistory = new OrderHistory(
+                    order.customer_id,
+                    order.order_id,
+                    now,
+                    status);
+
+            order.status = status;
+            order.updated_at = now;
+
+            this.orderRepository.update(order);
+            this.orderHistoryRepository.insert( orderHistory );
+        }
     }
 
 }

@@ -211,18 +211,15 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     @Override
     public Object[] lookupByKey(TransactionContext txCtx, IKey key){
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
-        if ( operationSet != null ){
-            if(txCtx.readOnly) {
-                Entry<Long, TransactionWrite> entry = operationSet.floorEntry(txCtx.lastTid);
-                if (entry != null){
-                    return (entry.val().type != WriteType.DELETE ? entry.val().record : null);
-                }
-            } else {
-                return operationSet.lastWriteType != WriteType.DELETE ?
-                        operationSet.peak().val().record : null;
-            }
+        if ( operationSet == null ) {
+            return this.primaryKeyIndex.lookupByKey(key);
         }
-        return this.primaryKeyIndex.lookupByKey(key);
+        if(txCtx.readOnly) {
+            Entry<Long, TransactionWrite> entry = operationSet.floorEntry(txCtx.lastTid);
+            return entry != null ? (entry.val().type != WriteType.DELETE ? entry.val().record : null) : null;
+        }
+        return operationSet.lastWriteType != WriteType.DELETE ?
+                operationSet.peak().val().record : null;
     }
 
     /**
@@ -304,19 +301,19 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     public IKey insertAndGetKey(TransactionContext txCtx, Object[] values){
-        if(this.primaryKeyGenerator.isPresent()){
+        if(this.primaryKeyGenerator.isPresent()) {
             Object key_ = this.primaryKeyGenerator.get().next();
             // set to record
             values[this.primaryKeyIndex.columns()[0]] = key_;
-            IKey key = KeyUtils.buildRecordKey( this.primaryKeyIndex.schema().getPrimaryKeyColumns(), new Object[]{ key_ } );
-            if(this.insert( txCtx, key, values )){
+            IKey key = KeyUtils.buildRecordKey(this.primaryKeyIndex.schema().getPrimaryKeyColumns(), new Object[]{key_});
+            if (this.insert(txCtx, key, values)) {
                 return key;
             }
-        } else {
-            IKey key = KeyUtils.buildRecordKey(this.primaryKeyIndex.schema().getPrimaryKeyColumns(), values);
-            if(this.insert( txCtx, key, values )){
-                return key;
-            }
+            return null;
+        }
+        IKey key = KeyUtils.buildRecordKey(this.primaryKeyIndex.schema().getPrimaryKeyColumns(), values);
+        if(this.insert( txCtx, key, values )){
+            return key;
         }
         return null;
     }
@@ -380,8 +377,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     @Override
     public void reset(){
         this.writeSetMap.clear();
-        this.keysToFlush.clear();
         this.updatesPerKeyMap.clear();
+        this.keysToFlush.clear();
     }
 
     public void garbageCollection(long maxTid){
@@ -543,6 +540,11 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                         return false;
                     }
                 }
+                /* is it returning a deleted entry???
+                if(updatesPerKeyMap.get(next.getKey()).lastWriteType == WriteType.DELETE){
+                    System.out.println("ATTENTION: "+this.txCtx.tid+" < "+updatesPerKeyMap.get(next.getKey()).peak().key);
+                }
+                */
                 this.currRecord = entry.val().record;
                 return true;
             }

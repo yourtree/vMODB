@@ -8,6 +8,8 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.util.Queue;
@@ -25,6 +27,20 @@ import static java.lang.Thread.sleep;
 final class LeaderWorker extends StoppableRunnable {
 
     private static final System.Logger LOGGER = System.getLogger(LeaderWorker.class.getName());
+
+    private static final VarHandle WRITE_SYNCHRONIZER;
+
+    static {
+        try {
+            MethodHandles.Lookup l = MethodHandles.lookup();
+            WRITE_SYNCHRONIZER = l.findVarHandle(LeaderWorker.class, "writeSynchronizer", int.class);
+        } catch (Exception e) {
+            throw new InternalError(e);
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private volatile int writeSynchronizer;
 
     private final ServerNode leader;
 
@@ -125,8 +141,10 @@ final class LeaderWorker extends StoppableRunnable {
     }
 
     private void sendBatchComplete(BatchComplete.Payload payload) {
+        this.acquireLock();
         BatchComplete.write( this.writeBuffer, payload );
         this.write(payload);
+        this.releaseLock();
     }
 
     private void sendBatchCommitAck(BatchCommitAck.Payload payload) {
@@ -137,6 +155,15 @@ final class LeaderWorker extends StoppableRunnable {
     private void sendTransactionAbort(TransactionAbort.Payload payload) {
         TransactionAbort.write( this.writeBuffer, payload );
         this.write(payload);
+    }
+
+    @SuppressWarnings("StatementWithEmptyBody")
+    public void acquireLock(){
+        while(! WRITE_SYNCHRONIZER.compareAndSet(this, 0, 1) );
+    }
+
+    public void releaseLock(){
+        WRITE_SYNCHRONIZER.setVolatile(this, 0);
     }
 
 }

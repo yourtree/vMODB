@@ -23,12 +23,12 @@ public class CustomBlockingQueue extends ConcurrentLinkedQueue<TransactionEvent.
     @Override
     public boolean add(TransactionEvent.PayloadRaw payloadRaw) {
         super.offer(payloadRaw);
-        batchSize.getAndAdd( payloadRaw.totalSize() );
+        this.batchSize.getAndAdd( payloadRaw.totalSize() );
         // signal there is at least one
-        if(waiter != null && waiter.getState() == Thread.State.WAITING) {
-            if(unparkPermission.compareAndExchange(false, true)) {
-                LockSupport.unpark(waiter);
-                unparkPermission.set(false);
+        if(this.waiter != null && this.waiter.getState() == Thread.State.WAITING) {
+            if(this.unparkPermission.compareAndExchange(false, true)) {
+                LockSupport.unpark(this.waiter);
+                this.unparkPermission.set(false);
             }
         }
         return true;
@@ -41,14 +41,14 @@ public class CustomBlockingQueue extends ConcurrentLinkedQueue<TransactionEvent.
     @Override
     public int drainTo(Collection<? super TransactionEvent.PayloadRaw> c, int maxSize) {
         // sleep
-        if(batchSize.get() == 0) {
+        if(this.batchSize.get() == 0) {
             LockSupport.park();
             // woke
         }
         // has the batch size reached?
-        if(batchSize.get() < maxSize){
+        if(this.batchSize.get() < maxSize){
             // long start = System.currentTimeMillis();
-            LockSupport.parkNanos( 300 );
+            LockSupport.parkNanos( 250 );
         }
         TransactionEvent.PayloadRaw event_;
         int sizeRemoved = 0;
@@ -56,7 +56,7 @@ public class CustomBlockingQueue extends ConcurrentLinkedQueue<TransactionEvent.
             c.add(this.poll());
             sizeRemoved = sizeRemoved + event_.totalSize();
         }
-        batchSize.addAndGet( -sizeRemoved );
+        this.batchSize.addAndGet( -sizeRemoved );
         return sizeRemoved;
     }
 

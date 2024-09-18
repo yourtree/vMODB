@@ -27,6 +27,7 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 import static dk.ku.di.dms.vms.marketplace.cart.infra.CartUtils.CART_ITEMS;
@@ -91,19 +92,19 @@ public final class Main {
         }
 
         @Override
-        public void patch(String uri, String body) {
+        public void patch(String uri, String body) throws IOException {
             String[] split = uri.split("/");
             String op = split[split.length - 1];
             if(op.contentEquals("add")) {
                 int customerId = Integer.parseInt(split[split.length - 2]);
                 dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
                                 SERDES.deserialize(body, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
-                CART_ITEMS.computeIfAbsent(customerId, (x) -> new ArrayList<>()).add(
-                        CartUtils.convertCartItemAPI(customerId, cartItemAPI)
-                );
-//                try (var txCtx = this.transactionManager.beginTransaction(0, 0, 0, false)) {
-//                    this.repository.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
-//                }
+//                CART_ITEMS.computeIfAbsent(customerId, (x) -> new ArrayList<>()).add(
+//                        CartUtils.convertCartItemAPI(customerId, cartItemAPI)
+//                );
+                try (var txCtx = this.transactionManager.beginTransaction(0, 0, 0, false)) {
+                    this.repository.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
+                }
             } else {
                 this.transactionManager.reset();
             }
@@ -113,12 +114,12 @@ public final class Main {
         public String getAsJson(String uri) throws Exception {
             String[] split = uri.split("/");
             int customerId = Integer.parseInt(split[split.length - 1]);
-            return SERDES.serializeList(CART_ITEMS.get(customerId));
+//            return SERDES.serializeList(CART_ITEMS.get(customerId));
             // long tid = this.transactionScheduler.lastTidFinished();
-//            try(var txCtx = this.transactionManager.beginTransaction( 0, 0, 0,true )) {
-//                List<CartItem> cartItems = this.repository.getCartItemsByCustomerId(customerId);
-//                return SERDES.serializeList(cartItems);
-//            }
+            try(var txCtx = this.transactionManager.beginTransaction( 0, 0, 0,true )) {
+                List<CartItem> cartItems = this.repository.getCartItemsByCustomerId(customerId);
+                return SERDES.serializeList(cartItems);
+            }
         }
     }
 

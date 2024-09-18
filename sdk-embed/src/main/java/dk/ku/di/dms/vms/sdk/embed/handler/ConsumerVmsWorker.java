@@ -166,7 +166,11 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 //                    this.transactionEvents.add(payloadRaw);
 //                    sumTotal += payloadRaw.totalSize();
 //                } while (sumTotal < maxSize && (payloadRaw = this.transactionEventQueue.poll()) != null);
-                this.sendBatchOfEvents();
+                if(this.transactionEvents.size() == 1){
+                    this.sendEvent(this.transactionEvents.remove(0));
+                } else {
+                    this.sendBatchOfEvents();
+                }
 //                } else {
 //                    this.sendEvent(payloadRaw);
 //                }
@@ -256,10 +260,21 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     @SuppressWarnings("unused")
     private void sendEvent(TransactionEvent.PayloadRaw payload) {
         ByteBuffer writeBuffer = this.retrieveByteBuffer();
-        TransactionEvent.write( writeBuffer, payload );
-        writeBuffer.flip();
-        this.acquireLock();
-        this.channel.write(writeBuffer, this.options.networkSendTimeout(), TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
+//        this.acquireLock();
+//        this.channel.write(writeBuffer, this.options.networkSendTimeout(), TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
+        try {
+            TransactionEvent.write( writeBuffer, payload );
+            writeBuffer.flip();
+            LOGGER.log(DEBUG, this.me.identifier+ ": Submitting single event to "+this.consumerVms.identifier);
+            do {
+                this.channel.write(writeBuffer).get();
+            } while (writeBuffer.hasRemaining());
+        } catch (Exception e){
+            LOGGER.log(ERROR, "Error caught on sending single event: "+e);
+        }
+        finally {
+            this.returnByteBuffer(writeBuffer);
+        }
     }
 
     private void sendBatchOfEvents() {
@@ -292,25 +307,20 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
                 if (!this.channel.isOpen()) {
                     LOGGER.log(WARNING, "The "+this.consumerVms.identifier+" VMS is offline");
                 }
-
                 // return events to the deque
                 while(!this.transactionEvents.isEmpty()) {
                     if(this.transactionEventQueue.offer(this.transactionEvents.get(0))){
                         this.transactionEvents.remove(0);
                     }
                 }
-
                 if(writeBuffer != null) {
                     this.returnByteBuffer(writeBuffer);
                 }
-
                 if(e instanceof IllegalStateException){
                     try { sleep(100); } catch (InterruptedException ignored) { }
                 }
-
                 // to avoid problems on future writes
                 this.releaseLock();
-
                 // force loop exit
                 remaining = 0;
             }

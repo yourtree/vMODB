@@ -14,14 +14,10 @@ import java.util.Date;
 public final class OrderPayment implements IEntity<OrderPayment.OrderPaymentId> {
 
     public static class OrderPaymentId implements Serializable {
-
         public int customer_id;
         public int order_id;
-
         public int sequential;
-
         public OrderPaymentId(){}
-
         public OrderPaymentId(int customer_id, int order_id, int sequential) {
             this.customer_id = customer_id;
             this.order_id = order_id;

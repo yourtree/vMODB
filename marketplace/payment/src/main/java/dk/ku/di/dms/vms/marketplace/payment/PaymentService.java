@@ -69,9 +69,73 @@ public final class PaymentService {
     @Parallel
     public PaymentConfirmed processPayment(InvoiceIssued invoiceIssued) {
         LOGGER.log(INFO, "APP: Payment received an invoice issued event with TID: "+ invoiceIssued.instanceId);
-
         Date now = new Date();
+        PaymentStatus status = getPaymentStatus(invoiceIssued);
+        int seq = 1;
+        boolean isCard = isCard(invoiceIssued.customer.PaymentType);
+        if (isCard) {
+            OrderPayment cardPaymentLine = new OrderPayment(
+                    invoiceIssued.customer.CustomerId,
+                    invoiceIssued.orderId,
+                    seq,
+                    PaymentType.CREDIT_CARD.equals(invoiceIssued.customer.PaymentType) ?
+                            PaymentType.CREDIT_CARD : PaymentType.DEBIT_CARD,
+                    invoiceIssued.customer.Installments,
+                    invoiceIssued.totalInvoice,
+                    status
+            );
+            this.orderPaymentRepository.insert(cardPaymentLine);
+            OrderPaymentCard card = new OrderPaymentCard(invoiceIssued.customer.CustomerId, invoiceIssued.orderId, seq, invoiceIssued.customer.CardNumber,
+                    invoiceIssued.customer.CardHolderName, invoiceIssued.customer.CardExpiration, invoiceIssued.customer.CardBrand);
+            this.orderPaymentCardRepository.insert(card);
+            seq++;
+        } else if (PaymentType.BOLETO.equals(invoiceIssued.customer.PaymentType)) {
+            OrderPayment paymentSlip = new OrderPayment(
+                    invoiceIssued.customer.CustomerId,
+                    invoiceIssued.orderId,
+                    seq,
+                    PaymentType.BOLETO,
+                    1,
+                    invoiceIssued.totalInvoice,
+                    status
+            );
+            this.orderPaymentRepository.insert(paymentSlip);
+            seq++;
+        }
 
+        if(status == PaymentStatus.succeeded) {
+            for (OrderItem item : invoiceIssued.items) {
+                if (item.total_incentive > 0) {
+                    OrderPayment voucher = new OrderPayment(
+                            invoiceIssued.customer.CustomerId,
+                            invoiceIssued.orderId,
+                            seq,
+                            PaymentType.VOUCHER,
+                            1,
+                            item.total_incentive,
+                            status
+                    );
+                    this.orderPaymentRepository.insert(voucher);
+                    seq++;
+                }
+            }
+        }
+
+        return new PaymentConfirmed(invoiceIssued.customer, invoiceIssued.orderId, invoiceIssued.totalInvoice, invoiceIssued.items, now, invoiceIssued.instanceId);
+    }
+
+    private static boolean isCard(String type){
+        switch (type){
+            case "CREDIT_CARD", "DEBIT_CARD" -> {
+                return true;
+            }
+            default -> {
+                return false;
+            }
+        }
+    }
+
+    private static PaymentStatus getPaymentStatus(InvoiceIssued invoiceIssued) {
         PaymentStatus status;
         if(provider){
             // TODO provider communication
@@ -88,63 +152,7 @@ public final class PaymentService {
         } else {
             status = PaymentStatus.succeeded;
         }
-
-        int orderId = invoiceIssued.orderId;
-
-        int seq = 1;
-        boolean cc = invoiceIssued.customer.PaymentType.contentEquals(PaymentType.CREDIT_CARD.name());
-
-        if (cc || invoiceIssued.customer.PaymentType.contentEquals(PaymentType.DEBIT_CARD.name())) {
-            OrderPayment cardPaymentLine = new OrderPayment(
-                    invoiceIssued.customer.CustomerId,
-                    orderId,
-                    seq,
-                    cc ? PaymentType.CREDIT_CARD : PaymentType.DEBIT_CARD,
-                    invoiceIssued.customer.Installments,
-                    invoiceIssued.totalInvoice,
-                    status
-            );
-
-            this.orderPaymentRepository.insert(cardPaymentLine);
-
-            OrderPaymentCard card = new OrderPaymentCard(invoiceIssued.customer.CustomerId, orderId, seq, invoiceIssued.customer.CardNumber,
-                    invoiceIssued.customer.CardHolderName, invoiceIssued.customer.CardExpiration, invoiceIssued.customer.CardBrand);
-
-            this.orderPaymentCardRepository.insert(card);
-            seq++;
-        } else if (invoiceIssued.customer.PaymentType.contentEquals(PaymentType.BOLETO.name())) {
-            OrderPayment paymentSlip = new OrderPayment(
-                    invoiceIssued.customer.CustomerId,
-                    orderId,
-                    seq,
-                    PaymentType.BOLETO,
-                    1,
-                    invoiceIssued.totalInvoice,
-                    status
-            );
-            orderPaymentRepository.insert(paymentSlip);
-            seq++;
-        }
-
-        if(status == PaymentStatus.succeeded) {
-            for (OrderItem item : invoiceIssued.items) {
-                if (item.total_incentive > 0) {
-                    OrderPayment voucher = new OrderPayment(
-                            invoiceIssued.customer.CustomerId,
-                            orderId,
-                            seq,
-                            PaymentType.VOUCHER,
-                            1,
-                            item.total_incentive,
-                            status
-                    );
-                    orderPaymentRepository.insert(voucher);
-                    seq++;
-                }
-            }
-        }
-
-        return new PaymentConfirmed(invoiceIssued.customer, invoiceIssued.orderId, invoiceIssued.totalInvoice, invoiceIssued.items, now, invoiceIssued.instanceId);
+        return status;
     }
 
 }

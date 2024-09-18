@@ -17,16 +17,37 @@ import static java.lang.Thread.sleep;
 public final class OrderTest {
 
     @Test
-    public void simpleTest() throws Exception {
+    public void testConcurrentCustomerCheckouts() throws Exception {
+        VmsApplication vms = initOrderVms();
+        for(int i = 1; i <= 2; i++){
+            InboundEvent inboundEvent = getInboundEvent(i);
+            vms.internalChannels().transactionInputQueue().add( inboundEvent );
+        }
+        sleep(100000);
+        assert vms.lastTidFinished() == 2;
+    }
 
-        VmsApplicationOptions options = VmsApplicationOptions.build("localhost", Constants.ORDER_VMS_PORT, new String[]{
+    @Test
+    public void simpleTest() throws Exception {
+        VmsApplication vms = initOrderVms();
+        InboundEvent inboundEvent = getInboundEvent(1);
+        vms.internalChannels().transactionInputQueue().add( inboundEvent );
+        sleep(1000);
+        assert vms.lastTidFinished() == 1;
+    }
+
+    private static VmsApplication initOrderVms() throws Exception {
+        VmsApplicationOptions options = VmsApplicationOptions.build(
+                "localhost", Constants.ORDER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.order",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
-
         VmsApplication vms = VmsApplication.build(options);
         vms.start();
+        return vms;
+    }
 
+    private static InboundEvent getInboundEvent(long tid) {
         CustomerCheckout customerCheckout = new CustomerCheckout(
                 1, "test", "test", "test", "test","test", "test", "test",
                 "CREDIT_CARD","test","test","test", "test", "test", 1,"1");
@@ -37,14 +58,8 @@ public final class OrderTest {
                 List.of( new CartItem(1,1,"test",1.0f, 1.0f, 1, 1.0f, "1") ),
                 "1" );
 
-        InboundEvent inboundEvent = new InboundEvent( 1, 0, 1,
+        return new InboundEvent( tid, tid-1, 0,
                 "stock_confirmed", StockConfirmed.class, stockConfirmed );
-        vms.internalChannels().transactionInputQueue().add( inboundEvent );
-
-        sleep(1000);
-
-        assert vms.lastTidFinished() == 1;
-
     }
 
 }
