@@ -326,8 +326,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public Optional<Object[]> removeOpt(TransactionContext txCtx, IKey key) {
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
         if (operationSet != null && operationSet.lastWriteType != WriteType.DELETE){
-            var entrySet = operationSet.peak();
-            Object[] lastRecord = entrySet.val().record;
+            Object[] lastRecord = operationSet.peak().val().record;
             TransactionWrite entry = TransactionWrite.delete(WriteType.DELETE);
             operationSet.put(txCtx.tid, entry);
             operationSet.lastWriteType = WriteType.DELETE;
@@ -382,7 +381,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     public void garbageCollection(long maxTid){
-        for(var key : this.keysToFlush){
+        for(IKey key : this.keysToFlush){
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             if(operationSetOfKey == null){
                 throw new RuntimeException("Error on retrieving operation set for key "+key);
@@ -396,7 +395,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     public void checkpoint(long maxTid){
-        for(var key : this.keysToFlush){
+        for(IKey key : this.keysToFlush){
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             if(operationSetOfKey == null){
                 throw new RuntimeException("Error on retrieving operation set for key "+key);

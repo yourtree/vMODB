@@ -33,11 +33,11 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
     private final Map<IKey, Set<IKey>> keyMap;
 
     public NonUniqueSecondaryIndex(PrimaryIndex primaryIndex, ReadWriteIndex<IKey> underlyingIndex) {
-        this.writeSet = new ConcurrentHashMap<>(10000);
+        this.writeSet = new ConcurrentHashMap<>(1024*100);
         this.primaryIndex = primaryIndex;
         this.underlyingIndex = underlyingIndex;
         // prevent a rehash to return null on get call
-        this.keyMap = new ConcurrentHashMap<>(10000);
+        this.keyMap = new ConcurrentHashMap<>(1024*100);
     }
 
     public ReadWriteIndex<IKey> getUnderlyingIndex(){

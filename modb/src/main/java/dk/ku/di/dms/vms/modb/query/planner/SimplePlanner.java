@@ -299,9 +299,13 @@ public final class SimplePlanner {
         final int[] filterColumns = filteredStream.toArray();
 
         // any column of the index is in the filter? if so, index is not used.
-        boolean indexColumnInFilter = Arrays.stream(filterColumns).anyMatch(indexSelected::containsColumn);
+        // boolean indexColumnInFilter = Arrays.stream(columnsForIndexSelection).anyMatch(indexSelected::containsColumn);
 
-        return new IndexSelectionVerdict(indexColumnInFilter, table.primaryKeyIndex(), filterColumns);
+        return new IndexSelectionVerdict(true,
+                table.secondaryIndexMap.containsKey(indexSelected.key()) ?
+                        table.secondaryIndexMap.get(indexSelected.key()) :
+                        table.partialIndexMap.get(indexSelected.key())
+                , filterColumns);
     }
 
     private ReadWriteIndex<IKey> getOptimalIndex(Table table, int[] filterColumns){
@@ -311,7 +315,7 @@ public final class SimplePlanner {
         ReadWriteIndex<IKey> bestSoFar = null;
         int maxLength = 0;
         for(int[] arr : combinations) {
-            IKey indexKey = KeyUtils.buildIndexKey(filterColumns);
+            IKey indexKey = KeyUtils.buildIndexKey(arr);
             if(table.secondaryIndexMap.get(indexKey) != null){
                 if(arr.length > maxLength){
                     bestSoFar = table.secondaryIndexMap.get(indexKey).getUnderlyingIndex();

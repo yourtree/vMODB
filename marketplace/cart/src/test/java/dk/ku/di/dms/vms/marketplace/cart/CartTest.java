@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
+import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
@@ -29,17 +30,16 @@ public final class CartTest {
     public void testRetrieveCartsForPriceUpdate() throws Exception {
         VmsApplication vms = loadCartVms();
         IProductReplicaRepository productReplicaRepository = (IProductReplicaRepository) vms.getRepositoryProxy("product_replicas");
+        ICartItemRepository cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
         try(var txCtx = (TransactionContext) vms.getTransactionManager().beginTransaction( 1, 0, 0, false )) {
             productReplicaRepository.insert(new ProductReplica(
                     1, 1, "test", "test", "test",
                     "test", 10, 0, "test", "0"
             ));
-            Object[] cartItemRow1 = new Object[]{1, 1, 1, "test", 10, 10, 1, 0, "0"};
-            Object[] cartItemRow2 = new Object[]{1, 1, 2, "test", 10, 10, 1, 0, "0"};
-            insertCartItem(vms, txCtx, cartItemRow1);
-            insertCartItem(vms, txCtx, cartItemRow2);
+            cartItemRepository.insert(new CartItem( 1, 1, 1, "test", 10, 10, 1, 0, "0" ));
+            cartItemRepository.insert(new CartItem( 1, 1, 2, "test", 10, 10, 1, 0, "0" ));
         }
-        ICartItemRepository cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
+
         try(var txCtx = vms.getTransactionManager().beginTransaction(2,0,1, false)) {
             cartItemRepository.delete(new CartItem( 1, 1, 1, "test", 10, 10, 1, 0, "0" ));
         }

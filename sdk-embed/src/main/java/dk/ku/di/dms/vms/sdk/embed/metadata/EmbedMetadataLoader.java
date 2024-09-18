@@ -239,8 +239,16 @@ public final class EmbedMetadataLoader {
             }
 
             if(!entry.getValue().indexMetadataList().isEmpty()) {
-                for (var index : entry.getValue().indexMetadataList()) {
-                    ReadWriteIndex<IKey> nuhi = createNonUniqueIndex(schema, new int[]{ index.columnPos() }, index.indexName() );
+                Map<String, List<IndexMetadata>> indexMetadataByName = entry.getValue().indexMetadataList().stream()
+                        .collect(Collectors.groupingBy(IndexMetadata::indexName));
+                for (var idxEntry : indexMetadataByName.entrySet()) {
+                    ReadWriteIndex<IKey> nuhi;
+                    if(idxEntry.getValue().size() == 1) {
+                        nuhi = createNonUniqueIndex(schema, new int[]{idxEntry.getValue().getFirst().columnPos()}, idxEntry.getKey());
+                    } else {
+                        int[] columnList = idxEntry.getValue().stream().mapToInt(c-> c.columnPos).toArray();
+                        nuhi = createNonUniqueIndex(schema, columnList, idxEntry.getKey() );
+                    }
                     listSecondaryIndexes.add(nuhi);
                 }
             }

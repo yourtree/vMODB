@@ -435,7 +435,12 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     @Override
     public TransactionContextBase beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) {
-        return this.txCtxMap.put(Thread.currentThread().threadId(), new TransactionContext(tid, lastTid, readOnly));
+        return this.txCtxMap.compute(Thread.currentThread().threadId(),
+                (k,v) -> {
+                    if (v == null || v.tid != 0)
+                        return new TransactionContext(tid, lastTid, readOnly);
+                    return v;
+                });
     }
 
     @Override

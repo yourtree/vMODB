@@ -26,9 +26,11 @@ public final class CartItem implements IEntity<CartItem.CartItemId> {
     }
 
     @Id
+    @VmsIndex(name = "product_idx")
     public int seller_id;
 
     @Id
+    @VmsIndex(name = "product_idx")
     public int product_id;
 
     // another way to create index on customer:
@@ -53,6 +55,7 @@ public final class CartItem implements IEntity<CartItem.CartItemId> {
     public float voucher;
 
     @Column
+    @VmsIndex(name = "product_idx")
     public String version;
 
     public CartItem() {}
