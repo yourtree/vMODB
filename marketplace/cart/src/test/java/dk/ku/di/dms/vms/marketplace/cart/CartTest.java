@@ -10,7 +10,6 @@ import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.transaction.TransactionContext;
-import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;

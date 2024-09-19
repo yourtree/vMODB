@@ -11,6 +11,8 @@ import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.channel.IChannel;
+import org.jctools.queues.MpscBlockingConsumerArrayQueue;
+import org.jctools.queues.MpscGrowableArrayQueue;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -77,7 +79,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 
     private final Deque<ByteBuffer> pendingWritesBuffer = new ConcurrentLinkedDeque<>();
 
-    private final BlockingQueue<TransactionEvent.PayloadRaw> transactionEventQueue;
+    private final MpscBlockingConsumerArrayQueue<TransactionEvent.PayloadRaw> transactionEventQueue;
 
     private State state;
 
@@ -85,7 +87,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 
     private final WriteCompletionHandler writeCompletionHandler = new WriteCompletionHandler();
 
-    private final List<TransactionEvent.PayloadRaw> transactionEvents = new ArrayList<>(1024*10);
+    private final List<TransactionEvent.PayloadRaw> drained = new ArrayList<>(1024*10);
 
     public static ConsumerVmsWorker build(
                                   VmsNode me,
@@ -110,7 +112,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
         this.loggingHandler = loggingHandler;
         this.serdesProxy = serdesProxy;
         this.options = options;
-        this.transactionEventQueue = new LinkedBlockingQueue<>();
+        this.transactionEventQueue = new MpscBlockingConsumerArrayQueue<>(1024*1000);
         this.state = NEW;
     }
 
@@ -152,9 +154,9 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 //                    this.giveUpCpu(pollTimeout);
 //                }
 //                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
-                this.transactionEvents.add(this.transactionEventQueue.take());
-                this.transactionEventQueue.drainTo( this.transactionEvents );
-
+                this.drained.add(this.transactionEventQueue.take());
+                //this.transactionEventQueue.drainTo( this.transactionEvents );
+                this.transactionEventQueue.drain(this.drained::add);
                 // use first as estimation to avoid sending a single event
 //                int maxSize = this.options.networkBufferSize() - payloadRaw.totalSize();
 
@@ -164,8 +166,8 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 //                    this.transactionEvents.add(payloadRaw);
 //                    sumTotal += payloadRaw.totalSize();
 //                } while (sumTotal < maxSize && (payloadRaw = this.transactionEventQueue.poll()) != null);
-                if(this.transactionEvents.size() == 1){
-                    this.sendEvent(this.transactionEvents.remove(0));
+                if(this.drained.size() == 1){
+                    this.sendEvent(this.drained.remove(0));
                 } else {
                     this.sendBatchOfEvents();
                 }
@@ -276,13 +278,13 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     }
 
     private void sendBatchOfEvents() {
-        int remaining = this.transactionEvents.size();
+        int remaining = this.drained.size();
         int count = remaining;
         ByteBuffer writeBuffer = null;
         while(remaining > 0){
             try {
                 writeBuffer = this.retrieveByteBuffer();
-                remaining = BatchUtils.assembleBatchPayload(remaining, this.transactionEvents, writeBuffer);
+                remaining = BatchUtils.assembleBatchPayload(remaining, this.drained, writeBuffer);
 
                 LOGGER.log(DEBUG, this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
                 count = remaining;
@@ -306,9 +308,9 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
                     LOGGER.log(WARNING, "The "+this.consumerVms.identifier+" VMS is offline");
                 }
                 // return events to the deque
-                while(!this.transactionEvents.isEmpty()) {
-                    if(this.transactionEventQueue.offer(this.transactionEvents.get(0))){
-                        this.transactionEvents.remove(0);
+                while(!this.drained.isEmpty()) {
+                    if(this.transactionEventQueue.offer(this.drained.get(0))){
+                        this.drained.remove(0);
                     }
                 }
                 if(writeBuffer != null) {
@@ -323,7 +325,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
                 remaining = 0;
             }
         }
-        this.transactionEvents.clear();
+        this.drained.clear();
     }
 
     private ByteBuffer retrieveByteBuffer(){

@@ -356,8 +356,8 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         int pollTimeout = 1;
         while (this.isRunning()){
             try {
-                this.transactionEventQueue.drain(this.transactionEvents, this.options.networkBufferSize());
-                if(this.transactionEvents.isEmpty()){
+                this.transactionEventQueue.drain(this.drained, this.options.networkBufferSize());
+                if(this.drained.isEmpty()){
                     pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep());
                     this.processPendingNetworkTasks();
                     this.processPendingLogging();
@@ -654,19 +654,19 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         this.writeBufferPool.add(bb);
     }
 
-    private final List<TransactionEvent.PayloadRaw> transactionEvents = new ArrayList<>(1024);
+    private final List<TransactionEvent.PayloadRaw> drained = new ArrayList<>(1024);
 
     /**
      * While a write operation is in progress, it must wait for completion and then submit the next write.
      */
     private void sendBatchOfEvents(){
-        int remaining = this.transactionEvents.size();
+        int remaining = this.drained.size();
         int count = remaining;
         ByteBuffer writeBuffer;
         while(remaining > 0) {
             try {
                 writeBuffer = this.retrieveByteBuffer();
-                remaining = BatchUtils.assembleBatchPayload(remaining, this.transactionEvents, writeBuffer);
+                remaining = BatchUtils.assembleBatchPayload(remaining, this.drained, writeBuffer);
 
                 LOGGER.log(DEBUG, "Leader: Submitting ["+(count - remaining)+"] events to "+consumerVms.identifier);
                 count = remaining;
@@ -686,15 +686,15 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             } catch (Exception e) {
                 LOGGER.log(ERROR, "Leader: Error on submitting ["+count+"] events to "+this.consumerVms.identifier+":"+e);
                 // return events to the deque
-                while(!this.transactionEvents.isEmpty()) {
-                    this.transactionEventQueue.insert(this.transactionEvents.remove(0));
+                while(!this.drained.isEmpty()) {
+                    this.transactionEventQueue.insert(this.drained.remove(0));
                 }
                 // force exit loop
                 remaining = 0;
                 this.releaseLock();
             }
         }
-        this.transactionEvents.clear();
+        this.drained.clear();
     }
 
     /**

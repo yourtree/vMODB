@@ -1,6 +1,13 @@
-# OnlineMarketplace Proxy aka Coordinator Service
+# OnlineMarketplace Proxy (aka Coordinator Service)
 
-## Running the project
+## Running all microservices (including the Proxy)
+
+Run the following command in the marketplace root folder:
+```
+./scripts/deploy/deploy_macos.sh cart product stock order payment shipment seller proxy
+```
+
+## Running only the proxy project
 
 Run the project with the following command:
 ```

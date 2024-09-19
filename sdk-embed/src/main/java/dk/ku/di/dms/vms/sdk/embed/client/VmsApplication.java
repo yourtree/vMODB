@@ -161,7 +161,7 @@ public final class VmsApplication {
 
         StoppableRunnable transactionScheduler = VmsTransactionScheduler.build(
                 vmsName,
-                vmsInternalPubSubService,
+                vmsInternalPubSubService.transactionInputQueue(),
                 vmsMetadata.queueToVmsTransactionMap(),
                 transactionManager,
                 eventHandler::processOutputEvent,

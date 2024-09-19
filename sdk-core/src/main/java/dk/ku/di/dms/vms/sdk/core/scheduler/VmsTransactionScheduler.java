@@ -13,10 +13,7 @@ import dk.ku.di.dms.vms.sdk.core.operational.VmsTransactionTaskBuilder.VmsTransa
 import dk.ku.di.dms.vms.sdk.core.scheduler.complex.VmsComplexTransactionScheduler;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -55,7 +52,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     private final Set<Object> partitionKeyTrackingMap = ConcurrentHashMap.newKeySet();
 
-    private final IVmsInternalChannels vmsChannels;
+    private final BlockingQueue<InboundEvent> transactionInputQueue;
 
     // transaction metadata mapping
     private final Map<String, VmsTransactionMetadata> transactionMetadataMap;
@@ -66,7 +63,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     private final VmsTransactionTaskBuilder vmsTransactionTaskBuilder;
 
     public static VmsTransactionScheduler build(String vmsIdentifier,
-                                                IVmsInternalChannels vmsChannels,
+                                                BlockingQueue<InboundEvent> transactionInputQueue,
                                                 Map<String, VmsTransactionMetadata> transactionMetadataMap,
                                                 ITransactionManager transactionalHandler,
                                                 Consumer<IVmsTransactionResult> eventHandler,
@@ -79,7 +76,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                                 Thread.ofPlatform().name("vms-task-thread")
                                         //.priority(Thread.MAX_PRIORITY)
                                         .factory() ),
-                vmsChannels,
+                transactionInputQueue,
                 transactionMetadataMap,
                 transactionalHandler,
                 eventHandler);
@@ -87,7 +84,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
     private VmsTransactionScheduler(String vmsIdentifier,
                                     ExecutorService sharedTaskPool,
-                                    IVmsInternalChannels vmsChannels,
+                                    BlockingQueue<InboundEvent> transactionInputQueue,
                                     Map<String, VmsTransactionMetadata> transactionMetadataMap,
                                     ITransactionManager transactionalHandler,
                                     Consumer<IVmsTransactionResult> eventHandler){
@@ -99,7 +96,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
 
         // infra (come from external)
         this.transactionMetadataMap = transactionMetadataMap;
-        this.vmsChannels = vmsChannels;
+        this.transactionInputQueue = transactionInputQueue;
 
         // operational (internal control of transactions and tasks)
         this.transactionTaskMap = new ConcurrentHashMap<>(1000000);
@@ -288,16 +285,16 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
     private void checkForNewEvents() throws InterruptedException {
         InboundEvent inboundEvent;
         if(this.mustWaitForInputEvent) {
-            inboundEvent = this.vmsChannels.transactionInputQueue().take();
+            inboundEvent = this.transactionInputQueue.take();
             // disable block
             this.mustWaitForInputEvent = false;
         } else {
-            inboundEvent = this.vmsChannels.transactionInputQueue().poll();
+            inboundEvent = this.transactionInputQueue.poll();
             if(inboundEvent == null) return;
         }
         // drain all
         this.drained.add(inboundEvent);
-        this.vmsChannels.transactionInputQueue().drainTo(this.drained);
+        this.transactionInputQueue.drainTo(this.drained);
         for(InboundEvent inboundEvent_ : this.drained){
             this.processNewEvent(inboundEvent_);
         }
