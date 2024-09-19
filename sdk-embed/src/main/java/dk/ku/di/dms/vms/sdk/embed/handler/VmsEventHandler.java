@@ -602,11 +602,12 @@ public final class VmsEventHandler extends ModbHttpServer {
                 if(count != inboundEvents.size()){
                     LOGGER.log(WARNING,me.identifier + ": Batch of [" +count+ "] events != from "+inboundEvents.size()+" that will be pushed to worker " + node.identifier);
                 }
-                while(!inboundEvents.isEmpty()){
-                    if(vmsInternalChannels.transactionInputQueue().offer(inboundEvents.get(0))){
-                        inboundEvents.remove(0);
-                    }
-                }
+//                while(!inboundEvents.isEmpty()){
+//                    if(vmsInternalChannels.transactionInputQueue().offer(inboundEvents.get(0))){
+//                        inboundEvents.remove(0);
+//                    }
+//                }
+                vmsInternalChannels.transactionInputQueue().addAll(inboundEvents);
 
                 LOGGER.log(DEBUG, "Number of inputs pending processing: "+vmsInternalChannels.transactionInputQueue().size());
 
@@ -1096,11 +1097,12 @@ public final class VmsEventHandler extends ModbHttpServer {
                 }
 
                 // add after to make sure the batch context map is filled by the time the output event is generated
-                while(!payloads.isEmpty()){
-                    if(vmsInternalChannels.transactionInputQueue().offer(payloads.get(0))){
-                        payloads.remove(0);
-                    }
-                }
+//                while(!payloads.isEmpty()){
+//                    if(vmsInternalChannels.transactionInputQueue().offer(payloads.get(0))){
+//                        payloads.remove(0);
+//                    }
+//                }
+                vmsInternalChannels.transactionInputQueue().addAll(payloads);
 
             } catch (Exception e){
                 LOGGER.log(ERROR, me.identifier +": Error while processing a batch\n"+e);

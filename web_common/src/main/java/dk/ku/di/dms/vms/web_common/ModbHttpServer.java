@@ -192,7 +192,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
 
     // POST, PATCH, GET
     protected static boolean isHttpClient(String request) {
-        var substr = request.substring(0, request.indexOf(' '));
+        String substr = request.substring(0, Math.max(request.indexOf(' '), 0));
         switch (substr){
             case "GET", "PATCH", "POST", "PUT" -> {
                 return true;

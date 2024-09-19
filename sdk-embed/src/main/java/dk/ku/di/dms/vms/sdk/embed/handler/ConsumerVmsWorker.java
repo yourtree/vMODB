@@ -21,9 +21,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.function.Supplier;
 
 import static dk.ku.di.dms.vms.sdk.embed.handler.ConsumerVmsWorker.State.*;
@@ -79,7 +77,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 
     private final Deque<ByteBuffer> pendingWritesBuffer = new ConcurrentLinkedDeque<>();
 
-    private final CustomBlockingQueue transactionEventQueue;
+    private final BlockingQueue<TransactionEvent.PayloadRaw> transactionEventQueue;
 
     private State state;
 
@@ -112,7 +110,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
         this.loggingHandler = loggingHandler;
         this.serdesProxy = serdesProxy;
         this.options = options;
-        this.transactionEventQueue = new CustomBlockingQueue();
+        this.transactionEventQueue = new LinkedBlockingQueue<>();
         this.state = NEW;
     }
 
@@ -143,7 +141,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     private void eventLoop() {
         // int pollTimeout = 1;
         // TransactionEvent.PayloadRaw payloadRaw;
-        this.transactionEventQueue.registerAsWaiter();
+        // this.transactionEventQueue.registerAsWaiter();
         while(this.isRunning()){
             try {
 //                while((payloadRaw = this.transactionEventQueue.poll()) == null) {
@@ -154,8 +152,8 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 //                    this.giveUpCpu(pollTimeout);
 //                }
 //                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
-                // this.transactionEvents.add(this.transactionEventQueue.take());
-                this.transactionEventQueue.drainTo( this.transactionEvents, this.options.networkBufferSize() );
+                this.transactionEvents.add(this.transactionEventQueue.take());
+                this.transactionEventQueue.drainTo( this.transactionEvents );
 
                 // use first as estimation to avoid sending a single event
 //                int maxSize = this.options.networkBufferSize() - payloadRaw.totalSize();

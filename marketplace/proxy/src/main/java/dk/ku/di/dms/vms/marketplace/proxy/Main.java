@@ -111,6 +111,7 @@ public final class Main {
         serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
 
         String transactionsRaw = properties.getProperty("transactions");
+        if(transactionsRaw == null) throw new RuntimeException("Make sure the app.properties contain a 'transactions' entry");
         String[] transactions = transactionsRaw.split(",");
         Map<String, TransactionDAG> transactionMap = buildTransactionDAGs(transactions);
 
