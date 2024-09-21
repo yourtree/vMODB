@@ -114,7 +114,6 @@ public final class MemoryManager {
     }
 
     public static void releaseTemporaryDirectBuffer(final ByteBuffer buf) {
-
         if(buf.position() > 0 || buf.limit() < buf.capacity()) {
             LOGGER.log(WARNING, "Buffer returned without being properly cleared!");
         }

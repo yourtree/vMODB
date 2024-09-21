@@ -15,7 +15,7 @@ import java.util.Set;
 
 final class JacksonVmsSerdes implements IVmsSerdesProxy {
 
-    private static final ObjectMapper mapper = new ObjectMapper().
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().
             configure(MapperFeature.AUTO_DETECT_GETTERS, false)
             .configure(DeserializationFeature.ACCEPT_FLOAT_AS_INT, true)
             .configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
@@ -24,7 +24,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     @Override
     public String serializeEventSchema(Map<String, VmsEventSchema> vmsEventSchema) {
         try {
-            return mapper.writeValueAsString(vmsEventSchema);
+            return OBJECT_MAPPER.writeValueAsString(vmsEventSchema);
         } catch (Throwable e) {
              e.printStackTrace(System.out);
             return null;
@@ -36,7 +36,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     @Override
     public Map<String, VmsEventSchema> deserializeEventSchema(String json) {
         try {
-            return mapper.readValue(json, EVENT_SCHEMA_CLAZZ);
+            return OBJECT_MAPPER.readValue(json, EVENT_SCHEMA_CLAZZ);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -48,7 +48,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     @Override
     public String serializeDataSchema(Map<String, VmsDataModel> vmsDataSchema) {
         try {
-            return mapper.writeValueAsString(vmsDataSchema);
+            return OBJECT_MAPPER.writeValueAsString(vmsDataSchema);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -58,7 +58,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     @Override
     public Map<String, VmsDataModel> deserializeDataSchema(String vmsDataSchema) {
         try {
-            return mapper.readValue(vmsDataSchema, DATA_MODEL_CLAZZ);
+            return OBJECT_MAPPER.readValue(vmsDataSchema, DATA_MODEL_CLAZZ);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -68,7 +68,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     @Override
     public <K, V> String serializeMap(Map<K, V> map) {
         try {
-            return mapper.writeValueAsString(map);
+            return OBJECT_MAPPER.writeValueAsString(map);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -79,7 +79,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public <K, V> Map<K, V> deserializeMap(String mapStr) {
         try {
             TypeReference<Map<K, V>> clazz = new TypeReference<>() { };
-            return mapper.readValue(mapStr, clazz);
+            return OBJECT_MAPPER.readValue(mapStr, clazz);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -89,7 +89,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     @Override
     public <V> String serializeSet(Set<V> set) {
         try {
-            return mapper.writeValueAsString(set);
+            return OBJECT_MAPPER.writeValueAsString(set);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -100,7 +100,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public <V> Set<V> deserializeSet(String setStr) {
         try {
             TypeReference<Set<V>> clazz = new TypeReference<>() { };
-            return mapper.readValue(setStr, clazz);
+            return OBJECT_MAPPER.readValue(setStr, clazz);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -112,7 +112,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     @Override
     public String serializeConsumerSet(Map<String, List<IdentifiableNode>> map) {
         try {
-            return mapper.writeValueAsString(map);
+            return OBJECT_MAPPER.writeValueAsString(map);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -122,7 +122,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     @Override
     public Map<String, List<IdentifiableNode>> deserializeConsumerSet(String mapStr) {
         try {
-            return mapper.readValue(mapStr, CONSUMER_SET_CLAZZ);
+            return OBJECT_MAPPER.readValue(mapStr, CONSUMER_SET_CLAZZ);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -135,7 +135,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     @Override
     public Map<String, Long> deserializeDependenceMap(String dependenceMapStr) {
         try {
-            return mapper.readValue(dependenceMapStr, DEP_MAP_CLAZZ);
+            return OBJECT_MAPPER.readValue(dependenceMapStr, DEP_MAP_CLAZZ);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -145,7 +145,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     @Override
     public <V> String serializeList(List<V> list) {
         try {
-            return mapper.writeValueAsString(list);
+            return OBJECT_MAPPER.writeValueAsString(list);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -156,7 +156,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     public <V> List<V> deserializeList(String listStr) {
         try {
             TypeReference<List<V>> clazz = new TypeReference<>() { };
-            return mapper.readValue(listStr, clazz);
+            return OBJECT_MAPPER.readValue(listStr, clazz);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -166,7 +166,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     @Override
     public String serialize(Object value, Class<?> clazz) {
         try {
-            return mapper.writeValueAsString(value);
+            return OBJECT_MAPPER.writeValueAsString(value);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;
@@ -176,7 +176,7 @@ final class JacksonVmsSerdes implements IVmsSerdesProxy {
     @Override
     public <T> T deserialize(String valueStr, Class<T> clazz) {
         try {
-            return mapper.readValue(valueStr, clazz);
+            return OBJECT_MAPPER.readValue(valueStr, clazz);
         } catch (Throwable e) {
             e.printStackTrace(System.out);
             return null;

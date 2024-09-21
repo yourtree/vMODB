@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.coordinator.vms;
 
 import dk.ku.di.dms.vms.coordinator.options.VmsWorkerOptions;
+import dk.ku.di.dms.vms.modb.common.logging.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
@@ -15,7 +16,6 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.channel.IChannel;
@@ -379,8 +379,8 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     }
 
     private void processPendingLogging(){
-        ByteBuffer writeBuffer = this.loggingWriteBuffers.poll();
-        if(writeBuffer != null){
+        ByteBuffer writeBuffer;
+        if((writeBuffer = this.loggingWriteBuffers.poll()) != null){
             try {
                 writeBuffer.position(0);
                 this.loggingHandler.log(writeBuffer);
@@ -471,7 +471,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             writeBuffer.flip();
             this.acquireLock();
             this.channel.write(writeBuffer, options.networkSendTimeout(), TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
-            LOGGER.log(INFO, "Leader: Batch ("+batchCommitCommand.batch()+") commit command sent to: " + this.consumerVms.identifier);
+            LOGGER.log(DEBUG, "Leader: Batch ("+batchCommitCommand.batch()+") commit command sent to: " + this.consumerVms.identifier);
         } catch (Exception e){
             LOGGER.log(ERROR,"Leader: Batch ("+batchCommitCommand.batch()+") commit command write has failed:\n"+e.getMessage());
             if(!this.channel.isOpen()){
@@ -632,7 +632,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
             writeBuffer.flip();
             this.acquireLock();
             this.channel.write(writeBuffer, options.networkSendTimeout(), TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
-            LOGGER.log(INFO, "Leader: Batch ("+batchCommitInfo.batch()+") commit info sent to " + this.consumerVms.identifier+"\n"+batchCommitInfo);
+            LOGGER.log(DEBUG, "Leader: Batch ("+batchCommitInfo.batch()+") commit info sent to " + this.consumerVms.identifier+"\n"+batchCommitInfo);
         } catch (Exception e) {
             LOGGER.log(ERROR, "Leader: Error on sending a batch commit info to VMS: " + e.getMessage());
             this.releaseLock();

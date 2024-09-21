@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.coordinator.logging;
 
-import dk.ku.di.dms.vms.modb.common.transaction.LoggingHandler;
+import dk.ku.di.dms.vms.modb.common.logging.ILoggingHandler;
+import dk.ku.di.dms.vms.modb.common.logging.LoggingHandlerBuilder;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -15,17 +16,17 @@ public class LoggingTest {
 
     @Test
     public void testLogging() throws IOException {
-        LoggingHandler loggingHandler = LoggingHandler.build("test");
+        ILoggingHandler compressedLoggingHandler = LoggingHandlerBuilder.build("test");
 
         var writeBuffer = ByteBuffer.allocateDirect(1024);
         writeBuffer.put( "TEST".getBytes(StandardCharsets.UTF_8) );
         writeBuffer.flip();
 
-        loggingHandler.log( writeBuffer );
+        compressedLoggingHandler.log( writeBuffer );
 
-        loggingHandler.close();
+        compressedLoggingHandler.close();
 
-        var fileName = loggingHandler.getFileName();
+        var fileName = compressedLoggingHandler.getFileName();
         Path path = Paths.get(fileName);
 
         var fileChannel = FileChannel.open(path,

@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
+import dk.ku.di.dms.vms.modb.common.logging.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
@@ -7,14 +8,11 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.channel.IChannel;
 import org.jctools.queues.MpscBlockingConsumerArrayQueue;
-import org.jctools.queues.MpscGrowableArrayQueue;
 
-import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteBuffer;
@@ -23,7 +21,9 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static dk.ku.di.dms.vms.sdk.embed.handler.ConsumerVmsWorker.State.*;
@@ -42,7 +42,6 @@ import static java.lang.Thread.sleep;
  *  in the batch to resend or return to the original location. let the
  *  main loop schedule the timer again. set the network node to off
  */
-@SuppressWarnings("SequencedCollectionMethodCanBeUsed")
 public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsContainer {
 
     private static final System.Logger LOGGER = System.getLogger(ConsumerVmsWorker.class.getName());
@@ -118,6 +117,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 
     @SuppressWarnings("StatementWithEmptyBody")
     public void acquireLock(){
+        // System.out.println(me.identifier +": somebody called meeee");
         while(! WRITE_SYNCHRONIZER.compareAndSet(this, 0, 1) );
     }
 
@@ -126,6 +126,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     }
 
     public void releaseLock(){
+        // System.out.println(me.identifier +": Releasing lock");
         WRITE_SYNCHRONIZER.setVolatile(this, 0);
     }
 
@@ -133,51 +134,49 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     public void run() {
         LOGGER.log(INFO, this.me.identifier+ ": Starting worker for consumer VMS: "+this.consumerVms.identifier);
         if(!this.connect()) {
-            LOGGER.log(WARNING, this.me.identifier+ ": Finishing worker for consumer VMS "+this.consumerVms.identifier+" because connection failed");
+            LOGGER.log(WARNING, this.me.identifier+ ": Finishing prematurely worker for consumer VMS "+this.consumerVms.identifier+" because connection failed");
             return;
         }
-        this.eventLoop();
+        if(this.options.logging()){
+            this.eventLoopLogging();
+        } else {
+            this.eventLoopNoLogging();
+        }
         LOGGER.log(INFO, this.me.identifier+ ": Finishing worker for consumer VMS: "+this.consumerVms.identifier);
     }
 
-    private void eventLoop() {
-        // int pollTimeout = 1;
-        // TransactionEvent.PayloadRaw payloadRaw;
-        // this.transactionEventQueue.registerAsWaiter();
+    private void eventLoopNoLogging() {
         while(this.isRunning()){
             try {
-//                while((payloadRaw = this.transactionEventQueue.poll()) == null) {
-//                    pollTimeout = Math.min(pollTimeout * 2, this.options.maxSleep());
-//                    // guarantees pending writes will be retired even though there is no new event to process
-//                    this.processPendingWrites();
-//                    this.processPendingLogging();
-//                    this.giveUpCpu(pollTimeout);
-//                }
-//                pollTimeout = pollTimeout > 0 ? pollTimeout / 2 : 0;
                 this.drained.add(this.transactionEventQueue.take());
-                //this.transactionEventQueue.drainTo( this.transactionEvents );
                 this.transactionEventQueue.drain(this.drained::add);
-                // use first as estimation to avoid sending a single event
-//                int maxSize = this.options.networkBufferSize() - payloadRaw.totalSize();
-
-//                if(!this.transactionEventQueue.isEmpty()){
-//                int sumTotal = 0;
-//                do {
-//                    this.transactionEvents.add(payloadRaw);
-//                    sumTotal += payloadRaw.totalSize();
-//                } while (sumTotal < maxSize && (payloadRaw = this.transactionEventQueue.poll()) != null);
                 if(this.drained.size() == 1){
-                    this.sendEvent(this.drained.remove(0));
+                    this.sendEventBlocking(this.drained.removeFirst());
                 } else {
-                    this.sendBatchOfEvents();
+                    this.sendBatchOfEventsBlocking();
                 }
-//                } else {
-//                    this.sendEvent(payloadRaw);
-//                }
-//                this.processPendingWrites();
-//                this.processPendingLogging();
             } catch (Exception e) {
-                LOGGER.log(ERROR, this.me.identifier+ ": Error captured in event loop \n"+e);
+                LOGGER.log(ERROR, this.me.identifier+ ": Error captured in event loop (no logging) \n"+e);
+            }
+        }
+    }
+
+    private void eventLoopLogging() {
+        while(this.isRunning()){
+            try {
+                if(this.loggingWriteBuffers.isEmpty()){
+                    //LOGGER.log(WARNING, me.identifier+": Going to block since no logging buffers");
+                    this.drained.add(this.transactionEventQueue.take());
+                    //LOGGER.log(WARNING, me.identifier+": Woke up");
+                }
+                this.transactionEventQueue.drain(this.drained::add);
+                if(this.drained.isEmpty()){
+                    this.processPendingLogging();
+                } else {
+                    this.sendBatchOfEventsNonBlocking();
+                }
+            } catch (Exception e) {
+                LOGGER.log(ERROR, this.me.identifier+ ": Error captured in event loop (logging) \n"+e);
             }
         }
     }
@@ -218,15 +217,15 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     }
 
     private void processPendingLogging(){
-        ByteBuffer writeBuffer = this.loggingWriteBuffers.poll();
-        if(writeBuffer != null){
+        ByteBuffer writeBuffer;
+        if((writeBuffer = this.loggingWriteBuffers.poll())!= null){
             try {
                 writeBuffer.position(0);
                 this.loggingHandler.log(writeBuffer);
-                // return buffer
                 this.returnByteBuffer(writeBuffer);
-            } catch (IOException e) {
+            } catch (Exception e) {
                 LOGGER.log(ERROR, me.identifier + ": Error on writing byte buffer to logging file: "+e.getMessage());
+                e.printStackTrace(System.out);
                 this.loggingWriteBuffers.add(writeBuffer);
             }
         }
@@ -248,7 +247,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
                     LOGGER.log(INFO, me.identifier+": Connection to "+consumerVms.identifier+" is open? "+this.channel.isOpen());
                     // probably comes from the class {@AsynchronousSocketChannelImpl}:
                     // "Writing not allowed due to timeout or cancellation"
-                    stop();
+                    this.stop();
                 }
                 this.releaseLock();
                 bb.clear();
@@ -257,27 +256,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
         }
     }
 
-    @SuppressWarnings("unused")
-    private void sendEvent(TransactionEvent.PayloadRaw payload) {
-        ByteBuffer writeBuffer = this.retrieveByteBuffer();
-//        this.acquireLock();
-//        this.channel.write(writeBuffer, this.options.networkSendTimeout(), TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
-        try {
-            TransactionEvent.write( writeBuffer, payload );
-            writeBuffer.flip();
-            LOGGER.log(DEBUG, this.me.identifier+ ": Submitting single event to "+this.consumerVms.identifier);
-            do {
-                this.channel.write(writeBuffer).get();
-            } while (writeBuffer.hasRemaining());
-        } catch (Exception e){
-            LOGGER.log(ERROR, "Error caught on sending single event: "+e);
-        }
-        finally {
-            this.returnByteBuffer(writeBuffer);
-        }
-    }
-
-    private void sendBatchOfEvents() {
+    private void sendBatchOfEventsNonBlocking() {
         int remaining = this.drained.size();
         int count = remaining;
         ByteBuffer writeBuffer = null;
@@ -285,47 +264,75 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
             try {
                 writeBuffer = this.retrieveByteBuffer();
                 remaining = BatchUtils.assembleBatchPayload(remaining, this.drained, writeBuffer);
-
+                writeBuffer.flip();
                 LOGGER.log(DEBUG, this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
                 count = remaining;
-                writeBuffer.flip();
+                // maximize useful work
+                while(!this.tryAcquireLock()){
+                    this.processPendingLogging();
+                }
+                this.channel.write(writeBuffer, this.options.networkSendTimeout(), TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
+            } catch (Exception e) {
+                this.failSafe(e, writeBuffer);
+                remaining = 0;
+                this.releaseLock();
+            }
+        }
+        this.drained.clear();
+    }
 
-                // drain buffer
+    private void sendEventBlocking(TransactionEvent.PayloadRaw payload) {
+        ByteBuffer writeBuffer = this.retrieveByteBuffer();
+        try {
+            TransactionEvent.write( writeBuffer, payload );
+            writeBuffer.flip();
+            do {
+                this.channel.write(writeBuffer).get();
+            } while (writeBuffer.hasRemaining());
+        } catch (Exception e){
+            LOGGER.log(ERROR, "Error caught on sending single event: "+e);
+            this.transactionEventQueue.offer(payload);
+        }
+        finally {
+            this.returnByteBuffer(writeBuffer);
+        }
+    }
+
+    private void sendBatchOfEventsBlocking() {
+        int remaining = this.drained.size();
+        int count = remaining;
+        ByteBuffer writeBuffer = null;
+        while(remaining > 0){
+            try {
+                writeBuffer = this.retrieveByteBuffer();
+                remaining = BatchUtils.assembleBatchPayload(remaining, this.drained, writeBuffer);
+                writeBuffer.flip();
+                LOGGER.log(DEBUG, this.me.identifier+ ": Submitting ["+(count - remaining)+"] event(s) to "+this.consumerVms.identifier);
+                count = remaining;
                 do {
                     this.channel.write(writeBuffer).get();
                 } while(writeBuffer.hasRemaining());
                 this.returnByteBuffer(writeBuffer);
-
-                // maximize useful work
-//                while(!this.tryAcquireLock()){
-//                    this.processPendingLogging();
-//                }
-//                this.channel.write(writeBuffer, this.options.networkSendTimeout(), TimeUnit.MILLISECONDS, writeBuffer, this.writeCompletionHandler);
             } catch (Exception e) {
-                LOGGER.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier+"\n"+e);
-                // return non-processed events to original location or what?
-                if (!this.channel.isOpen()) {
-                    LOGGER.log(WARNING, "The "+this.consumerVms.identifier+" VMS is offline");
-                }
-                // return events to the deque
-                while(!this.drained.isEmpty()) {
-                    if(this.transactionEventQueue.offer(this.drained.get(0))){
-                        this.drained.remove(0);
-                    }
-                }
-                if(writeBuffer != null) {
-                    this.returnByteBuffer(writeBuffer);
-                }
-                if(e instanceof IllegalStateException){
-                    try { sleep(100); } catch (InterruptedException ignored) { }
-                }
-                // to avoid problems on future writes
-                this.releaseLock();
+                this.failSafe(e, writeBuffer);
                 // force loop exit
                 remaining = 0;
             }
         }
         this.drained.clear();
+    }
+
+    private void failSafe(Exception e, ByteBuffer writeBuffer) {
+        LOGGER.log(ERROR, this.me.identifier+ ": Error submitting events to "+this.consumerVms.identifier+"\n"+ e);
+        // return non-processed events to original location or what?
+        if (!this.channel.isOpen()) {
+            LOGGER.log(WARNING, "The "+this.consumerVms.identifier+" VMS is offline");
+        }
+        // return events to the deque
+        this.transactionEventQueue.addAll(this.drained);
+        if(writeBuffer != null) {
+            this.returnByteBuffer(writeBuffer);
+        }
     }
 
     private ByteBuffer retrieveByteBuffer(){
@@ -340,7 +347,6 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     }
 
     private final class WriteCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
-
         @Override
         public void completed(Integer result, ByteBuffer byteBuffer) {
             LOGGER.log(DEBUG, me.identifier + ": Batch with size " + result + " has been sent to: " + consumerVms.identifier);
@@ -349,12 +355,12 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
                 // keep the lock and send the remaining
                 channel.write(byteBuffer, options.networkSendTimeout(), TimeUnit.MILLISECONDS, byteBuffer, this);
             } else {
-                releaseLock();
                 if(options.logging()){
                     loggingWriteBuffers.add(byteBuffer);
                 } else {
                     returnByteBuffer(byteBuffer);
                 }
+                releaseLock();
             }
         }
 
@@ -370,7 +376,9 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 
     @Override
     public void queue(TransactionEvent.PayloadRaw eventPayload){
-        this.transactionEventQueue.add(eventPayload);
+        if(!this.transactionEventQueue.offer(eventPayload)){
+            System.out.println(me.identifier +": cannot add event in the input queue");
+        }
     }
 
     @Override

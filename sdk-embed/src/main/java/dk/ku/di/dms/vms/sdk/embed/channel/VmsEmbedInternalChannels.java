@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.sdk.embed.channel;
 
-import dk.ku.di.dms.vms.modb.api.annotations.Inbound;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.sdk.core.channel.IVmsInternalChannels;
 import dk.ku.di.dms.vms.sdk.core.operational.InboundEvent;

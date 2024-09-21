@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.common.transaction;
+package dk.ku.di.dms.vms.modb.common.logging;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -14,4 +14,5 @@ public interface ILoggingHandler {
 
     default void close() { }
 
+    default String getFileName() { return ""; }
 }

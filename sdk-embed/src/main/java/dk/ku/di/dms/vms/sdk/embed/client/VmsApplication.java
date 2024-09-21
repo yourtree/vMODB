@@ -1,14 +1,14 @@
 package dk.ku.di.dms.vms.sdk.embed.client;
 
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
+import dk.ku.di.dms.vms.modb.common.logging.ILoggingHandler;
+import dk.ku.di.dms.vms.modb.common.logging.LoggingHandlerBuilder;
 import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
-import dk.ku.di.dms.vms.modb.common.transaction.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
-import dk.ku.di.dms.vms.modb.common.transaction.LoggingHandler;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.TransactionManager;
@@ -138,11 +138,11 @@ public final class VmsApplication {
 
         ILoggingHandler loggingHandler;
         if(options.isLogging()){
-            loggingHandler = LoggingHandler.build(vmsName);
+            loggingHandler = LoggingHandlerBuilder.build(vmsName);
         } else {
             String loggingStr = System.getProperty("logging");
             if(Boolean.parseBoolean(loggingStr)){
-                loggingHandler = LoggingHandler.build(vmsName);
+                loggingHandler = LoggingHandlerBuilder.build(vmsName);
             } else {
                 loggingHandler = new ILoggingHandler() { };
             }
