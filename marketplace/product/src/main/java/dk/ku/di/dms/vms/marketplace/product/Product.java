@@ -53,6 +53,7 @@ public final class Product implements IEntity<Product.ProductId> {
     @Column
     public String status;
 
+    // @NotNull
     @Column
     public String version;
 

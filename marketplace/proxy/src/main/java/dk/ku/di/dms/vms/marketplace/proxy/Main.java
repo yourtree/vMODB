@@ -44,7 +44,7 @@ public final class Main {
     @SuppressWarnings("BusyWait")
     private static void waitForAllStarterVMSs(Coordinator coordinator) throws InterruptedException {
         final int SLEEP = 1000;
-        var starterVMSs = coordinator.getStarterVMSs();
+        Map<String, IdentifiableNode> starterVMSs = coordinator.getStarterVMSs();
         int starterSize = starterVMSs.size();
         LOGGER.log(INFO, "Proxy: Waiting for all starter VMSs to come online. Sleeping for "+SLEEP+" ms...");
         while (coordinator.getConnectedVMSs().size() < starterSize) {
@@ -121,7 +121,17 @@ public final class Main {
         if(Arrays.stream(transactions).anyMatch(p->p.contentEquals(CUSTOMER_CHECKOUT))) {
             starterVMSs = buildStarterVMSsFull(properties);
         } else {
-            starterVMSs = buildStarterVMSsBasic(properties);
+            if(transactionMap.size() == 1){
+                if(transactionMap.containsKey("update_price")){
+                    starterVMSs = buildUpdatePriceVMSs(properties);
+                } else if(transactionMap.containsKey("update_product")){
+                    starterVMSs = buildStarterVMSsBasic(properties);
+                } else {
+                    throw new RuntimeException("Cannot identify a single transaction!!!");
+                }
+            } else {
+                starterVMSs = buildStarterVMSsBasic(properties);
+            }
         }
 
         // network
@@ -171,6 +181,19 @@ public final class Main {
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
         return coordinator;
+    }
+
+    private static Map<String, IdentifiableNode> buildUpdatePriceVMSs(Properties properties){
+        String cartHost = properties.getProperty("cart_host");
+        String productHost = properties.getProperty("product_host");
+        if(productHost == null) throw new RuntimeException("Product host is null");
+        if(cartHost == null) throw new RuntimeException("Cart host is null");
+        IdentifiableNode cartAddress = new IdentifiableNode("cart", cartHost, Constants.CART_VMS_PORT);
+        IdentifiableNode productAddress = new IdentifiableNode("product", productHost, Constants.PRODUCT_VMS_PORT);
+        Map<String, IdentifiableNode> starterVMSs = new HashMap<>();
+        starterVMSs.putIfAbsent(cartAddress.identifier, cartAddress);
+        starterVMSs.putIfAbsent(productAddress.identifier, productAddress);
+        return starterVMSs;
     }
 
     private static Map<String, IdentifiableNode> buildStarterVMSsBasic(Properties properties){

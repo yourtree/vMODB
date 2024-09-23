@@ -65,7 +65,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     private PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
         this.primaryKeyIndex = primaryKeyIndex;
-        this.updatesPerKeyMap = new ConcurrentHashMap<>(100000);
+        this.updatesPerKeyMap = new ConcurrentHashMap<>(1024*1000);
         this.primaryKeyGenerator = Optional.ofNullable(primaryKeyGenerator);
         this.writeSetMap = new ConcurrentHashMap<>();
         if(primaryKeyIndex instanceof UniqueHashBufferIndex){
@@ -394,15 +394,22 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         }
     }
 
+    private static final boolean GARBAGE_COLLECTION = false;
+
     public void checkpoint(long maxTid){
         for(IKey key : this.keysToFlush){
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             if(operationSetOfKey == null){
                 throw new RuntimeException("Error on retrieving operation set for key "+key);
             }
-            Entry<Long, TransactionWrite> entry = operationSetOfKey.removeUpToEntry(maxTid);
+            Entry<Long, TransactionWrite> entry = operationSetOfKey.getHigherEntryUpToKey(maxTid);
             if (entry == null) continue;
-            this.keysToFlush.remove(key);
+            // is the head?
+            if(operationSetOfKey.peak() == entry) {
+                this.keysToFlush.remove(key);
+            } else if(GARBAGE_COLLECTION) {
+                operationSetOfKey.removeChildren(entry);
+            }
             switch (operationSetOfKey.lastWriteType) {
                 case UPDATE -> this.primaryKeyIndex.update(key, entry.val().record);
                 case INSERT -> this.primaryKeyIndex.insert(key, entry.val().record);

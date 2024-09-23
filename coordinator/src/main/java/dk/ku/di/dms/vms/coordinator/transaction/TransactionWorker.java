@@ -161,6 +161,7 @@ public final class TransactionWorker extends StoppableRunnable {
 
     private long getTidNextBatch() {
         this.numTIDsSubmitted.updateAndGet(x -> x + (this.tid - this.startingTidBatch));
+        if(this.numWorkers == 1) return this.tid;
         return this.startingTidBatch + ((long) this.numWorkers * this.maxNumberOfTIDsBatch);
     }
 

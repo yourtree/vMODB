@@ -181,7 +181,7 @@ public final class EmbedMetadataLoader {
             final List<Field> indexList = Arrays.stream(entityClazz.getFields()).filter(f->f.getAnnotation(VmsIndex.class)!=null).toList();
             List<IndexMetadata> indexMetadataList = new ArrayList<>();
             for(Field field : indexList){
-                var ann = field.getAnnotation(VmsIndex.class);
+                VmsIndex ann = field.getAnnotation(VmsIndex.class);
                 Integer pos = vmsDataModel.findColumnPosition(field.getName());
                 indexMetadataList.add( new IndexMetadata(pos, ann.name()) );
             }
@@ -190,7 +190,7 @@ public final class EmbedMetadataLoader {
             final List<Field> partialIndexList = Arrays.stream(entityClazz.getFields()).filter(f->f.getAnnotation(VmsPartialIndex.class)!=null).toList();
             List<PartialIndexMetadata> partialIndexMetadataList = new ArrayList<>();
             for(Field field : partialIndexList){
-                var ann = field.getAnnotation(VmsPartialIndex.class);
+                VmsPartialIndex ann = field.getAnnotation(VmsPartialIndex.class);
                 Integer pos = vmsDataModel.findColumnPosition(field.getName());
                 partialIndexMetadataList.add( new PartialIndexMetadata(pos, ann.name(), ann.value()) );
             }

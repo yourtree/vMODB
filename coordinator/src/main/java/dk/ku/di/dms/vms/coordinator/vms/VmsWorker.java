@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.coordinator.vms;
 
 import dk.ku.di.dms.vms.coordinator.options.VmsWorkerOptions;
 import dk.ku.di.dms.vms.modb.common.logging.ILoggingHandler;
+import dk.ku.di.dms.vms.modb.common.logging.LoggingHandlerBuilder;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
@@ -157,7 +158,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         private final ConcurrentLinkedDeque<TransactionEvent.PayloadRaw> queue = new ConcurrentLinkedDeque<>();
         @Override
         public void insert(TransactionEvent.PayloadRaw payloadRaw) {
-            this.queue.add(payloadRaw);
+            this.queue.offerLast(payloadRaw);
         }
         @Override
         public void drain(List<TransactionEvent.PayloadRaw> list, int maxSize){
@@ -185,10 +186,9 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                                     Queue<Object> coordinatorQueue,
                                     Supplier<IChannel> channelFactory,
                                     VmsWorkerOptions options,
-                                    ILoggingHandler loggingHandler,
                                     IVmsSerdesProxy serdesProxy) throws IOException {
         return new VmsWorker(me, consumerVms, coordinatorQueue,
-                channelFactory, options, loggingHandler, serdesProxy);
+                channelFactory, options, serdesProxy);
     }
 
     private VmsWorker(// coordinator reference
@@ -199,7 +199,6 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
                       Queue<Object> coordinatorQueue,
                       Supplier<IChannel> channelFactory,
                       VmsWorkerOptions options,
-                      ILoggingHandler loggingHandler,
                       IVmsSerdesProxy serdesProxy) {
         this.me = me;
         this.state = State.NEW;
@@ -216,7 +215,12 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
 
         this.readBuffer = MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize());
 
-        this.loggingHandler = loggingHandler;
+        // logging
+        if(options.logging()) {
+            this.loggingHandler = LoggingHandlerBuilder.build("coordinator_"+consumerVms.identifier); }
+        else {
+            this.loggingHandler = new ILoggingHandler() { };
+        }
         this.serdesProxy = serdesProxy;
 
         // in

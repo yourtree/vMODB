@@ -11,8 +11,6 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionWorker;
 import dk.ku.di.dms.vms.coordinator.vms.IVmsWorker;
 import dk.ku.di.dms.vms.coordinator.vms.VmsWorker;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
-import dk.ku.di.dms.vms.modb.common.logging.ILoggingHandler;
-import dk.ku.di.dms.vms.modb.common.logging.LoggingHandlerBuilder;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
@@ -91,8 +89,6 @@ public final class Coordinator extends ModbHttpServer {
 
     // the identification of this server
     private final ServerNode me;
-
-    private final ILoggingHandler loggingHandler;
 
     /*
      * the offset of the pending batch commit (always < batchOffset)
@@ -180,13 +176,6 @@ public final class Coordinator extends ModbHttpServer {
         this.serverConnectionMetadataMap = serverConnectionMetadataMap;
         this.me = me;
 
-        // logging
-        if(options.logging()) {
-            this.loggingHandler = LoggingHandlerBuilder.build("coordinator"); }
-        else {
-            this.loggingHandler = new ILoggingHandler() { };
-        }
-
         // infra
         this.serdesProxy = serdesProxy;
 
@@ -198,7 +187,7 @@ public final class Coordinator extends ModbHttpServer {
 
         if(options.getNumTransactionWorkers() == 1){
             var inputQueue = this.transactionInputDeques.getFirst();
-            transactionInputConsumer = inputQueue::add;
+            transactionInputConsumer = inputQueue::offerLast;
         } else {
             transactionInputConsumer = transactionInput -> {
                 int idx = ThreadLocalRandom.current().nextInt(0, options.getNumTransactionWorkers());
@@ -355,7 +344,6 @@ public final class Coordinator extends ModbHttpServer {
                                             this.options.getNetworkSendTimeout(),
                                             this.options.getNumQueuesVmsWorker(),
                                             false),
-                                    this.loggingHandler,
                                     this.serdesProxy);
                             if(this.vmsWorkerContainerMap.get(inputVms.getValue().targetVms) instanceof VmsWorkerContainer o){
                                 o.addWorker(newWorker);
@@ -445,7 +433,6 @@ public final class Coordinator extends ModbHttpServer {
                                 this.options.getNetworkSendTimeout(),
                                 this.options.getNumQueuesVmsWorker(),
                                 true),
-                        this.loggingHandler,
                         this.serdesProxy);
                 // virtual thread leads to performance degradation
                 Thread vmsWorkerThread = Thread.ofPlatform().factory().newThread(vmsWorker);

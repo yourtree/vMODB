@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
 import dk.ku.di.dms.vms.modb.common.logging.ILoggingHandler;
+import dk.ku.di.dms.vms.modb.common.logging.LoggingHandlerBuilder;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
@@ -93,21 +94,33 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
                                   IdentifiableNode consumerVms,
                                   Supplier<IChannel> channelSupplier,
                                   VmsEventHandler.VmsHandlerOptions options,
-                                  ILoggingHandler loggingHandler,
                                   IVmsSerdesProxy serdesProxy) {
         return new ConsumerVmsWorker(me, consumerVms,
-                channelSupplier.get(), options, loggingHandler, serdesProxy);
+                channelSupplier.get(), options, serdesProxy);
     }
 
     private ConsumerVmsWorker(VmsNode me,
                              IdentifiableNode consumerVms,
                              IChannel channel,
                              VmsEventHandler.VmsHandlerOptions options,
-                             ILoggingHandler loggingHandler,
                              IVmsSerdesProxy serdesProxy) {
         this.me = me;
         this.consumerVms = consumerVms;
         this.channel = channel;
+
+        ILoggingHandler loggingHandler;
+        var logIdentifier = me.identifier+"_"+consumerVms.identifier;
+        if(options.logging()){
+            loggingHandler = LoggingHandlerBuilder.build(logIdentifier);
+        } else {
+            String loggingStr = System.getProperty("logging");
+            if(Boolean.parseBoolean(loggingStr)){
+                loggingHandler = LoggingHandlerBuilder.build(logIdentifier);
+            } else {
+                loggingHandler = new ILoggingHandler() { };
+            }
+        }
+
         this.loggingHandler = loggingHandler;
         this.serdesProxy = serdesProxy;
         this.options = options;

@@ -1,8 +1,6 @@
 package dk.ku.di.dms.vms.sdk.embed.client;
 
 import dk.ku.di.dms.vms.modb.api.annotations.Microservice;
-import dk.ku.di.dms.vms.modb.common.logging.ILoggingHandler;
-import dk.ku.di.dms.vms.modb.common.logging.LoggingHandlerBuilder;
 import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
@@ -78,8 +76,7 @@ public final class VmsApplication {
                       && !p.getName().contains("sun")
                       && !p.getName().contains("jdk")
                       && !p.getName().contains("com")
-                      && !p.getName().contains("org")
-                                                    ).findFirst();
+                      && !p.getName().contains("org")).findFirst();
 
         String packageName = optional.map(Package::getName).orElse("Nothing");
 
@@ -87,7 +84,7 @@ public final class VmsApplication {
 
         VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
 
-        Reflections reflections = VmsMetadataLoader.configureReflections(options.packages() );
+        Reflections reflections = VmsMetadataLoader.configureReflections(options.packages());
 
         Set<Class<?>> vmsClasses = reflections.getTypesAnnotatedWith(Microservice.class);
         if(vmsClasses.isEmpty()) throw new IllegalStateException("No classes annotated with @Microservice in this application.");
@@ -104,8 +101,7 @@ public final class VmsApplication {
         }
 
         // load catalog so we can pass the table instance to proxy repository
-        Map<String, Table> catalog = EmbedMetadataLoader
-                .loadCatalog(vmsDataModelMap, entityToTableNameMap, isCheckpointing, options.getMaxRecords());
+        Map<String, Table> catalog = EmbedMetadataLoader.loadCatalog(vmsDataModelMap, entityToTableNameMap, isCheckpointing, options.getMaxRecords());
 
         // operational API and checkpoint API
         TransactionManager transactionManager = new TransactionManager(catalog, isCheckpointing);
@@ -136,28 +132,9 @@ public final class VmsApplication {
                 vmsMetadata.inputEventSchema(),
                 vmsMetadata.outputEventSchema());
 
-        ILoggingHandler loggingHandler;
-        if(options.isLogging()){
-            loggingHandler = LoggingHandlerBuilder.build(vmsName);
-        } else {
-            String loggingStr = System.getProperty("logging");
-            if(Boolean.parseBoolean(loggingStr)){
-                loggingHandler = LoggingHandlerBuilder.build(vmsName);
-            } else {
-                loggingHandler = new ILoggingHandler() { };
-            }
-        }
-        var httpHandler = builder.build(transactionManager, tableToRepositoryMap::get);
+        IHttpHandler httpHandler = builder.build(transactionManager, tableToRepositoryMap::get);
 
-        VmsEventHandler eventHandler = VmsEventHandler.build(
-                vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, options, loggingHandler, httpHandler, serdes);
-
-//        VmsComplexTransactionScheduler scheduler =
-//                VmsComplexTransactionScheduler.build(
-//                        vmsName,
-//                        vmsInternalPubSubService,
-//                        vmsMetadata.queueToVmsTransactionMap(),
-//                        eventHandler.schedulerHandler());
+        VmsEventHandler eventHandler = VmsEventHandler.build(vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, options, httpHandler, serdes);
 
         StoppableRunnable transactionScheduler = VmsTransactionScheduler.build(
                 vmsName,

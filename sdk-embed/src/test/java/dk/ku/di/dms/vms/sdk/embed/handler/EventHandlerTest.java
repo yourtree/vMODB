@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
-import dk.ku.di.dms.vms.modb.common.logging.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
@@ -122,7 +121,6 @@ public class EventHandlerTest {
                 },
                 vmsInternalPubSubService, vmsMetadata,
                 VmsApplicationOptions.build(null, 0, null),
-                new ILoggingHandler() { },
                 new IHttpHandler() { },
                 serdes);
 

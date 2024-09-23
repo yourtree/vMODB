@@ -6,7 +6,6 @@ package dk.ku.di.dms.vms.modb.transaction.internal;
  * (i) It assumes there will be only one writer at every single time.
  * (ii) It also assumes new entries are appended to the head.
  * (iii) Readers never read from the head, unless that task is completed (all-or-nothing atomicity).
- * These three assumptions make it safe to call {@link #removeUpToEntry}
  * concurrently with a writer, as long as the keys being inserted, removed, and read do not
  * intersect. In other words, concurrent threads are supposed to always operate on
  * distinct partitions of the data structure.
@@ -17,7 +16,7 @@ public sealed class OneWriterMultiReadersLIFO<K extends Comparable<K>,V> permits
 
     private volatile Entry<K,V> head;
 
-    public void put(K key, V val){
+    public final void put(K key, V val){
         // always insert in the front
         Entry<K,V> currFirst = this.head;
         this.head = new Entry<>(key, val, currFirst);
@@ -27,13 +26,13 @@ public sealed class OneWriterMultiReadersLIFO<K extends Comparable<K>,V> permits
      * Removes the head of the data structure
      */
     @SuppressWarnings("UnnecessaryLocalVariable")
-    public void poll(){
+    public final void poll(){
         assert this.head != null;
         var next = this.head.next;
         this.head = next;
     }
 
-    public Entry<K,V> peak(){
+    public final Entry<K,V> peak(){
         return this.head;
     }
 
@@ -42,7 +41,7 @@ public sealed class OneWriterMultiReadersLIFO<K extends Comparable<K>,V> permits
      * exists, returns the entry for the greatest key less than the specified
      * key; if no such entry exists, returns {@code null}.
      */
-    public Entry<K,V> floorEntry(K key) {
+    public final Entry<K,V> floorEntry(K key) {
         if(this.head == null) return null;
         Entry<K,V> curr = this.head;
         int cmp = curr.key.compareTo(key);
@@ -60,7 +59,7 @@ public sealed class OneWriterMultiReadersLIFO<K extends Comparable<K>,V> permits
      * key; if no such entry exists, returns {@code null}.
      * In other words, gets the immediate successor of key.
      */
-    public Entry<K,V> getHigherEntryUpToKey(K key) {
+    public final Entry<K,V> getHigherEntryUpToKey(K key) {
         if(this.head == null) return null;
         // is parameter key already higher than the highest entry? if so, just return it
         if(key.compareTo(this.head.key) >= 0) return this.head;
@@ -81,11 +80,17 @@ public sealed class OneWriterMultiReadersLIFO<K extends Comparable<K>,V> permits
     /**
      * Remove all entries below the key
      * Method is used to remove TIDs that cannot be seen anymore
+     * Not safe if there are concurrent writers and the entry returned is the head
      * @param key node identifier
      */
-    public Entry<K,V> removeUpToEntry(K key){
+    public final Entry<K,V> removeUpToEntry(K key){
         final Entry<K,V> entryToReturn = this.getHigherEntryUpToKey(key);
-        Entry<K,V> currFloorEntry = entryToReturn;
+        this.removeChildren(entryToReturn);
+        return entryToReturn;
+    }
+
+    public final void removeChildren(final Entry<K,V> entry){
+        Entry<K,V> currFloorEntry = entry;
         Entry<K,V> auxEntry;
         while(currFloorEntry != null){
             auxEntry = currFloorEntry.next;
@@ -93,10 +98,9 @@ public sealed class OneWriterMultiReadersLIFO<K extends Comparable<K>,V> permits
             currFloorEntry.next = null;
             currFloorEntry = auxEntry;
         }
-        return entryToReturn;
     }
 
-    public void clear(){
+    public final void clear(){
         if(this.head == null) return;
         Entry<K,V> current = this.head;
         Entry<K,V> next;
@@ -108,7 +112,7 @@ public sealed class OneWriterMultiReadersLIFO<K extends Comparable<K>,V> permits
     }
 
     @Override
-    public String toString(){
+    public final String toString(){
         var current = this.head;
         if(current == null) return "";
         String lineSeparator = System.lineSeparator();

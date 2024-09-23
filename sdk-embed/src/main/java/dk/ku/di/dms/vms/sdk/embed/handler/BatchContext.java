@@ -68,10 +68,6 @@ public final class BatchContext {
         return this.status.get() > OPEN;
     }
 
-    public boolean setStatus(int expected, int status){
-        return this.status.compareAndSet(expected, status);
-    }
-
     public void setStatus(int status){
         this.status.set(status);
     }

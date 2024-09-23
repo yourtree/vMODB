@@ -16,6 +16,7 @@ import java.util.List;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
+import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
 import static java.lang.System.Logger.Level.*;
 
 @Microservice("cart")
@@ -89,11 +90,11 @@ public final class CartService {
      * id being seller_id is seller causality
      */
     @Inbound(values = {PRODUCT_UPDATED})
-    @Transactional(type=RW)
+    @Transactional(type=W)
     @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     public void processProductUpdate(ProductUpdated productUpdated) {
         LOGGER.log(INFO,"APP: Cart received a product update event with version: "+productUpdated.version);
-        var product = new ProductReplica(productUpdated.seller_id, productUpdated.product_id, productUpdated.name, productUpdated.sku, productUpdated.category,
+        ProductReplica product = new ProductReplica(productUpdated.seller_id, productUpdated.product_id, productUpdated.name, productUpdated.sku, productUpdated.category,
                 productUpdated.description, productUpdated.price, productUpdated.freight_value, productUpdated.status, productUpdated.version);
         this.productReplicaRepository.upsert(product);
     }

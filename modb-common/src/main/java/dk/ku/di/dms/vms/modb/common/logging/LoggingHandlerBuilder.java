@@ -10,7 +10,7 @@ import java.util.Date;
 public final class LoggingHandlerBuilder {
 
     public static ILoggingHandler build(String identifier) {
-        String fileName = "logging_" + identifier + "_" + new Date().getTime() +".llog";
+        String fileName = identifier + "_" + new Date().getTime() +".llog";
         Path path = Paths.get(fileName);
         FileChannel fileChannel;
         try {
@@ -21,11 +21,17 @@ public final class LoggingHandlerBuilder {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+
+        String loggingType = System.getProperty("logging_type");
         ILoggingHandler handler;
         try {
-            handler = new CompressedLoggingHandler(fileChannel, fileName);
+            if(loggingType == null || loggingType.isEmpty() || loggingType.contentEquals("default")){
+                handler = new DefaultLoggingHandler(fileChannel, fileName);
+            } else {
+                handler = new CompressedLoggingHandler(fileChannel, fileName);
+            }
         } catch (NoClassDefFoundError | Exception e) {
-            System.out.println("Failed to load compressed logging handler: \n"+e);
+            System.out.println("Failed to load compressed logging handler, setting the default. Error:\n"+e);
             handler = new DefaultLoggingHandler(fileChannel, fileName);
         }
         return handler;

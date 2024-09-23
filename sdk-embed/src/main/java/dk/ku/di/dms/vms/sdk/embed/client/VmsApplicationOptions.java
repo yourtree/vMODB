@@ -65,7 +65,7 @@ public final class VmsApplicationOptions {
                 soBufferSize,
                 logging,
                 checkpointing,
-                maxRecords,
+                maxRecords == 0 ? 100000 : maxRecords,
                 maxSleep);
     }
 

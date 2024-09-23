@@ -14,10 +14,8 @@ import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 /**
- * This index does not support growing number of keys
+ * This index does not support growing number of keys.
  * Could deal with collisions by having a linked list.
  * This index is oblivious to isolation level and relational constraints.
  */
@@ -25,7 +23,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     private final RecordBufferContext recordBufferContext;
 
-    private final AtomicInteger size;
+    private int size;
 
     private final long recordSize;
 
@@ -33,7 +31,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         super(schema, columnsIndex);
         this.recordBufferContext = recordBufferContext;
         this.recordSize = schema.getRecordSize();
-        this.size = new AtomicInteger(0);
+        this.size = 0;
     }
 
     /**
@@ -59,7 +57,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     }
 
     private void updateSize(int val){
-        this.size.addAndGet(val);
+        this.size = size + val;
     }
 
     /**
@@ -132,7 +130,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public Object[] lookupByKey(IKey key){
-        var pos = this.getPosition(key.hashCode());
+        long pos = this.getPosition(key.hashCode());
         if(this.exists(pos))
             return this.readFromIndex(pos + Schema.RECORD_HEADER);
         return null;
@@ -145,7 +143,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public int size() {
-        return this.size.get();
+        return this.size;
     }
 
     @Override

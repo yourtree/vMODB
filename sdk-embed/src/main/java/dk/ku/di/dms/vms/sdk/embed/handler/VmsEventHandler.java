@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
-import dk.ku.di.dms.vms.modb.common.logging.ILoggingHandler;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.*;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
@@ -32,6 +31,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static java.lang.System.Logger.Level.*;
@@ -80,8 +81,6 @@ public final class VmsEventHandler extends ModbHttpServer {
 
     private final VmsHandlerOptions options;
 
-    private final ILoggingHandler loggingHandler;
-
     private final IHttpHandler httpHandler;
     
     /** COORDINATOR **/
@@ -100,15 +99,6 @@ public final class VmsEventHandler extends ModbHttpServer {
     private final Set<String> queuesLeaderSubscribesTo;
 
     /** INTERNAL STATE **/
-
-    /*
-     * When is the current batch updated to the next?
-     * - When the last tid of this batch (for this VMS) finishes execution,
-     *   if this VMS is a terminal in this batch, send the batch complete event to leader
-     *   if this vms is not a terminal, must wait for a batch commit request from leader
-     *   -- but this wait can entail low throughput (rethink that later)
-     */
-    private BatchContext currentBatch;
 
     // metadata about all non-committed batches.
     // when a batch commit finishes, it should be removed from this map
@@ -143,7 +133,6 @@ public final class VmsEventHandler extends ModbHttpServer {
                                         // metadata about this vms
                                         VmsRuntimeMetadata vmsMetadata,
                                         VmsApplicationOptions options,
-                                        ILoggingHandler loggingHandler,
                                         IHttpHandler httpHandler,
                                         // serialization/deserialization of objects
                                         IVmsSerdesProxy serdesProxy){
@@ -152,28 +141,28 @@ public final class VmsEventHandler extends ModbHttpServer {
                     transactionalHandler, vmsInternalChannels,
                     new VmsEventHandler.VmsHandlerOptions( options.maxSleep(), options.networkBufferSize(),
                             options.osBufferSize(), options.networkThreadPoolSize(), options.networkSendTimeout(),
-                            options.vmsThreadPoolSize(), options.numVmsWorkers(), options.isLogging()),
-                    loggingHandler, httpHandler, serdesProxy);
+                            options.vmsThreadPoolSize(), options.numVmsWorkers(), options.isLogging(), options.isCheckpointing()),
+                    httpHandler, serdesProxy);
         } catch (IOException e){
             throw new RuntimeException("Error on setting up event handler: "+e.getCause()+ " "+ e.getMessage());
         }
     }
 
     public record VmsHandlerOptions(int maxSleep,
-                            int networkBufferSize,
-                            int osBufferSize,
-                            int networkThreadPoolSize,
-                            int networkSendTimeout,
-                            int vmsThreadPoolSize,
-                            int numVmsWorkers,
-                            boolean logging) {}
+                                    int networkBufferSize,
+                                    int osBufferSize,
+                                    int networkThreadPoolSize,
+                                    int networkSendTimeout,
+                                    int vmsThreadPoolSize,
+                                    int numVmsWorkers,
+                                    boolean logging,
+                                    boolean checkpointing) {}
 
     private VmsEventHandler(VmsNode me,
                             VmsRuntimeMetadata vmsMetadata,
                             ITransactionManager transactionManager,
                             VmsEmbedInternalChannels vmsInternalChannels,
                             VmsHandlerOptions options,
-                            ILoggingHandler loggingHandler,
                             IHttpHandler httpHandler,
                             IVmsSerdesProxy serdesProxy) throws IOException {
         super();
@@ -204,8 +193,6 @@ public final class VmsEventHandler extends ModbHttpServer {
 
         this.serdesProxy = serdesProxy;
 
-        this.currentBatch = BatchContext.buildAsStarter(me.batch, me.previousBatch, me.numberOfTIDsCurrentBatch);
-        this.currentBatch.setStatus(BatchContext.BATCH_COMMITTED);
         this.batchContextMap = new ConcurrentHashMap<>();
         this.trackingBatchMap = new ConcurrentHashMap<>();
         this.tidToPrecedenceMap = new ConcurrentHashMap<>();
@@ -219,7 +206,6 @@ public final class VmsEventHandler extends ModbHttpServer {
         this.queuesLeaderSubscribesTo = new HashSet<>();
 
         this.options = options;
-        this.loggingHandler = loggingHandler;
         this.httpHandler = httpHandler;
     }
 
@@ -250,8 +236,36 @@ public final class VmsEventHandler extends ModbHttpServer {
         this.updateBatchStats(txResult.getOutboundEventResult());
     }
 
+    private final Executor checkpointExecutor = Executors.newSingleThreadExecutor();
+
+    /**
+     * Many outputs from the same transaction may arrive here concurrently,
+     * but can only send the batch commit once
+     */
     private void updateBatchStats(OutboundEventResult outputEvent) {
-        BatchMetadata batchMetadata = this.trackingBatchMap.compute(outputEvent.batch(),
+        BatchMetadata batchMetadata = this.updateBatchMetadataAtomically(outputEvent);
+        // not arrived yet
+        if(!this.batchContextMap.containsKey(outputEvent.batch())) return;
+        BatchContext thisBatch = this.batchContextMap.get(outputEvent.batch());
+        if(thisBatch.numberOfTIDsBatch != batchMetadata.numberTIDsExecuted) {
+            return;
+        }
+        LOGGER.log(INFO, this.me.identifier + ": All TIDs for the batch " + thisBatch.batch + " have been executed");
+        thisBatch.setStatus(BatchContext.BATCH_COMPLETED);
+        if(this.options.logging()){
+            LOGGER.log(INFO, this.me.identifier + ": Requesting checkpoint for batch " + thisBatch.batch);
+            this.checkpointExecutor.execute(()->checkpoint(thisBatch.batch, batchMetadata.maxTidExecuted));
+        }
+        // if terminal, must send batch complete
+        if (thisBatch.terminal) {
+            LOGGER.log(INFO, this.me.identifier + ": Requesting leader worker to send batch " + thisBatch.batch + " complete");
+            // must be queued in case leader is off and comes back online
+            this.leaderWorker.queueMessage(BatchComplete.of(thisBatch.batch, this.me.identifier));
+        }
+    }
+
+    private BatchMetadata updateBatchMetadataAtomically(OutboundEventResult outputEvent) {
+        return this.trackingBatchMap.compute(outputEvent.batch(),
                 (x,y) -> {
                     BatchMetadata toMod = y;
                     if(toMod == null){
@@ -263,19 +277,6 @@ public final class VmsEventHandler extends ModbHttpServer {
                     }
                     return toMod;
         });
-        if(!this.batchContextMap.containsKey(outputEvent.batch())) return;
-        var thisBatch = this.batchContextMap.get(outputEvent.batch());
-        if(thisBatch.numberOfTIDsBatch == batchMetadata.numberTIDsExecuted) {
-            LOGGER.log(INFO, this.me.identifier + ": All TIDs for the current batch (" + thisBatch.batch + ") have been executed");
-            // many outputs from the same transaction may arrive here, but can only send the batch commit once
-            if (thisBatch.setStatus(BatchContext.OPEN, BatchContext.BATCH_COMPLETED)
-                    // if terminal, must send batch complete
-                    && thisBatch.terminal) {
-                LOGGER.log(INFO, this.me.identifier + ": Requesting leader worker to send batch (" + thisBatch.batch + ") complete");
-                // must be queued in case leader is off and comes back online
-                this.leaderWorker.queueMessage(BatchComplete.of(thisBatch.batch, this.me.identifier));
-            }
-        }
     }
 
     private void connectToReceivedConsumerSet(Map<String, List<IdentifiableNode>> receivedConsumerVms) {
@@ -296,16 +297,18 @@ public final class VmsEventHandler extends ModbHttpServer {
 
     private static final boolean INFORM_BATCH_ACK = false;
 
-    private void checkpoint(long maxTid) {
-        this.currentBatch.setStatus(BatchContext.CHECKPOINTING);
+    private void checkpoint(long batch, long maxTid) {
+        //this.batchContextMap.get(batch).setStatus(BatchContext.CHECKPOINTING);
         // of course, I do not need to stop the scheduler on commit
         // I need to make access to the data versions data race free
         // so new transactions get data versions from the version map or the store
+        //long initTs = System.currentTimeMillis();
         this.transactionManager.checkpoint(maxTid);
-        this.currentBatch.setStatus(BatchContext.BATCH_COMMITTED);
+        //LOGGER.log(WARNING, me.identifier+": Checkpointing latency is "+(System.currentTimeMillis()-initTs));
+        this.batchContextMap.get(batch).setStatus(BatchContext.BATCH_COMMITTED);
         // it may not be necessary. the leader has already moved on at this point
         if(INFORM_BATCH_ACK) {
-            this.leaderWorker.queueMessage(BatchCommitAck.of(this.currentBatch.batch, this.me.identifier));
+            this.leaderWorker.queueMessage(BatchCommitAck.of(batch, this.me.identifier));
         }
     }
 
@@ -346,7 +349,6 @@ public final class VmsEventHandler extends ModbHttpServer {
         ConsumerVmsWorker consumerVmsWorker = ConsumerVmsWorker.build(this.me, node,
                         () -> JdkAsyncChannel.create(this.group),
                         this.options,
-                        this.loggingHandler,
                         this.serdesProxy);
         Thread.ofPlatform().name("vms-consumer-"+node.identifier+"-"+identifier)
                 .inheritInheritableThreadLocals(false)
@@ -1013,22 +1015,33 @@ public final class VmsEventHandler extends ModbHttpServer {
             // if it has been completed but not moved to status, then should send
             if(trackingBatchMap.containsKey(batchCommitInfo.batch())
                     && trackingBatchMap.get(batchCommitInfo.batch()).numberTIDsExecuted == batchCommitInfo.numberOfTIDsBatch()){
-                LOGGER.log(INFO,me.identifier+": Requesting leader worker to send batch ("+
-                        batchCommitInfo.batch()+") complete (LATE)");
+                LOGGER.log(INFO,me.identifier+": Requesting leader worker to send batch ("+batchCommitInfo.batch()+") complete (LATE)");
                 leaderWorker.queueMessage(BatchComplete.of(batchCommitInfo.batch(), me.identifier));
             }
         }
 
         /**
          * Context of execution of this method:
-         * This is not a terminal node in this batch, which means
-         * it does not know anything about the batch commit command just received.
-         * If the previous batch is completed and this received batch is the next,
-         * we just let the main loop update it
+         * This is not a terminal node in this batch
          */
         private void processNewBatchCommand(BatchCommitCommand.Payload batchCommitCommand){
             BatchContext batchContext = BatchContext.build(batchCommitCommand);
             batchContextMap.put(batchCommitCommand.batch(), batchContext);
+            LOGGER.log(INFO,me.identifier+": Batch command received from leader for batch ("+ batchCommitCommand.batch()+")");
+            if(!trackingBatchMap.containsKey(batchCommitCommand.batch())){
+                LOGGER.log(WARNING,me.identifier+": Cannot find tracking of batch "+ batchCommitCommand.batch());
+            }
+            BatchMetadata batchMetadata = trackingBatchMap.get(batchCommitCommand.batch());
+            if(batchContext.numberOfTIDsBatch != batchMetadata.numberTIDsExecuted) {
+                LOGGER.log(WARNING,me.identifier+": Batch "+ batchCommitCommand.batch()+" has not yet finished!");
+                return;
+            }
+            LOGGER.log(INFO, me.identifier + ": All TIDs for the batch " + batchCommitCommand.batch() + " have been executed");
+            batchContext.setStatus(BatchContext.BATCH_COMPLETED);
+            if(options.logging()){
+                LOGGER.log(INFO, me.identifier + ": Requesting checkpoint for batch " + batchCommitCommand.batch());
+                checkpointExecutor.execute(()->checkpoint(batchCommitCommand.batch(), batchMetadata.maxTidExecuted));
+            }
         }
 
         @Override
