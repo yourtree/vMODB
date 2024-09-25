@@ -23,7 +23,6 @@ public final class ConfigUtils {
         } catch (Exception e) {
             System.out.println("Error loading logging configuration. Resorting to default configuration. Error details:\n" + e.getMessage());
         }
-
         PROPERTIES = new Properties();
         try {
             PROPERTIES.load(ConfigUtils.class.getClassLoader().getResourceAsStream(CONFIG_FILE));

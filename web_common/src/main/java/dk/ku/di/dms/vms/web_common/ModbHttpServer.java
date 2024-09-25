@@ -152,7 +152,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 byte[] errorBytes = ("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "+e.getMessage().length()+"\r\n\r\n"+e.getMessage()).getBytes(StandardCharsets.UTF_8);
                 this.writeBuffer.put(errorBytes);
                 this.writeBuffer.flip();
-                this.connectionMetadata.channel.write(writeBuffer);
+                this.connectionMetadata.channel.write(this.writeBuffer);
             }
             this.readBuffer.clear();
             this.connectionMetadata.channel.read(this.readBuffer, 0, this);

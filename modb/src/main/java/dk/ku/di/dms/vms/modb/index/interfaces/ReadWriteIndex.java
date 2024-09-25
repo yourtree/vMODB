@@ -20,6 +20,8 @@ public abstract class ReadWriteIndex<K> extends AbstractIndex<K> {
 
     public boolean exists(IKey key, Object[] record) { return false; }
 
+    public void upsert(IKey key, Object[] record) { this.insert(key, record); }
+
     // flush updates
     public void flush(){
         throw new RuntimeException("Not supported.");

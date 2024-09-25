@@ -419,7 +419,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 operationSetOfKey.removeChildren(entry);
             }
             switch (operationSetOfKey.lastWriteType) {
-                case UPDATE -> this.primaryKeyIndex.update(key, entry.val().record);
+                case UPDATE -> this.primaryKeyIndex.upsert(key, entry.val().record);
                 case INSERT -> this.primaryKeyIndex.insert(key, entry.val().record);
                 case DELETE -> this.primaryKeyIndex.delete(key);
             }

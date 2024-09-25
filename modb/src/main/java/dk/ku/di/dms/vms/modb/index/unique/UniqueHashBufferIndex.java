@@ -84,33 +84,51 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public void update(IKey key, Object[] record){
-        long pos = this.getPosition(key.hashCode());
-        int maxColumns = this.schema().columnOffset().length;
+        long pos = this.findRecordAddress(key, record);
+        if(pos == -1) {
+            LOGGER.log(ERROR, "Cannot find an existing record. Perhaps something wrong in the insertion logic?\nKey: " + key+ " Hash: " + key.hashCode());
+            return;
+        }
+        this.doWrite(pos, record);
+    }
+
+    private void doWrite(long pos, Object[] record) {
+        int maxColumns = this.schema.columnOffset().length;
         long currAddress = pos + Schema.RECORD_HEADER;
-        for(int index = 0; index < maxColumns; index++) {
-            DataType dt = this.schema().columnDataType(index);
-            if(record[index] != null) {
+        for (int index = 0; index < maxColumns; index++) {
+            DataType dt = this.schema.columnDataType(index);
+            if (record[index] != null) {
                 DataTypeUtils.callWriteFunction(currAddress, dt, record[index]);
             }
             currAddress += dt.value;
         }
     }
 
-    private static int DEFAULT_ATTEMPTS = 3;
+    private static int DEFAULT_ATTEMPTS = 5;
 
     private long getFreePositionToInsert(IKey key){
         int attemptsToFind = DEFAULT_ATTEMPTS;
         int aux = 0;
         long pos;
-        boolean found;
+        boolean busy;
         do {
             pos = this.getPosition(key.hashCode() + aux);
             attemptsToFind--;
             aux++;
-            found = UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE;
-        } while (!found && attemptsToFind > 0);
-        if(found) return pos;
+            busy = UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE;
+        } while (busy && attemptsToFind > 0);
+        if(!busy) return pos;
         return -1;
+    }
+
+    @Override
+    public void upsert(IKey key, Object[] record){
+        long pos = this.findRecordAddress(key, record);
+        if(pos == -1) {
+            this.insert(key, record);
+            return;
+        }
+        this.doWrite(pos, record);
     }
 
     @Override
@@ -123,16 +141,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
             }
             UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
             UNSAFE.putInt(null, pos + Header.SIZE, key.hashCode());
-            int maxColumns = this.schema.columnOffset().length;
-            long currAddress = pos + Schema.RECORD_HEADER;
-            for (int index = 0; index < maxColumns; index++) {
-                DataType dt = this.schema.columnDataType(index);
-                // null constraint should be validated by the transaction manager
-                if(record[index] != null) {
-                    DataTypeUtils.callWriteFunction(currAddress, dt, record[index]);
-                }
-                currAddress += dt.value;
-            }
+            this.doWrite(pos, record);
             this.updateSize(1);
         } catch (Exception e){
             throw new RuntimeException("Error inserting record: "+e.getMessage());
@@ -160,6 +169,23 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         return UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE;
     }
 
+    private long findRecordAddress(IKey key, Object[] record){
+        int attemptsToFind = DEFAULT_ATTEMPTS;
+        int aux = 0;
+        long pos = this.getPosition(key.hashCode() + aux);
+        while(attemptsToFind > 0){
+            if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE) {
+                Object[] existingRecord = this.readFromIndex(pos + Schema.RECORD_HEADER);
+                IKey existingKey = KeyUtils.buildRecordKey(this.schema().getPrimaryKeyColumns(), existingRecord);
+                if (existingKey.equals(key)) return pos;
+            }
+            attemptsToFind--;
+            aux++;
+            pos = this.getPosition(key.hashCode() + aux);
+        }
+        return -1;
+    }
+
     @Override
     public boolean exists(IKey key, Object[] record) {
         int attemptsToFind = DEFAULT_ATTEMPTS;
@@ -171,6 +197,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
             if(existingKey.equals(key)) return true;
             attemptsToFind--;
             aux++;
+            pos = this.getPosition(key.hashCode() + aux);
         }
         return false;
     }
@@ -195,8 +222,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public IRecordIterator<IKey> iterator() {
-        return new RecordIterator(this.recordBufferContext.address,
-                this.schema.getRecordSize(), this.recordBufferContext.capacity);
+        return new RecordIterator(this.recordBufferContext.address, this.schema.getRecordSize(), this.recordBufferContext.capacity);
     }
 
     @Override
