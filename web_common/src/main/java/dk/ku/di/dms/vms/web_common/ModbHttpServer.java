@@ -63,6 +63,13 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             return new HttpRequestInternal(method, headers, url, payload);
         }
 
+        private static String createHttpHeaders(int contentLength) {
+            return "HTTP/1.1 200 OK\r\n" +
+                    "Content-Type: application/json\r\n" +
+                    "Content-Length: " + contentLength + "\r\n" +
+                    "Connection: keep-alive\r\n\r\n";
+        }
+
         public void process(String request){
             try {
                 HttpRequestInternal httpRequest = parseRequest(request);
@@ -77,13 +84,14 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                                 case "*/*", "application/json" -> {
                                     String dashJson = httpHandler.getAsJson(httpRequest.uri());
                                     byte[] dashJsonBytes = dashJson.getBytes(StandardCharsets.UTF_8);
-                                    String response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
-                                            + dashJsonBytes.length + "\r\n\r\n" + dashJson;
-                                    byte[] respBytes = response.getBytes(StandardCharsets.UTF_8);
+                                    String headers = createHttpHeaders(dashJsonBytes.length);
+                                    byte[] headerBytes = headers.getBytes(StandardCharsets.UTF_8);
                                     // ask memory utils for a byte buffer big enough to fit the seller dashboard
-                                    if(respBytes.length > this.writeBuffer.capacity()) {
-                                        ByteBuffer bigBB = MemoryManager.getTemporaryDirectBuffer(MemoryUtils.nextPowerOfTwo(respBytes.length));
-                                        bigBB.put(respBytes);
+                                    int totalBytes = headerBytes.length + dashJsonBytes.length;
+                                    if(this.writeBuffer.capacity() < totalBytes) {
+                                        ByteBuffer bigBB = MemoryManager.getTemporaryDirectBuffer(MemoryUtils.nextPowerOfTwo(totalBytes));
+                                        bigBB.put(headerBytes);
+                                        bigBB.put(dashJsonBytes);
                                         bigBB.flip();
                                         int result = 0;
                                         do {
@@ -93,7 +101,8 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                                         bigBB.clear();
                                         MemoryManager.releaseTemporaryDirectBuffer(bigBB);
                                     } else {
-                                        this.writeBuffer.put(respBytes);
+                                        this.writeBuffer.put(headerBytes);
+                                        this.writeBuffer.put(dashJsonBytes);
                                         this.writeBuffer.flip();
                                         ft = this.connectionMetadata.channel.write(this.writeBuffer);
                                     }
@@ -141,9 +150,10 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 if(ft != null){
                     int result = ft.get();
                     // send remaining to avoid http client to hang
-                    while (result < this.writeBuffer.position()){
+                    while (this.writeBuffer.hasRemaining()){
                         result += this.connectionMetadata.channel.write(this.writeBuffer).get();
                     }
+                    assert result == this.writeBuffer.limit();
                 }
                 this.writeBuffer.clear();
             } catch (Exception e){
@@ -152,6 +162,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 byte[] errorBytes;
                 if(e.getMessage() == null){
                     System.out.println("Exception without message has been caught:\n"+e);
+                    e.printStackTrace(System.out);
                     errorBytes = ERROR_RESPONSE_BYTES;
                 } else {
                     errorBytes = ("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "+
