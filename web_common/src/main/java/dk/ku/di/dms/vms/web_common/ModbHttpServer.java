@@ -88,7 +88,8 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                                     byte[] headerBytes = headers.getBytes(StandardCharsets.UTF_8);
                                     // ask memory utils for a byte buffer big enough to fit the seller dashboard
                                     int totalBytes = headerBytes.length + dashJsonBytes.length;
-                                    if(this.writeBuffer.capacity() < totalBytes) {
+                                    // use remaining to be error-proof
+                                    if(this.writeBuffer.remaining() < totalBytes) {
                                         ByteBuffer bigBB = MemoryManager.getTemporaryDirectBuffer(MemoryUtils.nextPowerOfTwo(totalBytes));
                                         bigBB.put(headerBytes);
                                         bigBB.put(dashJsonBytes);
@@ -101,6 +102,10 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                                         bigBB.clear();
                                         MemoryManager.releaseTemporaryDirectBuffer(bigBB);
                                     } else {
+                                        if(this.writeBuffer.position() != 0){
+                                            System.out.println("This buffer has not been cleaned appropriately!");
+                                            this.writeBuffer.clear();
+                                        }
                                         this.writeBuffer.put(headerBytes);
                                         this.writeBuffer.put(dashJsonBytes);
                                         this.writeBuffer.flip();
@@ -155,7 +160,6 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                     }
                     assert result == this.writeBuffer.limit();
                 }
-                this.writeBuffer.clear();
             } catch (Exception e){
                 // LOGGER.log(WARNING, me.identifier+": Error caught in HTTP handler.\n"+e);
                 this.writeBuffer.clear();
@@ -170,10 +174,14 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 }
                 this.writeBuffer.put(errorBytes);
                 this.writeBuffer.flip();
-                this.connectionMetadata.channel.write(this.writeBuffer);
+                try {
+                    this.connectionMetadata.channel.write(this.writeBuffer).get();
+                } catch (Exception ignored) {}
+            } finally {
+                this.writeBuffer.clear();
+                this.readBuffer.clear();
+                this.connectionMetadata.channel.read(this.readBuffer, 0, this);
             }
-            this.readBuffer.clear();
-            this.connectionMetadata.channel.read(this.readBuffer, 0, this);
         }
 
         private void processSseClient() throws InterruptedException, ExecutionException {
