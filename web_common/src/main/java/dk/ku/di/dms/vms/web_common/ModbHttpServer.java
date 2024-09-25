@@ -149,7 +149,14 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             } catch (Exception e){
                 // LOGGER.log(WARNING, me.identifier+": Error caught in HTTP handler.\n"+e);
                 this.writeBuffer.clear();
-                byte[] errorBytes = ("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "+e.getMessage().length()+"\r\n\r\n"+e.getMessage()).getBytes(StandardCharsets.UTF_8);
+                byte[] errorBytes;
+                if(e.getMessage() == null){
+                    System.out.println("Exception without message has been caught:\n"+e);
+                    errorBytes = ERROR_RESPONSE_BYTES;
+                } else {
+                    errorBytes = ("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "+
+                            e.getMessage().length()+"\r\n\r\n" + e.getMessage()).getBytes(StandardCharsets.UTF_8);
+                }
                 this.writeBuffer.put(errorBytes);
                 this.writeBuffer.flip();
                 this.connectionMetadata.channel.write(this.writeBuffer);

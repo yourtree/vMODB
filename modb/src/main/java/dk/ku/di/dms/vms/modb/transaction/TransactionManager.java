@@ -88,7 +88,6 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
                     return this.planner.plan(queryTree);
                 });
         List<WherePredicate> wherePredicates = this.analyzer.analyzeWhere(table, selectStatement.whereClause);
-
         if(scanOperator.isIndexScan()){
             IKey key = this.getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
             return scanOperator.asIndexScan().runAsEmbedded(this.txCtxMap.get(Thread.currentThread().threadId()), key);

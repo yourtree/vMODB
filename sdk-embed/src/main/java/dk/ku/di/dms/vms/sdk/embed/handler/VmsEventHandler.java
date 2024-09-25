@@ -536,12 +536,10 @@ public final class VmsEventHandler extends ModbHttpServer {
 
         @Override
         public void completed(Integer result, Void void_) {
-
             String remoteAddress = "";
             try {
                 remoteAddress = channel.getRemoteAddress().toString();
             } catch (IOException ignored) { }
-
             if(result == 0){
                 LOGGER.log(WARNING,me.identifier+": A node ("+remoteAddress+") is trying to connect with an empty message!");
                 try { this.channel.close(); } catch (IOException ignored) {}
@@ -557,18 +555,17 @@ public final class VmsEventHandler extends ModbHttpServer {
                 this.buffer.flip();
                 String request = StandardCharsets.UTF_8.decode(this.buffer).toString();
                 if(isHttpClient(request)){
-                    var readCompletionHandler = new HttpReadCompletionHandler(
+                    HttpReadCompletionHandler readCompletionHandler = new HttpReadCompletionHandler(
                             new ConnectionMetadata("http_client".hashCode(),
                                     ConnectionMetadata.NodeType.HTTP_CLIENT,
                                     this.channel),
                             this.buffer,
                             MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize),
-                            httpHandler
-                            );
+                            httpHandler);
                     try { NetworkUtils.configure(this.channel, options.osBufferSize()); } catch (IOException ignored) { }
                     readCompletionHandler.process(request);
                 } else {
-                    LOGGER.log(WARNING, me.identifier + ": A node is trying to connect without a presentation message. \n" + request);
+                    LOGGER.log(WARNING, me.identifier + ": A node is trying to connect without a presentation message.\n"+request);
                     this.buffer.clear();
                     MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
                     try { this.channel.close(); } catch (IOException ignored) { }
@@ -667,7 +664,7 @@ public final class VmsEventHandler extends ModbHttpServer {
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 channel.read(buffer, null, new UnknownNodeReadCompletionHandler(channel, buffer));
             } catch(Exception e){
-                LOGGER.log(ERROR,me.identifier+": Accept handler caught exception: "+e.getMessage());
+                LOGGER.log(ERROR,me.identifier+": Accept handler caught an exception:\n"+e);
                 buffer.clear();
                 MemoryManager.releaseTemporaryDirectBuffer(buffer);
             } finally {
