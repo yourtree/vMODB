@@ -215,7 +215,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     @Override
     public Object[] lookupByKey(TransactionContext txCtx, IKey key){
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
-        if ( operationSet == null ) {
+        if (operationSet == null) {
             return this.primaryKeyIndex.lookupByKey(key);
         }
         if(txCtx.readOnly) {
@@ -460,7 +460,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     @Override
-    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey... keys) {
+    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey[] keys) {
         return new MultiVersionIterator(txCtx, keys);
     }
 
@@ -504,10 +504,10 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         return freshSet;
     }
 
-    public Object[] getRecord(TransactionContext txCtx, IKey key){
+    public Object[] getRecord(long tid, IKey key){
         OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
         if(operation != null){
-            Entry<Long, TransactionWrite> entry = operation.floorEntry(txCtx.tid);
+            Entry<Long, TransactionWrite> entry = operation.floorEntry(tid);
             if(entry != null && entry.val().type != WriteType.DELETE) {
                 return entry.val().record;
             }

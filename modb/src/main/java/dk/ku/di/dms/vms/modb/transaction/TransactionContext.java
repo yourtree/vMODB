@@ -48,15 +48,4 @@ public final class TransactionContext implements ITransactionContext {
 //        INDEX_SET_BUFFER.addLast(this.indexes);
     }
 
-    public long getLastTid() {
-        return lastTid;
-    }
-
-    public boolean isReadOnly() {
-        return readOnly;
-    }
-
-    public long getTid() {
-        return tid;
-    }
 }

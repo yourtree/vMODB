@@ -81,7 +81,7 @@ public final class Main {
             String[] uriSplit = uri.split("/");
             int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
             long lastTid = VMS.lastTidFinished();
-            try (var txCtx = this.transactionManager.beginTransaction(lastTid, 0, 0, true)) {
+            try (var txCtx = this.transactionManager.beginTransaction(lastTid, 0, lastTid, true)) {
                 List<OrderEntry> orderEntries = this.repository.getOrderEntriesBySellerId(sellerId);
                 if(orderEntries.isEmpty()) return EMPTY_DASHBOARD.toString();
                 LOGGER.log(INFO, "APP: Seller "+sellerId+" has "+orderEntries.size()+" entries in seller dashboard");

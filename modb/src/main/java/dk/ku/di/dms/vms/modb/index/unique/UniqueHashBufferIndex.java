@@ -14,7 +14,8 @@ import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
-import static java.lang.System.Logger.Level.*;
+
+import static java.lang.System.Logger.Level.ERROR;
 
 /**
  * This index does not support growing number of keys.

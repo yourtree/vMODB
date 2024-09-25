@@ -10,6 +10,7 @@ import dk.ku.di.dms.vms.modb.transaction.multiversion.WriteType;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.function.BiFunction;
 
 /**
  * Wrapper of a non unique index for multi versioning concurrency control
@@ -129,21 +130,60 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
         WRITE_SET_BUFFER.addLast(writeSet);
     }
 
+    private static final Iterator<Object[]> EMPTY_ITERATOR = Collections.emptyIterator();
+
     @Override
-    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey... keys) {
-        return new SecondaryIndexIterator(txCtx, keys);
+    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey[] keys) {
+        return new MultiKeySecondaryIndexIterator(txCtx.readOnly ? txCtx.lastTid : txCtx.tid, keys);
     }
 
-    private final class SecondaryIndexIterator implements Iterator<Object[]> {
+    @Override
+    public Iterator<Object[]> iterator(TransactionContext txCtx, IKey key) {
+        if(!this.keyMap.containsKey(key)) return EMPTY_ITERATOR;
+        return new SecondaryIndexIterator(txCtx.readOnly ? txCtx.lastTid : txCtx.tid, this.keyMap.get(key).iterator(), this.primaryIndex::getRecord);
+    }
 
-        private final TransactionContext txCtx;
+    private static final class SecondaryIndexIterator implements Iterator<Object[]> {
+
+        private final Iterator<IKey> iterator;
+        private Object[] currRecord;
+        private final long tid;
+        private final BiFunction<Long,IKey,Object[]> getRecordFunc;
+
+        public SecondaryIndexIterator(long tid,
+                                      Iterator<IKey> iterator,
+                                      BiFunction<Long,IKey,Object[]> getRecordFunc){
+            this.tid = tid;
+            this.iterator = iterator;
+            this.getRecordFunc = getRecordFunc;
+        }
+
+        @Override
+        public boolean hasNext() {
+            while(this.iterator.hasNext()){
+                this.currRecord = this.getRecordFunc.apply(this.tid, this.iterator.next());
+                if(this.currRecord != null) return true;
+            }
+            return false;
+        }
+
+        @Override
+        public Object[] next() {
+            return this.currRecord;
+        }
+
+    }
+
+    private final class MultiKeySecondaryIndexIterator implements Iterator<Object[]> {
+
         private Iterator<IKey> currentIterator;
         private Object[] currRecord;
         private final IKey[] keys;
         private int idx;
+        private final long tid;
 
-        public SecondaryIndexIterator(TransactionContext txCtx, IKey[] keys){
-            this.txCtx = txCtx;
+        public MultiKeySecondaryIndexIterator(long tid, IKey[] keys){
+            this.tid = tid;
             this.idx = 0;
             this.keys = keys;
             this.currentIterator = keyMap.getOrDefault(keys[this.idx], Set.of()).iterator();
@@ -151,8 +191,8 @@ public final class NonUniqueSecondaryIndex implements IMultiVersionIndex {
 
         @Override
         public boolean hasNext() {
-            while(this.currentIterator.hasNext() ){
-                this.currRecord = primaryIndex.getRecord(this.txCtx, this.currentIterator.next());
+            while(this.currentIterator.hasNext()){
+                this.currRecord = primaryIndex.getRecord(this.tid, this.currentIterator.next());
                 if(this.currRecord != null) return true;
             }
             if(this.idx < this.keys.length - 1){
