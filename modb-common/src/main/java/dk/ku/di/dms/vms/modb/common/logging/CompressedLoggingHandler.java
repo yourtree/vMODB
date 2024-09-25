@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.logging;
 
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import net.jpountz.lz4.LZ4Compressor;
 import net.jpountz.lz4.LZ4Factory;
 
@@ -26,7 +27,7 @@ final class CompressedLoggingHandler extends DefaultLoggingHandler {
     public void log(ByteBuffer byteBuffer) throws IOException {
         // get at least same size
         int maxCompressedLength = LZ4_COMPRESSOR.maxCompressedLength(byteBuffer.remaining());
-        int key = nextPowerOfTwo(maxCompressedLength);
+        int key = MemoryUtils.nextPowerOfTwo(maxCompressedLength);
         Queue<ByteBuffer> targetBufferPool = COMPRESSED_BUFFER_POOL.computeIfAbsent(key, (x) -> new ConcurrentLinkedQueue<>());
         ByteBuffer targetBuffer = targetBufferPool.poll();
         if(targetBuffer == null){
@@ -41,16 +42,6 @@ final class CompressedLoggingHandler extends DefaultLoggingHandler {
         } while(targetBuffer.hasRemaining());
         targetBuffer.clear();
         COMPRESSED_BUFFER_POOL.get(key).add(targetBuffer);
-    }
-
-    public static int nextPowerOfTwo(int number) {
-        number--;
-        number |= number >> 1;
-        number |= number >> 2;
-        number |= number >> 4;
-        number |= number >> 8;
-        number |= number >> 16;
-        return number + 1;
     }
 
 }

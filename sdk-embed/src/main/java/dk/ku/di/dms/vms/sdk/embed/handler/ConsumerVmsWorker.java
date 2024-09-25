@@ -351,7 +351,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     private ByteBuffer retrieveByteBuffer(){
         ByteBuffer bb = WRITE_BUFFER_POOL.poll();
         if(bb != null) return bb;
-        return MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize());
+        return MemoryManager.getTemporaryDirectBuffer(this.options.networkBufferSize());
     }
 
     private void returnByteBuffer(ByteBuffer bb) {

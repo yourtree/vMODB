@@ -807,8 +807,8 @@ public final class Coordinator extends ModbHttpServer {
             ));
         }
         // send to sse client if connected
-        if(!sseClients.isEmpty()){
-            sseClients.getFirst().sendToSseClient(this.numTIDsCommitted.get());
+        if(!SSE_CLIENTS.isEmpty()){
+            SSE_CLIENTS.getFirst().sendToSseClient(this.numTIDsCommitted.get());
         }
     }
 

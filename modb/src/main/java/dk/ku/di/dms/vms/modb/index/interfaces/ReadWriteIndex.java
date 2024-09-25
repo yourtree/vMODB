@@ -18,6 +18,8 @@ public abstract class ReadWriteIndex<K> extends AbstractIndex<K> {
 
     public abstract Object[] lookupByKey(IKey key);
 
+    public boolean exists(IKey key, Object[] record) { return false; }
+
     // flush updates
     public void flush(){
         throw new RuntimeException("Not supported.");

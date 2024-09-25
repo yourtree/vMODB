@@ -412,7 +412,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             if(startPos == 0){
                 this.readBuffer.flip();
             }
-            byte messageType = readBuffer.get();
+            byte messageType = this.readBuffer.get();
             switch (messageType) {
                 case (BATCH_OF_EVENTS) -> {
                     int bufferSize = this.getBufferSize();
@@ -1030,6 +1030,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             LOGGER.log(INFO,me.identifier+": Batch command received from leader for batch ("+ batchCommitCommand.batch()+")");
             if(!trackingBatchMap.containsKey(batchCommitCommand.batch())){
                 LOGGER.log(WARNING,me.identifier+": Cannot find tracking of batch "+ batchCommitCommand.batch());
+                return;
             }
             BatchMetadata batchMetadata = trackingBatchMap.get(batchCommitCommand.batch());
             if(batchContext.numberOfTIDsBatch != batchMetadata.numberTIDsExecuted) {

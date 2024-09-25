@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.sdk.core.operational;
 
 import dk.ku.di.dms.vms.modb.api.enums.ExecutionModeEnum;
 import dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum;
+import dk.ku.di.dms.vms.modb.common.transaction.ITransactionContext;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 
 import java.lang.reflect.InvocationTargetException;
@@ -74,31 +75,49 @@ public final class VmsTransactionTaskBuilder {
             this.partitionId = partitionIdAux;
         }
 
-        @Override
-        public String toString() {
-            return "{"
-                    + "\"batch\":\"" + this.batch + "\""
-                    + ",\"lastTid\":\"" + this.lastTid + "\""
-                    + ",\"tid\":\"" + tid + "\""
-                    + "}";
+        private void readOnlyRun(){
+            try(ITransactionContext txCtx = transactionManager.beginTransaction(this.tid, -1, this.lastTid, true)){
+                Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.input);
+                OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
+                schedulerCallback.success(this.signature.executionMode(), eventOutput);
+            } catch (IllegalAccessException | InvocationTargetException e) {
+                this.handleErrorOnTask(e);
+            } catch (Exception e){
+                this.handleGenericError(e);
+            }
+        }
+
+        private void handleGenericError(Exception e) {
+            LOGGER.log(ERROR, "Error not related to invoking task "+this.toString()+"\n"+ e);
+            e.printStackTrace(System.out);
+            schedulerCallback.error(signature.executionMode(), this.tid, e);
+        }
+
+        private void handleErrorOnTask(ReflectiveOperationException e) {
+            LOGGER.log(ERROR, "Error during invoking task "+this.toString()+"\n"+ e);
+            e.printStackTrace(System.out);
+            schedulerCallback.error(signature.executionMode(), this.tid, e);
         }
 
         @Override
         public void run() {
             this.signalRunning();
-            try(var txCtx = transactionManager.beginTransaction(this.tid, -1, this.lastTid, this.signature.transactionType() == TransactionTypeEnum.R)){
+            if(this.signature.transactionType() == TransactionTypeEnum.R){
+                this.readOnlyRun();
+                return;
+            }
+            try {
+                ITransactionContext txCtx = transactionManager.beginTransaction(this.tid, -1, this.lastTid, false);
                 Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.input);
                 OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
-                // if(this.signature.transactionType() != TransactionTypeEnum.R) transactionManager.commit();
-                schedulerCallback.success(signature.executionMode(), eventOutput);
+                transactionManager.commit();
+                schedulerCallback.success(this.signature.executionMode(), eventOutput);
+                // avoid returning indexes to pool before committing
+                txCtx.close();
             } catch (IllegalAccessException | InvocationTargetException e) {
-                LOGGER.log(ERROR, "Error during invoking task "+this.toString()+"\n"+ e);
-                e.printStackTrace(System.out);
-                schedulerCallback.error(signature.executionMode(), this.tid, e);
+                this.handleErrorOnTask(e);
             } catch (Exception e){
-                LOGGER.log(ERROR, "Error not related to invoking task "+this.toString()+"\n"+ e);
-                e.printStackTrace(System.out);
-                schedulerCallback.error(signature.executionMode(), this.tid, e);
+                this.handleGenericError(e);
             }
         }
 
@@ -145,6 +164,15 @@ public final class VmsTransactionTaskBuilder {
 
         public Optional<Object> partitionId() {
             return this.partitionId;
+        }
+
+        @Override
+        public String toString() {
+            return "{"
+                    + "\"batch\":\"" + this.batch + "\""
+                    + ",\"lastTid\":\"" + this.lastTid + "\""
+                    + ",\"tid\":\"" + tid + "\""
+                    + "}";
         }
 
     }

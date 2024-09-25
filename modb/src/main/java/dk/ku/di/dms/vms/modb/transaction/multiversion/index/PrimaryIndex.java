@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
+import static java.lang.System.Logger.Level.WARNING;
 
 /**
  * A consistent view over an index.
@@ -39,6 +40,8 @@ import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
  * when no transactional guarantees are necessary.
  */
 public final class PrimaryIndex implements IMultiVersionIndex {
+
+    private static final System.Logger LOGGER = System.getLogger(PrimaryIndex.class.getName());
 
     private static final Deque<Set<IKey>> WRITE_SET_BUFFER = new ConcurrentLinkedDeque<>();
 
@@ -227,20 +230,19 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      * then extract the updated columns to make constraint violation check faster
      * @return whether it is allowed to proceed with the operation
      */
-    public boolean insert(TransactionContext txCtx, IKey key, Object[] values) {
-        OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
+    public boolean insert(TransactionContext txCtx, IKey key, Object[] record) {
+        OperationSetOfKey operationSet = this.updatesPerKeyMap.get(key);
         boolean pkConstraintViolation;
         // if not delete, violation (it means some tid has written to this PK before)
-        if ( operationSet != null ){
+        if (operationSet != null){
             pkConstraintViolation = operationSet.lastWriteType != WriteType.DELETE;
         } else {
-            // let's check now the index itself. if the key exists, it is a violation
-            pkConstraintViolation = this.primaryKeyIndex.exists(key);
+            pkConstraintViolation = this.primaryKeyIndex.exists(key, record);
         }
-        if(pkConstraintViolation || this.nonPkConstraintViolation(values)) {
+        if(pkConstraintViolation || this.nonPkConstraintViolation(record)) {
             return false;
         }
-        return this.doInsert(txCtx, key, values, operationSet);
+        return this.doInsert(txCtx, key, record, operationSet);
     }
 
     private boolean doInsert(TransactionContext txCtx, IKey key, Object[] values, OperationSetOfKey operationSet) {
@@ -312,7 +314,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             return null;
         }
         IKey key = KeyUtils.buildRecordKey(this.primaryKeyIndex.schema().getPrimaryKeyColumns(), values);
-        if(this.insert( txCtx, key, values )){
+        if(this.insert(txCtx, key, values)){
             return key;
         }
         return null;
@@ -376,6 +378,11 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     @Override
     public void reset(){
         this.writeSetMap.clear();
+        if(this.primaryKeyIndex instanceof UniqueHashBufferIndex){
+            for(var entry : this.updatesPerKeyMap.entrySet()){
+                this.primaryKeyIndex.delete(entry.getKey());
+            }
+        }
         this.updatesPerKeyMap.clear();
         this.keysToFlush.clear();
     }
@@ -397,6 +404,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     private static final boolean GARBAGE_COLLECTION = false;
 
     public void checkpoint(long maxTid){
+        if(this.keysToFlush.isEmpty()) return;
         for(IKey key : this.keysToFlush){
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             if(operationSetOfKey == null){
@@ -422,7 +430,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public void installWrites(TransactionContext txCtx){
         Set<IKey> writeSet = this.removeWriteSet(txCtx);
         if(writeSet == null) {
-            System.out.println("Primary Index: Transaction ID "+txCtx.tid+" could not be found in write set. Perhaps concurrent threads are set to the same TID?");
+            LOGGER.log(WARNING, "Primary Index: Transaction ID "+txCtx.tid+" could not be found in write set. Perhaps concurrent threads are set to the same TID?");
             return;
         }
         this.keysToFlush.addAll(writeSet);
@@ -548,7 +556,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 }
                 /* is it returning a deleted entry???
                 if(updatesPerKeyMap.get(next.getKey()).lastWriteType == WriteType.DELETE){
-                    System.out.println("ATTENTION: "+this.txCtx.tid+" < "+updatesPerKeyMap.get(next.getKey()).peak().key);
+                    LOGGER.log(ERROR,"ATTENTION: "+this.txCtx.tid+" < "+updatesPerKeyMap.get(next.getKey()).peak().key);
                 }
                 */
                 this.currRecord = entry.val().record;

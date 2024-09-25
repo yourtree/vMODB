@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.web_common;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 
@@ -16,7 +17,7 @@ import java.util.concurrent.Future;
 
 public abstract class ModbHttpServer extends StoppableRunnable {
 
-    protected static final List<HttpReadCompletionHandler> sseClients = new CopyOnWriteArrayList<>();
+    protected static final List<HttpReadCompletionHandler> SSE_CLIENTS = new CopyOnWriteArrayList<>();
 
     protected static final class HttpReadCompletionHandler implements CompletionHandler<Integer, Integer> {
 
@@ -74,11 +75,28 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         } else {
                             switch (httpRequest.headers.get("Accept")) {
                                 case "*/*", "application/json" -> {
-                                    String respVms = httpHandler.getAsJson(httpRequest.uri());
-                                    byte[] respBytes = respVms.getBytes(StandardCharsets.UTF_8);
+                                    String dashJson = httpHandler.getAsJson(httpRequest.uri());
+                                    byte[] dashJsonBytes = dashJson.getBytes(StandardCharsets.UTF_8);
                                     String response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
-                                            + respBytes.length + "\r\n\r\n" + respVms;
-                                    this.writeBuffer.put(response.getBytes(StandardCharsets.UTF_8));
+                                            + dashJsonBytes.length + "\r\n\r\n" + dashJson;
+                                    byte[] respBytes = response.getBytes(StandardCharsets.UTF_8);
+                                    // ask memory utils for a byte buffer big enough to fit the seller dashboard
+                                    if(respBytes.length > this.writeBuffer.capacity()) {
+                                        ByteBuffer bigBB = MemoryManager.getTemporaryDirectBuffer(MemoryUtils.nextPowerOfTwo(respBytes.length));
+                                        bigBB.put(respBytes);
+                                        bigBB.flip();
+                                        int result = 0;
+                                        do {
+                                            result += this.connectionMetadata.channel.write(bigBB).get();
+                                        } while (bigBB.hasRemaining());
+                                        assert result == bigBB.limit();
+                                        bigBB.clear();
+                                        MemoryManager.releaseTemporaryDirectBuffer(bigBB);
+                                    } else {
+                                        this.writeBuffer.put(respBytes);
+                                        this.writeBuffer.flip();
+                                        ft = this.connectionMetadata.channel.write(this.writeBuffer);
+                                    }
                                 }
                                 case "application/octet-stream" -> {
                                     byte[] byteArray = httpHandler.getAsBytes(httpRequest.uri());
@@ -86,16 +104,20 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                                             "\r\nContent-Type: application/octet-stream\r\n\r\n";
                                     this.writeBuffer.put(headers.getBytes(StandardCharsets.UTF_8));
                                     this.writeBuffer.put(byteArray);
+                                    this.writeBuffer.flip();
+                                    ft = this.connectionMetadata.channel.write(this.writeBuffer);
                                 }
                                 case "text/event-stream" -> {
                                     this.processSseClient();
                                     return;
                                 }
-                                case null, default -> this.writeBuffer.put(ERROR_RESPONSE_BYTES);
+                                case null, default -> {
+                                    this.writeBuffer.put(ERROR_RESPONSE_BYTES);
+                                    this.writeBuffer.flip();
+                                    ft = this.connectionMetadata.channel.write(this.writeBuffer);
+                                }
                             }
                         }
-                        this.writeBuffer.flip();
-                        ft = this.connectionMetadata.channel.write(this.writeBuffer);
                     }
                     case "POST" -> {
                         httpHandler.post(httpRequest.uri(), httpRequest.body());
@@ -127,7 +149,8 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             } catch (Exception e){
                 // LOGGER.log(WARNING, me.identifier+": Error caught in HTTP handler.\n"+e);
                 this.writeBuffer.clear();
-                this.writeBuffer.put(ERROR_RESPONSE_BYTES);
+                byte[] errorBytes = ("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "+e.getMessage().length()+"\r\n\r\n"+e.getMessage()).getBytes(StandardCharsets.UTF_8);
+                this.writeBuffer.put(errorBytes);
                 this.writeBuffer.flip();
                 this.connectionMetadata.channel.write(writeBuffer);
             }
@@ -144,7 +167,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             this.writeBuffer.clear();
             this.readBuffer.clear();
             this.connectionMetadata.channel.read(this.readBuffer, 0, this);
-            sseClients.add(this);
+            SSE_CLIENTS.add(this);
         }
 
         public void sendToSseClient(long numTIDsCommitted){
@@ -157,7 +180,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 } while (this.writeBuffer.hasRemaining());
             } catch (InterruptedException | ExecutionException e) {
                 System.out.println("Error caught: "+e.getMessage());
-                sseClients.remove(this);
+                SSE_CLIENTS.remove(this);
                 // e.printStackTrace(System.out);
             }
             this.writeBuffer.clear();
@@ -165,7 +188,9 @@ public abstract class ModbHttpServer extends StoppableRunnable {
 
         private static final byte[] OK_RESPONSE_BYTES = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
-        private static final byte[] ERROR_RESPONSE_BYTES = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nBad Request".getBytes(StandardCharsets.UTF_8);
+        private static final String UNKNOWN_ACCEPT = "Accept header value is not supported";
+
+        private static final byte[] ERROR_RESPONSE_BYTES = ("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "+UNKNOWN_ACCEPT.length()+"\r\n\r\n"+UNKNOWN_ACCEPT).getBytes(StandardCharsets.UTF_8);
 
         @Override
         public void completed(Integer result, Integer attachment) {
@@ -175,7 +200,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 MemoryManager.releaseTemporaryDirectBuffer(this.readBuffer);
                 MemoryManager.releaseTemporaryDirectBuffer(this.writeBuffer);
                 // LOGGER.log(DEBUG,me.identifier+": HTTP client has disconnected!");
-                sseClients.remove(this);
+                SSE_CLIENTS.remove(this);
                 return;
             }
             this.readBuffer.flip();

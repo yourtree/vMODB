@@ -38,9 +38,11 @@ public final class Main {
 
     private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
 
+    private static VmsApplication VMS;
+
     public static void main(String[] args) throws Exception {
         Properties properties = ConfigUtils.loadProperties();
-        VmsApplication vms = initVms(properties);
+        VMS = initVms(properties);
 //        initHttpServer(properties, vms);
     }
 
@@ -59,6 +61,7 @@ public final class Main {
     }
 
     private static class SellerHttpHandlerJdk2 implements IHttpHandler {
+
         private final ITransactionManager transactionManager;
         private final IOrderEntryRepository repository;
 
@@ -77,7 +80,8 @@ public final class Main {
         public String getAsJson(String uri) throws Exception {
             String[] uriSplit = uri.split("/");
             int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
-            try (var txCtx = this.transactionManager.beginTransaction(0, 0, 0, true)) {
+            long lastTid = VMS.lastTidFinished();
+            try (var txCtx = this.transactionManager.beginTransaction(lastTid, 0, 0, true)) {
                 List<OrderEntry> orderEntries = this.repository.getOrderEntriesBySellerId(sellerId);
                 if(orderEntries.isEmpty()) return EMPTY_DASHBOARD.toString();
                 LOGGER.log(INFO, "APP: Seller "+sellerId+" has "+orderEntries.size()+" entries in seller dashboard");

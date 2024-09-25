@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.clause.WhereClauseElement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityUtils;
@@ -43,14 +44,6 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     private final Map<String, VarHandle> entityFieldMap;
 
     private final Map<String, VarHandle> pkFieldMap;
-
-    /*
-     * Cache of objects in memory.
-     * Circular buffer of records (represented as object arrays) for a given index
-     * Should be used by the repository facade, since it is the one who is converting the payloads from the user code.
-     * Key is the hash code of a table
-     */
-    // private final CircularBuffer objectCacheStore;
 
     /**
      * Attribute set after database is loaded
@@ -165,14 +158,15 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
     /**
      * An optimization is just setting the PK into the entity passed as parameter.
      * Another optimization is checking if PK is generated before returning the entity,
-     * but this is missing for now
+     * but this is missing for now. However, this method is probably used when the PK
+     * must be retrieved
      */
     @Override
     public final T insertAndGet(T entity){
         Object[] values = this.extractFieldValuesFromEntityObject(entity);
         Object[] newValues = this.operationalAPI.insertAndGet(this.table, values);
         for(var entry : this.pkFieldMap.entrySet()){
-            int i = this.table.underlyingPrimaryKeyIndex().schema().columnPosition(entry.getKey());
+            int i = this.table.schema().columnPosition(entry.getKey());
             if(newValues[i] == null){
                 continue;
             }
@@ -236,6 +230,7 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         this.operationalAPI.deleteAll(this.table, parsedEntities);
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public final T parseObjectIntoEntity(Object[] object){
         try {
             // all entities must have default constructor
@@ -243,14 +238,23 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
             int i;
             for(Map.Entry<String,VarHandle> entry : this.entityFieldMap.entrySet()){
                 // must get the index of the column first
-                i = this.table.underlyingPrimaryKeyIndex().schema().columnPosition(entry.getKey());
+                i = this.table.schema().columnPosition(entry.getKey());
                 if(object[i] == null){
                     continue;
                 }
-                entry.getValue().set(entity, object[i]);
+                try {
+                    entry.getValue().set(entity, object[i]);
+                } catch (ClassCastException e){
+                    // has the entry come from raw index?
+                    if(this.table.schema().columnDataType(i) == DataType.ENUM && object[i] instanceof String objStr && !objStr.isBlank()){
+                        entry.getValue().set(entity, Enum.valueOf((Class)entry.getValue().varType(), objStr));
+                    } else {
+                        throw new RuntimeException();
+                    }
+                }
             }
             return entity;
-        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+        } catch (ClassCastException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
     }

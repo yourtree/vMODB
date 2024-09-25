@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.marketplace.common.entities.OrderItem;
 import dk.ku.di.dms.vms.marketplace.common.events.InvoiceIssued;
 import dk.ku.di.dms.vms.marketplace.common.inputs.CustomerCheckout;
 import dk.ku.di.dms.vms.marketplace.seller.dtos.SellerDashboard;
+import dk.ku.di.dms.vms.marketplace.seller.entities.OrderEntry;
 import dk.ku.di.dms.vms.marketplace.seller.entities.Seller;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
@@ -26,11 +27,23 @@ public final class SellerTest {
 
     private static final int LAST_TID = 10;
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testParseEnumDynamically() throws Exception {
+        VmsApplication vms = getVmsApplication();
+        vms.start();
+        Object[] entry = new Object[]{
+                1, 1, 1, 1, "c_o_id", 1, "test", "test", 1, 1, 1, 1, 1, 1, 1, null, null, "CREATED", "created"
+        };
+        var orderEntryRepository = (AbstractProxyRepository<OrderEntry.OrderEntryId, OrderEntry>) vms.getRepositoryProxy("order_entries");
+        OrderEntry oe = orderEntryRepository.parseObjectIntoEntity(entry);
+        Assert.assertNotNull(oe);
+    }
+
     @Test
     public void testComplexSellerDashboard() throws Exception {
         VmsApplication vms = getVmsApplication();
         vms.start();
-
         CustomerCheckout customerCheckout = new CustomerCheckout(
                 1, "test", "test", "test", "test","test", "test", "test",
                 "CREDIT_CARD","test","test","test", "test", "test", 1,"1");
@@ -105,7 +118,6 @@ public final class SellerTest {
     private static void insertSellers(VmsApplication vms) {
         var sellerTable = vms.getTable("sellers");
         var sellerRepository = (AbstractProxyRepository<Integer, Seller>) vms.getRepositoryProxy("sellers");
-
         for(int i = 1; i <= MAX_SELLERS; i++){
             var seller = new Seller(i, "test", "test", "test",
                     "test", "test", "test", "test",

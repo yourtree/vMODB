@@ -2,9 +2,7 @@ package dk.ku.di.dms.vms.modb.common.type;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 
-import java.nio.ByteBuffer;
 import java.util.Date;
-import java.util.function.Function;
 
 import static dk.ku.di.dms.vms.modb.common.type.Constants.DEFAULT_MAX_SIZE_STRING;
 
@@ -25,7 +23,7 @@ public final class DataTypeUtils {
             case CHAR -> {
                 return UNSAFE.getChar(null, address);
             }
-            case STRING -> {
+            case STRING, ENUM -> {
                 StringBuilder sb = new StringBuilder();
                 long currAddress = address;
                 for(int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
@@ -57,54 +55,6 @@ public final class DataTypeUtils {
         }
     }
 
-    /**
-     * Used by the append-only buffer?
-     * @param dt Data type
-     * @return the corresponding function
-     */
-    public static Function<ByteBuffer,?> getReadFunction(DataType dt){
-        switch (dt){
-            case BOOL -> {
-                 return ByteBuffer::get;
-             }
-             case INT -> {
-                     return ByteBuffer::getInt;
-                 }
-            case CHAR -> {
-                return ByteBuffer::getChar;
-            }
-             case STRING -> {
-                     return DataTypeUtils::getString;
-                 }
-             case LONG, DATE -> {
-                     return ByteBuffer::getLong;
-                 }
-             case FLOAT -> {
-                     return ByteBuffer::getFloat;
-                 }
-             case DOUBLE -> {
-                     return ByteBuffer::getDouble;
-                 }
-             default -> throw new IllegalStateException("Unknown data type");
-        }
-    }
-
-    public static Object callReadFunction(long address, DataType dt){
-        switch (dt){
-            case BOOL -> { return UNSAFE.getBoolean(null, address); }
-            case INT -> { return UNSAFE.getInt(null, address); }
-            case CHAR -> { return UNSAFE.getChar(null, address); }
-            case STRING -> {
-                return "";
-            }
-            case LONG -> { return UNSAFE.getLong(null, address); }
-            case DATE -> { return new Date(UNSAFE.getLong(null, address)); }
-            case FLOAT -> { return UNSAFE.getFloat(null, address); }
-            case DOUBLE -> { return UNSAFE.getDouble(null, address); }
-            default -> throw new IllegalStateException("Unknown data type");
-        }
-    }
-
     // just a wrapper
     public static void callWriteFunction(long address, DataType dt, Object value){
         switch (dt){
@@ -112,22 +62,38 @@ public final class DataTypeUtils {
                     UNSAFE.putBoolean(null, address, (boolean)value);
             case INT -> UNSAFE.putInt(null, address, (int)value);
             case CHAR -> UNSAFE.putChar(null, address, (char)value);
-            case STRING -> {
+            case STRING, ENUM -> {
                 long currPos = address;
                 int i = 0;
-                if(value instanceof Character[] charArray) {
-                    int length = Math.min(charArray.length, DEFAULT_MAX_SIZE_STRING);
-                    while(i < length) {
-                        UNSAFE.putChar(null, currPos, charArray[i]);
-                        currPos += Character.BYTES;
-                        i++;
+                switch (value) {
+                    case String strValue -> {
+                        int length = Math.min(strValue.length(), DEFAULT_MAX_SIZE_STRING);
+                        while (i < length) {
+                            UNSAFE.putChar(null, currPos, strValue.charAt(i));
+                            currPos += Character.BYTES;
+                            i++;
+                        }
                     }
-                } else if (value instanceof String strValue){
-                    int length = Math.min(strValue.length(), DEFAULT_MAX_SIZE_STRING);
-                    while(i < length) {
-                        UNSAFE.putChar(null, currPos, strValue.charAt(i));
-                        currPos += Character.BYTES;
-                        i++;
+                    case Enum<?> anEnum -> {
+                        String strValue = value.toString();
+                        int length = Math.min(strValue.length(), DEFAULT_MAX_SIZE_STRING);
+                        while (i < length) {
+                            UNSAFE.putChar(null, currPos, strValue.charAt(i));
+                            currPos += Character.BYTES;
+                            i++;
+                        }
+                    }
+                    case Character[] charArray -> {
+                        int length = Math.min(charArray.length, DEFAULT_MAX_SIZE_STRING);
+                        while (i < length) {
+                            UNSAFE.putChar(null, currPos, charArray[i]);
+                            currPos += Character.BYTES;
+                            i++;
+                        }
+                    }
+                    case null, default -> {
+                        assert value != null;
+                        throw new IllegalStateException("Cannot write type " + value.getClass());
                     }
                 }
             }
@@ -143,49 +109,6 @@ public final class DataTypeUtils {
             case DOUBLE -> UNSAFE.putDouble(null, address, (double)value);
             default -> throw new IllegalStateException("Unknown data type");
         }
-    }
-
-    public static void callWriteFunction(ByteBuffer buffer, DataType dt, Object value){
-        switch (dt){
-            case BOOL -> // byte is used. on unsafe, the boolean is used
-                    buffer.put( (byte)value);
-            case INT -> buffer.putInt( (int)value);
-            case CHAR -> buffer.putChar( (char)value);
-            case STRING -> {
-                int start = buffer.position();
-                if(value instanceof Character[] charArray) {
-                    for (int i = 0; i < DEFAULT_MAX_SIZE_STRING && i < charArray.length; i++) {
-                        buffer.putChar(charArray[i]);
-                    }
-                } else if (value instanceof String strValue){
-                    for (int i = 0; i < DEFAULT_MAX_SIZE_STRING && i < strValue.length(); i++) {
-                        buffer.putChar(strValue.charAt(i));
-                    }
-                }
-                buffer.position(start + (Character.BYTES * DEFAULT_MAX_SIZE_STRING));
-            }
-            case LONG, DATE -> buffer.putLong((long)value);
-            case FLOAT -> buffer.putFloat( (float)value);
-            case DOUBLE -> buffer.putDouble((double)value);
-            default -> throw new IllegalStateException("Unknown data type");
-        }
-    }
-
-    private static String getString(ByteBuffer buffer) {
-        if(buffer.isDirect()){
-            StringBuilder sb = new StringBuilder();
-            long currAddress = MemoryUtils.getByteBufferAddress(buffer);
-            for(int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
-                sb.append( UNSAFE.getChar(currAddress) );
-                currAddress += Character.BYTES;
-            }
-            return sb.toString();
-        }
-        StringBuilder sb = new StringBuilder();
-        for(int i = 0; i < DEFAULT_MAX_SIZE_STRING; i++) {
-            sb.append( buffer.getChar() );
-        }
-        return sb.toString();
     }
 
     public static DataType getColumnDataTypeFromAttributeType(Class<?> attributeType) {
@@ -245,9 +168,10 @@ public final class DataTypeUtils {
             case DATE -> {
                 return Date.class;
             }
+            case ENUM -> {
+                return Enum.class;
+            }
             default -> throw new IllegalStateException(dataType + " is not supported.");
         }
-
     }
-
 }

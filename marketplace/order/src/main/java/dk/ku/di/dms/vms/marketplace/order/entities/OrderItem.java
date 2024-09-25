@@ -30,7 +30,7 @@ public final class OrderItem implements IEntity<OrderItem.OrderItemId> {
     }
 
     @Id
-    @VmsForeignKey( table = Order.class, column = "customer_id")
+    @VmsForeignKey(table = Order.class, column = "customer_id")
     public int customer_id;
 
     @Id

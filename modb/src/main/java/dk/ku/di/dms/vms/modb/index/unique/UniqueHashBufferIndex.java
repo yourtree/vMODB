@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Header;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteBufferIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
@@ -13,6 +14,7 @@ import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
+import static java.lang.System.Logger.Level.*;
 
 /**
  * This index does not support growing number of keys.
@@ -21,9 +23,11 @@ import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
  */
 public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements ReadWriteBufferIndex<IKey> {
 
+    private static final System.Logger LOGGER = System.getLogger(UniqueHashBufferIndex.class.getName());
+
     private final RecordBufferContext recordBufferContext;
 
-    private int size;
+    private long size;
 
     private final long recordSize;
 
@@ -32,6 +36,14 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         this.recordBufferContext = recordBufferContext;
         this.recordSize = schema.getRecordSize();
         this.size = 0;
+        long lastPos = this.recordBufferContext.address +
+                (this.recordBufferContext.capacity * this.recordSize) - 1;
+        // initialize all entries
+        long pos = this.recordBufferContext.address;
+        while(pos < lastPos){
+            UNSAFE.putByte(pos, Header.INACTIVE_BYTE);
+            pos = pos + this.recordSize;
+        }
     }
 
     /**
@@ -77,17 +89,37 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         long currAddress = pos + Schema.RECORD_HEADER;
         for(int index = 0; index < maxColumns; index++) {
             DataType dt = this.schema().columnDataType(index);
-            DataTypeUtils.callWriteFunction( currAddress, dt, record[index] );
+            if(record[index] != null) {
+                DataTypeUtils.callWriteFunction(currAddress, dt, record[index]);
+            }
             currAddress += dt.value;
         }
+    }
+
+    private static int DEFAULT_ATTEMPTS = 3;
+
+    private long getFreePositionToInsert(IKey key){
+        int attemptsToFind = DEFAULT_ATTEMPTS;
+        int aux = 0;
+        long pos;
+        boolean found;
+        do {
+            pos = this.getPosition(key.hashCode() + aux);
+            attemptsToFind--;
+            aux++;
+            found = UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE;
+        } while (!found && attemptsToFind > 0);
+        if(found) return pos;
+        return -1;
     }
 
     @Override
     public void insert(IKey key, Object[] record){
         try {
-            long pos = this.getPosition(key.hashCode());
-            if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE){
-                System.out.println("Overwriting previously written record. Key: " + key+ " Hash: " + key.hashCode());
+            long pos = this.getFreePositionToInsert(key);
+            if(pos == -1){
+                LOGGER.log(ERROR, "Cannot find an empty entry for record. Perhaps should increase number of entries?\nKey: " + key+ " Hash: " + key.hashCode());
+                return;
             }
             UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
             UNSAFE.putInt(null, pos + Header.SIZE, key.hashCode());
@@ -102,7 +134,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
                 currAddress += dt.value;
             }
             this.updateSize(1);
-        } catch (Exception e ){
+        } catch (Exception e){
             throw new RuntimeException("Error inserting record: "+e.getMessage());
         }
     }
@@ -129,6 +161,21 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     }
 
     @Override
+    public boolean exists(IKey key, Object[] record) {
+        int attemptsToFind = DEFAULT_ATTEMPTS;
+        int aux = 0;
+        long pos = this.getPosition(key.hashCode() + aux);
+        while(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE && attemptsToFind > 0){
+            Object[] existingRecord = this.readFromIndex(pos + Schema.RECORD_HEADER);
+            IKey existingKey = KeyUtils.buildRecordKey(this.schema().getPrimaryKeyColumns(), existingRecord);
+            if(existingKey.equals(key)) return true;
+            attemptsToFind--;
+            aux++;
+        }
+        return false;
+    }
+
+    @Override
     public Object[] lookupByKey(IKey key){
         long pos = this.getPosition(key.hashCode());
         if(this.exists(pos))
@@ -143,7 +190,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public int size() {
-        return this.size;
+        return (int) this.size;
     }
 
     @Override

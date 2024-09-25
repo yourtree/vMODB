@@ -428,9 +428,9 @@ public final class EmbedMetadataLoader {
         }
         LOGGER.log(INFO, "Attempt to create new file in directory: "+filePath);
         if(file.getParentFile().mkdirs()){
-            LOGGER.log(INFO, "Parent directory required being created.");
+            LOGGER.log(INFO, "Parent directory ("+filePath+") required being created.");
         } else {
-            LOGGER.log(INFO, "Parent directory did not need being created.");
+            LOGGER.log(INFO, "Parent directory ("+filePath+") did not need being created.");
         }
         try {
             FileChannel fc = FileChannel.open(Paths.get(filePath),
@@ -439,7 +439,7 @@ public final class EmbedMetadataLoader {
                     StandardOpenOption.SPARSE,
                     StandardOpenOption.READ,
                     StandardOpenOption.WRITE);
-            LOGGER.log(INFO, "Attempt to create new file in directory: "+filePath+" completed successfully.");
+            LOGGER.log(INFO, "Attempt to create new file in directory completed successfully: "+filePath);
             return fc.map(FileChannel.MapMode.READ_WRITE, 0, bytes, Arena.ofShared());
         } catch (IOException e) {
             throw new RuntimeException(e);
