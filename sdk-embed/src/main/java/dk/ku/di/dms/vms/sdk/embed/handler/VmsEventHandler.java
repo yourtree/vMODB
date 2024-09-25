@@ -252,7 +252,7 @@ public final class VmsEventHandler extends ModbHttpServer {
         }
         LOGGER.log(INFO, this.me.identifier + ": All TIDs for the batch " + thisBatch.batch + " have been executed");
         thisBatch.setStatus(BatchContext.BATCH_COMPLETED);
-        if(this.options.logging()){
+        if(this.options.checkpointing()){
             LOGGER.log(INFO, this.me.identifier + ": Requesting checkpoint for batch " + thisBatch.batch);
             this.checkpointExecutor.execute(()->checkpoint(thisBatch.batch, batchMetadata.maxTidExecuted));
         }
@@ -1039,7 +1039,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             }
             LOGGER.log(INFO, me.identifier + ": All TIDs for the batch " + batchCommitCommand.batch() + " have been executed");
             batchContext.setStatus(BatchContext.BATCH_COMPLETED);
-            if(options.logging()){
+            if(options.checkpointing()){
                 LOGGER.log(INFO, me.identifier + ": Requesting checkpoint for batch " + batchCommitCommand.batch());
                 checkpointExecutor.execute(()->checkpoint(batchCommitCommand.batch(), batchMetadata.maxTidExecuted));
             }

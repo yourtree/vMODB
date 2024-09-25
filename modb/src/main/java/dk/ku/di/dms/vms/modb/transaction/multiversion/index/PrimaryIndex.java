@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
+import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.WARNING;
 
 /**
@@ -405,6 +406,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     public void checkpoint(long maxTid){
         if(this.keysToFlush.isEmpty()) return;
+        int numRecords = 0;
         for(IKey key : this.keysToFlush){
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             if(operationSetOfKey == null){
@@ -423,8 +425,14 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 case INSERT -> this.primaryKeyIndex.insert(key, entry.val().record);
                 case DELETE -> this.primaryKeyIndex.delete(key);
             }
+            numRecords++;
         }
-        this.primaryKeyIndex.flush();
+        if(numRecords > 0) {
+            LOGGER.log(DEBUG, "Flushing "+numRecords+" to disk.");
+            this.primaryKeyIndex.flush();
+        } else {
+            LOGGER.log(WARNING, "No records have been flushed. Schema: \n"+this.primaryKeyIndex.schema());
+        }
     }
 
     public void installWrites(TransactionContext txCtx){
