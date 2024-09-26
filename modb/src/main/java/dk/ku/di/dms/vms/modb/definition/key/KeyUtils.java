@@ -3,6 +3,10 @@ package dk.ku.di.dms.vms.modb.definition.key;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
+import dk.ku.di.dms.vms.modb.definition.key.composite.NCompositeKey;
+import dk.ku.di.dms.vms.modb.definition.key.composite.PairCompositeKey;
+import dk.ku.di.dms.vms.modb.definition.key.composite.QuadrupleCompositeKey;
+import dk.ku.di.dms.vms.modb.definition.key.composite.TripleCompositeKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 
 import java.util.Arrays;
@@ -12,17 +16,30 @@ public final class KeyUtils {
     private KeyUtils(){}
 
     public static IKey buildRecordKey(int[] columns, Object[] object){
-        if(columns.length == 1){
-            return SimpleKey.of( object[columns[0]] );
+        switch (columns.length){
+            case 1 -> {
+                return SimpleKey.of( object[columns[0]] );
+            }
+            case 2 -> {
+                return PairCompositeKey.of(object[columns[0]], object[columns[1]]);
+            }
+            case 3 -> {
+                return TripleCompositeKey.of(object[columns[0]], object[columns[1]], object[columns[2]]);
+            }
+            case 4 -> {
+                return QuadrupleCompositeKey.of(object[columns[0]], object[columns[1]], object[columns[2]], object[columns[3]]);
+            }
+            default -> {
+                if(columns.length == object.length){
+                    return NCompositeKey.of( object );
+                }
+                Object[] values = new Object[columns.length];
+                for(int i = 0; i < columns.length; i++){
+                    values[i] = object[columns[i]];
+                }
+                return NCompositeKey.of( values );
+            }
         }
-        if(columns.length == object.length){
-            return CompositeKey.of( object );
-        }
-        Object[] values = new Object[columns.length];
-        for(int i = 0; i < columns.length; i++){
-            values[i] = object[columns[i]];
-        }
-        return CompositeKey.of( values );
     }
 
     public static IKey buildRecordKeyNoHeader(Schema schema, int[] columns, long srcAddress){
@@ -42,7 +59,7 @@ public final class KeyUtils {
                 // make it default to get the correct offset next iteration
                 currAddress = srcAddress;
             }
-            key = CompositeKey.of( values );
+            key = NCompositeKey.of( values );
         }
         return key;
     }
@@ -71,19 +88,19 @@ public final class KeyUtils {
                 // make it default to get the correct offset next iteration
                 currAddress = srcAddress;
             }
-            key = CompositeKey.of( values );
+            key = NCompositeKey.of( values );
         }
         return key;
     }
 
     public static IKey buildIndexKey(Object[] values){
         if(values.length == 1) return SimpleKey.of(values[0]);
-        return CompositeKey.of(values);
+        return NCompositeKey.of(values);
     }
 
     public static IIndexKey buildIndexKey(int[] values){
         if(values.length == 1) return SimpleKey.of(values[0]);
-        return CompositeKey.of(Arrays.stream(values).boxed().toArray(Integer[]::new));
+        return NCompositeKey.of(Arrays.stream(values).boxed().toArray(Integer[]::new));
     }
 
 }

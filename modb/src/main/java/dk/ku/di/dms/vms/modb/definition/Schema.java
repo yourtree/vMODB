@@ -51,11 +51,11 @@ public final class Schema {
             switch (columnDataTypes[j]){
                 case LONG, DATE -> acc += Long.BYTES;
                 case CHAR -> acc += Character.BYTES;
-                case STRING -> acc += (Character.BYTES * Constants.DEFAULT_MAX_SIZE_STRING);
+                case STRING, ENUM -> acc += (Character.BYTES * Constants.DEFAULT_MAX_SIZE_STRING);
                 case INT -> acc += Integer.BYTES;
                 case FLOAT -> acc += Float.BYTES;
                 case DOUBLE -> acc += Double.BYTES;
-                case BOOL -> acc += 1; // byte size
+                case BOOL -> acc += 1;
             }
         }
 

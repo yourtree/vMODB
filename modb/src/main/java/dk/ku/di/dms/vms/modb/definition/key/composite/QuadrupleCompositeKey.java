@@ -1,0 +1,45 @@
+package dk.ku.di.dms.vms.modb.definition.key.composite;
+
+import dk.ku.di.dms.vms.modb.definition.key.IKey;
+
+import java.util.Objects;
+
+public final class QuadrupleCompositeKey extends BaseComposite implements IKey {
+
+    private final Object value0;
+    private final Object value1;
+    private final Object value2;
+    private final Object value3;
+
+    public static QuadrupleCompositeKey of(Object value0, Object value1, Object value2, Object value3){
+        return new QuadrupleCompositeKey(value0, value1, value2, value3);
+    }
+
+    private QuadrupleCompositeKey(Object value0, Object value1, Object value2, Object value3) {
+        super(Objects.hash(value0, value1, value2, value3));
+        this.value0 = value0;
+        this.value1 = value1;
+        this.value2 = value2;
+        this.value3 = value3;
+    }
+
+    @Override
+    public boolean equals(Object key){
+        return key instanceof QuadrupleCompositeKey pairCompositeKey &&
+                this.value0.equals(pairCompositeKey.value0) &&
+                this.value1.equals(pairCompositeKey.value1) &&
+                this.value2.equals(pairCompositeKey.value2) &&
+                this.value3.equals(pairCompositeKey.value3);
+    }
+
+    @Override
+    public String toString() {
+        return "{"
+                + "\"value0\":" + this.value0
+                + ",\"value1\":" + this.value1
+                + ",\"value2\":" + this.value2
+                + ",\"value3\":" + this.value3
+                + "}";
+    }
+
+}

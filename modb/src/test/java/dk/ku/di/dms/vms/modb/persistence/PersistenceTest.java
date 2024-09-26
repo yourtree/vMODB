@@ -38,6 +38,34 @@ public final class PersistenceTest {
     private static final long TEN_GB = ONE_GB * 10;
 
     @Test
+    public void testCollision() throws IOException {
+        Schema schema = new Schema(new String[]{"id", "test"}, new DataType[]{ DataType.INT, DataType.STRING },
+                new int[]{ 0 }, null, false );
+        var fileName = "mapped_file_test.data";
+        Path path = Paths.get(fileName);
+        var fc = FileChannel.open(path,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.READ,
+                StandardOpenOption.SPARSE,
+                StandardOpenOption.WRITE
+        );
+        MemorySegment memorySegment = fc.map(FileChannel.MapMode.READ_WRITE, 0,
+                7L * schema.getRecordSize(), Arena.ofShared());
+        var bufCtx = new RecordBufferContext( memorySegment,7);
+        var index = new UniqueHashBufferIndex(bufCtx, schema, schema.getPrimaryKeyColumns());
+
+        index.insert(IntKey.of(10), new Object[] { 10, "test" } );
+        index.insert(IntKey.of(14), new Object[] { 14, "test" } );
+        index.insert(IntKey.of(24), new Object[] { 24, "test" } );
+
+        Assert.assertEquals(3, index.size());
+
+        index.reset();
+
+    }
+
+    @Test
     public void testMemoryMapping() throws IOException {
         Schema schema = new Schema(new String[]{"id", "test"}, new DataType[]{ DataType.INT, DataType.STRING },
                 new int[]{ 0 }, null, false );

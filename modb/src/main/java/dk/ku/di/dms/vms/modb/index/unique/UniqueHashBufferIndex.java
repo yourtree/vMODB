@@ -53,14 +53,15 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
                 (this.recordBufferContext.capacity * this.recordSize) - 1;
         long pos = this.recordBufferContext.address;
         while(pos < lastPos){
-            if(UNSAFE.getByte(pos) == Header.ACTIVE_BYTE){
+            if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE){
+                UNSAFE.putByte(null, pos, Header.INACTIVE_BYTE);
                 this.size--;
+                if(this.size == 0) break;
             }
-            UNSAFE.putByte(pos, Header.INACTIVE_BYTE);
             pos = pos + this.recordSize;
         }
         if(this.size > 0){
-            LOGGER.log(ERROR, "The reset did not clean all the entries!");
+            LOGGER.log(WARNING, "The reset did not clean all the entries. Size left out: "+this.size);
         }
         this.size = 0;
     }
@@ -91,7 +92,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     }
 
     private void updateSize(int val){
-        this.size = size + val;
+        this.size = this.size + val;
     }
 
     /**
@@ -126,7 +127,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         }
     }
 
-    private static int DEFAULT_ATTEMPTS = 5;
+    private static int DEFAULT_ATTEMPTS = 10;
 
     private long getFreePositionToInsert(IKey key){
         int attemptsToFind = DEFAULT_ATTEMPTS;
@@ -134,7 +135,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         long pos;
         boolean busy;
         do {
-            pos = this.getPosition(key.hashCode() + aux);
+            pos = this.getPosition(key.hashCode() + Math.multiplyExact(aux,2));
             attemptsToFind--;
             aux++;
             busy = UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE;

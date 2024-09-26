@@ -30,6 +30,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
         for (Future<?> future : TRACKED_FUTURES) {
             future.cancel(true);
         }
+        TRACKED_FUTURES.clear();
     }
 
     protected static final class HttpReadCompletionHandler implements CompletionHandler<Integer, Integer> {
@@ -153,7 +154,9 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         ft = this.connectionMetadata.channel.write(this.writeBuffer);
                     }
                     case "PATCH" -> {
-                        if(httpRequest.uri().contains("reset")) cancelBackgroundTasks();
+                        if(httpRequest.uri().contains("reset")) {
+                            cancelBackgroundTasks();
+                        }
                         httpHandler.patch(httpRequest.uri(), httpRequest.body());
                         this.writeBuffer.put(OK_RESPONSE_BYTES);
                         this.writeBuffer.flip();

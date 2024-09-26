@@ -1,10 +1,11 @@
 package dk.ku.di.dms.vms.modb.definition.key;
 
+import dk.ku.di.dms.vms.modb.definition.key.composite.NCompositeKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 
 /**
  * A value that serves both for identifying a unique row (e.g., as PK) or a unique index entry.
- * In this case, the hash code is the hash of the object itself rather than the composition of values as in {@link CompositeKey}
+ * In this case, the hash code is the hash of the object itself rather than the composition of values as in {@link NCompositeKey}
  */
 public final class SimpleKey implements IKey, IIndexKey {
 

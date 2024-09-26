@@ -207,7 +207,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     @Override
     public void deleteByKey(Table table, Object[] keyValues) {
-        IKey pk = KeyUtils.buildIndexKey(keyValues);
+        IKey pk = KeyUtils.buildRecordKey(table.schema().getPrimaryKeyColumns(), keyValues);
         this.deleteByKey(this.txCtxMap.get(Thread.currentThread().threadId()), table, pk);
     }
 
@@ -235,14 +235,14 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     }
 
     @Override
-    public boolean exists(PrimaryIndex primaryKeyIndex, Object[] valuesOfKey){
-        IKey pk = KeyUtils.buildIndexKey(valuesOfKey);
-        return primaryKeyIndex.exists(this.txCtxMap.get(Thread.currentThread().threadId()), pk);
+    public boolean exists(PrimaryIndex index, Object[] valuesOfKey){
+        IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), valuesOfKey);
+        return index.exists(this.txCtxMap.get(Thread.currentThread().threadId()), pk);
     }
 
     @Override
     public Object[] lookupByKey(PrimaryIndex index, Object[] valuesOfKey){
-        IKey pk = KeyUtils.buildIndexKey(valuesOfKey);
+        IKey pk = KeyUtils.buildRecordKey(index.underlyingIndex().schema().getPrimaryKeyColumns(), valuesOfKey);
         return index.lookupByKey(this.txCtxMap.get(Thread.currentThread().threadId()), pk);
     }
 
