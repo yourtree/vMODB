@@ -15,7 +15,7 @@ import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 
-import static java.lang.System.Logger.Level.ERROR;
+import static java.lang.System.Logger.Level.*;
 
 /**
  * This index does not support growing number of keys.
@@ -37,14 +37,32 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         this.recordBufferContext = recordBufferContext;
         this.recordSize = schema.getRecordSize();
         this.size = 0;
+        this.reset();
+    }
+
+    /**
+     * Initialize all entries
+     */
+    @Override
+    public void reset() {
+        if(this.size == 0){
+            LOGGER.log(DEBUG, "Size of buffer is zero. No need to reset.");
+            return;
+        }
         long lastPos = this.recordBufferContext.address +
                 (this.recordBufferContext.capacity * this.recordSize) - 1;
-        // initialize all entries
         long pos = this.recordBufferContext.address;
         while(pos < lastPos){
+            if(UNSAFE.getByte(pos) == Header.ACTIVE_BYTE){
+                this.size--;
+            }
             UNSAFE.putByte(pos, Header.INACTIVE_BYTE);
             pos = pos + this.recordSize;
         }
+        if(this.size > 0){
+            LOGGER.log(ERROR, "The reset did not clean all the entries!");
+        }
+        this.size = 0;
     }
 
     /**
@@ -54,7 +72,10 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
      */
     private long getPosition(int key){
         long logicalPosition = (key & 0x7fffffff) % this.recordBufferContext.capacity;
-        return this.recordBufferContext.address + ( this.recordSize * logicalPosition );
+        if(logicalPosition > 1)
+            return this.recordBufferContext.address + ( this.recordSize * (logicalPosition-1) );
+        assert logicalPosition > 0;
+        return this.recordBufferContext.address;
     }
 
     @Override
@@ -137,6 +158,8 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         try {
             long pos = this.getFreePositionToInsert(key);
             if(pos == -1){
+                // https://en.wikipedia.org/wiki/Hash_table#Collision_resolution
+                // quadratic probing
                 LOGGER.log(ERROR, "Cannot find an empty entry for record. Perhaps should increase number of entries?\nKey: " + key+ " Hash: " + key.hashCode());
                 return;
             }

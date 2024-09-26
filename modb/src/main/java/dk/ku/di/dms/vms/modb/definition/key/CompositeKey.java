@@ -13,36 +13,32 @@ import java.util.Objects;
  */
 public final class CompositeKey implements IKey, IIndexKey {
 
-    private final Object[] value;
+    private final Object[] values;
 
     public static CompositeKey of(Object[] values){
         return new CompositeKey(values);
     }
 
     private CompositeKey(Object[] values) {
-        this.value = values;
+        this.values = values;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(this.value);
+        return Objects.hash(this.values);
     }
 
     @Override
     public boolean equals(Object key){
         return key instanceof CompositeKey compositeKey &&
-            Arrays.equals(this.value, compositeKey.value);
+            Arrays.equals(this.values, compositeKey.values);
     }
 
     @Override
     public String toString() {
         return "{"
-                + "\"value\":" + Arrays.toString(this.value)
+                + "\"values\":" + Arrays.toString(this.values)
                 + "}";
-    }
-
-    public Object[] getValue() {
-        return value;
     }
 
 }

@@ -39,7 +39,7 @@ public final class SimpleKey implements IKey, IIndexKey {
     @Override
     public String toString() {
         return "{" +
-                "value =" + this.value +
+                "value = " + this.value +
                 '}';
     }
 

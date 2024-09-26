@@ -74,7 +74,8 @@ public final class VmsComplexTransactionTask implements Callable<VmsTransactionT
     @Override
     public VmsTransactionTaskResult call() {
         // register thread in the transaction facade
-        try(var txCtx = this.transactionalHandler.beginTransaction(this.tid, this.identifier, this.lastTid, this.signature.transactionType() == TransactionTypeEnum.R)){
+        try{
+            var txCtx = this.transactionalHandler.beginTransaction(this.tid, this.identifier, this.lastTid, this.signature.transactionType() == TransactionTypeEnum.R);
             Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.inputs);
             // can be null, given we have terminal events (void method)
             // could also be terminal and generate event... maybe an external system wants to consume

@@ -76,7 +76,8 @@ public final class VmsTransactionTaskBuilder {
         }
 
         private void readOnlyRun(){
-            try(ITransactionContext txCtx = transactionManager.beginTransaction(this.tid, -1, this.lastTid, true)){
+            try{
+                ITransactionContext txCtx = transactionManager.beginTransaction(this.tid, -1, this.lastTid, true);
                 Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.input);
                 OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
                 schedulerCallback.success(this.signature.executionMode(), eventOutput);
@@ -106,19 +107,19 @@ public final class VmsTransactionTaskBuilder {
                 this.readOnlyRun();
                 return;
             }
+            ITransactionContext txCtx = transactionManager.beginTransaction(this.tid, -1, this.lastTid, false);
             try {
-                ITransactionContext txCtx = transactionManager.beginTransaction(this.tid, -1, this.lastTid, false);
                 Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.input);
                 OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
                 transactionManager.commit();
                 schedulerCallback.success(this.signature.executionMode(), eventOutput);
-                // avoid returning indexes to pool before committing
-                txCtx.close();
             } catch (IllegalAccessException | InvocationTargetException e) {
                 this.handleErrorOnTask(e);
             } catch (Exception e){
                 this.handleGenericError(e);
             }
+            // avoid returning indexes to pool before committing
+            txCtx.release();
         }
 
         public long tid() {

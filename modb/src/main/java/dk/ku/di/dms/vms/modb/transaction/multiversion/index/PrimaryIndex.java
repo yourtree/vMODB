@@ -20,8 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
-import static java.lang.System.Logger.Level.DEBUG;
-import static java.lang.System.Logger.Level.WARNING;
+import static java.lang.System.Logger.Level.*;
 
 /**
  * A consistent view over an index.
@@ -380,9 +379,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public void reset(){
         this.writeSetMap.clear();
         if(this.primaryKeyIndex instanceof UniqueHashBufferIndex){
-            for(var entry : this.updatesPerKeyMap.entrySet()){
-                this.primaryKeyIndex.delete(entry.getKey());
-            }
+            this.primaryKeyIndex.reset();
         }
         this.updatesPerKeyMap.clear();
         this.keysToFlush.clear();
@@ -405,11 +402,16 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     private static final boolean GARBAGE_COLLECTION = false;
 
     public void checkpoint(long maxTid){
-        if(this.keysToFlush.isEmpty()) return;
+        if(this.keysToFlush.isEmpty() || this.updatesPerKeyMap.isEmpty()) return;
         int numRecords = 0;
+        // LOGGER.log(DEBUG, this.updatesPerKeyMap.size()+" records will be inserted into:\n"+this.primaryKeyIndex.schema());
         for(IKey key : this.keysToFlush){
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             if(operationSetOfKey == null){
+                // has updates map been resetted?
+                if(this.updatesPerKeyMap.isEmpty()){
+                    return;
+                }
                 throw new RuntimeException("Error on retrieving operation set for key "+key);
             }
             Entry<Long, TransactionWrite> entry = operationSetOfKey.getHigherEntryUpToKey(maxTid);

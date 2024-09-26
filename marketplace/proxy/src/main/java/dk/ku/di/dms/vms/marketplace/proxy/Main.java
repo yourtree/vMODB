@@ -6,7 +6,6 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
 import dk.ku.di.dms.vms.marketplace.proxy.http.HttpServerAsyncJdk;
-import dk.ku.di.dms.vms.marketplace.proxy.http.HttpServerBuilder;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
@@ -18,8 +17,6 @@ import java.io.IOException;
 import java.util.*;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
-import static java.lang.System.Logger.Level.INFO;
-import static java.lang.Thread.sleep;
 
 /**
  * The proxy builds on top of the coordinator module.
@@ -28,29 +25,9 @@ import static java.lang.Thread.sleep;
  */
 public final class Main {
 
-    private static final System.Logger LOGGER = System.getLogger(Main.class.getName());
-
     public static void main(String[] ignoredArgs) throws IOException, InterruptedException {
         Properties properties = ConfigUtils.loadProperties();
-        Coordinator coordinator = loadCoordinator(properties);
-        //initHttpServer(properties, coordinator);
-    }
-
-    private static void initHttpServer(Properties properties, Coordinator coordinator) throws IOException, InterruptedException {
-        waitForAllStarterVMSs(coordinator);
-        HttpServerBuilder.build(properties, coordinator);
-    }
-
-    @SuppressWarnings("BusyWait")
-    private static void waitForAllStarterVMSs(Coordinator coordinator) throws InterruptedException {
-        final int SLEEP = 1000;
-        Map<String, IdentifiableNode> starterVMSs = coordinator.getStarterVMSs();
-        int starterSize = starterVMSs.size();
-        LOGGER.log(INFO, "Proxy: Waiting for all starter VMSs to come online. Sleeping for "+SLEEP+" ms...");
-        while (coordinator.getConnectedVMSs().size() < starterSize) {
-            sleep(SLEEP);
-        }
-        LOGGER.log(INFO,"Proxy: All starter VMSs have connected to the coordinator");
+        loadCoordinator(properties);
     }
 
     private static Map<String, TransactionDAG> buildTransactionDAGs(String[] transactionList){
@@ -100,7 +77,7 @@ public final class Main {
         return transactionMap;
     }
 
-    private static Coordinator loadCoordinator(Properties properties) throws IOException {
+    private static void loadCoordinator(Properties properties) throws IOException {
         final int STARTING_TID = 1;
         final int STARTING_BATCH_ID = 1;
 
@@ -180,7 +157,6 @@ public final class Main {
 
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();
-        return coordinator;
     }
 
     private static Map<String, IdentifiableNode> buildUpdatePriceVMSs(Properties properties){

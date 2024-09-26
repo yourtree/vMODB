@@ -65,8 +65,7 @@ public final class PersistenceTest {
         // test force now
         bufCtx.force();
         fc.close();
-        fc = FileChannel.open(path,
-                StandardOpenOption.READ);
+        fc = FileChannel.open(path, StandardOpenOption.READ);
 
         memorySegment = fc.map(FileChannel.MapMode.READ_ONLY, 0,
                 10L * schema.getRecordSize(), Arena.ofShared());

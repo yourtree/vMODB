@@ -31,8 +31,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 
 import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static java.lang.System.Logger.Level.*;
@@ -236,8 +234,6 @@ public final class VmsEventHandler extends ModbHttpServer {
         this.updateBatchStats(txResult.getOutboundEventResult());
     }
 
-    private final Executor checkpointExecutor = Executors.newSingleThreadExecutor();
-
     /**
      * Many outputs from the same transaction may arrive here concurrently,
      * but can only send the batch commit once
@@ -254,7 +250,7 @@ public final class VmsEventHandler extends ModbHttpServer {
         thisBatch.setStatus(BatchContext.BATCH_COMPLETED);
         if(this.options.checkpointing()){
             LOGGER.log(INFO, this.me.identifier + ": Requesting checkpoint for batch " + thisBatch.batch);
-            this.checkpointExecutor.execute(()->checkpoint(thisBatch.batch, batchMetadata.maxTidExecuted));
+            this.submitBackgroundTask(()->checkpoint(thisBatch.batch, batchMetadata.maxTidExecuted));
         }
         // if terminal, must send batch complete
         if (thisBatch.terminal) {
@@ -1031,14 +1027,14 @@ public final class VmsEventHandler extends ModbHttpServer {
             }
             BatchMetadata batchMetadata = trackingBatchMap.get(batchCommitCommand.batch());
             if(batchContext.numberOfTIDsBatch != batchMetadata.numberTIDsExecuted) {
-                LOGGER.log(WARNING,me.identifier+": Batch "+ batchCommitCommand.batch()+" has not yet finished!");
+                LOGGER.log(INFO,me.identifier+": Batch "+ batchCommitCommand.batch()+" has not yet finished!");
                 return;
             }
             LOGGER.log(INFO, me.identifier + ": All TIDs for the batch " + batchCommitCommand.batch() + " have been executed");
             batchContext.setStatus(BatchContext.BATCH_COMPLETED);
             if(options.checkpointing()){
                 LOGGER.log(INFO, me.identifier + ": Requesting checkpoint for batch " + batchCommitCommand.batch());
-                checkpointExecutor.execute(()->checkpoint(batchCommitCommand.batch(), batchMetadata.maxTidExecuted));
+                submitBackgroundTask(()->checkpoint(batchCommitCommand.batch(), batchMetadata.maxTidExecuted));
             }
         }
 

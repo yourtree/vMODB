@@ -11,13 +11,26 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import java.util.Set;
+import java.util.concurrent.*;
 
 public abstract class ModbHttpServer extends StoppableRunnable {
 
     protected static final List<HttpReadCompletionHandler> SSE_CLIENTS = new CopyOnWriteArrayList<>();
+
+    private static final ExecutorService BACKGROUND_EXECUTOR = Executors.newSingleThreadExecutor();
+
+    private static final Set<Future<?>> TRACKED_FUTURES = ConcurrentHashMap.newKeySet();
+
+    protected static void submitBackgroundTask(Runnable task){
+        TRACKED_FUTURES.add(BACKGROUND_EXECUTOR.submit(task));
+    }
+
+    protected static void cancelBackgroundTasks(){
+        for (Future<?> future : TRACKED_FUTURES) {
+            future.cancel(true);
+        }
+    }
 
     protected static final class HttpReadCompletionHandler implements CompletionHandler<Integer, Integer> {
 
@@ -140,6 +153,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         ft = this.connectionMetadata.channel.write(this.writeBuffer);
                     }
                     case "PATCH" -> {
+                        if(httpRequest.uri().contains("reset")) cancelBackgroundTasks();
                         httpHandler.patch(httpRequest.uri(), httpRequest.body());
                         this.writeBuffer.put(OK_RESPONSE_BYTES);
                         this.writeBuffer.flip();
@@ -159,7 +173,10 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         result += this.connectionMetadata.channel.write(this.writeBuffer).get();
                     }
                     assert result == this.writeBuffer.limit();
+                    this.writeBuffer.clear();
                 }
+                this.readBuffer.clear();
+                this.connectionMetadata.channel.read(this.readBuffer, 0, this);
             } catch (Exception e){
                 // LOGGER.log(WARNING, me.identifier+": Error caught in HTTP handler.\n"+e);
                 this.writeBuffer.clear();
@@ -177,7 +194,6 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 try {
                     this.connectionMetadata.channel.write(this.writeBuffer).get();
                 } catch (Exception ignored) {}
-            } finally {
                 this.writeBuffer.clear();
                 this.readBuffer.clear();
                 this.connectionMetadata.channel.read(this.readBuffer, 0, this);
@@ -190,6 +206,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             this.writeBuffer.put(headers.getBytes(StandardCharsets.UTF_8));
             this.writeBuffer.flip();
             this.connectionMetadata.channel.write(this.writeBuffer).get();
+            // need to set up read before adding this connection to sse client
             this.writeBuffer.clear();
             this.readBuffer.clear();
             this.connectionMetadata.channel.read(this.readBuffer, 0, this);
@@ -241,7 +258,6 @@ public abstract class ModbHttpServer extends StoppableRunnable {
         }
     }
 
-    // POST, PATCH, GET
     protected static boolean isHttpClient(String request) {
         String substr = request.substring(0, Math.max(request.indexOf(' '), 0));
         switch (substr){

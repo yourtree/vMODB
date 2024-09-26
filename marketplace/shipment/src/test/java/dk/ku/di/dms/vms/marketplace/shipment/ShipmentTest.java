@@ -58,12 +58,11 @@ public final class ShipmentTest {
 
         sleep(2000);
 
-        try(var txCtx = vms.getTransactionManager().beginTransaction( 4, 0, 3, true )) {
-            IPackageRepository packageRepository = (IPackageRepository) vms.getRepositoryProxy("packages");
-            List<dk.ku.di.dms.vms.marketplace.shipment.entities.Package> list =
-                    packageRepository.getPackagesByCustomerIdAndOrderId(1, 1);
-            Assert.assertEquals(1, list.size());
-        }
+        var txCtx = vms.getTransactionManager().beginTransaction( 4, 0, 3, true );
+        IPackageRepository packageRepository = (IPackageRepository) vms.getRepositoryProxy("packages");
+        List<dk.ku.di.dms.vms.marketplace.shipment.entities.Package> list =
+                packageRepository.getPackagesByCustomerIdAndOrderId(1, 1);
+        Assert.assertEquals(1, list.size());
     }
 
     @Test
@@ -76,11 +75,10 @@ public final class ShipmentTest {
 
         sleep(5000);
 
-        try(var txCtx = vms.getTransactionManager().beginTransaction( 11, 0, 10, true )) {
-            List<OldestSellerPackageEntry> packages = packageRepository.fetchMany(
-                    OLDEST_SHIPMENT_PER_SELLER, OldestSellerPackageEntry.class);
-            Assert.assertEquals(10, packages.size());
-        }
+        var txCtx = vms.getTransactionManager().beginTransaction( 11, 0, 10, true );
+        List<OldestSellerPackageEntry> packages = packageRepository.fetchMany(
+                OLDEST_SHIPMENT_PER_SELLER, OldestSellerPackageEntry.class);
+        Assert.assertEquals(10, packages.size());
     }
 
     private static void generatePaymentConfirmed(int tid, String instanceId, int previousTid, VmsApplication vms) {

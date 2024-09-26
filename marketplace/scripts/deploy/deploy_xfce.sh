@@ -42,7 +42,6 @@ if `echo "$*" | grep -q cart`; then
     else
         echo "Initializing Cart..."
         xfce4-terminal -e 'bash -c "java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar '$current_dir'/cart/target/cart-1.0-SNAPSHOT-jar-with-dependencies.jar"' -T "Cart"
-        
     fi
 fi
 

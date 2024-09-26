@@ -2,6 +2,7 @@ package dk.ku.di.dms.vms.modb.common.logging;
 
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -14,7 +15,12 @@ public final class LoggingHandlerBuilder {
     public static ILoggingHandler build(String identifier) {
         String fileName = identifier + "_" + new Date().getTime() +".llog";
         String userHome = ConfigUtils.getUserHome();
-        String filePath = userHome + "/vms/" + fileName;
+        String basePath = userHome + "/vms";
+        File theDir = new File(basePath);
+        if (!theDir.exists()){
+            theDir.mkdirs();
+        }
+        String filePath = basePath + "/" + fileName;
         Path path = Paths.get(filePath);
         FileChannel fileChannel;
         try {

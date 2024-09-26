@@ -22,6 +22,10 @@ public abstract class ReadWriteIndex<K> extends AbstractIndex<K> {
 
     public void upsert(IKey key, Object[] record) { this.insert(key, record); }
 
+    public void reset() {
+        throw new RuntimeException("Not supported.");
+    }
+
     // flush updates
     public void flush(){
         throw new RuntimeException("Not supported.");
