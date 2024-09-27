@@ -25,7 +25,7 @@ import static dk.ku.di.dms.vms.marketplace.common.Constants.INVOICE_ISSUED;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.SHIPMENT_UPDATED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
-import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.*;
 
 @Microservice("seller")
 public final class SellerService {
@@ -55,7 +55,7 @@ public final class SellerService {
     @Transactional(type=W)
     @Parallel
     public void processInvoiceIssued(InvoiceIssued invoiceIssued){
-        LOGGER.log(INFO, "APP: Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
+        LOGGER.log(DEBUG, "APP: Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
         List<OrderItem> orderItems = invoiceIssued.getItems();
         List<OrderEntry> entries = new ArrayList<>(orderItems.size());
         for (OrderItem orderItem : orderItems) {
@@ -78,7 +78,7 @@ public final class SellerService {
                     null,
                     null,
                     OrderStatus.INVOICED,
-                    null
+                    PackageStatus.created
             );
             entries.add(entry);
         }
@@ -88,7 +88,7 @@ public final class SellerService {
     @Inbound(values = SHIPMENT_UPDATED)
     @Transactional(type=RW)
     public void processShipmentUpdate(ShipmentUpdated shipmentUpdated){
-        LOGGER.log(INFO, "APP: Seller received a shipment update event with TID: "+ shipmentUpdated.instanceId);
+        LOGGER.log(DEBUG, "APP: Seller received a shipment update event with TID: "+ shipmentUpdated.instanceId);
         // synchronization must also be present here
         for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {
             List<OrderEntry> orderEntries = this.orderEntryRepository.getOrderEntriesByCustomerIdAndOrderId(
@@ -131,10 +131,10 @@ public final class SellerService {
      * Parallel by default -- http clients trigger it
      */
     public SellerDashboard queryDashboard(int sellerId){
-        LOGGER.log(INFO, "APP: Seller received a seller dashboard request for ID: "+ sellerId);
+        LOGGER.log(DEBUG, "APP: Seller received a seller dashboard request for ID: "+ sellerId);
         List<OrderEntry> orderEntries = this.orderEntryRepository.getOrderEntriesBySellerId(sellerId);
         if(orderEntries.isEmpty()) return EMPTY_DASHBOARD;
-        LOGGER.log(INFO, "APP: Seller "+sellerId+" has "+orderEntries.size()+" entries in seller dashboard");
+        LOGGER.log(DEBUG, "APP: Seller "+sellerId+" has "+orderEntries.size()+" entries in seller dashboard");
         OrderSellerView view = this.orderEntryRepository.fetchOne(SELLER_VIEW_BASE.setParam(sellerId), OrderSellerView.class);
         // LOGGER.log(DEBUG, view);
         return new SellerDashboard(view, orderEntries);

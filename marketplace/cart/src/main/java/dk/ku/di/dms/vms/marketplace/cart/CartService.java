@@ -38,7 +38,7 @@ public final class CartService {
     @Transactional(type=RW)
     @PartitionBy(clazz = CustomerCheckout.class, method = "getId")
     public ReserveStock checkout(CustomerCheckout checkout) {
-        LOGGER.log(INFO, "APP: Cart received a checkout request for customer ID "+ checkout.CustomerId +" with TID: "+checkout.instanceId);
+        LOGGER.log(DEBUG, "APP: Cart received a checkout request for customer ID "+ checkout.CustomerId +" with TID: "+checkout.instanceId);
         // get cart items from the given customer
         List<CartItem> cartItems = //CartUtils.CART_ITEMS.remove(checkout.CustomerId);
                 this.cartItemRepository.getCartItemsByCustomerId(checkout.CustomerId);

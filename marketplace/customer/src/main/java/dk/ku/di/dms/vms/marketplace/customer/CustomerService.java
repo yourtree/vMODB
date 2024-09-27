@@ -12,7 +12,7 @@ import java.util.Date;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.PAYMENT_CONFIRMED;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.SHIPMENT_UPDATED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
-import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.*;
 
 @Microservice("customer")
 public final class CustomerService {
@@ -28,7 +28,7 @@ public final class CustomerService {
     @Inbound(values = {PAYMENT_CONFIRMED})
     @Transactional(type=RW)
     public void processPaymentConfirmed(PaymentConfirmed paymentConfirmed){
-        LOGGER.log(INFO, "APP: Customer received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
+        LOGGER.log(DEBUG, "APP: Customer received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
 
         Date now = new Date();
         Customer customer = this.customerRepository.lookupByKey( paymentConfirmed.customerCheckout.CustomerId );

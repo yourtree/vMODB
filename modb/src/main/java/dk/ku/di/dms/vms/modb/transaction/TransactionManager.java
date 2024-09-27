@@ -406,9 +406,10 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      */
     @Override
     public void checkpoint(long maxTid){
-        LOGGER.log(INFO, "Checkpoint called for max TID "+maxTid);
+        LOGGER.log(INFO, "Checkpoint called for max TID "+maxTid+" at "+System.currentTimeMillis());
         if(this.checkpointing) {
             for (Table table : this.catalog.values()) {
+                LOGGER.log(INFO, "Checkpointing table "+table.getName());
                 table.primaryKeyIndex().checkpoint(maxTid);
             }
         } else {
@@ -417,6 +418,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
                 table.primaryKeyIndex().garbageCollection(maxTid);
             }
         }
+        LOGGER.log(INFO, "Checkpoint for max TID "+maxTid+" finished at "+System.currentTimeMillis());
     }
 
     /**
@@ -446,6 +448,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     public void reset() {
         LOGGER.log(INFO, "Reset triggered.");
         for (Table table : this.catalog.values()) {
+            LOGGER.log(INFO, "Resetting "+table.name);
             table.primaryKeyIndex().reset();
             for(var secIdx : table.secondaryIndexMap.values()){
                 secIdx.reset();

@@ -16,7 +16,7 @@ import java.util.Properties;
 
 import static dk.ku.di.dms.vms.marketplace.seller.SellerService.EMPTY_DASHBOARD;
 import static dk.ku.di.dms.vms.marketplace.seller.SellerService.SELLER_VIEW_BASE;
-import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.*;
 
 public final class Main {
 
@@ -67,7 +67,7 @@ public final class Main {
             var txCtx = this.transactionManager.beginTransaction(lastTid, 0, lastTid, true);
             List<OrderEntry> orderEntries = this.repository.getOrderEntriesBySellerId(sellerId);
             if(orderEntries.isEmpty()) return EMPTY_DASHBOARD.toString();
-            LOGGER.log(INFO, "APP: Seller "+sellerId+" has "+orderEntries.size()+" entries in seller dashboard");
+            LOGGER.log(DEBUG, "APP: Seller "+sellerId+" has "+orderEntries.size()+" entries in seller dashboard");
             OrderSellerView view = this.repository.fetchOne(SELLER_VIEW_BASE.setParam(sellerId), OrderSellerView.class);
             return new SellerDashboard(view, orderEntries).toString();
         }

@@ -246,7 +246,7 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
                     entry.getValue().set(entity, object[i]);
                 } catch (ClassCastException e){
                     // has the entry come from raw index?
-                    if(this.table.schema().columnDataType(i) == DataType.ENUM && object[i] instanceof String objStr && !objStr.isBlank()){
+                    if(this.table.schema().columnDataType(i) == DataType.ENUM && object[i] instanceof String objStr && !objStr.isEmpty() && !objStr.isBlank()){
                         entry.getValue().set(entity, Enum.valueOf((Class)entry.getValue().varType(), objStr));
                     } else {
                         System.out.println("Cannot cast column "+table.schema().columnName(i)+" for value "+object[i]);

@@ -412,9 +412,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     public void checkpoint(long maxTid){
         if(this.keysToFlush.isEmpty() || this.updatesPerKeyMap.isEmpty()) return;
-        LOGGER.log(WARNING, "Starting checkpointing with max TID "+maxTid+" for schema: \n"+this.primaryKeyIndex.schema()+" at "+System.currentTimeMillis());
         int numRecords = 0;
-        // LOGGER.log(DEBUG, this.updatesPerKeyMap.size()+" records will be inserted into:\n"+this.primaryKeyIndex.schema());
         for(IKey key : this.keysToFlush){
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             if(operationSetOfKey == null){
