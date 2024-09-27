@@ -49,8 +49,8 @@ public class CheckpointingTest extends CartProductWorkflowTest {
         try (FileChannel fc = FileChannel.open(path, StandardOpenOption.READ)){
             var memorySegment = fc.map(FileChannel.MapMode.READ_ONLY, 0,
                     10L * schema.getRecordSize(), Arena.ofShared());
-            var bufCtx = new RecordBufferContext( memorySegment,10);
-            var index = new UniqueHashBufferIndex(bufCtx, schema, schema.getPrimaryKeyColumns());
+            var bufCtx = new RecordBufferContext(memorySegment);
+            var index = new UniqueHashBufferIndex(bufCtx, schema, schema.getPrimaryKeyColumns(), 10);
             var bb = MemoryManager.getTemporaryDirectBuffer( (int)fc.size() );
             int res = fc.read(bb);
             Assert.assertEquals(4260, res);

@@ -32,11 +32,16 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     private final long recordSize;
 
-    public UniqueHashBufferIndex(RecordBufferContext recordBufferContext, Schema schema, int[] columnsIndex){
+    // total number of records (of a given schema)
+    // the conjunction of all buffers can possibly hold
+    private final int capacity;
+
+    public UniqueHashBufferIndex(RecordBufferContext recordBufferContext, Schema schema, int[] columnsIndex, int capacity){
         super(schema, columnsIndex);
         this.recordBufferContext = recordBufferContext;
         this.recordSize = schema.getRecordSize();
         this.size = 0;
+        this.capacity = capacity;
         this.reset();
     }
 
@@ -50,7 +55,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
             return;
         }
         long lastPos = this.recordBufferContext.address +
-                (this.recordBufferContext.capacity * this.recordSize) - 1;
+                (this.capacity * this.recordSize) - 1;
         long pos = this.recordBufferContext.address;
         while(pos < lastPos){
             if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE){
@@ -72,10 +77,10 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
      * and then computing the remainder when dividing by M, as in modular hashing."
      */
     private long getPosition(int key){
-        long logicalPosition = (key & 0x7fffffff) % this.recordBufferContext.capacity;
-        if(logicalPosition > 1)
-            return this.recordBufferContext.address + ( this.recordSize * (logicalPosition-1) );
-        assert logicalPosition > 0;
+        long logicalPosition = (key & 0x7fffffff) % this.capacity;
+        if(logicalPosition > 0){
+            return this.recordBufferContext.address + ( this.recordSize * logicalPosition );
+        }
         return this.recordBufferContext.address;
     }
 
@@ -159,8 +164,6 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         try {
             long pos = this.getFreePositionToInsert(key);
             if(pos == -1){
-                // https://en.wikipedia.org/wiki/Hash_table#Collision_resolution
-                // quadratic probing
                 LOGGER.log(ERROR, "Cannot find an empty entry for record. Perhaps should increase number of entries?\nKey: " + key+ " Hash: " + key.hashCode());
                 return;
             }
@@ -247,7 +250,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public IRecordIterator<IKey> iterator() {
-        return new RecordIterator(this.recordBufferContext.address, this.schema.getRecordSize(), this.recordBufferContext.capacity);
+        return new RecordIterator(this.recordBufferContext.address, this.schema.getRecordSize(), this.capacity);
     }
 
     @Override

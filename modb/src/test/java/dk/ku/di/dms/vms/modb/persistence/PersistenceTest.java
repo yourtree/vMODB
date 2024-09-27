@@ -52,8 +52,8 @@ public final class PersistenceTest {
         );
         MemorySegment memorySegment = fc.map(FileChannel.MapMode.READ_WRITE, 0,
                 7L * schema.getRecordSize(), Arena.ofShared());
-        var bufCtx = new RecordBufferContext( memorySegment,7);
-        var index = new UniqueHashBufferIndex(bufCtx, schema, schema.getPrimaryKeyColumns());
+        var bufCtx = new RecordBufferContext( memorySegment);
+        var index = new UniqueHashBufferIndex(bufCtx, schema, schema.getPrimaryKeyColumns(),7);
 
         index.insert(IntKey.of(10), new Object[] { 10, "test" } );
         index.insert(IntKey.of(14), new Object[] { 14, "test" } );
@@ -81,8 +81,8 @@ public final class PersistenceTest {
         MemorySegment memorySegment = fc.map(FileChannel.MapMode.READ_WRITE, 0,
                 10L * schema.getRecordSize(), Arena.ofShared());
 
-        var bufCtx = new RecordBufferContext( memorySegment,10);
-        var index = new UniqueHashBufferIndex(bufCtx, schema, schema.getPrimaryKeyColumns());
+        var bufCtx = new RecordBufferContext(memorySegment);
+        var index = new UniqueHashBufferIndex(bufCtx, schema, schema.getPrimaryKeyColumns(), 10);
         for(int i = 1; i <= 10; i = i + 2){
             index.insert(IntKey.of(i), new Object[] { i, "test" } );
         }
@@ -97,8 +97,8 @@ public final class PersistenceTest {
 
         memorySegment = fc.map(FileChannel.MapMode.READ_ONLY, 0,
                 10L * schema.getRecordSize(), Arena.ofShared());
-        bufCtx = new RecordBufferContext( memorySegment,10);
-        index = new UniqueHashBufferIndex(bufCtx, schema, schema.getPrimaryKeyColumns());
+        bufCtx = new RecordBufferContext(memorySegment);
+        index = new UniqueHashBufferIndex(bufCtx, schema, schema.getPrimaryKeyColumns(), 10);
 
         var bb = ByteBuffer.allocate( 10 * schema.getRecordSize() );
         int res = fc.read(bb);
