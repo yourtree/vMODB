@@ -162,7 +162,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     @Override
     public void delete(IKey key) {
         long pos = this.findRecordAddress(key);
-        if(pos == -1) {
+        if(pos != -1) {
             UNSAFE.putByte(null, pos, Header.INACTIVE_BYTE);
             this.updateSize(-1);
         }
