@@ -60,7 +60,7 @@ public final class CartService {
     @Inbound(values = {PRICE_UPDATED})
     @Transactional(type=RW)
     public void updateProductPrice(PriceUpdated priceUpdated) {
-        LOGGER.log(INFO,"APP: Cart received an update price event with version: "+priceUpdated.instanceId);
+        LOGGER.log(DEBUG, "APP: Cart received an update price event with version: "+priceUpdated.instanceId);
         // could use issue statement for faster update
         ProductReplica product = this.productReplicaRepository.lookupByKey(
                 new ProductReplica.ProductId(priceUpdated.sellerId, priceUpdated.productId));
@@ -93,7 +93,7 @@ public final class CartService {
     @Transactional(type=W)
     @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     public void processProductUpdate(ProductUpdated productUpdated) {
-        LOGGER.log(INFO,"APP: Cart received a product update event with version: "+productUpdated.version);
+        LOGGER.log(DEBUG, "APP: Cart received a product update event with version: "+productUpdated.version);
         ProductReplica product = new ProductReplica(productUpdated.seller_id, productUpdated.product_id, productUpdated.name, productUpdated.sku, productUpdated.category,
                 productUpdated.description, productUpdated.price, productUpdated.freight_value, productUpdated.status, productUpdated.version);
         this.productReplicaRepository.upsert(product);

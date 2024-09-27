@@ -33,7 +33,7 @@ public final class StockService {
     @Transactional(type=RW)
     @PartitionBy(clazz = ProductUpdated.class, method = "getId")
     public void updateProduct(ProductUpdated productUpdated) {
-        LOGGER.log(INFO,"APP: Stock received an update product event with version: "+productUpdated.version);
+        LOGGER.log(DEBUG, "APP: Stock received an update product event with version: "+productUpdated.version);
 
         // can use issue statement for faster update
         StockItem stockItem = this.stockRepository.lookupByKey(new StockItem.StockId(productUpdated.seller_id, productUpdated.product_id));
@@ -55,7 +55,7 @@ public final class StockService {
     @Outbound(STOCK_CONFIRMED)
     @Transactional(type=RW)
     public StockConfirmed reserveStock(ReserveStock reserveStock){
-        LOGGER.log(INFO,"APP: Stock received a reserve stock event with TID: "+reserveStock.instanceId);
+        LOGGER.log(DEBUG, "APP: Stock received a reserve stock event with TID: "+reserveStock.instanceId);
 
         Map<StockItem.StockId, CartItem> cartItemMap = reserveStock.items.stream().collect( Collectors.toMap( (f)-> new StockItem.StockId(f.SellerId, f.ProductId), Function.identity()) );
 
@@ -102,7 +102,7 @@ public final class StockService {
             }
         }
 
-        // LOGGER.log(INFO,"APP: Stock finished a reserve stock event with TID: "+reserveStock.instanceId);
+        // LOGGER.log(DEBUG, "APP: Stock finished a reserve stock event with TID: "+reserveStock.instanceId);
 
         // need to find a way to complete the transaction in the case it does not hit all virtual microservices
         return new StockConfirmed( reserveStock.timestamp, reserveStock.customerCheckout, cartItemsReserved, reserveStock.instanceId );

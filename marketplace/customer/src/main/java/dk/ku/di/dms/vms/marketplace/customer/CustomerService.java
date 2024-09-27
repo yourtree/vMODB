@@ -45,7 +45,7 @@ public final class CustomerService {
     @Inbound(values = {SHIPMENT_UPDATED})
     @Transactional(type=RW)
     public void processDeliveryNotification(ShipmentUpdated shipmentUpdated){
-        LOGGER.log(INFO,"APP: Customer received a shipment updated event with TID: "+ shipmentUpdated.instanceId);
+        LOGGER.log(DEBUG, "APP: Customer received a shipment updated event with TID: "+ shipmentUpdated.instanceId);
 
         Date now = new Date();
         for(DeliveryNotification delivery : shipmentUpdated.deliveryNotifications) {

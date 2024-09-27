@@ -50,7 +50,7 @@ public final class OrderService {
     @PartitionBy(clazz = StockConfirmed.class, method = "getCustomerId")
     public InvoiceIssued processStockConfirmed(StockConfirmed stockConfirmed) {
         Date now = new Date();
-        LOGGER.log(DEBUG,"APP: Order received a stock confirmed event with TID: "+ stockConfirmed.instanceId);
+        LOGGER.log(DEBUG, "APP: Order received a stock confirmed event with TID: "+ stockConfirmed.instanceId);
 
         // calculate total freight_value
         float total_freight = 0;
@@ -174,7 +174,7 @@ public final class OrderService {
     @Inbound(values = {SHIPMENT_UPDATED})
     @Transactional(type=RW)
     public void processShipmentNotification(ShipmentUpdated shipmentUpdated){
-        LOGGER.log(DEBUG,"APP: Order received a shipment updated event with TID: "+shipmentUpdated.instanceId);
+        LOGGER.log(DEBUG, "APP: Order received a shipment updated event with TID: "+shipmentUpdated.instanceId);
 
         Date now = new Date();
         for(ShipmentNotification shipmentNotification : shipmentUpdated.shipmentNotifications) {

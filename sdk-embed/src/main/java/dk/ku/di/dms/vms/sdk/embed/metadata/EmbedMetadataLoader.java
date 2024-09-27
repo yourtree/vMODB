@@ -436,9 +436,9 @@ public final class EmbedMetadataLoader {
         }
         LOGGER.log(INFO, "Attempt to create new file in directory: "+filePath);
         if(file.getParentFile().mkdirs()){
-            LOGGER.log(INFO, "Parent directory ("+filePath+") required being created.");
+            LOGGER.log(INFO, "Parent directory ("+file.getParentFile()+") required being created.");
         } else {
-            LOGGER.log(INFO, "Parent directory ("+filePath+") did not need being created.");
+            LOGGER.log(INFO, "Parent directory ("+file.getParentFile()+") did not need being created.");
         }
         try {
             FileChannel fc = FileChannel.open(Paths.get(filePath),
