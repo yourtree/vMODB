@@ -51,10 +51,11 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     @Override
     public void reset() {
         if(this.size == 0){
-            LOGGER.log(DEBUG, "Size of buffer is zero. No need to reset.");
+            LOGGER.log(INFO, "Size of buffer is zero. No need to reset.");
             return;
         }
         long initialSize = this.size;
+        LOGGER.log(INFO, "Reset started with initial size: "+initialSize);
         long lastPos = this.recordBufferContext.address +
                 (this.capacity * this.recordSize) - 1;
         long pos = this.recordBufferContext.address;
@@ -69,7 +70,6 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         if(this.size > 0){
             LOGGER.log(WARNING, "The reset did not clean all the entries. Size left out: "+this.size);
         }
-        LOGGER.log(WARNING, "Entries cleaned: "+initialSize);
         this.size = 0;
     }
 
@@ -88,7 +88,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public void insert(IKey key, long srcAddress) {
-        long pos = this.getPosition(key.hashCode());
+        long pos = this.findRecordAddress(key);
         if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE){
             System.out.println("Overwriting previously written record!");
         }
@@ -108,7 +108,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
      */
     @Override
     public void update(IKey key, long srcAddress) {
-        long pos = getPosition(key.hashCode());
+        long pos = this.findRecordAddress(key);
         UNSAFE.copyMemory(null, srcAddress, null, pos, this.recordSize);
     }
 
@@ -172,18 +172,10 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public long address(IKey key) {
-        return this.getPosition(key.hashCode());
+        return this.findRecordAddress(key);
     }
 
     private static int DEFAULT_ATTEMPTS = 10;
-
-    /**
-     * Check whether the record is active (if exists)
-     */
-    @Override
-    public boolean exists(IKey key){
-        return this.findRecordAddress(key) != -1;
-    }
 
     private long getFreePositionToInsert(IKey key){
         int attemptsToFind = DEFAULT_ATTEMPTS;
@@ -219,10 +211,18 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         return -1;
     }
 
+    /**
+     * Check whether the record is active (if exists)
+     */
+    @Override
+    public boolean exists(IKey key){
+        return this.findRecordAddress(key) != -1;
+    }
+
     @Override
     public Object[] lookupByKey(IKey key){
-        long pos = this.getPosition(key.hashCode());
-        if(this.exists(pos))
+        long pos = this.findRecordAddress(key);
+        if(pos != -1)
             return this.readFromIndex(pos + Schema.RECORD_HEADER);
         return null;
     }
@@ -259,7 +259,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public Object[] record(IKey key) {
-        return this.readFromIndex(this.getPosition(key.hashCode()) + Schema.RECORD_HEADER);
+        return this.readFromIndex(this.findRecordAddress(key) + Schema.RECORD_HEADER);
     }
 
     @Override

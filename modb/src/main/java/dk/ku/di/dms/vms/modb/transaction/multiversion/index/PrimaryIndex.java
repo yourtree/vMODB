@@ -241,7 +241,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 return false;
             }
         } else if(this.primaryKeyIndex.exists(key)){
-            LOGGER.log(WARNING, "Primary key violation found in underlying primary key index: "+key);
+            var existingRecord = this.primaryKeyIndex.lookupByKey(key);
+            LOGGER.log(WARNING, "Primary key violation found in underlying primary key index: "+key+" Existing record:\n"+Arrays.stream(existingRecord).toList());
             return false;
         }
         if(this.nonPkConstraintViolation(record)) {
