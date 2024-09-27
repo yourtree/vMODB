@@ -29,14 +29,11 @@ public final class CustomerService {
     @Transactional(type=RW)
     public void processPaymentConfirmed(PaymentConfirmed paymentConfirmed){
         LOGGER.log(DEBUG, "APP: Customer received a payment confirmed event with TID: "+ paymentConfirmed.instanceId);
-
         Date now = new Date();
         Customer customer = this.customerRepository.lookupByKey( paymentConfirmed.customerCheckout.CustomerId );
-
         if(customer == null){
             throw new RuntimeException("Customer "+paymentConfirmed.customerCheckout.CustomerId+" cannot be found!");
         }
-
         customer.success_payment_count++;
         customer.updated_at = now;
         this.customerRepository.update(customer);
@@ -46,7 +43,6 @@ public final class CustomerService {
     @Transactional(type=RW)
     public void processDeliveryNotification(ShipmentUpdated shipmentUpdated){
         LOGGER.log(DEBUG, "APP: Customer received a shipment updated event with TID: "+ shipmentUpdated.instanceId);
-
         Date now = new Date();
         for(DeliveryNotification delivery : shipmentUpdated.deliveryNotifications) {
             Customer customer = this.customerRepository.lookupByKey( delivery.customerId );

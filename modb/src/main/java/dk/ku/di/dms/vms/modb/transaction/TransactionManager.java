@@ -446,7 +446,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
 
     @Override
     public void reset() {
-        LOGGER.log(INFO, "Reset triggered.");
+        LOGGER.log(INFO, "Reset triggered at "+System.currentTimeMillis());
         for (Table table : this.catalog.values()) {
             LOGGER.log(INFO, "Resetting "+table.name);
             table.primaryKeyIndex().reset();
@@ -457,7 +457,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
                 uniqIdx.reset();
             }
         }
-        LOGGER.log(INFO, "Reset finished.");
+        LOGGER.log(INFO, "Reset finished at "+System.currentTimeMillis());
         LOGGER.log(INFO, "GC triggered.");
         System.gc();
         LOGGER.log(INFO, "GC finished.");

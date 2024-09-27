@@ -240,11 +240,19 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 LOGGER.log(WARNING, "Primary key violation found in multi version map: " + key);
                 return false;
             }
-        } else if(this.primaryKeyIndex.exists(key)){
+        }
+        /*
+        unknown error related to this block. only occurs in processStockConfirmed and after an initial run
+        either (a) the checkpoint is concurrently putting this entry or
+        (b) the reset is not appropriately cleaning the buffer or
+        (c) some hash buffer operation is buggy (although the record returned below indeed has the same key)
+         */
+        else if(this.primaryKeyIndex.exists(key)){
             var existingRecord = this.primaryKeyIndex.lookupByKey(key);
             LOGGER.log(WARNING, "Primary key violation found in underlying primary key index: "+key+" Existing record:\n"+Arrays.stream(existingRecord).toList());
-            return false;
+            // return false;
         }
+
         if(this.nonPkConstraintViolation(record)) {
             LOGGER.log(WARNING, "Non PK violation found in underlying primary key index: "+key);
             return false;

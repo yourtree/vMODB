@@ -90,7 +90,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     public void insert(IKey key, long srcAddress) {
         long pos = this.findRecordAddress(key);
         if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE){
-            System.out.println("Overwriting previously written record!");
+            LOGGER.log(WARNING, "Overwriting previously written record for key: "+key);
         }
         UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
         UNSAFE.putInt(null, pos, key.hashCode());
