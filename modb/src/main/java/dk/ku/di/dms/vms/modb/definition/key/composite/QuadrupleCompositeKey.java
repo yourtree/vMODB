@@ -25,11 +25,11 @@ public final class QuadrupleCompositeKey extends BaseComposite implements IKey {
 
     @Override
     public boolean equals(Object key){
-        return key instanceof QuadrupleCompositeKey pairCompositeKey &&
-                this.value0.equals(pairCompositeKey.value0) &&
-                this.value1.equals(pairCompositeKey.value1) &&
-                this.value2.equals(pairCompositeKey.value2) &&
-                this.value3.equals(pairCompositeKey.value3);
+        return key instanceof QuadrupleCompositeKey compositeKey &&
+                this.value0.equals(compositeKey.value0) &&
+                this.value1.equals(compositeKey.value1) &&
+                this.value2.equals(compositeKey.value2) &&
+                this.value3.equals(compositeKey.value3);
     }
 
     @Override

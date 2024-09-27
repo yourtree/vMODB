@@ -249,7 +249,8 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
                     if(this.table.schema().columnDataType(i) == DataType.ENUM && object[i] instanceof String objStr && !objStr.isBlank()){
                         entry.getValue().set(entity, Enum.valueOf((Class)entry.getValue().varType(), objStr));
                     } else {
-                        throw new RuntimeException();
+                        System.out.println("Cannot cast column "+table.schema().columnName(i)+" for value "+object[i]);
+                        throw new RuntimeException(e);
                     }
                 }
             }

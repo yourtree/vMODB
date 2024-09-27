@@ -222,8 +222,10 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             Entry<Long, TransactionWrite> entry = operationSet.floorEntry(txCtx.lastTid);
             return entry != null ? (entry.val().type != WriteType.DELETE ? entry.val().record : null) : null;
         }
-        return operationSet.lastWriteType != WriteType.DELETE ?
-                operationSet.peak().val().record : null;
+        if(operationSet.lastWriteType == WriteType.DELETE) return null;
+        Entry<Long, TransactionWrite> entry = operationSet.floorEntry(txCtx.tid);
+        if(entry != null) return entry.val().record;
+        return null;
     }
 
     /**
@@ -233,38 +235,41 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      */
     public boolean insert(TransactionContext txCtx, IKey key, Object[] record) {
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get(key);
-        boolean pkConstraintViolation;
         // if not delete, violation (it means some tid has written to this PK before)
         if (operationSet != null){
-            pkConstraintViolation = operationSet.lastWriteType != WriteType.DELETE;
-        } else {
-            pkConstraintViolation = this.primaryKeyIndex.exists(key);
-            if(pkConstraintViolation)
-                LOGGER.log(WARNING, "Primary key violation found in underlying primary key index: "+key);
-        }
-        if(pkConstraintViolation || this.nonPkConstraintViolation(record)) {
+            if(operationSet.lastWriteType != WriteType.DELETE) {
+                LOGGER.log(WARNING, "Primary key violation found in multi version map: " + key);
+                return false;
+            }
+        } else if(this.primaryKeyIndex.exists(key)){
+            LOGGER.log(WARNING, "Primary key violation found in underlying primary key index: "+key);
             return false;
         }
-        return this.doInsert(txCtx, key, record, operationSet);
+        if(this.nonPkConstraintViolation(record)) {
+            LOGGER.log(WARNING, "Non PK violation found in underlying primary key index: "+key);
+            return false;
+        }
+        this.doInsert(txCtx, key, record, operationSet);
+        return true;
     }
 
-    private boolean doInsert(TransactionContext txCtx, IKey key, Object[] values, OperationSetOfKey operationSet) {
+    private void doInsert(TransactionContext txCtx, IKey key, Object[] values, OperationSetOfKey operationSet) {
         TransactionWrite entry = TransactionWrite.upsert(WriteType.INSERT, values);
         if(operationSet == null){
-            operationSet = new OperationSetOfKey();
+            operationSet = new OperationSetOfKey(WriteType.INSERT);
             this.updatesPerKeyMap.put(key, operationSet);
+        } else {
+            operationSet.lastWriteType = WriteType.INSERT;
         }
         operationSet.put(txCtx.tid, entry);
-        operationSet.lastWriteType = WriteType.INSERT;
         this.appendWrite(txCtx, key);
-        return true;
     }
 
     public boolean upsert(TransactionContext txCtx, IKey key, Object[] values) {
         if(this.nonPkConstraintViolation(values)) {
             return false;
         }
-        OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
+        OperationSetOfKey operationSet = this.updatesPerKeyMap.get(key);
         boolean exists;
         if (operationSet != null){
             exists = operationSet.lastWriteType != WriteType.DELETE;
@@ -272,10 +277,11 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             exists = this.primaryKeyIndex.exists(key);
         }
         if(exists) {
-            return this.doUpdate(txCtx, key, values, operationSet);
+            this.doUpdate(txCtx, key, values, operationSet);
         } else {
-            return this.doInsert(txCtx, key, values, operationSet);
+            this.doInsert(txCtx, key, values, operationSet);
         }
+        return true;
     }
 
     @Override
@@ -290,19 +296,20 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         if(pkConstraintViolation || this.nonPkConstraintViolation(values)) {
             return false;
         }
-        return this.doUpdate(txCtx, key, values, operationSet);
+        this.doUpdate(txCtx, key, values, operationSet);
+        return true;
     }
 
-    private boolean doUpdate(TransactionContext txCtx, IKey key, Object[] values, OperationSetOfKey operationSet) {
+    private void doUpdate(TransactionContext txCtx, IKey key, Object[] values, OperationSetOfKey operationSet) {
         TransactionWrite entry = TransactionWrite.upsert(WriteType.UPDATE, values);
         if(operationSet == null){
-            operationSet = new OperationSetOfKey();
+            operationSet = new OperationSetOfKey(WriteType.UPDATE);
             this.updatesPerKeyMap.put(key, operationSet);
+        } else {
+            operationSet.lastWriteType = WriteType.UPDATE;
         }
         operationSet.put(txCtx.tid, entry);
-        operationSet.lastWriteType = WriteType.UPDATE;
         this.appendWrite(txCtx, key);
-        return true;
     }
 
     public IKey insertAndGetKey(TransactionContext txCtx, Object[] values){
@@ -342,11 +349,10 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         Object[] obj = this.primaryKeyIndex.lookupByKey(key);
         if(obj != null) {
             // that means we haven't had any previous transaction performing writes to this key
-            operationSet = new OperationSetOfKey();
+            operationSet = new OperationSetOfKey(WriteType.DELETE);
             this.updatesPerKeyMap.put( key, operationSet );
             TransactionWrite entry = TransactionWrite.delete(WriteType.DELETE);
             operationSet.put(txCtx.tid, entry);
-            operationSet.lastWriteType = WriteType.DELETE;
             this.appendWrite(txCtx, key);
             return Optional.of( obj );
         }

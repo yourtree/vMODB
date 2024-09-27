@@ -264,7 +264,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         IKey pk = primaryIndex.insertAndGetKey(txCtx, values);
         if(pk == null) {
             this.undoTransactionWrites(txCtx);
-            throw new RuntimeException("Primary key constraint violation in table " + table.getName() + ". Record:\n" + Arrays.stream(values).toList());
+            throw new RuntimeException("Constraint violation in table " + table.getName() + ". Record:\n" + Arrays.stream(values).toList());
         }
         txCtx.indexes.add(primaryIndex);
         // iterate over secondary indexes to insert the new write

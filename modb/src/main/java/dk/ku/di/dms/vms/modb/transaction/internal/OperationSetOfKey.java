@@ -19,6 +19,8 @@ public final class OperationSetOfKey extends OneWriterMultiReadersLIFO<Long, Tra
      */
     public volatile WriteType lastWriteType;
 
-    public OperationSetOfKey(){ }
+    public OperationSetOfKey(WriteType initialWriteType){
+        this.lastWriteType = initialWriteType;
+    }
 
 }
