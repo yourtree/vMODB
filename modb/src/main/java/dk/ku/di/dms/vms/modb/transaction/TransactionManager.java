@@ -406,7 +406,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
      */
     @Override
     public void checkpoint(long maxTid){
-        LOGGER.log(INFO, "Checkpoint called for max TID "+maxTid+" at "+System.currentTimeMillis());
+        LOGGER.log(INFO, "Checkpoint for max TID "+maxTid+" started at "+System.currentTimeMillis());
         if(this.checkpointing) {
             for (Table table : this.catalog.values()) {
                 LOGGER.log(INFO, "Checkpointing table "+table.getName());

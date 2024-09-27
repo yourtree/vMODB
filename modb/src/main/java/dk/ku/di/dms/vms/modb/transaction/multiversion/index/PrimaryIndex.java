@@ -421,13 +421,13 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public void checkpoint(long maxTid){
         if(this.keysToFlush.isEmpty() || this.updatesPerKeyMap.isEmpty()) return;
         int numRecords = 0;
-        for(IKey key : this.keysToFlush){
+        Iterator<IKey> it = this.keysToFlush.iterator();
+        this.primaryKeyIndex.lock();
+        while(it.hasNext()){
+            IKey key = it.next();
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             if(operationSetOfKey == null){
-                // has updates map been resetted?
-                if(this.updatesPerKeyMap.isEmpty()){
-                    return;
-                }
+                this.primaryKeyIndex.unlock();
                 throw new RuntimeException("Error on retrieving operation set for key "+key);
             }
             Entry<Long, TransactionWrite> entry = operationSetOfKey.floorEntry(maxTid);
@@ -445,11 +445,12 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             }
             numRecords++;
         }
+        this.primaryKeyIndex.unlock();
         if(numRecords > 0) {
-            LOGGER.log(WARNING, "Flushing "+numRecords+" to disk. Schema: \n"+this.primaryKeyIndex.schema());
+            LOGGER.log(INFO, "Updated "+numRecords+" records in disk");
             this.primaryKeyIndex.flush();
         } else {
-            LOGGER.log(WARNING, "No records have been flushed. Schema: \n"+this.primaryKeyIndex.schema());
+            LOGGER.log(WARNING, "No records have been flushed");
         }
     }
 

@@ -15,6 +15,8 @@ import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 
+import java.util.concurrent.locks.ReentrantLock;
+
 import static java.lang.System.Logger.Level.*;
 
 /**
@@ -36,6 +38,9 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     // the conjunction of all buffers can possibly hold
     private final int capacity;
 
+    // for operations that require exclusive access to the whiole buffer like reset and checkpoint
+    public final ReentrantLock lock = new ReentrantLock();
+
     public UniqueHashBufferIndex(RecordBufferContext recordBufferContext, Schema schema, int[] columnsIndex, int capacity){
         super(schema, columnsIndex);
         this.recordBufferContext = recordBufferContext;
@@ -45,12 +50,24 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         this.reset();
     }
 
+    @Override
+    public void lock(){
+        this.lock.lock();
+    }
+
+    @Override
+    public void unlock(){
+        this.lock.unlock();
+    }
+
     /**
      * Initialize all entries
      */
     @Override
     public void reset() {
+        this.lock();
         if(this.size == 0){
+            this.unlock();
             LOGGER.log(INFO, "Size of buffer is zero. No need to reset.");
             return;
         }
@@ -68,9 +85,12 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
             pos = pos + this.recordSize;
         }
         if(this.size > 0){
-            LOGGER.log(WARNING, "The reset did not clean all the entries. Size left out: "+this.size);
+            LOGGER.log(WARNING, "Reset did not clean all the entries. Size left out: "+this.size);
+        } else {
+            LOGGER.log(INFO, "Reset cleaned all the entries. Size left out: "+this.size);
         }
         this.size = 0;
+        this.unlock();
     }
 
     /**

@@ -25,6 +25,14 @@ public abstract class ReadWriteIndex<K> extends AbstractIndex<K> {
         this.insert(key, record);
     }
 
+    public void lock(){
+        throw new RuntimeException("Not supported.");
+    }
+
+    public void unlock(){
+        throw new RuntimeException("Not supported.");
+    }
+
     public void reset() {
         throw new RuntimeException("Not supported.");
     }

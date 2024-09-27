@@ -28,7 +28,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
 
     protected static void cancelBackgroundTasks(){
         for (Future<?> future : TRACKED_FUTURES) {
-            future.cancel(true);
+            future.cancel(false);
         }
         TRACKED_FUTURES.clear();
     }
