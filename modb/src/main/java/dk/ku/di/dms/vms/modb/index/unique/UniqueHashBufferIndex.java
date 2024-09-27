@@ -162,8 +162,10 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     @Override
     public void delete(IKey key) {
         long pos = this.findRecordAddress(key);
-        UNSAFE.putByte(null, pos, Header.INACTIVE_BYTE);
-        this.updateSize(-1);
+        if(pos == -1) {
+            UNSAFE.putByte(null, pos, Header.INACTIVE_BYTE);
+            this.updateSize(-1);
+        }
     }
 
     @Override
@@ -204,7 +206,9 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
             if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE) {
                 Object[] existingRecord = this.readFromIndex(pos + Schema.RECORD_HEADER);
                 IKey existingKey = KeyUtils.buildRecordKey(this.schema().getPrimaryKeyColumns(), existingRecord);
-                if (existingKey.equals(key)) return pos;
+                if (existingKey.equals(key)) {
+                    return pos;
+                }
             }
             attemptsToFind--;
             pos = this.getPosition(key.hashCode() + Math.multiplyExact(aux,2));

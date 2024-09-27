@@ -239,7 +239,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             pkConstraintViolation = operationSet.lastWriteType != WriteType.DELETE;
         } else {
             pkConstraintViolation = this.primaryKeyIndex.exists(key);
-            LOGGER.log(WARNING, "Primary key violation found in underlying primary key index: "+key);
+            if(pkConstraintViolation)
+                LOGGER.log(WARNING, "Primary key violation found in underlying primary key index: "+key);
         }
         if(pkConstraintViolation || this.nonPkConstraintViolation(record)) {
             return false;
