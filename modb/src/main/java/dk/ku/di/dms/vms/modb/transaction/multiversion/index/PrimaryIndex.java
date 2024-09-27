@@ -20,8 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
-import static java.lang.System.Logger.Level.DEBUG;
-import static java.lang.System.Logger.Level.WARNING;
+import static java.lang.System.Logger.Level.*;
 
 /**
  * A consistent view over an index.
@@ -412,6 +411,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     public void checkpoint(long maxTid){
         if(this.keysToFlush.isEmpty() || this.updatesPerKeyMap.isEmpty()) return;
+        LOGGER.log(WARNING, "Starting checkpointing with max TID "+maxTid+" for schema: \n"+this.primaryKeyIndex.schema()+" at "+System.currentTimeMillis());
         int numRecords = 0;
         // LOGGER.log(DEBUG, this.updatesPerKeyMap.size()+" records will be inserted into:\n"+this.primaryKeyIndex.schema());
         for(IKey key : this.keysToFlush){
@@ -423,7 +423,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 }
                 throw new RuntimeException("Error on retrieving operation set for key "+key);
             }
-            Entry<Long, TransactionWrite> entry = operationSetOfKey.getHigherEntryUpToKey(maxTid);
+            Entry<Long, TransactionWrite> entry = operationSetOfKey.floorEntry(maxTid);
             if (entry == null) continue;
             // is the head?
             if(operationSetOfKey.peak() == entry) {
@@ -439,7 +439,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             numRecords++;
         }
         if(numRecords > 0) {
-            LOGGER.log(DEBUG, "Flushing "+numRecords+" to disk.");
+            LOGGER.log(WARNING, "Flushing "+numRecords+" to disk. Schema: \n"+this.primaryKeyIndex.schema());
             this.primaryKeyIndex.flush();
         } else {
             LOGGER.log(WARNING, "No records have been flushed. Schema: \n"+this.primaryKeyIndex.schema());

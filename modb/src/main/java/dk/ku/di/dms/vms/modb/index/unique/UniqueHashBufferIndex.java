@@ -54,6 +54,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
             LOGGER.log(DEBUG, "Size of buffer is zero. No need to reset.");
             return;
         }
+        long initialSize = this.size;
         long lastPos = this.recordBufferContext.address +
                 (this.capacity * this.recordSize) - 1;
         long pos = this.recordBufferContext.address;
@@ -68,6 +69,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         if(this.size > 0){
             LOGGER.log(WARNING, "The reset did not clean all the entries. Size left out: "+this.size);
         }
+        LOGGER.log(WARNING, "Entries cleaned: "+initialSize);
         this.size = 0;
     }
 
@@ -92,7 +94,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         }
         UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
         UNSAFE.putInt(null, pos, key.hashCode());
-        UNSAFE.copyMemory(null, srcAddress, null, pos + Schema.RECORD_HEADER, schema.getRecordSizeWithoutHeader());
+        UNSAFE.copyMemory(null, srcAddress, null, pos + Schema.RECORD_HEADER, this.schema.getRecordSizeWithoutHeader());
         this.updateSize(1);
     }
 
