@@ -14,8 +14,11 @@ import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
+import static dk.ku.di.dms.vms.marketplace.common.Constants.INVOICE_ISSUED;
 import static java.lang.Thread.sleep;
 
 /**
@@ -26,6 +29,10 @@ import static java.lang.Thread.sleep;
  */
 public final class Main {
 
+    private static final List<String> VMSes = Arrays.asList("cart","product","stock","order","payment","shipment","seller");
+
+    private static final int NUM_QUEUED_TRANSACTIONS = 5000000;
+
     public static void main(String[] ignoredArgs) throws IOException, InterruptedException {
         Properties properties = ConfigUtils.loadProperties();
         // must ideally scale together
@@ -34,57 +41,83 @@ public final class Main {
         // can potentially hide the wait time introduced by the "ring"
         int num_max_transactions_batch = Integer.parseInt( properties.getProperty("num_max_transactions_batch") );
         int max_time = Integer.parseInt( properties.getProperty("max_time") );
+        int batch_windows_ms = Integer.parseInt( properties.getProperty("batch_window_ms"));
 
         System.out.println("Experiment config: \n"+
-                " Num vms workers "+ (num_transaction_workers)+"\n"+
-                " Num transaction workers "+ (num_transaction_workers)+"\n"+
-                " Num max transaction batch "+ (num_max_transactions_batch)+"\n"+
-                " Max time "+ (max_time)+"\n"
+                " Num vms workers = "+ (num_transaction_workers)+"\n"+
+                " Num transaction workers = "+ (num_transaction_workers)+"\n"+
+                " Num max transaction batch = "+ (num_max_transactions_batch)+"\n"+
+                " Batch window (ms) = "+batch_windows_ms+"\n"+
+                " Max time (ms) = "+ (max_time)+"\n"
         );
-
-        int NUM_QUEUED_TRANSACTIONS = 5000000;
 
         List<ConcurrentLinkedDeque<TransactionInput>> txInputQueues = new ArrayList<>(num_transaction_workers);
 
         // fill each queue with proper number of transaction inputs
+        String defaultPayload = String.valueOf(0);
         for (int i = 1; i <= num_transaction_workers; i++) {
            var inputQueue = new ConcurrentLinkedDeque<TransactionInput>();
            txInputQueues.add(inputQueue);
            System.out.println("Generating "+NUM_QUEUED_TRANSACTIONS+" transactions for worker # "+i);
            for(int j = 1; j <= NUM_QUEUED_TRANSACTIONS; j++) {
-               inputQueue.add(new TransactionInput("update_product",
-                       new TransactionInput.Event("update_product", String.valueOf(i))));
+               int idx = ThreadLocalRandom.current().nextInt(1, 101);
+               if(idx <= 73){
+                   inputQueue.add(
+                           new TransactionInput(CUSTOMER_CHECKOUT,
+                                   new TransactionInput.Event(CUSTOMER_CHECKOUT,
+                                           defaultPayload)));
+               } else if(idx <= 86) {
+                   inputQueue.add(
+                           new TransactionInput(UPDATE_PRODUCT,
+                                   new TransactionInput.Event(UPDATE_PRODUCT,
+                                           defaultPayload)));
+               } else {
+                   inputQueue.add(
+                           new TransactionInput(UPDATE_PRICE,
+                                   new TransactionInput.Event(UPDATE_PRICE,
+                                           defaultPayload)));
+               }
            }
         }
 
         Deque<Object> coordinatorQueue = new ConcurrentLinkedDeque<>();
 
-        BaseMicroBenchVmsWorker vmsWorker;
-        if(num_vms_workers > 1) {
-            vmsWorker = new ComplexMicroBenchVmsWorker(num_vms_workers);
-        } else {
-            vmsWorker = new SimpleMicroBenchVmsWorker();
+        Map<String,IVmsWorker> vmsWorkers = new HashMap<>();
+        for(var vms : VMSes){
+            BaseMicroBenchVmsWorker vmsWorker;
+            if(num_vms_workers > 1) {
+                vmsWorker = new ComplexMicroBenchVmsWorker(num_vms_workers);
+            } else {
+                vmsWorker = new SimpleMicroBenchVmsWorker();
+            }
+            vmsWorkers.put(vms, vmsWorker);
         }
 
-        System.out.println("Setting up "+num_transaction_workers+" workers");
-        List<TransactionWorker> workers = setupTransactionWorkers(num_transaction_workers, num_max_transactions_batch,
-                vmsWorker, coordinatorQueue, txInputQueues);
+        System.out.println("Setting up "+num_transaction_workers+" worker threads");
+        List<TransactionWorker> workers = setupTransactionWorkers(num_transaction_workers, num_max_transactions_batch, batch_windows_ms,
+                vmsWorkers, coordinatorQueue, txInputQueues);
 
         System.out.println("Initializing "+num_transaction_workers+" worker threads");
-        var threadFactory = Thread.ofPlatform().factory();
+        ThreadFactory threadFactory = Thread.ofPlatform().factory();
+        List<Thread> threads = new ArrayList<>();
         for (TransactionWorker worker : workers) {
-            threadFactory.newThread(worker).start();
+            var thread = threadFactory.newThread(worker);
+            threads.add(thread);
+            thread.start();
         }
 
-        // 10 seconds - 1 second
-        sleep(max_time-1000);
+        sleep(max_time);
 
-        for (TransactionWorker worker : workers) {
+        for (var thread : threads) {
+            thread.interrupt();
+        }
+
+        long numPayloads = vmsWorkers.values().stream().mapToInt(iVmsWorker -> ((BaseMicroBenchVmsWorker) iVmsWorker).getNumPayloads()).sum();
+        long numBatches = coordinatorQueue.size();
+
+        for(var worker : workers){
             worker.stop();
         }
-
-        long numPayloads = vmsWorker.getNumPayloads();
-        long numBatches = coordinatorQueue.size();
 
         //  add batches per second. count num of batches in the queue
         System.out.println("Experiment finished: \n"+
@@ -108,14 +141,14 @@ public final class Main {
             this.numVmsWorkers = numVmsWorkers;
             this.payloadQueues = new ArrayList<>(numVmsWorkers);
             for (int i = 0; i < numVmsWorkers; i++) {
-                payloadQueues.add(new ConcurrentLinkedDeque<>());
+                this.payloadQueues.add(new ConcurrentLinkedDeque<>());
             }
         }
 
         @Override
         int getNumPayloads() {
             int sum = 0;
-            for (Queue<TransactionEvent.PayloadRaw> queue: payloadQueues) {
+            for (Queue<TransactionEvent.PayloadRaw> queue: this.payloadQueues) {
                 sum += queue.size();
             }
             return sum;
@@ -158,28 +191,24 @@ public final class Main {
 
     }
 
-    private static List<TransactionWorker> setupTransactionWorkers(int numWorkers, int maxNumTidBatch,
-                                                                   IVmsWorker vmsWorker,
+    private static List<TransactionWorker> setupTransactionWorkers(int numWorkers, int maxNumTidBatch, int batch_windows_ms,
+                                                                   Map<String,IVmsWorker> workers,
                                                                    Queue<Object> coordinatorQueue,
                                                                    List<ConcurrentLinkedDeque<TransactionInput>> txInputQueues){
         List<TransactionWorker> txWorkers = new ArrayList<>();
         var vmsMetadataMap = new HashMap<String, VmsNode>();
-        vmsMetadataMap.put( "product", new VmsNode("localhost", 8080, "product", 0, 0, 0, null, null, null));
+        int i = 0;
+        for(var vms : VMSes) {
+            vmsMetadataMap.put(vms, new VmsNode("localhost", 8080 + i, vms, 0, 0, 0, null, null, null));
+            i++;
+        }
 
-        Map<String, TransactionDAG> transactionMap = new HashMap<>();
-        TransactionDAG updateProductDag = TransactionBootstrap.name("update_product")
-                .input("a", "product", "update_product")
-                .terminal("b", "product", "a")
-                .build();
-        transactionMap.put(updateProductDag.name, updateProductDag);
+        Map<String, TransactionDAG> transactionMap = buildTransactionDAGs();
 
         Map<String, VmsNode[]> vmsNodePerDAG = new HashMap<>();
         for(var dag : transactionMap.entrySet()) {
             vmsNodePerDAG.put(dag.getKey(), BatchAlgo.buildTransactionDagVmsList(dag.getValue(), vmsMetadataMap));
         }
-
-        Map<String,IVmsWorker> workers = new HashMap<>();
-        workers.put("product", vmsWorker);
 
         // generic algorithm to handle N number of transaction workers
         int idx = 1;
@@ -190,8 +219,10 @@ public final class Main {
         ConcurrentLinkedDeque<Map<String, TransactionWorker.PrecedenceInfo>> precedenceMapOutputQueue;
 
         Map<String, TransactionWorker.PrecedenceInfo> precedenceMap = new HashMap<>();
-        precedenceMap.put("product", new TransactionWorker.PrecedenceInfo(0, 0, 0));
-        precedenceMapInputQueue.add(precedenceMap);
+        for(var vms : VMSes) {
+            precedenceMap.put(vms, new TransactionWorker.PrecedenceInfo(0, 0, 0));
+            precedenceMapInputQueue.add(precedenceMap);
+        }
 
         var serdesProxy = VmsSerdesProxyBuilder.build();
         do {
@@ -200,7 +231,7 @@ public final class Main {
             } else {
                 precedenceMapOutputQueue = firstPrecedenceInputQueue;
             }
-            var txWorker = TransactionWorker.build(idx, txInputQueues.get(idx-1), initTid, maxNumTidBatch, 1000,
+            var txWorker = TransactionWorker.build(idx, txInputQueues.get(idx-1), initTid, maxNumTidBatch, batch_windows_ms,
                     numWorkers, precedenceMapInputQueue, precedenceMapOutputQueue, transactionMap,
                     vmsNodePerDAG, workers, coordinatorQueue, serdesProxy);
             initTid = initTid + maxNumTidBatch;
@@ -209,6 +240,35 @@ public final class Main {
             txWorkers.add(txWorker);
         } while (idx <= numWorkers);
         return txWorkers;
+    }
+
+    private static Map<String, TransactionDAG> buildTransactionDAGs(){
+        Map<String, TransactionDAG> transactionMap = new HashMap<>();
+
+        TransactionDAG updatePriceDag = TransactionBootstrap.name(UPDATE_PRICE)
+                .input("a", "product", UPDATE_PRICE)
+                .terminal("b", "cart", "a")
+                .build();
+        transactionMap.put(updatePriceDag.name, updatePriceDag);
+
+        TransactionDAG updateProductDag = TransactionBootstrap.name(UPDATE_PRODUCT)
+                .input("a", "product", UPDATE_PRODUCT)
+                .terminal("b", "stock", "a")
+                .terminal("c", "cart", "a")
+                .build();
+        transactionMap.put(updateProductDag.name, updateProductDag);
+
+        TransactionDAG checkoutDag = TransactionBootstrap.name(CUSTOMER_CHECKOUT)
+                .input("a", "cart", CUSTOMER_CHECKOUT)
+                .internal("b", "stock", RESERVE_STOCK, "a")
+                .internal("c", "order", STOCK_CONFIRMED, "b")
+                .internal("d", "payment", INVOICE_ISSUED, "c")
+                .internal("e", "seller", INVOICE_ISSUED, "c")
+                .terminal("f", "shipment", "d")
+                .build();
+        transactionMap.put(checkoutDag.name, checkoutDag);
+
+        return transactionMap;
     }
 
 }
