@@ -287,7 +287,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             @Override
             public void completed(Integer result, ByteBuffer byteBuffer) {
                 if(byteBuffer.hasRemaining()) {
-                    connectionMetadata.channel.write(byteBuffer, null, this);
+                    connectionMetadata.channel.write(byteBuffer, byteBuffer, this);
                     return;
                 }
                 byteBuffer.clear();
