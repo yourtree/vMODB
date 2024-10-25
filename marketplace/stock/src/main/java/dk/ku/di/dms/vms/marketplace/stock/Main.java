@@ -49,7 +49,7 @@ public final class Main {
         @Override
         public void post(String uri, String body) {
             StockItem stockItem = StockDbUtils.deserializeStockItem(body);
-            var txCtx = this.transactionManager.beginTransaction(0, 0, 0, false);
+            this.transactionManager.beginTransaction(0, 0, 0, false);
             this.repository.upsert(stockItem);
         }
 
@@ -73,11 +73,11 @@ public final class Main {
         }
 
         @Override
-        public String getAsJson(String uri) throws Exception {
+        public String getAsJson(String uri) {
             final String[] uriSplit = uri.split("/");
             int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
             int productId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
-            var txCtx = this.transactionManager.beginTransaction(0, 0, 0, true);
+            this.transactionManager.beginTransaction(0, 0, 0, true);
             StockItem stockItem = this.repository.lookupByKey(new StockItem.StockId(sellerId, productId));
             return stockItem.toString();
         }

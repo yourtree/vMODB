@@ -50,7 +50,7 @@ public final class Main {
         @Override
         public void post(String uri, String payload) {
             Product product = ProductDbUtils.deserializeProduct(payload);
-            var txCtx = this.transactionManager.beginTransaction(0, 0, 0, false);
+            this.transactionManager.beginTransaction(0, 0, 0, false);
             this.repository.upsert(product);
         }
 

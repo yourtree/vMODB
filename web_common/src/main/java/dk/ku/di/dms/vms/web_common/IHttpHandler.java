@@ -2,9 +2,9 @@ package dk.ku.di.dms.vms.web_common;
 
 public interface IHttpHandler {
 
-    default void post(String uri, String body) throws Exception { }
+    default void post(String uri, String body) throws RuntimeException { }
 
-    default String getAsJson(String uri) throws Exception { return null; }
+    default String getAsJson(String uri) throws RuntimeException { return null; }
 
     default byte[] getAsBytes(String uri) { return null; }
 
