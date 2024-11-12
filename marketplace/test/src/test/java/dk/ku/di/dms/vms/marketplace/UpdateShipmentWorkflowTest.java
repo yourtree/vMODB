@@ -188,7 +188,7 @@ public non-sealed class UpdateShipmentWorkflowTest extends CheckoutWorkflowTest 
                 serverIdentifier,
                 new CoordinatorOptions().withBatchWindow(BATCH_WINDOW_INTERVAL),
                 1,
-                1,  _ -> new IHttpHandler() { },
+                1,  _ -> IHttpHandler.DEFAULT,
                 serdes
         );
     }

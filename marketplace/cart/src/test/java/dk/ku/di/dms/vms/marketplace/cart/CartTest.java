@@ -27,23 +27,25 @@ public final class CartTest {
 
     @Test
     public void testRetrieveCartsForPriceUpdate() throws Exception {
-        VmsApplication vms = loadCartVms();
-        IProductReplicaRepository productReplicaRepository = (IProductReplicaRepository) vms.getRepositoryProxy("product_replicas");
-        ICartItemRepository cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
+        ICartItemRepository cartItemRepository;
+        try (VmsApplication vms = loadCartVms()) {
+            vms.start();
+            IProductReplicaRepository productReplicaRepository = (IProductReplicaRepository) vms.getRepositoryProxy("product_replicas");
+            cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
 
-        var txCtx0 = (TransactionContext) vms.getTransactionManager().beginTransaction( 1, 0, 0, false );
-        productReplicaRepository.insert(new ProductReplica(
-                1, 1, "test", "test", "test",
-                "test", 10, 0, "test", "0"
-        ));
-        cartItemRepository.insert(new CartItem( 1, 1, 1, "test", 10, 10, 1, 0, "0" ));
-        cartItemRepository.insert(new CartItem( 1, 1, 2, "test", 10, 10, 1, 0, "0" ));
+            vms.getTransactionManager().beginTransaction(1, 0, 0, false);
+            productReplicaRepository.insert(new ProductReplica(
+                    1, 1, "test", "test", "test",
+                    "test", 10, 0, "test", "0"
+            ));
+            cartItemRepository.insert(new CartItem(1, 1, 1, "test", 10, 10, 1, 0, "0"));
+            cartItemRepository.insert(new CartItem(1, 1, 2, "test", 10, 10, 1, 0, "0"));
 
-        var txCtx1 = vms.getTransactionManager().beginTransaction(2,0,1, false);
-        cartItemRepository.delete(new CartItem( 1, 1, 1, "test", 10, 10, 1, 0, "0" ));
+            vms.getTransactionManager().beginTransaction(2, 0, 1, false);
+            cartItemRepository.delete(new CartItem(1, 1, 1, "test", 10, 10, 1, 0, "0"));
 
-
-        var txCtx2 = vms.getTransactionManager().beginTransaction(3,0,2, true);
+            vms.getTransactionManager().beginTransaction(3, 0, 2, true);
+        }
         var items = cartItemRepository.getCartItemsBySellerIdAndProductIdAndVersion(1, 1, "0");
         Assert.assertEquals(1, items.size());
     }
@@ -51,6 +53,7 @@ public final class CartTest {
     @Test
     public void testPriceUpdate() throws Exception {
         VmsApplication vms = loadCartVms();
+        vms.start();
         IProductReplicaRepository productReplicaRepository = (IProductReplicaRepository) vms.getRepositoryProxy("product_replicas");
 
         var txCtx = (TransactionContext) vms.getTransactionManager().beginTransaction( 1, 0, 0, false );
@@ -62,7 +65,6 @@ public final class CartTest {
         Object[] cartItemRow2 = new Object[]{1, 1, 2, "test", 10, 10, 1, 0, "0"};
         insertCartItem(vms, txCtx, cartItemRow1);
         insertCartItem(vms, txCtx, cartItemRow2);
-
 
         PriceUpdated priceUpdated = new PriceUpdated(1, 1, 20, "0", "1");
 
@@ -87,7 +89,7 @@ public final class CartTest {
     @Test
     public void testOneCheckout() throws Exception {
         VmsApplication vms = loadCartVms();
-
+        vms.start();
         Object[] cartItemRow = new Object[]{1, 1, 1, "test", 10, 10, 1, 0, "0"};
 
         var txCtx = (TransactionContext) vms.getTransactionManager().beginTransaction(0, 0,0,false);
@@ -108,40 +110,34 @@ public final class CartTest {
         ICartItemRepository cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
 
         // register tid 2 and query the state of customer 1 cart items to see if they are deleted
-        var txCtx1 = vms.getTransactionManager().beginTransaction( 2, 0, 1, true );
+        vms.getTransactionManager().beginTransaction( 2, 0, 1, true );
         List<CartItem> list = cartItemRepository.getCartItemsByCustomerId(1);
         Assert.assertTrue(list.isEmpty());
     }
 
     private static void insertCartItem(VmsApplication vms, TransactionContext txCtx, Object[] cartItemRow) {
         var table = vms.getTable("cart_items");
-
         IKey key = KeyUtils.buildRecordKey( table.schema().getPrimaryKeyColumns(), cartItemRow );
         table.primaryKeyIndex().insert(txCtx, key, cartItemRow);
-
         // add to customer idx
         NonUniqueSecondaryIndex secIdx = table.secondaryIndexMap.get( KeyUtils.buildIndexKey( new int[]{2} ) );
         secIdx.insert(txCtx, key, cartItemRow);
     }
 
     private static VmsApplication loadCartVms() throws Exception {
-
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 "localhost",
                 Constants.CART_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.cart",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
-
-        VmsApplication vms = VmsApplication.build(options);
-        vms.start();
-        return vms;
+        return VmsApplication.build(options);
     }
 
     @Test
     public void testTwoCustomerUpdates() throws Exception {
         VmsApplication vms = loadCartVms();
-
+        vms.start();
         // cart item for same customer id
         Object[] cartItemRow = new Object[]{1, 1, 1, "test", 10, 10, 1, 0, "0"};
 
@@ -167,7 +163,7 @@ public final class CartTest {
         ICartItemRepository cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
 
         // register tid 2 and query the state of customer 1 cart items to see if they are deleted
-        var txCtx = vms.getTransactionManager().beginTransaction( 3, 0, 2, true );
+        vms.getTransactionManager().beginTransaction( 3, 0, 2, true );
         List<CartItem> list = cartItemRepository.getCartItemsByCustomerId(1);
         Assert.assertTrue(list.isEmpty());
     }

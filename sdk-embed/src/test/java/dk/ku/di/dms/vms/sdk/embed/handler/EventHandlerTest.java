@@ -121,7 +121,7 @@ public class EventHandlerTest {
                 },
                 vmsInternalPubSubService, vmsMetadata,
                 VmsApplicationOptions.build(null, 0, null),
-                new IHttpHandler() { },
+                IHttpHandler.DEFAULT,
                 serdes);
 
         if(eventHandlerActive) {

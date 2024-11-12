@@ -59,10 +59,9 @@ public final class SellerTest {
         }
 
         sleep(2000);
-        var sellerService = vms.<SellerService>getService();
-        Assert.assertTrue(sellerService.isPresent());
-        var txCtx = vms.getTransactionManager().beginTransaction(LAST_TID, 0, LAST_TID, true);
-        SellerDashboard dash = sellerService.get().queryDashboard(1);
+        SellerService sellerService = vms.getService("seller");
+        vms.getTransactionManager().beginTransaction(LAST_TID, 0, LAST_TID, true);
+        SellerDashboard dash = sellerService.queryDashboard(1);
         Assert.assertNotNull(dash);
         Assert.assertEquals(dash.view.count_items, 10);
         Assert.assertEquals(dash.view.count_orders, 10);
@@ -74,10 +73,9 @@ public final class SellerTest {
         vms.start();
         generateInvoiceIssuedEvents(vms);
         sleep(2000);
-        var sellerService = vms.<SellerService>getService();
-        Assert.assertTrue(sellerService.isPresent());
-        var txCtx = vms.getTransactionManager().beginTransaction(LAST_TID, 0, LAST_TID, true);
-        SellerDashboard dash = sellerService.get().queryDashboard(1);
+        SellerService sellerService = vms.getService("seller");
+        vms.getTransactionManager().beginTransaction(LAST_TID, 0, LAST_TID, true);
+        SellerDashboard dash = sellerService.queryDashboard(1);
         Assert.assertNotNull(dash);
         Assert.assertEquals(dash.view.count_items, 1);
         Assert.assertEquals(dash.view.count_orders, 1);

@@ -21,10 +21,12 @@ public final class Main {
 
     public static void main(String[] ignoredArgs) throws Exception {
         Properties properties = ConfigUtils.loadProperties();
-        VmsApplication vms = initVmsApplication(properties);
+        try(VmsApplication vms = buildVms(properties)){
+            vms.start();
+        }
     }
 
-    private static VmsApplication initVmsApplication(Properties properties) throws Exception {
+    private static VmsApplication buildVms(Properties properties) throws Exception {
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 properties,
                 "0.0.0.0",
@@ -32,10 +34,8 @@ public final class Main {
                 "dk.ku.di.dms.vms.marketplace.cart",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
-        VmsApplication vms = VmsApplication.build(options,
+        return VmsApplication.build(options,
                 (x,z) -> new CartHttpHandlerJdk2(x, (ICartItemRepository) z.apply("cart_items")));
-        vms.start();
-        return vms;
     }
     
     private static class CartHttpHandlerJdk2 implements IHttpHandler {
@@ -58,7 +58,7 @@ public final class Main {
                 int customerId = Integer.parseInt(split[split.length - 2]);
                 dk.ku.di.dms.vms.marketplace.common.entities.CartItem cartItemAPI =
                         SERDES.deserialize(body, dk.ku.di.dms.vms.marketplace.common.entities.CartItem.class);
-                var txCtx = this.transactionManager.beginTransaction(0, 0, 0, false);
+                this.transactionManager.beginTransaction(0, 0, 0, false);
                 this.repository.insert(CartUtils.convertCartItemAPI(customerId, cartItemAPI));
                 return;
             }
@@ -69,7 +69,7 @@ public final class Main {
         public String getAsJson(String uri) {
             String[] split = uri.split("/");
             int customerId = Integer.parseInt(split[split.length - 1]);
-            var txCtx = this.transactionManager.beginTransaction( 0, 0, 0,true );
+            this.transactionManager.beginTransaction( 0, 0, 0,true );
             List<CartItem> cartItems = this.repository.getCartItemsByCustomerId(customerId);
             return SERDES.serializeList(cartItems);
 

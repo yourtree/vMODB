@@ -14,8 +14,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.*;
 
-import static java.util.concurrent.ForkJoinPool.commonPool;
-
 public abstract class ModbHttpServer extends StoppableRunnable {
 
     protected static final List<HttpReadCompletionHandler> SSE_CLIENTS = new CopyOnWriteArrayList<>();
@@ -102,7 +100,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                             this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
                         } else {
                             switch (httpRequest.headers.get("Accept")) {
-                                case "*/*", "application/json" -> commonPool().submit(() -> {
+                                case "*/*", "application/json" -> ForkJoinPool.commonPool().submit(() -> {
                                     String dashJson = this.httpHandler.getAsJson(httpRequest.uri());
                                     byte[] dashJsonBytes = dashJson.getBytes(StandardCharsets.UTF_8);
                                     String headers = createHttpHeaders(dashJsonBytes.length);

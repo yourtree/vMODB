@@ -18,33 +18,34 @@ public final class OrderTest {
 
     @Test
     public void testConcurrentCustomerCheckouts() throws Exception {
-        VmsApplication vms = initOrderVms();
-        for(int i = 1; i <= 2; i++){
-            InboundEvent inboundEvent = getInboundEvent(i);
-            vms.internalChannels().transactionInputQueue().add( inboundEvent );
+        try(VmsApplication vms = buildOrderVms()) {
+            for (int i = 1; i <= 2; i++) {
+                InboundEvent inboundEvent = getInboundEvent(i);
+                vms.internalChannels().transactionInputQueue().add(inboundEvent);
+            }
+            sleep(100000);
+            assert vms.lastTidFinished() == 2;
         }
-        sleep(100000);
-        assert vms.lastTidFinished() == 2;
     }
 
     @Test
     public void simpleTest() throws Exception {
-        VmsApplication vms = initOrderVms();
-        InboundEvent inboundEvent = getInboundEvent(1);
-        vms.internalChannels().transactionInputQueue().add( inboundEvent );
-        sleep(1000);
-        assert vms.lastTidFinished() == 1;
+        try(VmsApplication vms = buildOrderVms()){
+            vms.start();
+            InboundEvent inboundEvent = getInboundEvent(1);
+            vms.internalChannels().transactionInputQueue().add( inboundEvent );
+            sleep(1000);
+            assert vms.lastTidFinished() == 1;
+        }
     }
 
-    private static VmsApplication initOrderVms() throws Exception {
+    private static VmsApplication buildOrderVms() throws Exception {
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 "localhost", Constants.ORDER_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.order",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
-        VmsApplication vms = VmsApplication.build(options);
-        vms.start();
-        return vms;
+        return VmsApplication.build(options);
     }
 
     private static InboundEvent getInboundEvent(long tid) {

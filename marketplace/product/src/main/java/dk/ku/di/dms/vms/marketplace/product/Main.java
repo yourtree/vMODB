@@ -18,10 +18,12 @@ public final class Main {
 
     public static void main(String[] ignoredArgs) throws Exception {
         Properties properties = ConfigUtils.loadProperties();
-        VmsApplication vms = initVms(properties);
+        try(var vms = buildVms(properties)){
+            vms.start();
+        }
     }
 
-    public static VmsApplication initVms(Properties properties) throws Exception {
+    public static VmsApplication buildVms(Properties properties) throws Exception {
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 properties,
                 "0.0.0.0",
@@ -29,10 +31,8 @@ public final class Main {
                         "dk.ku.di.dms.vms.marketplace.product",
                         "dk.ku.di.dms.vms.marketplace.common"
                 });
-        VmsApplication vms = VmsApplication.build(options,
+        return VmsApplication.build(options,
                 (x,y) -> new ProductHttpHandlerJdk2(x, (IProductRepository) y.apply("products")));
-        vms.start();
-        return vms;
     }
 
     private static class ProductHttpHandlerJdk2 implements IHttpHandler {

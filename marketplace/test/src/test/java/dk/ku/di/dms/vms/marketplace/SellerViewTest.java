@@ -98,7 +98,7 @@ public final class SellerViewTest extends AbstractWorkflowTest {
                 serverIdentifier,
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
-                1,  _ -> new IHttpHandler() { },
+                1,  _ -> IHttpHandler.DEFAULT,
                 serdes
         );
     }

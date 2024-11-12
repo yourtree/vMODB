@@ -25,12 +25,10 @@ import static java.lang.Thread.sleep;
 public class StockTest {
 
     private static VmsApplication getVmsApplication() throws Exception {
-
         VmsApplicationOptions options = VmsApplicationOptions.build("localhost", Constants.STOCK_VMS_PORT, new String[]{
                 "dk.ku.di.dms.vms.marketplace.stock",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
-
         return VmsApplication.build(options);
     }
 

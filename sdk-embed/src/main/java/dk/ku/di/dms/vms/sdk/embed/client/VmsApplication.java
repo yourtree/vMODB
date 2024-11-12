@@ -20,12 +20,13 @@ import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import org.reflections.Reflections;
 
+import java.io.Closeable;
 import java.util.*;
 
 /**
  * Starting point for initializing the VMS application runtime
  */
-public final class VmsApplication {
+public final class VmsApplication implements Closeable {
 
     private final String name;
 
@@ -58,7 +59,7 @@ public final class VmsApplication {
     }
 
     public static VmsApplication build(VmsApplicationOptions options) throws Exception {
-           return build(options, (transactionManager, repository) -> new IHttpHandler() { });
+           return build(options, (ignored1, ignored2) -> IHttpHandler.DEFAULT);
     }
 
     /**
@@ -148,19 +149,17 @@ public final class VmsApplication {
     }
 
     /**
-     * Setting high priority can increase the garbage size, leading to larger garbage collection times
+     * This method setups the VMS TCP socket accept and the scheduler thread
      */
     public void start(){
-        Thread.ofPlatform().name("vms-event-handler-"+this.name)
-                .inheritInheritableThreadLocals(false)
-                .start(this.eventHandler);
+        this.eventHandler.run();
         Thread.ofPlatform().name("vms-transaction-scheduler-"+this.name)
                 .inheritInheritableThreadLocals(false)
                 .start(this.transactionScheduler);
     }
 
-    public void stop(){
-        this.eventHandler.stop();
+    @Override
+    public void close(){
         this.transactionScheduler.stop();
     }
 
@@ -181,8 +180,8 @@ public final class VmsApplication {
     }
 
     @SuppressWarnings("unchecked")
-    public <T> Optional<T> getService() {
-        return (Optional<T>) this.vmsRuntimeMetadata.loadedVmsInstances().values().stream().findFirst();
+    public <T> T getService(String name) {
+        return (T) this.vmsRuntimeMetadata.loadedVmsInstances().get(name);
     }
 
     public ITransactionManager getTransactionManager() {

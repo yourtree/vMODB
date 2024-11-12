@@ -14,9 +14,10 @@ public final class Main {
                 "dk.ku.di.dms.vms.marketplace.order",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
-        VmsApplication vms = VmsApplication.build(options,
-                (x,z) -> new DefaultHttpHandlerJdk(x));
-        vms.start();
+        try (VmsApplication vms = VmsApplication.build(options,
+                (x, ignored) -> new DefaultHttpHandlerJdk(x))) {
+            vms.start();
+        }
     }
 
 }

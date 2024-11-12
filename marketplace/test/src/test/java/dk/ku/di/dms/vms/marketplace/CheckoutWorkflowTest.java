@@ -130,7 +130,7 @@ public sealed class CheckoutWorkflowTest extends AbstractWorkflowTest permits Up
                 new CoordinatorOptions().withBatchWindow(BATCH_WINDOW_INTERVAL),
                 1,
                 1,
-                _ -> new IHttpHandler() { },
+                _ -> IHttpHandler.DEFAULT,
                 serdes
         );
     }

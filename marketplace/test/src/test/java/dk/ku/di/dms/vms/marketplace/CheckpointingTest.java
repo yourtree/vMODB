@@ -29,7 +29,8 @@ public class CheckpointingTest extends CartProductWorkflowTest {
         // System.setProperty("logging", "true");
         System.setProperty("checkpointing", "true");
         Properties properties = ConfigUtils.loadProperties();
-        PRODUCT_VMS = dk.ku.di.dms.vms.marketplace.product.Main.initVms(properties);
+        PRODUCT_VMS = dk.ku.di.dms.vms.marketplace.product.Main.buildVms(properties);
+        PRODUCT_VMS.start();
     }
 
     @Override

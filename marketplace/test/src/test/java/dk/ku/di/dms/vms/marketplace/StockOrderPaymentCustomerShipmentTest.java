@@ -142,7 +142,7 @@ public class StockOrderPaymentCustomerShipmentTest extends AbstractWorkflowTest 
                 new CoordinatorOptions().withBatchWindow(3000),
                 1,
                 1,
-                c -> new IHttpHandler() { },
+                c -> IHttpHandler.DEFAULT,
                 serdes
         );
     }

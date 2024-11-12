@@ -18,10 +18,12 @@ public final class Main {
 
     public static void main(String[] ignoredArgs) throws Exception {
         Properties properties = ConfigUtils.loadProperties();
-        VmsApplication vms = initVms(properties);
+        try(VmsApplication vms = buildVms(properties)){
+            vms.start();
+        }
     }
 
-    private static VmsApplication initVms(Properties properties) throws Exception {
+    private static VmsApplication buildVms(Properties properties) throws Exception {
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 properties,
                 "0.0.0.0",
@@ -29,10 +31,8 @@ public final class Main {
                         "dk.ku.di.dms.vms.marketplace.stock",
                         "dk.ku.di.dms.vms.marketplace.common"
                 });
-        VmsApplication vms = VmsApplication.build(options,
+        return VmsApplication.build(options,
                 (x,y) -> new StockHttpHandlerJdk2(x, (IStockRepository) y.apply("stock_items")));
-        vms.start();
-        return vms;
     }
     
     private static class StockHttpHandlerJdk2 implements IHttpHandler {
@@ -54,7 +54,7 @@ public final class Main {
         }
 
         @Override
-        public void patch(String uri, String body) throws Exception {
+        public void patch(String uri, String body) {
             final String[] uriSplit = uri.split("/");
             String op = uriSplit[uriSplit.length - 1];
             if(op.contentEquals("reset")){
@@ -62,7 +62,7 @@ public final class Main {
                 this.transactionManager.reset();
                 return;
             }
-            var txCtx = this.transactionManager.beginTransaction(0, 0, 0,false);
+            this.transactionManager.beginTransaction(0, 0, 0,false);
             List<StockItem> stockItems = this.repository.getAll();
             for(StockItem item : stockItems){
                 item.qty_available = 10000;

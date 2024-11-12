@@ -109,7 +109,7 @@ public class CartProductWorkflowTest extends AbstractWorkflowTest {
                         .withNetworkBufferSize(networkBufferSize)
                         .withLogging(logging),
                 1,
-                1,  _ -> new IHttpHandler() { },
+                1,  _ -> IHttpHandler.DEFAULT,
                 serdes
         );
     }

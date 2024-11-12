@@ -29,9 +29,11 @@ public record VmsRuntimeMetadata(
         Map<Class<?>, String> eventToQueueMap,
 
         Map<String, String> clazzNameToVmsName,
+
+        // The classes annotated with {@link dk.ku.di.dms.vms.modb.api.annotations.Microservice}
         Map<String, Object> loadedVmsInstances,
 
-        // key is the entity (or table) name
+        // key is the table (or entity) name
         Map<String, Object> repositoryProxyMap
 
 ){}

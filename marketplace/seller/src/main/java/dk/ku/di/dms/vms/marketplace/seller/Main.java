@@ -27,6 +27,7 @@ public final class Main {
     public static void main(String[] args) throws Exception {
         Properties properties = ConfigUtils.loadProperties();
         VMS = initVms(properties);
+        VMS.start();
     }
 
     private static VmsApplication initVms(Properties properties) throws Exception {
@@ -37,10 +38,8 @@ public final class Main {
                 "dk.ku.di.dms.vms.marketplace.seller",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
-        VmsApplication vms = VmsApplication.build(options,
+        return VmsApplication.build(options,
                 (x,z) -> new SellerHttpHandlerJdk2(x, (IOrderEntryRepository) z.apply("order_entries")));
-        vms.start();
-        return vms;
     }
 
     private static class SellerHttpHandlerJdk2 implements IHttpHandler {
@@ -64,7 +63,7 @@ public final class Main {
             String[] uriSplit = uri.split("/");
             int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
             long lastTid = VMS.lastTidFinished();
-            var txCtx = this.transactionManager.beginTransaction(lastTid, 0, lastTid, true);
+            this.transactionManager.beginTransaction(lastTid, 0, lastTid, true);
             List<OrderEntry> orderEntries = this.repository.getOrderEntriesBySellerId(sellerId);
             if(orderEntries.isEmpty()) return EMPTY_DASHBOARD.toString();
             LOGGER.log(DEBUG, "APP: Seller "+sellerId+" has "+orderEntries.size()+" entries in seller dashboard");

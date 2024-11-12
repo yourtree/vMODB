@@ -250,7 +250,7 @@ public final class VmsEventHandler extends ModbHttpServer {
         thisBatch.setStatus(BatchContext.BATCH_COMPLETED);
         if(this.options.checkpointing()){
             LOGGER.log(INFO, this.me.identifier + ": Requesting checkpoint for batch " + thisBatch.batch);
-            this.submitBackgroundTask(()->checkpoint(thisBatch.batch, batchMetadata.maxTidExecuted));
+            submitBackgroundTask(()->checkpoint(thisBatch.batch, batchMetadata.maxTidExecuted));
         }
         // if terminal, must send batch complete
         if (thisBatch.terminal) {
@@ -262,7 +262,7 @@ public final class VmsEventHandler extends ModbHttpServer {
 
     private BatchMetadata updateBatchMetadataAtomically(OutboundEventResult outputEvent) {
         return this.trackingBatchMap.compute(outputEvent.batch(),
-                (x,y) -> {
+                (ignored, y) -> {
                     BatchMetadata toMod = y;
                     if(toMod == null){
                         toMod = new BatchMetadata();

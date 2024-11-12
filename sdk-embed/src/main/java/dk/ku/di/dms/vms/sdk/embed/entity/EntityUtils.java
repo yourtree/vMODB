@@ -33,11 +33,9 @@ public final class EntityUtils {
     }
 
     public static Map<String, VarHandle> getVarHandleFieldsFromCompositePk(Class<?> pkClazz) throws NoSuchFieldException, IllegalAccessException {
-
         MethodHandles.Lookup lookup_ = MethodHandles.privateLookupIn(pkClazz, LOOKUP);
         Field[] fields = pkClazz.getDeclaredFields();
         Map<String, VarHandle> fieldMap = new LinkedHashMap<>(fields.length);
-
         for(Field field : fields){
             fieldMap.put(
                     field.getName(),
@@ -52,11 +50,9 @@ public final class EntityUtils {
     }
 
     public static Map<String, VarHandle> getVarHandleFieldFromPk(Class<?> parentClazz, Schema schema) throws NoSuchFieldException, IllegalAccessException {
-
         // usually the first, but to make sure lets do like this
         int pkColumn = schema.getPrimaryKeyColumns()[0];
         String pkColumnName = schema.columnNames()[pkColumn];
-
         Map<String, VarHandle> fieldMap = new HashMap<>(1);
         fieldMap.put(
                 pkColumnName,
@@ -69,23 +65,19 @@ public final class EntityUtils {
         return fieldMap;
     }
 
-    public static Map<String, VarHandle> getVarHandleFieldsFromEntity(Class<? extends IEntity<?>> entityClazz,
-                                                                      Schema schema)
+    public static Map<String, VarHandle> getVarHandleFieldsFromEntity(Class<? extends IEntity<?>> entityClazz, Schema schema)
             throws NoSuchFieldException, IllegalAccessException {
         MethodHandles.Lookup lookup_ = MethodHandles.privateLookupIn(entityClazz, LOOKUP);
         Map<String, VarHandle> fieldMap = new HashMap<>(schema.columnNames().length);
         int i = 0;
-        Class<?> typez;
+        Class<?> clazz;
         for(String columnName : schema.columnNames()){
             if(schema.columnDataTypes()[i] == DataType.ENUM){
-                typez = entityClazz.getDeclaredField(columnName).getType();
+                clazz = entityClazz.getDeclaredField(columnName).getType();
             } else {
-                typez = DataTypeUtils.getJavaTypeFromDataType(schema.columnDataTypes()[i]);
+                clazz = DataTypeUtils.getJavaTypeFromDataType(schema.columnDataTypes()[i]);
             }
-            fieldMap.put(columnName,
-                            lookup_.findVarHandle(entityClazz,
-                                                  columnName,
-                                                  typez) );
+            fieldMap.put(columnName, lookup_.findVarHandle(entityClazz, columnName, clazz) );
             i++;
         }
         return fieldMap;

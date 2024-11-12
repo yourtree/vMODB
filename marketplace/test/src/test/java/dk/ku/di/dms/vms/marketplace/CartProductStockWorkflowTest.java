@@ -107,7 +107,7 @@ public final class CartProductStockWorkflowTest extends AbstractWorkflowTest {
                         .withNetworkThreadPoolSize(groupPoolSize)
                         .withNetworkBufferSize(networkBufferSize),
                 1,
-                1,  _ -> new IHttpHandler() { },
+                1,  _ -> IHttpHandler.DEFAULT,
                 serdes
         );
     }
