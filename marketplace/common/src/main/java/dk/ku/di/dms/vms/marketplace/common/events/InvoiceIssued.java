@@ -37,7 +37,4 @@ public final class InvoiceIssued {
         this.instanceId = instanceId;
     }
 
-    public List<OrderItem> getItems() {
-        return this.items;
-    }
 }

@@ -44,4 +44,14 @@ public final class ConfigUtils {
         return userHome;
     }
 
+    public static String getOsName()
+    {
+        return System.getProperty("os.name");
+    }
+
+    public static boolean isWindows()
+    {
+        return getOsName().startsWith("Windows");
+    }
+
 }

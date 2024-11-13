@@ -40,25 +40,25 @@ public class AbstractWorkflowTest {
             "test", "test", "test", 1, String.valueOf(customerId)
     );
 
-    protected static final BiFunction<Integer, String, HttpRequest> HTTP_REQUEST_CART_SUPPLIER = (customerId, payload) -> HttpRequest.newBuilder( URI.create( "http://localhost:"+CART_HTTP_PORT+"/cart/"+customerId+"/add" ) )
+    protected static final BiFunction<Integer, String, HttpRequest> HTTP_REQUEST_CART_SUPPLIER = (customerId, payload) -> HttpRequest.newBuilder( URI.create( "http://localhost:"+CART_VMS_PORT+"/cart/"+customerId+"/add" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HTTP_VERSION)
             .method("PATCH", HttpRequest.BodyPublishers.ofString( payload ))
             .build();
 
-    protected static final Function<String, HttpRequest> HTTP_REQUEST_PRODUCT_SUPPLIER = str -> HttpRequest.newBuilder( URI.create( "http://localhost:"+PRODUCT_HTTP_PORT+"/product" ) )
+    protected static final Function<String, HttpRequest> HTTP_REQUEST_PRODUCT_SUPPLIER = str -> HttpRequest.newBuilder( URI.create( "http://localhost:"+PRODUCT_VMS_PORT+"/product" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HTTP_VERSION)
             .POST(HttpRequest.BodyPublishers.ofString( str ))
             .build();
 
-    protected static final Function<String, HttpRequest> HTTP_REQUEST_STOCK_SUPPLIER = str -> HttpRequest.newBuilder( URI.create( "http://localhost:"+STOCK_HTTP_PORT+"/stock" ) )
+    protected static final Function<String, HttpRequest> HTTP_REQUEST_STOCK_SUPPLIER = str -> HttpRequest.newBuilder( URI.create( "http://localhost:"+STOCK_VMS_PORT+"/stock" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HTTP_VERSION)
             .POST(HttpRequest.BodyPublishers.ofString( str ))
             .build();
 
-    protected static final Function<String, HttpRequest> HTTP_REQUEST_CUSTOMER_SUPPLIER = str -> HttpRequest.newBuilder( URI.create( "http://localhost:"+CUSTOMER_HTTP_PORT+"/customer" ) )
+    protected static final Function<String, HttpRequest> HTTP_REQUEST_CUSTOMER_SUPPLIER = str -> HttpRequest.newBuilder( URI.create( "http://localhost:"+CUSTOMER_VMS_PORT+"/customer" ) )
             .header("Content-Type", "application/json").timeout(Duration.ofMinutes(10))
             .version(HTTP_VERSION)
             .POST(HttpRequest.BodyPublishers.ofString( str ))

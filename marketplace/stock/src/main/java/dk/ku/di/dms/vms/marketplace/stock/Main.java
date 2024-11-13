@@ -1,12 +1,11 @@
 package dk.ku.di.dms.vms.marketplace.stock;
 
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.stock.infra.StockDbUtils;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
+import dk.ku.di.dms.vms.sdk.embed.client.DefaultHttpHandler;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
-import dk.ku.di.dms.vms.web_common.IHttpHandler;
 
 import java.lang.System.Logger;
 import java.util.List;
@@ -18,9 +17,8 @@ public final class Main {
 
     public static void main(String[] ignoredArgs) throws Exception {
         Properties properties = ConfigUtils.loadProperties();
-        try(VmsApplication vms = buildVms(properties)){
-            vms.start();
-        }
+        VmsApplication vms = buildVms(properties);
+        vms.start();
     }
 
     private static VmsApplication buildVms(Properties properties) throws Exception {
@@ -32,23 +30,22 @@ public final class Main {
                         "dk.ku.di.dms.vms.marketplace.common"
                 });
         return VmsApplication.build(options,
-                (x,y) -> new StockHttpHandlerJdk2(x, (IStockRepository) y.apply("stock_items")));
+                (x,y) -> new StockHttpHandler(x, (IStockRepository) y.apply("stock_items")));
     }
     
-    private static class StockHttpHandlerJdk2 implements IHttpHandler {
+    private static class StockHttpHandler extends DefaultHttpHandler {
 
-        private final ITransactionManager transactionManager;
         private final IStockRepository repository;
 
-        public StockHttpHandlerJdk2(ITransactionManager transactionManager,
-                                     IStockRepository repository){
-            this.transactionManager = transactionManager;
+        public StockHttpHandler(ITransactionManager transactionManager,
+                                IStockRepository repository){
+            super(transactionManager);
             this.repository = repository;
         }
 
         @Override
         public void post(String uri, String body) {
-            StockItem stockItem = StockDbUtils.deserializeStockItem(body);
+            StockItem stockItem = SERDES.deserialize(body, StockItem.class);
             this.transactionManager.beginTransaction(0, 0, 0, false);
             this.repository.upsert(stockItem);
         }

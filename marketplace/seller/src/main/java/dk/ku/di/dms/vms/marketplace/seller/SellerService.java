@@ -25,7 +25,7 @@ import static dk.ku.di.dms.vms.marketplace.common.Constants.INVOICE_ISSUED;
 import static dk.ku.di.dms.vms.marketplace.common.Constants.SHIPMENT_UPDATED;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.RW;
 import static dk.ku.di.dms.vms.modb.api.enums.TransactionTypeEnum.W;
-import static java.lang.System.Logger.Level.*;
+import static java.lang.System.Logger.Level.DEBUG;
 
 @Microservice("seller")
 public final class SellerService {
@@ -56,9 +56,8 @@ public final class SellerService {
     @Parallel
     public void processInvoiceIssued(InvoiceIssued invoiceIssued){
         LOGGER.log(DEBUG, "APP: Seller received an invoice issued event with TID: "+ invoiceIssued.instanceId);
-        List<OrderItem> orderItems = invoiceIssued.getItems();
-        List<OrderEntry> entries = new ArrayList<>(orderItems.size());
-        for (OrderItem orderItem : orderItems) {
+        List<OrderEntry> entries = new ArrayList<>(invoiceIssued.items.size());
+        for (OrderItem orderItem : invoiceIssued.items) {
             float totalInvoice = orderItem.total_amount + orderItem.getFreightValue();
             OrderEntry entry = new OrderEntry(
                     invoiceIssued.customer.CustomerId,

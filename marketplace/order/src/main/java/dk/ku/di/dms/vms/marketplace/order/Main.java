@@ -1,7 +1,7 @@
 package dk.ku.di.dms.vms.marketplace.order;
 
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.common.infra.DefaultHttpHandlerJdk;
+import dk.ku.di.dms.vms.sdk.embed.client.DefaultHttpHandler;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 
@@ -14,10 +14,8 @@ public final class Main {
                 "dk.ku.di.dms.vms.marketplace.order",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
-        try (VmsApplication vms = VmsApplication.build(options,
-                (x, ignored) -> new DefaultHttpHandlerJdk(x))) {
-            vms.start();
-        }
+        VmsApplication vms = VmsApplication.build(options, (x, ignored) -> new DefaultHttpHandler(x)));
+        vms.start();
     }
 
 }

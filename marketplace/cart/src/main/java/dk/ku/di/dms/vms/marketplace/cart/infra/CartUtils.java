@@ -8,8 +8,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class CartUtils {
 
-    public static final Map<Integer, List<dk.ku.di.dms.vms.marketplace.cart.entities.CartItem>> CART_ITEMS = new ConcurrentHashMap<>();
-
     public static List<CartItem> convertCartItems(List<dk.ku.di.dms.vms.marketplace.cart.entities.CartItem> cartItems){
         return cartItems.stream().map(CartUtils::convertCartItemEntity).toList();
     }

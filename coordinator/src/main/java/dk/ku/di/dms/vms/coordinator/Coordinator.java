@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.coordinator.vms.IVmsWorker;
 import dk.ku.di.dms.vms.coordinator.vms.VmsWorker;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.schema.VmsEventSchema;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
@@ -24,6 +25,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
+import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import dk.ku.di.dms.vms.web_common.ModbHttpServer;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
@@ -118,6 +120,65 @@ public final class Coordinator extends ModbHttpServer {
 
     private final IHttpHandler httpHandler;
 
+    private static final int DEFAULT_STARTING_TID = 1;
+    private static final int DEFAULT_STARTING_BATCH_ID = 1;
+
+    public static Coordinator build(Properties properties, Map<String, IdentifiableNode> startersVMSs,
+                                    Map<String, TransactionDAG> transactionMap, Function<Coordinator, IHttpHandler> httpHandlerSupplier){
+
+        int tcpPort = Integer.parseInt( properties.getProperty("tcp_port") );
+        ServerNode serverIdentifier = new ServerNode( "0.0.0.0", tcpPort );
+
+        Map<Integer, ServerNode> serverMap = new HashMap<>();
+        serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
+
+        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
+
+        // network
+        int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
+        int osBufferSize = Integer.parseInt( properties.getProperty("os_buffer_size") );
+        int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
+        int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
+        int definiteBufferSize = networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize;
+
+        // batch generation
+        int batchWindow = Integer.parseInt( properties.getProperty("batch_window_ms") );
+        int batchMaxTransactions = Integer.parseInt( properties.getProperty("num_max_transactions_batch") );
+        int numTransactionWorkers = Integer.parseInt( properties.getProperty("num_transaction_workers") );
+
+        // vms worker config
+        int numWorkersPerVms = Integer.parseInt( properties.getProperty("num_vms_workers") );
+        int numQueuesVmsWorker = Integer.parseInt( properties.getProperty("num_queues_vms_worker"));
+        int maxSleep = Integer.parseInt( properties.getProperty("max_sleep") );
+
+        // logging
+        boolean logging = Boolean.parseBoolean( properties.getProperty("logging") );
+
+        return Coordinator.build(
+                serverMap,
+                startersVMSs,
+                transactionMap,
+                serverIdentifier,
+                new CoordinatorOptions()
+                        .withNetworkBufferSize(definiteBufferSize)
+                        .withOsBufferSize(osBufferSize)
+                        .withNetworkThreadPoolSize(groupPoolSize)
+                        .withNetworkSendTimeout(networkSendTimeout)
+                        .withBatchWindow(batchWindow)
+                        .withMaxTransactionsPerBatch(batchMaxTransactions)
+                        .withNumTransactionWorkers(numTransactionWorkers)
+                        .withNumWorkersPerVms(numWorkersPerVms)
+                        .withNumQueuesVmsWorker(numQueuesVmsWorker)
+                        .withMaxVmsWorkerSleep(maxSleep)
+                        .withLogging(logging)
+                ,
+                DEFAULT_STARTING_BATCH_ID,
+                DEFAULT_STARTING_TID,
+                httpHandlerSupplier,
+                serdes
+        );
+    }
+
     public static Coordinator build(// obtained from leader election or passed by parameter on setup
                                     Map<Integer, ServerNode> servers,
                                     // passed by parameter
@@ -131,7 +192,7 @@ public final class Coordinator extends ModbHttpServer {
                                     // starting tid (may come from storage after a crash)
                                     long startingTid,
                                     Function<Coordinator, IHttpHandler> httpHandlerSupplier,
-                                    IVmsSerdesProxy serdesProxy) throws IOException {
+                                    IVmsSerdesProxy serdesProxy) {
         return new Coordinator(servers == null ? new ConcurrentHashMap<>() : servers,
                 new HashMap<>(), startersVMSs, transactionMap,
                 me, options, startingBatchOffset, startingTid,
@@ -147,26 +208,30 @@ public final class Coordinator extends ModbHttpServer {
                         long startingBatchOffset,
                         long startingTid,
                         Function<Coordinator, IHttpHandler> httpHandlerSupplier,
-                        IVmsSerdesProxy serdesProxy) throws IOException {
+                        IVmsSerdesProxy serdesProxy) {
         super();
 
         // coordinator options
         this.options = options;
 
-        if(options.getNetworkThreadPoolSize() > 0) {
-            this.group = AsynchronousChannelGroup.withThreadPool(Executors.newWorkStealingPool(options.getNetworkThreadPoolSize()));
-            this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
-        } else {
+        try {
+            if (options.getNetworkThreadPoolSize() > 0) {
+                this.group = AsynchronousChannelGroup.withThreadPool(Executors.newWorkStealingPool(options.getNetworkThreadPoolSize()));
+                this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+            } else {
             /* may lead to better performance than default group
             this.group = AsynchronousChannelGroup.withThreadPool(ForkJoinPool.commonPool());
             this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
              */
-            this.group = null;
-            this.serverSocket = AsynchronousServerSocketChannel.open();
-        }
+                this.group = null;
+                this.serverSocket = AsynchronousServerSocketChannel.open();
+            }
 
-        // network and executor
-        this.serverSocket.bind(me.asInetSocketAddress());
+            // network and executor
+            this.serverSocket.bind(me.asInetSocketAddress());
+        } catch (Exception e){
+            throw new RuntimeException(e);
+        }
 
         this.starterVMSs = startersVMSs;
         this.vmsMetadataMap = new ConcurrentHashMap<>();
@@ -240,10 +305,6 @@ public final class Coordinator extends ModbHttpServer {
         try {
             Object message;
             do {
-//            try {
-//                message = this.coordinatorQueue.take();
-//                this.processVmsMessage(message);
-//            } catch (InterruptedException ignored) { }
                 // tends to be faster than blocking
                 while ((message = this.coordinatorQueue.poll(250, TimeUnit.MILLISECONDS)) != null) {
                     this.processVmsMessage(message);

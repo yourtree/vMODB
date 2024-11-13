@@ -12,6 +12,4 @@ public @interface VmsTable {
 
     String name();
 
-    VmsIndex[] indexes() default {};
-
 }

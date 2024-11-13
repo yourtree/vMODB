@@ -38,8 +38,8 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     // the conjunction of all buffers can possibly hold
     private final int capacity;
 
-    // for operations that require exclusive access to the whiole buffer like reset and checkpoint
-    public final ReentrantLock lock = new ReentrantLock();
+    // for operations that require exclusive access to the whole buffer like reset and checkpoint
+    private final ReentrantLock lock = new ReentrantLock();
 
     public UniqueHashBufferIndex(RecordBufferContext recordBufferContext, Schema schema, int[] columnsIndex, int capacity){
         super(schema, columnsIndex);
@@ -47,7 +47,6 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         this.recordSize = schema.getRecordSize();
         this.size = 0;
         this.capacity = capacity;
-        this.reset();
     }
 
     @Override
@@ -195,7 +194,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         return this.findRecordAddress(key);
     }
 
-    private static int DEFAULT_ATTEMPTS = 10;
+    private static final int DEFAULT_ATTEMPTS = 10;
 
     private long getFreePositionToInsert(IKey key){
         int attemptsToFind = DEFAULT_ATTEMPTS;

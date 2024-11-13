@@ -5,17 +5,15 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.clause.WhereClauseElement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
-import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
-import dk.ku.di.dms.vms.sdk.embed.entity.EntityUtils;
+import dk.ku.di.dms.vms.sdk.embed.entity.EntityHandler;
 import net.bytebuddy.implementation.bind.annotation.AllArguments;
 import net.bytebuddy.implementation.bind.annotation.Origin;
 import net.bytebuddy.implementation.bind.annotation.RuntimeType;
 import net.bytebuddy.implementation.bind.annotation.This;
 
 import java.io.Serializable;
-import java.lang.invoke.VarHandle;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -30,20 +28,12 @@ import java.util.Map;
  * Responsible to parse objects and convert database results to application objects.
  * A repository class do not need direct access to {@link ITransactionManager}
  */
-public abstract class AbstractProxyRepository<PK extends Serializable, T extends IEntity<PK>> implements IRepository<PK, T> {
-
-//    private static final Logger LOGGER = Logger.getLogger(AbstractProxyRepository.class.getName());
-
-    private final Constructor<T> entityConstructor;
+public abstract class AbstractProxyRepository<PK extends Serializable, T extends IEntity<PK>> extends EntityHandler<PK,T> implements IRepository<PK, T> {
 
     /**
      * Respective table of the entity
      */
     private final Table table;
-
-    private final Map<String, VarHandle> entityFieldMap;
-
-    private final Map<String, VarHandle> pkFieldMap;
 
     /**
      * Attribute set after database is loaded
@@ -62,13 +52,7 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
                                   // key: method name, value: select stmt
                                   Map<String, SelectStatement> repositoryQueriesMap)
             throws NoSuchFieldException, IllegalAccessException {
-        this.entityConstructor = EntityUtils.getEntityConstructor(entityClazz);
-        this.entityFieldMap = EntityUtils.getVarHandleFieldsFromEntity(entityClazz, table.schema());
-        if(pkClazz.getPackageName().equalsIgnoreCase("java.lang") || pkClazz.isPrimitive()){
-            this.pkFieldMap = EntityUtils.getVarHandleFieldFromPk(entityClazz, table.schema());
-        } else {
-            this.pkFieldMap = EntityUtils.getVarHandleFieldsFromCompositePk(pkClazz);
-        }
+        super(pkClazz, entityClazz, table.schema());
         this.table = table;
         this.operationalAPI = operationalAPI;
         this.repositoryQueriesMap = repositoryQueriesMap;
@@ -228,64 +212,6 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
             parsedEntities.add( this.extractFieldValuesFromEntityObject(entity) );
         }
         this.operationalAPI.deleteAll(this.table, parsedEntities);
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public final T parseObjectIntoEntity(Object[] object){
-        try {
-            // all entities must have default constructor
-            T entity = this.entityConstructor.newInstance();
-            int i;
-            for(Map.Entry<String,VarHandle> entry : this.entityFieldMap.entrySet()){
-                // must get the index of the column first
-                i = this.table.schema().columnPosition(entry.getKey());
-                if(object[i] == null){
-                    continue;
-                }
-                try {
-                    entry.getValue().set(entity, object[i]);
-                } catch (ClassCastException e){
-                    // has the entry come from raw index?
-                    if(this.table.schema().columnDataType(i) == DataType.ENUM && object[i] instanceof String objStr && !objStr.isEmpty() && !objStr.isBlank()){
-                        entry.getValue().set(entity, Enum.valueOf((Class)entry.getValue().varType(), objStr));
-                    } else {
-                        System.out.println("Cannot cast column "+table.schema().columnName(i)+" for value "+object[i]);
-                        throw new RuntimeException(e);
-                    }
-                }
-            }
-            return entity;
-        } catch (ClassCastException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     * Must be a linked sorted map. Ordered by the columns that appear on the key object.
-     */
-    private Object[] extractFieldValuesFromKeyObject(PK keyObject) {
-        Object[] values = new Object[this.pkFieldMap.size()];
-        if(keyObject instanceof Number){
-            values[0] = keyObject;
-            return values;
-        }
-        int fieldIdx = 0;
-        // get values from key object
-        for(String columnName : this.pkFieldMap.keySet()){
-            values[fieldIdx] = this.pkFieldMap.get(columnName).get(keyObject);
-            fieldIdx++;
-        }
-        return values;
-    }
-
-    public final Object[] extractFieldValuesFromEntityObject(T entity) {
-        Object[] values = new Object[this.table.schema().columnNames().length];
-        int fieldIdx = 0;
-        for(String columnName : this.table.schema().columnNames()){
-            values[fieldIdx] = this.entityFieldMap.get(columnName).get(entity);
-            fieldIdx++;
-        }
-        return values;
     }
 
     /**

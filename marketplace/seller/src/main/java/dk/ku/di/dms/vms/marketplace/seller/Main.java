@@ -7,16 +7,16 @@ import dk.ku.di.dms.vms.marketplace.seller.entities.OrderEntry;
 import dk.ku.di.dms.vms.marketplace.seller.repositories.IOrderEntryRepository;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
+import dk.ku.di.dms.vms.sdk.embed.client.DefaultHttpHandler;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
-import dk.ku.di.dms.vms.web_common.IHttpHandler;
 
 import java.util.List;
 import java.util.Properties;
 
 import static dk.ku.di.dms.vms.marketplace.seller.SellerService.EMPTY_DASHBOARD;
 import static dk.ku.di.dms.vms.marketplace.seller.SellerService.SELLER_VIEW_BASE;
-import static java.lang.System.Logger.Level.*;
+import static java.lang.System.Logger.Level.DEBUG;
 
 public final class Main {
 
@@ -38,24 +38,16 @@ public final class Main {
                 "dk.ku.di.dms.vms.marketplace.seller",
                 "dk.ku.di.dms.vms.marketplace.common"
         });
-        return VmsApplication.build(options,
-                (x,z) -> new SellerHttpHandlerJdk2(x, (IOrderEntryRepository) z.apply("order_entries")));
+        return VmsApplication.build(options, (x,z) -> new SellerHttpHandler(x, (IOrderEntryRepository) z.apply("order_entries")));
     }
 
-    private static class SellerHttpHandlerJdk2 implements IHttpHandler {
-
-        private final ITransactionManager transactionManager;
+    private static class SellerHttpHandler extends DefaultHttpHandler {
         private final IOrderEntryRepository repository;
 
-        public SellerHttpHandlerJdk2(ITransactionManager transactionManager,
-                                    IOrderEntryRepository repository){
-            this.transactionManager = transactionManager;
+        public SellerHttpHandler(ITransactionManager transactionManager,
+                                 IOrderEntryRepository repository){
+            super(transactionManager);
             this.repository = repository;
-        }
-
-        @Override
-        public void patch(String uri, String body) {
-            this.transactionManager.reset();
         }
 
         @Override

@@ -27,8 +27,10 @@
     <!-- operations -->
     <module>coordinator</module>
 
-    <!-- marketplace -->
+    <!-- applications -->
     <module>marketplace</module>
+    <module>tpcc</module>
+      <module>tpcc/order-tpcc</module>
 
   </modules>
 
@@ -47,7 +49,6 @@
   </properties>
 
   <dependencies>
-
 
     <dependency>
       <groupId>org.jctools</groupId>

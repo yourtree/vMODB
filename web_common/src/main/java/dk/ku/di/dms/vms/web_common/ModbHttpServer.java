@@ -126,7 +126,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                                     }
                                 });
                                 case "application/octet-stream" -> {
-                                    byte[] byteArray = httpHandler.getAsBytes(httpRequest.uri());
+                                    byte[] byteArray = this.httpHandler.getAsBytes(httpRequest.uri());
                                     String headers = "HTTP/1.1 200 OK\r\nContent-Length: " + byteArray.length +
                                             "\r\nContent-Type: application/octet-stream\r\n\r\n";
                                     this.writeBuffer.put(headers.getBytes(StandardCharsets.UTF_8));
@@ -147,7 +147,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         }
                     }
                     case "POST" -> {
-                        httpHandler.post(httpRequest.uri(), httpRequest.body());
+                        this.httpHandler.post(httpRequest.uri(), httpRequest.body());
                         this.writeBuffer.put(OK_RESPONSE_BYTES);
                         this.writeBuffer.flip();
                         this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
@@ -156,13 +156,13 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         if(httpRequest.uri().contains("reset")) {
                             cancelBackgroundTasks();
                         }
-                        httpHandler.patch(httpRequest.uri(), httpRequest.body());
+                        this.httpHandler.patch(httpRequest.uri(), httpRequest.body());
                         this.writeBuffer.put(OK_RESPONSE_BYTES);
                         this.writeBuffer.flip();
                         this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
                     }
                     case "PUT" -> {
-                        httpHandler.put(httpRequest.uri(), httpRequest.body());
+                        this.httpHandler.put(httpRequest.uri(), httpRequest.body());
                         this.writeBuffer.put(OK_RESPONSE_BYTES);
                         this.writeBuffer.flip();
                         this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);

@@ -26,7 +26,7 @@ import java.util.*;
 /**
  * Starting point for initializing the VMS application runtime
  */
-public final class VmsApplication implements Closeable {
+public final class VmsApplication {
 
     private final String name;
 
@@ -158,7 +158,6 @@ public final class VmsApplication implements Closeable {
                 .start(this.transactionScheduler);
     }
 
-    @Override
     public void close(){
         this.transactionScheduler.stop();
     }

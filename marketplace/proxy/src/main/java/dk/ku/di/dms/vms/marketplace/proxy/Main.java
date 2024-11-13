@@ -1,19 +1,12 @@
 package dk.ku.di.dms.vms.marketplace.proxy;
 
 import dk.ku.di.dms.vms.coordinator.Coordinator;
-import dk.ku.di.dms.vms.coordinator.options.CoordinatorOptions;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.proxy.http.HttpServerAsyncJdk;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
-import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 
-import java.io.IOException;
 import java.util.*;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
@@ -25,7 +18,7 @@ import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
  */
 public final class Main {
 
-    public static void main(String[] ignoredArgs) throws IOException, InterruptedException {
+    public static void main(String[] ignoredArgs) {
         Properties properties = ConfigUtils.loadProperties();
         loadCoordinator(properties);
     }
@@ -77,22 +70,12 @@ public final class Main {
         return transactionMap;
     }
 
-    private static void loadCoordinator(Properties properties) throws IOException {
-        final int STARTING_TID = 1;
-        final int STARTING_BATCH_ID = 1;
-
-        int tcpPort = Integer.parseInt( properties.getProperty("tcp_port") );
-        ServerNode serverIdentifier = new ServerNode( "0.0.0.0", tcpPort );
-
-        Map<Integer, ServerNode> serverMap = new HashMap<>();
-        serverMap.put(serverIdentifier.hashCode(), serverIdentifier);
+    private static void loadCoordinator(Properties properties) {
 
         String transactionsRaw = properties.getProperty("transactions");
         if(transactionsRaw == null) throw new RuntimeException("Make sure the app.properties contain a 'transactions' entry");
         String[] transactions = transactionsRaw.split(",");
         Map<String, TransactionDAG> transactionMap = buildTransactionDAGs(transactions);
-
-        IVmsSerdesProxy serdes = VmsSerdesProxyBuilder.build();
 
         Map<String, IdentifiableNode> starterVMSs;
         if(Arrays.stream(transactions).anyMatch(p->p.contentEquals(CUSTOMER_CHECKOUT))) {
@@ -110,50 +93,7 @@ public final class Main {
                 starterVMSs = buildStarterVMSsBasic(properties);
             }
         }
-
-        // network
-        int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
-        int osBufferSize = Integer.parseInt( properties.getProperty("os_buffer_size") );
-        int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
-        int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
-        int definiteBufferSize = networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize;
-
-        // batch generation
-        int batchWindow = Integer.parseInt( properties.getProperty("batch_window_ms") );
-        int batchMaxTransactions = Integer.parseInt( properties.getProperty("num_max_transactions_batch") );
-        int numTransactionWorkers = Integer.parseInt( properties.getProperty("num_transaction_workers") );
-
-        // vms worker config
-        int numWorkersPerVms = Integer.parseInt( properties.getProperty("num_vms_workers") );
-        int numQueuesVmsWorker = Integer.parseInt( properties.getProperty("num_queues_vms_worker"));
-        int maxSleep = Integer.parseInt( properties.getProperty("max_sleep") );
-
-        // logging
-        boolean logging = Boolean.parseBoolean( properties.getProperty("logging") );
-
-        Coordinator coordinator = Coordinator.build(
-                serverMap,
-                starterVMSs,
-                transactionMap,
-                serverIdentifier,
-                new CoordinatorOptions()
-                        .withNetworkBufferSize(definiteBufferSize)
-                        .withOsBufferSize(osBufferSize)
-                        .withNetworkThreadPoolSize(groupPoolSize)
-                        .withNetworkSendTimeout(networkSendTimeout)
-                        .withBatchWindow(batchWindow)
-                        .withMaxTransactionsPerBatch(batchMaxTransactions)
-                        .withNumTransactionWorkers(numTransactionWorkers)
-                        .withNumWorkersPerVms(numWorkersPerVms)
-                        .withNumQueuesVmsWorker(numQueuesVmsWorker)
-                        .withMaxVmsWorkerSleep(maxSleep)
-                        .withLogging(logging)
-                        ,
-                STARTING_BATCH_ID,
-                STARTING_TID,
-                HttpServerAsyncJdk::new,
-                serdes
-        );
+        Coordinator coordinator = Coordinator.build(properties, starterVMSs, transactionMap, ProxyHttpServerAsyncJdk::new);
 
         Thread coordinatorThread = new Thread(coordinator);
         coordinatorThread.start();

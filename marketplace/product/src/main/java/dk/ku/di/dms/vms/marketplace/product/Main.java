@@ -1,14 +1,11 @@
 package dk.ku.di.dms.vms.marketplace.product;
 
 import dk.ku.di.dms.vms.marketplace.common.Constants;
-import dk.ku.di.dms.vms.marketplace.product.infra.ProductDbUtils;
-import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
-import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
+import dk.ku.di.dms.vms.sdk.embed.client.DefaultHttpHandler;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
-import dk.ku.di.dms.vms.web_common.IHttpHandler;
 
 import java.util.Properties;
 
@@ -18,9 +15,8 @@ public final class Main {
 
     public static void main(String[] ignoredArgs) throws Exception {
         Properties properties = ConfigUtils.loadProperties();
-        try(var vms = buildVms(properties)){
-            vms.start();
-        }
+        VmsApplication vms = buildVms(properties);
+        vms.start();
     }
 
     public static VmsApplication buildVms(Properties properties) throws Exception {
@@ -31,25 +27,21 @@ public final class Main {
                         "dk.ku.di.dms.vms.marketplace.product",
                         "dk.ku.di.dms.vms.marketplace.common"
                 });
-        return VmsApplication.build(options,
-                (x,y) -> new ProductHttpHandlerJdk2(x, (IProductRepository) y.apply("products")));
+        return VmsApplication.build(options, (x,y) -> new ProductHttpHandler(x, (IProductRepository) y.apply("products")));
     }
 
-    private static class ProductHttpHandlerJdk2 implements IHttpHandler {
-
-        private final ITransactionManager transactionManager;
+    private static class ProductHttpHandler extends DefaultHttpHandler {
         private final IProductRepository repository;
-        private static final IVmsSerdesProxy SERDES = VmsSerdesProxyBuilder.build();
 
-        public ProductHttpHandlerJdk2(ITransactionManager transactionManager,
-                                        IProductRepository repository){
-            this.transactionManager = transactionManager;
+        public ProductHttpHandler(ITransactionManager transactionManager,
+                                  IProductRepository repository){
+            super(transactionManager);
             this.repository = repository;
         }
 
         @Override
         public void post(String uri, String payload) {
-            Product product = ProductDbUtils.deserializeProduct(payload);
+            Product product = SERDES.deserialize(payload, Product.class);
             this.transactionManager.beginTransaction(0, 0, 0, false);
             this.repository.upsert(product);
         }
@@ -63,7 +55,7 @@ public final class Main {
                 this.transactionManager.reset();
                 return;
             }
-            var txCtx = this.transactionManager.beginTransaction(0, 0, 0,false);
+            this.transactionManager.beginTransaction(0, 0, 0,false);
             var products = this.repository.getAll();
             for(Product product : products){
                 product.version = "0";
@@ -76,10 +68,11 @@ public final class Main {
             String[] split = uri.split("/");
             int sellerId = Integer.parseInt(split[split.length - 2]);
             int productId = Integer.parseInt(split[split.length - 1]);
-            var txCtx = this.transactionManager.beginTransaction(0, 0, 0,true);
+            this.transactionManager.beginTransaction(0, 0, 0,true);
             Product product = this.repository.lookupByKey(new Product.ProductId(sellerId, productId));
             return product.toString();
         }
+
     }
 
 }

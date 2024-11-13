@@ -17,9 +17,7 @@ public final class LoggingHandlerBuilder {
         String userHome = ConfigUtils.getUserHome();
         String basePath = userHome + "/vms";
         File theDir = new File(basePath);
-        if (!theDir.exists()){
-            theDir.mkdirs();
-        }
+        assert theDir.exists() || theDir.mkdirs();
         String filePath = basePath + "/" + fileName;
         Path path = Paths.get(filePath);
         FileChannel fileChannel;

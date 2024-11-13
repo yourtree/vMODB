@@ -18,7 +18,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
-import static dk.ku.di.dms.vms.marketplace.common.Constants.INVOICE_ISSUED;
 import static java.lang.Thread.sleep;
 
 /**

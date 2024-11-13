@@ -18,25 +18,24 @@ public final class OrderTest {
 
     @Test
     public void testConcurrentCustomerCheckouts() throws Exception {
-        try(VmsApplication vms = buildOrderVms()) {
-            for (int i = 1; i <= 2; i++) {
-                InboundEvent inboundEvent = getInboundEvent(i);
-                vms.internalChannels().transactionInputQueue().add(inboundEvent);
-            }
-            sleep(100000);
-            assert vms.lastTidFinished() == 2;
+        VmsApplication vms = buildOrderVms();
+        vms.start();
+        for (int i = 1; i <= 2; i++) {
+            InboundEvent inboundEvent = getInboundEvent(i);
+            vms.internalChannels().transactionInputQueue().add(inboundEvent);
         }
+        sleep(100000);
+        assert vms.lastTidFinished() == 2;
     }
 
     @Test
     public void simpleTest() throws Exception {
-        try(VmsApplication vms = buildOrderVms()){
-            vms.start();
-            InboundEvent inboundEvent = getInboundEvent(1);
-            vms.internalChannels().transactionInputQueue().add( inboundEvent );
-            sleep(1000);
-            assert vms.lastTidFinished() == 1;
-        }
+        VmsApplication vms = buildOrderVms();
+        vms.start();
+        InboundEvent inboundEvent = getInboundEvent(1);
+        vms.internalChannels().transactionInputQueue().add( inboundEvent );
+        sleep(1000);
+        assert vms.lastTidFinished() == 1;
     }
 
     private static VmsApplication buildOrderVms() throws Exception {

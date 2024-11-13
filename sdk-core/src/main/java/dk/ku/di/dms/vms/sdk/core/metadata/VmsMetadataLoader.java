@@ -217,7 +217,7 @@ public final class VmsMetadataLoader {
     @SuppressWarnings("unchecked")
     public static Map<String, VmsDataModel> buildVmsDataModel(Map<Class<?>, String> entityToVirtualMicroservice,
                                                                  Map<Class<?>, String> vmsTableNames) {
-        Map<String, VmsDataModel> schemaMap = new HashMap<>();
+        Map<String, VmsDataModel> dataModelMap = new HashMap<>();
 
         // build schema of each table
         // we build the schema in order to look up the fields and define the pk hash index
@@ -294,9 +294,9 @@ public final class VmsMetadataLoader {
             String vmsTableName = vmsTableAnnotation.name();
             String vms = entityToVirtualMicroservice.get( tableClass );
             VmsDataModel schema = new VmsDataModel(vms, vmsTableName, pkFieldsStr, columnNamesArray, columnDataTypesArray, foreignKeyReferences, constraints);
-            schemaMap.put(vmsTableName, schema);
+            dataModelMap.put(vmsTableName, schema);
         }
-        return schemaMap;
+        return dataModelMap;
     }
 
     /**
@@ -376,9 +376,7 @@ public final class VmsMetadataLoader {
     }
 
     public static Map<Class<?>, String> mapEntitiesToVirtualMicroservice(Set<Class<?>> vmsClasses, Map<Class<?>, String> entityToTableNameMap) {
-
         Map<Class<?>, String> entityToVirtualMicroservice = new HashMap<>();
-
         for(Class<?> clazz : vmsClasses) {
             String vmsName = clazz.getAnnotation(Microservice.class).value();
             // fast way since it is usually one per app
