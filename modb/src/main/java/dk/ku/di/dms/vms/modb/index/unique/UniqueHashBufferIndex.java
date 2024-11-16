@@ -224,7 +224,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
                 }
             }
             attemptsToFind--;
-            pos = this.getPosition(key.hashCode() + Math.multiplyExact(aux,2));
+            pos = this.getPosition(key.hashCode() + Math.multiplyExact(aux, 2));
             aux++;
         }
         return -1;

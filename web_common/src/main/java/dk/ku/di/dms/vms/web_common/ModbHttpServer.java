@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +42,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
         private final IHttpHandler httpHandler;
 
         private final DefaultWriteCH defaultWriteCH = new DefaultWriteCH();
+        private final CloseWriteCH closeWriteCH = new CloseWriteCH();
         private final BigBbWriteCH bigBbWriteCH = new BigBbWriteCH();
         private final SseWriteCH sseWriteCH;
 
@@ -89,15 +91,27 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                     "Connection: keep-alive\r\n\r\n";
         }
 
+        private static final byte[] OK_RESPONSE_BYTES = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+
+        private static final String UNKNOWN_ACCEPT = "Accept header value is not supported";
+
+        private static final byte[] ERROR_RESPONSE_BYTES = ("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "+UNKNOWN_ACCEPT.length()+"\r\n\r\n"+UNKNOWN_ACCEPT).getBytes(StandardCharsets.UTF_8);
+
+        private static final byte[] NO_ACCEPT_IN_HEADER_ERR_MSG =
+                ("HTTP/1.1 400 Bad Request\r\n"
+                + "Content-Type: text/plain\r\n"
+                + "Content-Length: 24\r\n"
+                + "Connection: close\r\n"
+                + "\r\n"
+                + "No accept type in header").getBytes(StandardCharsets.UTF_8);
+
         public void process(String request){
             try {
                 final HttpRequestInternal httpRequest = parseRequest(request);
                 switch (httpRequest.httpMethod()){
                     case "GET" -> {
                         if(!httpRequest.headers.containsKey("Accept")){
-                            var noContentType = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nNo accept type in header".getBytes(StandardCharsets.UTF_8);
-                            this.writeBuffer.put(noContentType);
-                            this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
+                            this.sendErrorMsgAndCloseConnection(NO_ACCEPT_IN_HEADER_ERR_MSG);
                         } else {
                             switch (httpRequest.headers.get("Accept")) {
                                 case "*/*", "application/json" -> ForkJoinPool.commonPool().submit(() -> {
@@ -139,9 +153,8 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                                     return;
                                 }
                                 case null, default -> {
-                                    this.writeBuffer.put(ERROR_RESPONSE_BYTES);
-                                    this.writeBuffer.flip();
-                                    this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
+                                    this.sendErrorMsgAndCloseConnection(ERROR_RESPONSE_BYTES);
+                                    return;
                                 }
                             }
                         }
@@ -190,6 +203,15 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             }
         }
 
+        private void sendErrorMsgAndCloseConnection(byte[] errorResponseBytes) throws IOException {
+            this.writeBuffer.put(errorResponseBytes);
+            this.writeBuffer.flip();
+            this.connectionMetadata.channel.write(this.writeBuffer, null, this.closeWriteCH);
+            this.readBuffer.clear();
+            MemoryManager.releaseTemporaryDirectBuffer(this.readBuffer);
+            this.connectionMetadata.channel.close();
+        }
+
         private void processSseClient() throws InterruptedException, ExecutionException {
             // Write HTTP response headers for SSE
             String headers = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n";
@@ -218,12 +240,6 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             }
         }
 
-        private static final byte[] OK_RESPONSE_BYTES = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
-
-        private static final String UNKNOWN_ACCEPT = "Accept header value is not supported";
-
-        private static final byte[] ERROR_RESPONSE_BYTES = ("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "+UNKNOWN_ACCEPT.length()+"\r\n\r\n"+UNKNOWN_ACCEPT).getBytes(StandardCharsets.UTF_8);
-
         @Override
         public void completed(Integer result, Integer attachment) {
             if(result == -1){
@@ -244,6 +260,23 @@ public abstract class ModbHttpServer extends StoppableRunnable {
         public void failed(Throwable exc, Integer attachment) {
             this.readBuffer.clear();
             this.connectionMetadata.channel.read(this.readBuffer, 0, this);
+        }
+
+        private final class CloseWriteCH implements CompletionHandler<Integer, Void> {
+            @Override
+            public void completed(Integer result, Void ignored) {
+                if(writeBuffer.hasRemaining()) {
+                    connectionMetadata.channel.write(writeBuffer, null, this);
+                    return;
+                }
+                writeBuffer.clear();
+                MemoryManager.releaseTemporaryDirectBuffer(writeBuffer);
+            }
+            @Override
+            public void failed(Throwable exc, Void ignored) {
+                writeBuffer.clear();
+                MemoryManager.releaseTemporaryDirectBuffer(writeBuffer);
+            }
         }
 
         private final class DefaultWriteCH implements CompletionHandler<Integer, Void> {

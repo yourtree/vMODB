@@ -5,16 +5,65 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
+import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
+import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoader;
 import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcHttpHandler;
+import dk.ku.di.dms.vms.tpcc.proxy.storage.StorageUtils;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Scanner;
 
 public final class Main {
-    public static void main(String[] ignoredArgs) {
+    public static void main(String[] ignoredArgs) throws NoSuchFieldException, IllegalAccessException {
         Properties properties = ConfigUtils.loadProperties();
         loadCoordinator(properties);
+        // main menu
+        menu();
+    }
+
+    private static void menu() throws NoSuchFieldException, IllegalAccessException {
+        Map<String, UniqueHashBufferIndex> tables;
+        StorageUtils.EntityMetadata metadata = StorageUtils.loadEntityMetadata();
+        Scanner scanner = new Scanner(System.in);
+        boolean running = true;
+        while (running) {
+            printMenu();
+            System.out.print("Enter your choice: ");
+            String choice = scanner.nextLine();
+            switch (choice) {
+                case "1":
+                    tables = StorageUtils.createTables(metadata);
+                    break;
+                case "2":
+                    tables = StorageUtils.loadTables(metadata);
+                    DataLoader.load(tables, metadata.entityHandlerMap());
+                    break;
+                case "3":
+                    // createWorkload();
+                    break;
+                case "4":
+                    // submitWorkload();
+                    break;
+                case "0":
+                    System.out.println("Exiting the application. Goodbye!");
+                    running = false;
+                    break;
+                default:
+                    System.out.println("Invalid choice. Please try again.");
+            }
+        }
+        scanner.close();
+    }
+
+    private static void printMenu() {
+        System.out.println("\n=== Main Menu ===");
+        System.out.println("1. Create tables");
+        System.out.println("2. Ingest data");
+        System.out.println("3. Create workload");
+        System.out.println("4. Submit workload");
+        System.out.println("0. Exit");
     }
 
     private static void loadCoordinator(Properties properties) {

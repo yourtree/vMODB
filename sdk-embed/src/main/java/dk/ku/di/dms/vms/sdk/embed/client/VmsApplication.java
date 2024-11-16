@@ -20,7 +20,6 @@ import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import org.reflections.Reflections;
 
-import java.io.Closeable;
 import java.util.*;
 
 /**

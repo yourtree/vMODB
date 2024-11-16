@@ -209,11 +209,10 @@ public final class VmsEventHandler extends ModbHttpServer {
 
     @Override
     public void run() {
-        LOGGER.log(INFO,this.me.identifier+": Event handler has started");
+        LOGGER.log(INFO,this.me.identifier+": Event handler will be setup");
         // setup accept since we need to accept connections from the coordinator and other VMSs
         this.serverSocket.accept(null, new AcceptCompletionHandler());
         LOGGER.log(INFO,this.me.identifier+": Accept handler has been setup");
-        LOGGER.log(INFO,this.me.identifier+": Event handler has finished execution.");
     }
 
     public void processOutputEvent(IVmsTransactionResult txResult) {

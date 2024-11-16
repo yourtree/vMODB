@@ -23,7 +23,7 @@ public class UniqueHashJoinWithProjection extends AbstractMemoryBasedOperator {
     protected final int[] leftProjectionColumns;
     protected final int[] leftProjectionColumnsSize;
 
-    // this is unnecessary, since it can be get from the index directly
+    // this is unnecessary, since it can be from the index directly
     protected final int[] rightProjectionColumns;
     protected final int[] rightProjectionColumnsSize;
 
@@ -64,15 +64,15 @@ public class UniqueHashJoinWithProjection extends AbstractMemoryBasedOperator {
                 // do the probing
                 this.rightIndex.checkCondition(rightKey, rightFilter)) {
                     append( nextLeft, rightKey,
-                            leftProjectionColumns, leftProjectionColumnsSize,
-                            rightProjectionColumns, rightProjectionColumnsSize
+                            this.leftProjectionColumns, this.leftProjectionColumnsSize,
+                            this.rightProjectionColumns, this.rightProjectionColumnsSize
                     );
 
                 }
             iterator.next();
         }
 
-        return memoryRefNode;
+        return this.memoryRefNode;
 
     }
 
@@ -82,18 +82,18 @@ public class UniqueHashJoinWithProjection extends AbstractMemoryBasedOperator {
 
         while(outerIterator.hasNext()){
             IKey leftKey = outerIterator.next();
-            if(leftIndex.checkCondition(leftKey, leftFilter)){
+            if(this.leftIndex.checkCondition(leftKey, leftFilter)){
                 IKey rightKey = outerIterator.next();
-                if(rightIndex.checkCondition(rightKey, rightFilter)) {
-                    append( leftKey, rightKey, leftProjectionColumns, leftProjectionColumnsSize,
-                            rightProjectionColumns, rightProjectionColumnsSize );
+                if(this.rightIndex.checkCondition(rightKey, rightFilter)) {
+                    append( leftKey, rightKey, this.leftProjectionColumns, this.leftProjectionColumnsSize,
+                            this.rightProjectionColumns, this.rightProjectionColumnsSize );
 
                 }
             }
             outerIterator.next();
         }
 
-        return memoryRefNode;
+        return this.memoryRefNode;
     }
 
     /**
@@ -114,7 +114,6 @@ public class UniqueHashJoinWithProjection extends AbstractMemoryBasedOperator {
         Object[] rightRecord = this.rightIndex.record(keyRight);
 
         for(int projOrdIdx = 0; projOrdIdx < projectionOrder.length; projOrdIdx++) {
-
             // left
             if(!projectionOrder[projOrdIdx]){
                 DataTypeUtils.callWriteFunction( this.currentBuffer.address(), this.leftIndex.schema().columnDataType( leftProjIdx ), leftRecord[leftProjectionColumns[leftProjIdx]] );
@@ -125,7 +124,6 @@ public class UniqueHashJoinWithProjection extends AbstractMemoryBasedOperator {
                 this.currentBuffer.forwardOffset(rightValueSizeInBytes[rightProjIdx]);
                 rightProjIdx++;
             }
-
         }
 
     }

@@ -26,7 +26,7 @@ public class IndexCountGroupBy extends AbstractCount {
 
     public MemoryRefNode run(FilterContext filterContext, IKey... keys){
         Map<Integer,Integer> countMap = new HashMap<>();
-        Iterator<IKey> iterator = index.iterator(keys);
+        Iterator<IKey> iterator = this.index.iterator(keys);
         while(iterator.hasNext()){
             IKey key = iterator.next();
             if(this.index.checkCondition(key, filterContext)){

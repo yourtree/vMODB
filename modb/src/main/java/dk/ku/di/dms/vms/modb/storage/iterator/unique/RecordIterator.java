@@ -1,6 +1,8 @@
 package dk.ku.di.dms.vms.modb.storage.iterator.unique;
 
+import dk.ku.di.dms.vms.modb.definition.Header;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
+import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.storage.iterator.CachingKeyIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
@@ -10,7 +12,7 @@ import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
  * Does not consider a record may have multiple items.
  * In other words, it reads from the last consistent snapshot
  */
-public final class RecordIterator extends CachingKeyIterator implements IRecordIterator<IKey> {
+public final class RecordIterator implements IRecordIterator<IKey> {
 
     private long nextAddress;
     private final int recordSize;
@@ -27,18 +29,20 @@ public final class RecordIterator extends CachingKeyIterator implements IRecordI
     @Override
     public boolean hasNext() {
         // check for bit active
-//        while(progress < capacity && !UNSAFE.getBoolean(null, nextAddress)){
-//            this.progress++;
-//            this.nextAddress += recordSize;
-//        }
-        return progress < capacity;
+        while(this.progress < this.capacity && UNSAFE.getByte(null, nextAddress) != Header.ACTIVE_BYTE){
+            this.progress++;
+            this.nextAddress += recordSize;
+        }
+        return this.progress < this.capacity;
     }
 
     @Override
     public IKey next() {
+        // return this.keyOf(UNSAFE.getInt(nextAddress + 1));
+        var res = SimpleKey.of(UNSAFE.getInt(nextAddress + 1));
         this.progress++;
-        this.nextAddress += recordSize;
-        return this.keyOf(UNSAFE.getInt(nextAddress + 1));
+        this.nextAddress += this.recordSize;
+        return res;
     }
 
     @Override

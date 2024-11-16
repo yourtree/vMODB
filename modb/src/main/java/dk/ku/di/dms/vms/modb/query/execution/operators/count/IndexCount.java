@@ -24,7 +24,7 @@ public final class IndexCount extends AbstractCount {
         Iterator<IKey> iterator = this.index.iterator(keys);
         while(iterator.hasNext()){
             IKey key =  iterator.next();
-            if(index.checkCondition(key, filterContext)){
+            if(this.index.checkCondition(key, filterContext)){
                 count++;
             }
         }
