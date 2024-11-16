@@ -5,21 +5,19 @@ import java.lang.foreign.MemorySegment;
 /**
  * This class encapsulates a managed {@link MemorySegment}
  */
-public final class RecordBufferContext {
-
-    // the following metadata should be stored in a metadata buffer for recovery
+public sealed class RecordBufferContext permits AppendOnlyBuffer {
 
     // just to avoid many method calls, since this value does not change
     public final long address;
 
-    private final MemorySegment memorySegment;
+    protected final MemorySegment memorySegment;
 
     public RecordBufferContext(MemorySegment memorySegment) {
         this.memorySegment = memorySegment;
         this.address = this.memorySegment.address();
     }
 
-    public void force(){
+    public final void force(){
         this.memorySegment.force();
     }
 

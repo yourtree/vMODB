@@ -2,14 +2,14 @@ package dk.ku.di.dms.vms.modb.query.execution.operators;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
-import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
+import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBufferOld;
 
 public abstract class AbstractMemoryBasedOperator extends AbstractSimpleOperator {
 
     // the first node (but last to be acquired) of the memory segment nodes
     protected MemoryRefNode memoryRefNode = null;
 
-    protected AppendOnlyBuffer currentBuffer;
+    protected AppendOnlyBufferOld currentBuffer;
 
     public AbstractMemoryBasedOperator(int entrySize) {
         super(entrySize);
@@ -27,7 +27,7 @@ public abstract class AbstractMemoryBasedOperator extends AbstractSimpleOperator
         MemoryRefNode claimed = MemoryManager.getTemporaryDirectMemory();
         claimed.next = this.memoryRefNode;
         this.memoryRefNode = claimed;
-        this.currentBuffer = new AppendOnlyBuffer(claimed.address(), claimed.bytes());
+        this.currentBuffer = new AppendOnlyBufferOld(claimed.address(), claimed.bytes());
     }
 
     /**
@@ -42,7 +42,7 @@ public abstract class AbstractMemoryBasedOperator extends AbstractSimpleOperator
         MemoryRefNode claimed = MemoryManager.getTemporaryDirectMemory(size);
         claimed.next = this.memoryRefNode;
         this.memoryRefNode = claimed;
-        this.currentBuffer = new AppendOnlyBuffer(claimed.address(), claimed.bytes());
+        this.currentBuffer = new AppendOnlyBufferOld(claimed.address(), claimed.bytes());
     }
 
 }

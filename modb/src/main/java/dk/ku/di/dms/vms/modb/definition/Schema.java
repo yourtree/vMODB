@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.modb.definition;
 
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
-import dk.ku.di.dms.vms.modb.common.type.Constants;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 
 import java.util.Arrays;
@@ -47,16 +46,19 @@ public final class Schema {
         this.columnOffset = new int[columnDataTypes.length];
 
         int acc = RECORD_HEADER;
-        for(int j = 0; j < columnDataTypes.length; j++){
-            columnOffset[j] = acc;
-            switch (columnDataTypes[j]){
-                case LONG, DATE -> acc += Long.BYTES;
-                case CHAR -> acc += Character.BYTES;
-                case STRING, ENUM -> acc += (Character.BYTES * Constants.DEFAULT_MAX_SIZE_STRING);
-                case INT -> acc += Integer.BYTES;
-                case FLOAT -> acc += Float.BYTES;
-                case DOUBLE -> acc += Double.BYTES;
-                case BOOL -> acc += 1;
+        for(int j = 0; j < this.columnDataTypes.length; j++){
+            this.columnOffset[j] = acc;
+            switch (this.columnDataTypes[j]){
+                case LONG -> acc += DataType.LONG.value;
+                case DATE -> acc += DataType.DATE.value;
+                case CHAR -> acc += DataType.CHAR.value;
+                case STRING -> acc += DataType.STRING.value;
+                case ENUM -> acc += DataType.ENUM.value;
+                case INT -> acc += DataType.INT.value;
+                case FLOAT -> acc += DataType.FLOAT.value;
+                case DOUBLE -> acc += DataType.DOUBLE.value;
+                case BOOL -> acc += DataType.BOOL.value;
+                case INT_ARRAY -> acc += DataType.INT_ARRAY.value;
             }
         }
 

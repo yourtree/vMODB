@@ -1,22 +1,20 @@
 package dk.ku.di.dms.vms.modb.common.type;
 
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
-
 import java.util.Date;
 
+import static dk.ku.di.dms.vms.modb.common.memory.MemoryUtils.UNSAFE;
 import static dk.ku.di.dms.vms.modb.common.type.Constants.DEFAULT_MAX_SIZE_STRING;
+import static dk.ku.di.dms.vms.modb.common.type.Constants.MAX_ARRAY_NUM_ITEMS;
 
 public final class DataTypeUtils {
 
     private DataTypeUtils(){}
 
-    private static final jdk.internal.misc.Unsafe UNSAFE = MemoryUtils.UNSAFE;
+    private static final byte TRUE = 1;
+    private static final byte FALSE = 0;
 
     public static Object getValue(DataType dt, long address){
         switch (dt) {
-            case BOOL -> {
-                return UNSAFE.getBoolean(null, address);
-            }
             case INT -> {
                 return UNSAFE.getInt(null, address);
             }
@@ -51,6 +49,18 @@ public final class DataTypeUtils {
             case DOUBLE -> {
                 return UNSAFE.getDouble(null, address);
             }
+            case BOOL -> {
+                return UNSAFE.getByte(null, address) == TRUE;
+            }
+            case INT_ARRAY -> {
+                int[] intArray = new int[MAX_ARRAY_NUM_ITEMS];
+                long currPos = address;
+                for (int j = 0; j < MAX_ARRAY_NUM_ITEMS; j++) {
+                    intArray[j] = UNSAFE.getInt(null, currPos);
+                    currPos += Integer.BYTES;
+                }
+                return intArray;
+            }
             default -> throw new IllegalStateException("Unknown data type");
         }
     }
@@ -58,8 +68,6 @@ public final class DataTypeUtils {
     // just a wrapper
     public static void callWriteFunction(long address, DataType dt, Object value){
         switch (dt){
-            case BOOL -> // byte is used. on unsafe, the boolean is used
-                    UNSAFE.putBoolean(null, address, (boolean)value);
             case INT -> UNSAFE.putInt(null, address, (int)value);
             case CHAR -> UNSAFE.putChar(null, address, (char)value);
             case STRING, ENUM -> {
@@ -75,7 +83,7 @@ public final class DataTypeUtils {
                         }
                     }
                     case Enum<?> anEnum -> {
-                        String strValue = value.toString();
+                        String strValue = anEnum.toString();
                         int length = Math.min(strValue.length(), DEFAULT_MAX_SIZE_STRING);
                         while (i < length) {
                             UNSAFE.putChar(null, currPos, strValue.charAt(i));
@@ -107,6 +115,21 @@ public final class DataTypeUtils {
             }
             case FLOAT -> UNSAFE.putFloat(null, address, (float)value);
             case DOUBLE -> UNSAFE.putDouble(null, address, (double)value);
+            case BOOL -> UNSAFE.putByte(null, address, ((boolean)value) ? TRUE : FALSE);
+            case INT_ARRAY -> {
+                int[] intArray = (int[]) value;
+                long currPos = address;
+                int j;
+                for (j = 0; j < intArray.length; j++) {
+                    UNSAFE.putInt(null, currPos, intArray[j]);
+                    currPos += Integer.BYTES;
+                }
+                // fill remaining
+                for(j = intArray.length; j < MAX_ARRAY_NUM_ITEMS; j++){
+                    UNSAFE.putInt(null, currPos, -1);
+                    currPos += Integer.BYTES;
+                }
+            }
             default -> throw new IllegalStateException("Unknown data type");
         }
     }
@@ -136,6 +159,9 @@ public final class DataTypeUtils {
         }
         else if(attributeType.isEnum()){
             return DataType.ENUM;
+        }
+        else if(attributeType == Boolean.class){
+            return DataType.BOOL;
         }
         else {
             throw new IllegalStateException(attributeType.getCanonicalName() + " is not accepted as a column data type.");

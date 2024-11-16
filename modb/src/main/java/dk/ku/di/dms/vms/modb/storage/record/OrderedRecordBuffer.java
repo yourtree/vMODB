@@ -41,7 +41,7 @@ public final class OrderedRecordBuffer {
 
     private final LinkedList<Long> deletedOffsets;
 
-    private final AppendOnlyBuffer buffer;
+    private final AppendOnlyBufferOld buffer;
 
     // entry size :
     public static final int entrySize = 1 + Integer.BYTES + (3 * Long.BYTES);
@@ -58,7 +58,7 @@ public final class OrderedRecordBuffer {
     public static final int deltaNext = 1 + Integer.BYTES + (2 * Long.BYTES);
     public static final int deltaPrevious = 1;
 
-    public OrderedRecordBuffer(AppendOnlyBuffer buffer) {
+    public OrderedRecordBuffer(AppendOnlyBufferOld buffer) {
         this.buffer = buffer;
         this.first = buffer.address();
         this.last = buffer.address();

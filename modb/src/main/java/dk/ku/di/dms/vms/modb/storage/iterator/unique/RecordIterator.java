@@ -3,7 +3,6 @@ package dk.ku.di.dms.vms.modb.storage.iterator.unique;
 import dk.ku.di.dms.vms.modb.definition.Header;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
-import dk.ku.di.dms.vms.modb.storage.iterator.CachingKeyIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 
 /**

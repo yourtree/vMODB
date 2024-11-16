@@ -3,8 +3,6 @@ package dk.ku.di.dms.vms.marketplace.cart.infra;
 import dk.ku.di.dms.vms.marketplace.common.entities.CartItem;
 
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class CartUtils {
 

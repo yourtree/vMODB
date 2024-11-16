@@ -1,7 +1,8 @@
 package dk.ku.di.dms.vms.modb.storage.record;
 
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
-import jdk.internal.misc.Unsafe;
+import java.lang.foreign.MemorySegment;
+
+import static dk.ku.di.dms.vms.modb.common.memory.MemoryUtils.UNSAFE;
 
 /**
  * Append-only buffer.
@@ -23,23 +24,14 @@ import jdk.internal.misc.Unsafe;
  * - Can also be used for caching writes of transactions
  *
  */
-public class AppendOnlyBuffer {
-
-    private static final Unsafe UNSAFE = MemoryUtils.UNSAFE;
-
-    // what is found in the metadata buffer of this storage structure?
-    private final long address;
+public final class AppendOnlyBuffer extends RecordBufferContext {
 
     // the offset of the bucket
     private long nextOffset;
 
-    // the number of bytes this buffer provides
-    private final long size;
-
-    public AppendOnlyBuffer(long address, long size) {
-        this.address = address;
-        this.nextOffset = address;
-        this.size = size;
+    public AppendOnlyBuffer(MemorySegment memorySegment) {
+        super(memorySegment);
+        this.nextOffset = memorySegment.address();
     }
 
     // move offset
@@ -52,7 +44,7 @@ public class AppendOnlyBuffer {
     }
 
     public long size(){
-        return this.size;
+        return this.memorySegment.byteSize();
     }
 
     public long nextOffset() {
@@ -86,12 +78,12 @@ public class AppendOnlyBuffer {
     }
 
     public void append(float value){
-        UNSAFE.putFloat(nextOffset, value);
+        UNSAFE.putFloat(this.nextOffset, value);
         this.nextOffset += Float.BYTES;
     }
 
     public void append(double value){
-        UNSAFE.putDouble(nextOffset, value);
+        UNSAFE.putDouble(this.nextOffset, value);
         this.nextOffset += Float.BYTES;
     }
 

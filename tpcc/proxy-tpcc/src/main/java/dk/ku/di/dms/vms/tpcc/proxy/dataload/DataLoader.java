@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityHandler;
-import dk.ku.di.dms.vms.tpcc.proxy.datagen.TPCcConstants;
+import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants;
 
 import java.net.URI;
 import java.net.http.HttpClient;

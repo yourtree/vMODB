@@ -1,10 +1,20 @@
-package dk.ku.di.dms.vms.tpcc.proxy.datagen;
+package dk.ku.di.dms.vms.tpcc.proxy.infra;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public final class TPCcConstants {
 
+    /**
+     * WORKLOAD
+     */
+    public static final int NUM_TRANSACTIONS = 3;
+    public static final boolean ALLOW_MULTI_WAREHOUSE_TX = false;
+    public static final boolean FORCE_ABORTS = false;
+
+    /**
+     * DATA
+     */
     public static final int NUM_WARE = 1;
     public static final int NUM_DIST_PER_WARE = 10;
     public static final int NUM_CUST_PER_DIST = 3000;
@@ -36,7 +46,7 @@ public final class TPCcConstants {
         TABLE_TO_VMS_MAP.put("customer", "warehouse");
 
         TABLE_TO_VMS_MAP.put("item", "inventory");
-        TABLE_TO_VMS_MAP.put("stock", "warehouse");
+        TABLE_TO_VMS_MAP.put("stock", "inventory");
 
         TABLE_TO_VMS_MAP.put("orders", "order");
         TABLE_TO_VMS_MAP.put("new_orders", "order");

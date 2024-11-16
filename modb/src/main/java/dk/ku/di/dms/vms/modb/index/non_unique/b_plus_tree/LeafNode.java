@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.non_unique.RecordBucketIterator;
-import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
+import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBufferOld;
 import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 
 public class LeafNode implements INode {
@@ -35,7 +35,7 @@ public class LeafNode implements INode {
 
     public static LeafNode leaf(int pageSize){
         MemoryRefNode memoryRefNode = MemoryManager.getTemporaryDirectMemory( pageSize );
-        AppendOnlyBuffer buffer = new AppendOnlyBuffer( memoryRefNode.address, memoryRefNode.bytes );
+        AppendOnlyBufferOld buffer = new AppendOnlyBufferOld( memoryRefNode.address, memoryRefNode.bytes );
         return new LeafNode(pageSize, new OrderedRecordBuffer( buffer) );
     }
     

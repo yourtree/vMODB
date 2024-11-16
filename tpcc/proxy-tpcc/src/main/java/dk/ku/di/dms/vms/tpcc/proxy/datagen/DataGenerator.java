@@ -2,31 +2,17 @@ package dk.ku.di.dms.vms.tpcc.proxy.datagen;
 
 import dk.ku.di.dms.vms.tpcc.inventory.entities.Item;
 import dk.ku.di.dms.vms.tpcc.inventory.entities.Stock;
+import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants;
 import dk.ku.di.dms.vms.tpcc.warehouse.entities.Customer;
 import dk.ku.di.dms.vms.tpcc.warehouse.entities.District;
 import dk.ku.di.dms.vms.tpcc.warehouse.entities.Warehouse;
 
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Map;
 
 import static dk.ku.di.dms.vms.tpcc.proxy.datagen.DataGenUtils.*;
 
 public final class DataGenerator {
-
-    public static Map<Integer, Item> generateItemTable()
-    {
-        return generateItemTable(TPCcConstants.NUM_ITEMS);
-    }
-
-    public static Map<Integer,Item> generateItemTable(int numItems){
-        var items = new HashMap<Integer, Item>();
-        for (int I_ID = 1; I_ID <= numItems; I_ID ++)
-        {
-            items.put(I_ID, generateItem(I_ID));
-        }
-        return items;
-    }
 
     public static Item generateItem(int I_ID) {
         int I_IM_ID = randomNumber(1, 10000);
@@ -61,17 +47,6 @@ public final class DataGenerator {
         var D_YTD = (float) 30000.0;
         var D_NEXT_O_ID = 3001;
         return new District(D_ID, D_W_ID, D_NAME, D_STREET_1, D_STREET_2, D_CITY, D_STATE, D_ZIP, D_TAX, D_YTD, D_NEXT_O_ID);
-    }
-
-    public static Map<Integer, Customer> generateCustomerTable(int c_d_id , int c_w_id)
-    {
-        var customer_table = new HashMap<Integer, Customer>();
-        for (int C_ID = 1; C_ID <= TPCcConstants.NUM_CUST_PER_DIST; C_ID++)
-        {
-            Customer customer = generateCustomer(c_d_id, c_w_id, C_ID);
-            customer_table.put(C_ID, customer);
-        }
-        return customer_table;
     }
 
     public static Customer generateCustomer(int c_d_id, int c_w_id, int C_ID) {
@@ -109,17 +84,6 @@ public final class DataGenerator {
         String C_DATA = makeAlphaString(300, 500);
 
         return new Customer(C_ID, c_d_id, c_w_id, C_FIRST, C_MIDDLE, C_LAST, C_STREET_1, C_STREET_2, C_CITY, C_STATE, C_ZIP, C_PHONE, C_SINCE, C_CREDIT, C_CREDIT_LIM, C_DISCOUNT, C_BALANCE, C_YTD_PAYMENT, C_PAYMENT_CNT, C_DELIVERY_CNT, C_DATA);
-    }
-
-    public static Map<Integer, Stock> generateStockTable(int w_id)
-    {
-        var stockMap = new HashMap<Integer, Stock>(TPCcConstants.NUM_ITEMS);
-        for (int S_I_ID = 1; S_I_ID <= TPCcConstants.NUM_ITEMS; S_I_ID++)
-        {
-            Stock stock = generateStockItem(w_id, S_I_ID);
-            stockMap.put(S_I_ID, stock);
-        }
-        return stockMap;
     }
 
     public static Stock generateStockItem(int w_id, int S_I_ID) {

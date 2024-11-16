@@ -2,7 +2,7 @@ package dk.ku.di.dms.vms.modb.common.type;
 
 public enum DataType {
 
-    BOOL(0), // actually 1 bit, not 1 byte
+    BOOL(Byte.BYTES),
 
     INT(Integer.BYTES),
 
@@ -22,9 +22,9 @@ public enum DataType {
     // should only be used by events
     STRING_ARRAY(Constants.DEFAULT_MAX_SIZE_STRING),
 
-    FLOAT_ARRAY(Float.BYTES * 10),
+    FLOAT_ARRAY(Float.BYTES * Constants.MAX_ARRAY_NUM_ITEMS),
 
-    INT_ARRAY(Integer.BYTES * 10),
+    INT_ARRAY(Integer.BYTES * Constants.MAX_ARRAY_NUM_ITEMS),
 
     // max 16 characters
     ENUM(Constants.DEFAULT_MAX_SIZE_STRING),

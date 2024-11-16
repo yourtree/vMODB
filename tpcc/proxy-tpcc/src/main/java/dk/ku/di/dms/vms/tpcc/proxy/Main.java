@@ -6,14 +6,13 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
+import dk.ku.di.dms.vms.tpcc.common.events.NewOrderWareIn;
 import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoader;
 import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcHttpHandler;
 import dk.ku.di.dms.vms.tpcc.proxy.storage.StorageUtils;
+import dk.ku.di.dms.vms.tpcc.proxy.workload.WorkloadUtils;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Scanner;
+import java.util.*;
 
 public final class Main {
     public static void main(String[] ignoredArgs) throws NoSuchFieldException, IllegalAccessException {
@@ -24,7 +23,8 @@ public final class Main {
     }
 
     private static void menu() throws NoSuchFieldException, IllegalAccessException {
-        Map<String, UniqueHashBufferIndex> tables;
+        Map<String, UniqueHashBufferIndex> tables = null;
+        List<NewOrderWareIn> input = null;
         StorageUtils.EntityMetadata metadata = StorageUtils.loadEntityMetadata();
         Scanner scanner = new Scanner(System.in);
         boolean running = true;
@@ -32,19 +32,31 @@ public final class Main {
             printMenu();
             System.out.print("Enter your choice: ");
             String choice = scanner.nextLine();
+            System.out.println("You chose option: " + choice);
             switch (choice) {
                 case "1":
+                    System.out.println("Option 1: Create tables selected.");
                     tables = StorageUtils.createTables(metadata);
                     break;
                 case "2":
-                    tables = StorageUtils.loadTables(metadata);
+                    System.out.println("Option 2: Ingest data selected.");
+                    if(tables == null) {
+                        System.out.println("Loading tables from disk...");
+                        tables = StorageUtils.loadTables(metadata);
+                    }
                     DataLoader.load(tables, metadata.entityHandlerMap());
                     break;
                 case "3":
-                    // createWorkload();
+                    System.out.println("Option 3: Create workload selected.");
+                    input = WorkloadUtils.createWorkload();
                     break;
                 case "4":
-                    // submitWorkload();
+                    System.out.println("Option 4: Submit workload selected.");
+                    if(input == null){
+                        System.out.println("Loading workload from disk...");
+                        input = WorkloadUtils.loadWorkloadData();
+                    }
+                    WorkloadUtils.submitWorkload(input);
                     break;
                 case "0":
                     System.out.println("Exiting the application. Goodbye!");

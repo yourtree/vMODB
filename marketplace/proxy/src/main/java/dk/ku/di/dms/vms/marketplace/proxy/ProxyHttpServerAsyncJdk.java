@@ -6,7 +6,6 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
 import dk.ku.di.dms.vms.web_common.IHttpHandler;
 
 import static dk.ku.di.dms.vms.marketplace.common.Constants.*;
-import static dk.ku.di.dms.vms.marketplace.common.Constants.UPDATE_DELIVERY;
 
 public final class ProxyHttpServerAsyncJdk extends AbstractHttpHandler implements IHttpHandler {
 

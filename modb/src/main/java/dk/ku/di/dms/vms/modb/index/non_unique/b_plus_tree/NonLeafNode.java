@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.modb.common.memory.MemoryRefNode;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
-import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
+import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBufferOld;
 import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 
 /**
@@ -29,7 +29,7 @@ public class NonLeafNode implements INode {
     public final int pageSize;
     public final int branchingFactor;
 
-    public final AppendOnlyBuffer buffer;
+    public final AppendOnlyBufferOld buffer;
 
 //    private long first;
 //    private long last;
@@ -50,7 +50,7 @@ public class NonLeafNode implements INode {
         this.branchingFactor = 5;
         this.parent = true;
         MemoryRefNode memoryRefNode = MemoryManager.getTemporaryDirectMemory( pageSize );
-        this.buffer = new AppendOnlyBuffer( memoryRefNode.address, memoryRefNode.bytes );
+        this.buffer = new AppendOnlyBufferOld( memoryRefNode.address, memoryRefNode.bytes );
         this.nKeys = 0;
         this.children = new INode[this.branchingFactor + 1]; // + 1 because of leaf nodes
         this.children[0] = LeafNode.leaf( this.pageSize );
@@ -66,7 +66,7 @@ public class NonLeafNode implements INode {
         // return parent;
     }
 
-    private NonLeafNode(int pageSize, int nKeys, INode[] children, AppendOnlyBuffer buffer){
+    private NonLeafNode(int pageSize, int nKeys, INode[] children, AppendOnlyBufferOld buffer){
         this.pageSize = pageSize;
         this.branchingFactor = (pageSize / nonLeafEntrySize) - 1;
         this.buffer = buffer;
@@ -75,9 +75,8 @@ public class NonLeafNode implements INode {
         this.children = children;
     }
 
-    public static NonLeafNode internal(int pageSize, int nKeys, INode[] children, AppendOnlyBuffer buffer){
-        NonLeafNode parent = new NonLeafNode(pageSize, nKeys, children, buffer);
-        return parent;
+    public static NonLeafNode internal(int pageSize, int nKeys, INode[] children, AppendOnlyBufferOld buffer){
+        return new NonLeafNode(pageSize, nKeys, children, buffer);
     }
 
     @Override
@@ -116,7 +115,7 @@ public class NonLeafNode implements INode {
         this.nKeys = half;
 
         MemoryRefNode memoryRefNode = MemoryManager.getTemporaryDirectMemory( this.pageSize );
-        AppendOnlyBuffer rightBuffer = new AppendOnlyBuffer( memoryRefNode.address, memoryRefNode.bytes );
+        AppendOnlyBufferOld rightBuffer = new AppendOnlyBufferOld( memoryRefNode.address, memoryRefNode.bytes );
 
         // copy keys to new buffer (from truncated offset + 1 to branching factor)
         MemoryUtils.UNSAFE.copyMemory( this.buffer.address() + ( (long) (this.branchingFactor - nKeys + 1) * nonLeafEntrySize),

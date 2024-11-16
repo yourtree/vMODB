@@ -18,6 +18,7 @@ import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashMapIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashMapIndex;
 import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
+import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBufferOld;
 import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
@@ -350,6 +351,7 @@ public final class EmbedMetadataLoader {
         try {
             segment = mapFileIntoMemorySegment(sizeInBytes, fileName, true);
         } catch (Exception e){
+            e.printStackTrace(System.err);
             try (Arena arena = Arena.ofShared()) {
                 segment = arena.allocate(sizeInBytes);
             }
@@ -408,7 +410,7 @@ public final class EmbedMetadataLoader {
     }
 
     private static OrderedRecordBuffer loadOrderedRecordBuffer(long address, int size){
-        AppendOnlyBuffer appendOnlyBuffer = new AppendOnlyBuffer(address, size);
+        AppendOnlyBufferOld appendOnlyBuffer = new AppendOnlyBufferOld(address, size);
         return new OrderedRecordBuffer(appendOnlyBuffer);
     }
 
@@ -424,6 +426,20 @@ public final class EmbedMetadataLoader {
             LOGGER.log(WARNING, "Could not map file. Resorting to direct memory allocation attempt: \n"+e);
             try (Arena arena = Arena.ofShared()) {
                 return new RecordBufferContext(arena.allocate(sizeInBytes));
+            }
+        }
+    }
+
+    public static AppendOnlyBuffer loadAppendOnlyBuffer(int maxNumberOfRecords, int recordSize, String fileName, boolean truncate){
+        long sizeInBytes = (long) maxNumberOfRecords * recordSize;
+        try {
+            MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, fileName, truncate);
+            return new AppendOnlyBuffer(segment);
+        } catch (Exception e){
+            LOGGER.log(WARNING, "Could not map file. Resorting to direct memory allocation attempt: \n"+e);
+            try (Arena arena = Arena.ofShared()) {
+                var segment = arena.allocate(sizeInBytes);
+                return new AppendOnlyBuffer(segment);
             }
         }
     }
