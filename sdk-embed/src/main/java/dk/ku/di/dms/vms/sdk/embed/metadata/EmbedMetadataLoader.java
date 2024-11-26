@@ -43,14 +43,13 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.reflect.*;
 import java.nio.channels.FileChannel;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.lang.System.Logger.Level.INFO;
-import static java.lang.System.Logger.Level.WARNING;
+import static java.lang.System.Logger.Level.*;
 
 public final class EmbedMetadataLoader {
 
@@ -436,7 +435,7 @@ public final class EmbedMetadataLoader {
             MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, fileName, truncate);
             return new AppendOnlyBuffer(segment);
         } catch (Exception e){
-            LOGGER.log(WARNING, "Could not map file. Resorting to direct memory allocation attempt: \n"+e);
+            LOGGER.log(ERROR, "Could not map file. Resorting to direct memory allocation attempt: \n"+e);
             try (Arena arena = Arena.ofShared()) {
                 var segment = arena.allocate(sizeInBytes);
                 return new AppendOnlyBuffer(segment);
@@ -444,7 +443,40 @@ public final class EmbedMetadataLoader {
         }
     }
 
+    public static AppendOnlyBuffer loadAppendOnlyBufferUnknownSize(String fileName){
+        try {
+            MemorySegment segment = mapFileIntoMemorySegment(fileName);
+            return new AppendOnlyBuffer(segment);
+        } catch (Exception e){
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static MemorySegment mapFileIntoMemorySegment(String fileName) {
+        File file = buildFile(fileName);
+        try {
+            StandardOpenOption[] options = buildFileOpenOptions(false);
+            FileChannel fc = FileChannel.open(Path.of(file.toURI()), options);
+            LOGGER.log(INFO, "Attempt to open file in directory completed successfully: "+file.getAbsolutePath());
+            return mapFileChannelIntoMemorySegment(fc, file.length());// also works: fc.size()
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private static MemorySegment mapFileIntoMemorySegment(long bytes, String fileName, boolean truncate) {
+        File file = buildFile(fileName);
+        try {
+            StandardOpenOption[] options = buildFileOpenOptions(truncate);
+            FileChannel fc = FileChannel.open(Path.of(file.toURI()), options);
+            LOGGER.log(INFO, "Attempt to open file in directory completed successfully: "+file.getAbsolutePath());
+            return mapFileChannelIntoMemorySegment(fc, bytes);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static File buildFile(String fileName) {
         String userHome = ConfigUtils.getUserHome();
         String filePath;
         if(ConfigUtils.isWindows()){
@@ -459,14 +491,11 @@ public final class EmbedMetadataLoader {
         } else {
             LOGGER.log(INFO, "Parent directory ("+file.getParentFile()+") did not need being created.");
         }
-        try {
-            StandardOpenOption[] options = buildFileOpenOptions(truncate);
-            FileChannel fc = FileChannel.open(Paths.get(filePath), options);
-            LOGGER.log(INFO, "Attempt to open file in directory completed successfully: "+filePath);
-            return fc.map(FileChannel.MapMode.READ_WRITE, 0, bytes, Arena.ofShared());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        return file;
+    }
+
+    private static MemorySegment mapFileChannelIntoMemorySegment(FileChannel fc, long bytes) throws IOException {
+        return fc.map(FileChannel.MapMode.READ_WRITE, 0, bytes, Arena.ofShared());
     }
 
     private static StandardOpenOption[] buildFileOpenOptions(boolean truncate) {

@@ -18,6 +18,7 @@ import dk.ku.di.dms.vms.tpcc.warehouse.entities.District;
 import dk.ku.di.dms.vms.tpcc.warehouse.entities.Warehouse;
 import org.reflections.Reflections;
 
+import java.io.File;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.HashMap;
@@ -39,25 +40,31 @@ public final class StorageUtils {
         ENTITY_TO_VMS_MAP.put(Stock.class, "proxy");
     }
 
+    public static int getNumRecordsFromInDiskTable(Schema schema, String fileName){
+        File file = EmbedMetadataLoader.buildFile(fileName);
+        return (int) file.length() / schema.getRecordSize();
+    }
+
     /**
      * Map already created tables in disk
      */
-    public static Map<String, UniqueHashBufferIndex> loadTables(EntityMetadata metadata) {
+    public static Map<String, UniqueHashBufferIndex> loadTables(EntityMetadata metadata, int numWare) {
         Map<String, UniqueHashBufferIndex> tableToIndexMap = new HashMap<>();
         for (var entry : metadata.entityToTableNameMap.entrySet()) {
             final Schema schema = metadata.entityToSchemaMap.get(entry.getValue());
             switch (entry.getValue()){
                 case "warehouse" -> {
-                    UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, TPCcConstants.NUM_WARE, false);
+                    LOGGER.log(INFO, "Loading "+numWare+" warehouses...");
+                    UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, numWare, false);
                     tableToIndexMap.put(entry.getValue(), idx);
                 }
                 case "district" -> {
-                    int maxRecords = TPCcConstants.NUM_WARE * TPCcConstants.NUM_DIST_PER_WARE;
+                    int maxRecords = numWare * TPCcConstants.NUM_DIST_PER_WARE;
                     UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, maxRecords, false);
                     tableToIndexMap.put(entry.getValue(), idx);
                 }
                 case "customer" -> {
-                    int maxRecords = TPCcConstants.NUM_WARE * TPCcConstants.NUM_DIST_PER_WARE * TPCcConstants.NUM_CUST_PER_DIST * 2;
+                    int maxRecords = numWare * TPCcConstants.NUM_DIST_PER_WARE * TPCcConstants.NUM_CUST_PER_DIST * 2;
                     UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, maxRecords, false);
                     tableToIndexMap.put(entry.getValue(), idx);
                 }
@@ -66,7 +73,7 @@ public final class StorageUtils {
                     tableToIndexMap.put(entry.getValue(), idx);
                 }
                 case "stock" -> {
-                    int maxRecords = TPCcConstants.NUM_WARE * TPCcConstants.NUM_ITEMS;
+                    int maxRecords = numWare * TPCcConstants.NUM_ITEMS;
                     UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, maxRecords, false);
                     tableToIndexMap.put(entry.getValue(), idx);
                 }
@@ -80,12 +87,10 @@ public final class StorageUtils {
         Reflections reflections = VmsMetadataLoader.configureReflections(new String[]{
                 "dk.ku.di.dms.vms.tpcc",
         });
-
         Map<Class<?>, String> entityToTableNameMap = VmsMetadataLoader.loadVmsTableNames(reflections);
         Map<String, VmsDataModel> vmsDataModelMap = VmsMetadataLoader.buildVmsDataModel(ENTITY_TO_VMS_MAP, entityToTableNameMap );
         Map<String, EntityHandler> entityHandlerMap = new HashMap<>();
         Map<String, Schema> entityToSchemaMap = new HashMap<>();
-
         for (var entry : entityToTableNameMap.entrySet()) {
             VmsDataModel vmsDataModel = vmsDataModelMap.get(entry.getValue());
             Class<?> entityClazz = entry.getKey();
@@ -96,7 +101,6 @@ public final class StorageUtils {
             EntityHandler entityHandler = new EntityHandler(pkClazz, entityClazz, schema);
             entityHandlerMap.put(entry.getValue(), entityHandler);
         }
-
         return new EntityMetadata(entityToTableNameMap, vmsDataModelMap, entityHandlerMap, entityToSchemaMap);
     }
 
@@ -107,30 +111,35 @@ public final class StorageUtils {
      * Generate data and create tables in disk
      */
     @SuppressWarnings({"unchecked"})
-    public static Map<String, UniqueHashBufferIndex> createTables(EntityMetadata metadata) {
+    public static Map<String, UniqueHashBufferIndex> createTables(EntityMetadata metadata, int numWare) {
         Map<String, UniqueHashBufferIndex> tableToIndexMap = new HashMap<>();
         for (var entry : metadata.entityToTableNameMap.entrySet()) {
             final Schema schema = metadata.entityToSchemaMap.get(entry.getValue());
             var entityHandler = metadata.entityHandlerMap.get(entry.getValue());
-
             // generate data and store in respective indexes
             switch (entry.getValue()){
                 case "warehouse" -> {
-                    UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, TPCcConstants.NUM_WARE, true);
+                    LOGGER.log(INFO, "Creating "+numWare+" warehouse records...");
+                    long initTs = System.currentTimeMillis();
+                    UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, numWare, true);
                     tableToIndexMap.put(entry.getValue(), idx);
-                    for(int w_id = 1; w_id <= TPCcConstants.NUM_WARE; w_id++){
+                    for(int w_id = 1; w_id <= numWare; w_id++){
                         Warehouse warehouse = DataGenerator.generateWarehouse(w_id);
                         var record = entityHandler.extractFieldValuesFromEntityObject(warehouse);
                         IKey key = KeyUtils.buildRecordKey(schema.getPrimaryKeyColumns(), record);
                         idx.insert(key, record);
                     }
                     idx.flush();
+                    long endTs = System.currentTimeMillis();
+                    LOGGER.log(INFO, "Finished creating "+numWare+" warehouse records in "+(endTs-initTs)+" ms");
                 }
                 case "district" -> {
-                    int maxRecords = TPCcConstants.NUM_WARE * TPCcConstants.NUM_DIST_PER_WARE;
+                    int maxRecords = numWare * TPCcConstants.NUM_DIST_PER_WARE * 2;
+                    LOGGER.log(INFO, "Creating "+maxRecords+" district records...");
+                    long initTs = System.currentTimeMillis();
                     UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, maxRecords, true);
                     tableToIndexMap.put(entry.getValue(), idx);
-                    for(int w_id = 1; w_id <= TPCcConstants.NUM_WARE; w_id++){
+                    for(int w_id = 1; w_id <= numWare; w_id++){
                         for(int d_id = 1; d_id <= TPCcConstants.NUM_DIST_PER_WARE; d_id++) {
                             District district = DataGenerator.generateDistrict(d_id, w_id);
                             var record = entityHandler.extractFieldValuesFromEntityObject(district);
@@ -139,13 +148,16 @@ public final class StorageUtils {
                         }
                     }
                     idx.flush();
+                    long endTs = System.currentTimeMillis();
+                    LOGGER.log(INFO, "Finished creating "+numWare+" district records in "+(endTs-initTs)+" ms");
                 }
                 case "customer" -> {
-                    int maxRecords = TPCcConstants.NUM_WARE * TPCcConstants.NUM_DIST_PER_WARE * TPCcConstants.NUM_CUST_PER_DIST * 2;
-                    LOGGER.log(INFO, "Creating customer table with max records = "+maxRecords);
+                    int maxRecords = numWare * TPCcConstants.NUM_DIST_PER_WARE * TPCcConstants.NUM_CUST_PER_DIST * 2;
+                    LOGGER.log(INFO, "Creating "+maxRecords+" customer records...");
+                    long initTs = System.currentTimeMillis();
                     UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, maxRecords, true);
                     tableToIndexMap.put(entry.getValue(), idx);
-                    for(int w_id = 1; w_id <= TPCcConstants.NUM_WARE; w_id++){
+                    for(int w_id = 1; w_id <= numWare; w_id++){
                         for(int d_id = 1; d_id <= TPCcConstants.NUM_DIST_PER_WARE; d_id++) {
                             for(int c_id = 1; c_id <= TPCcConstants.NUM_CUST_PER_DIST; c_id++) {
                                 Customer customer = DataGenerator.generateCustomer(d_id, w_id, c_id);
@@ -156,8 +168,12 @@ public final class StorageUtils {
                         }
                     }
                     idx.flush();
+                    long endTs = System.currentTimeMillis();
+                    LOGGER.log(INFO, "Finished creating "+maxRecords+" customer records in "+(endTs-initTs)+" ms");
                 }
                 case "item" -> {
+                    LOGGER.log(INFO, "Creating "+TPCcConstants.NUM_ITEMS+" item records...");
+                    long initTs = System.currentTimeMillis();
                     UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, TPCcConstants.NUM_ITEMS, true);
                     tableToIndexMap.put(entry.getValue(), idx);
                     for(int i_id = 1; i_id <= TPCcConstants.NUM_ITEMS; i_id++){
@@ -167,12 +183,16 @@ public final class StorageUtils {
                         idx.insert(key, record);
                     }
                     idx.flush();
+                    long endTs = System.currentTimeMillis();
+                    LOGGER.log(INFO, "Finished creating "+TPCcConstants.NUM_ITEMS+" item records in "+(endTs-initTs)+" ms");
                 }
                 case "stock" -> {
-                    int maxRecords = TPCcConstants.NUM_WARE * TPCcConstants.NUM_ITEMS;
+                    int maxRecords = numWare * (TPCcConstants.NUM_ITEMS * 2);
+                    LOGGER.log(INFO, "Creating "+maxRecords+" stock records...");
+                    long initTs = System.currentTimeMillis();
                     UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, maxRecords, true);
                     tableToIndexMap.put(entry.getValue(), idx);
-                    for(int w_id = 1; w_id <= TPCcConstants.NUM_WARE; w_id++) {
+                    for(int w_id = 1; w_id <= numWare; w_id++) {
                         for (int i_id = 1; i_id <= TPCcConstants.NUM_ITEMS; i_id++) {
                             Stock stock = DataGenerator.generateStockItem(w_id, i_id);
                             var record = entityHandler.extractFieldValuesFromEntityObject(stock);
@@ -181,6 +201,8 @@ public final class StorageUtils {
                         }
                     }
                     idx.flush();
+                    long endTs = System.currentTimeMillis();
+                    LOGGER.log(INFO, "Finished creating "+maxRecords+" stock records in "+(endTs-initTs)+" ms");
                 }
             }
         }

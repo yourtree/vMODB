@@ -8,14 +8,12 @@ public final class TPCcConstants {
     /**
      * WORKLOAD
      */
-    public static final int NUM_TRANSACTIONS = 3;
     public static final boolean ALLOW_MULTI_WAREHOUSE_TX = false;
     public static final boolean FORCE_ABORTS = false;
 
     /**
      * DATA
      */
-    public static final int NUM_WARE = 1;
     public static final int NUM_DIST_PER_WARE = 10;
     public static final int NUM_CUST_PER_DIST = 3000;
     public static final int NUM_ITEMS = 100000;

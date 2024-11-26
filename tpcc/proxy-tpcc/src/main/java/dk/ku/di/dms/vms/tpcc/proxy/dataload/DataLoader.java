@@ -16,7 +16,11 @@ import java.util.Properties;
 import java.util.concurrent.*;
 import java.util.function.Supplier;
 
+import static java.lang.System.Logger.Level.INFO;
+
 public final class DataLoader {
+
+    private static final System.Logger LOGGER = System.getLogger(DataLoader.class.getName());
 
     public static final String CONTENT_TYPE = "Content-Type";
     public static final String CONTENT_TYPE_VAL = "application/json";
@@ -34,10 +38,10 @@ public final class DataLoader {
     };
 
     @SuppressWarnings({"rawtypes"})
-    public static void load(Map<String, UniqueHashBufferIndex> tableToIndexMap,
+    public static boolean load(Map<String, UniqueHashBufferIndex> tableToIndexMap,
                             Map<String, EntityHandler> entityHandlerMap) {
 
-        int cpus = Runtime.getRuntime().availableProcessors();
+        int cpus = 1;// Runtime.getRuntime().availableProcessors();
         var threadPool = Executors.newFixedThreadPool(cpus);
         BlockingQueue<Future<Void>> completionQueue = new ArrayBlockingQueue<>(tableToIndexMap.size());
         CompletionService<Void> service = new ExecutorCompletionService<>(threadPool, completionQueue);
@@ -47,7 +51,7 @@ public final class DataLoader {
             if(!idx.getKey().contentEquals("warehouse")) continue;
             service.submit(new IngestionWorker(idx.getKey(), idx.getValue(), entityHandlerMap.get(idx.getKey())), null);
         }
-
+        LOGGER.log(INFO, "Loading tables starting...");
         long init = System.currentTimeMillis();
         try {
             for (int i = 0; i < tableToIndexMap.size(); i++) {
@@ -56,9 +60,11 @@ public final class DataLoader {
         } catch (InterruptedException e){
             threadPool.shutdownNow();
             e.printStackTrace(System.err);
+            return false;
         } finally {
             long end = System.currentTimeMillis();
-            System.out.println("Loading tables (ms): "+(end-init));
+            LOGGER.log(INFO, "Loading tables finished in "+(end-init)+"ms");
+            return true;
         }
 
     }
@@ -81,21 +87,21 @@ public final class DataLoader {
             HttpClient httpClient = HTTP_CLIENT_SUPPLIER.get();
             try {
 
-                IRecordIterator<IKey> iterator = index.iterator();
+                IRecordIterator<IKey> iterator = this.index.iterator();
 
-                String vms = TPCcConstants.TABLE_TO_VMS_MAP.get(table);
+                String vms = TPCcConstants.TABLE_TO_VMS_MAP.get(this.table);
                 int port = TPCcConstants.VMS_TO_PORT_MAP.get(vms);
 
                 Properties properties = ConfigUtils.loadProperties();
-                String host = properties.getProperty(table+"_host");
+                String host = properties.getProperty(this.table+"_host");
 
-                String url = "http://"+ host+":"+port+"/"+table;
+                String url = "http://"+ host+":"+port+"/"+this.table;
 
                 while(iterator.hasNext()){
                     IKey key = iterator.next();
-                    Object[] record = index.record(key);
+                    Object[] record = this.index.record(key);
 
-                    var entity = entityHandler.parseObjectIntoEntity(record);
+                    var entity = this.entityHandler.parseObjectIntoEntity(record);
 
                     HttpRequest httpReq = HttpRequest.newBuilder()
                             .uri(URI.create(url))

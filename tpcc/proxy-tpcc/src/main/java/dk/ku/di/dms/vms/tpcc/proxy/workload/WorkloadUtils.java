@@ -49,16 +49,16 @@ public final class WorkloadUtils {
     }
 
     public static void submitWorkload(List<NewOrderWareIn> input){
-
-
-
+        //int
         return;
     }
 
     public static List<NewOrderWareIn> loadWorkloadData(){
-        List<NewOrderWareIn> input = new ArrayList<>(NUM_TRANSACTIONS);
-        AppendOnlyBuffer buffer = EmbedMetadataLoader.loadAppendOnlyBuffer(NUM_TRANSACTIONS, SCHEMA.getRecordSize(),"new_order_input", false);
-        for(int txIdx = 1; txIdx <= NUM_TRANSACTIONS; txIdx++) {
+        AppendOnlyBuffer buffer = EmbedMetadataLoader.loadAppendOnlyBufferUnknownSize("new_order_input");
+        // calculate number of entries (i.e., transactions)
+        int numTransactions = (int) buffer.size() / SCHEMA.getRecordSize();
+        List<NewOrderWareIn> input = new ArrayList<>(numTransactions);
+        for(int txIdx = 1; txIdx <= numTransactions; txIdx++) {
             Object[] newOrderInput = read(buffer.nextOffset());
             input.add(parseRecordIntoEntity(newOrderInput));
             buffer.forwardOffset(SCHEMA.getRecordSize());
@@ -66,12 +66,13 @@ public final class WorkloadUtils {
         return input;
     }
 
-    public static List<NewOrderWareIn> createWorkload(){
-        List<NewOrderWareIn> input = new ArrayList<>(NUM_TRANSACTIONS);
-        AppendOnlyBuffer buffer = EmbedMetadataLoader.loadAppendOnlyBuffer(NUM_TRANSACTIONS, SCHEMA.getRecordSize(),"new_order_input", true);
-        for(int txIdx = 1; txIdx <= NUM_TRANSACTIONS; txIdx++) {
-            int w_id = randomNumber(1, NUM_WARE);
-            Object[] newOrderInput = generateNewOrder(w_id, NUM_WARE);
+    public static List<NewOrderWareIn> createWorkload(int numWare, int numTransactions){
+        System.out.println("Starting generating "+numTransactions);
+        List<NewOrderWareIn> input = new ArrayList<>(numTransactions);
+        AppendOnlyBuffer buffer = EmbedMetadataLoader.loadAppendOnlyBuffer(numTransactions, SCHEMA.getRecordSize(),"new_order_input", true);
+        for(int txIdx = 1; txIdx <= numTransactions; txIdx++) {
+            int w_id = randomNumber(1, numWare);
+            Object[] newOrderInput = generateNewOrder(w_id, numWare);
             input.add(parseRecordIntoEntity(newOrderInput));
             write(buffer.nextOffset(), newOrderInput);
             buffer.forwardOffset(SCHEMA.getRecordSize());
@@ -159,7 +160,9 @@ public final class WorkloadUtils {
     private static int otherWare(int num_ware, int home_ware) {
         int tmp;
         if (num_ware == 1) return home_ware;
-        while ((tmp = randomNumber(1, num_ware)) == home_ware);
+        do {
+            tmp = randomNumber(1, num_ware);
+        } while (tmp == home_ware);
         return tmp;
     }
 

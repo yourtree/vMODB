@@ -23,6 +23,7 @@ public final class Main {
     }
 
     private static void menu() throws NoSuchFieldException, IllegalAccessException {
+        int numWare;
         Map<String, UniqueHashBufferIndex> tables = null;
         List<NewOrderWareIn> input = null;
         StorageUtils.EntityMetadata metadata = StorageUtils.loadEntityMetadata();
@@ -35,26 +36,38 @@ public final class Main {
             System.out.println("You chose option: " + choice);
             switch (choice) {
                 case "1":
-                    System.out.println("Option 1: Create tables selected.");
-                    tables = StorageUtils.createTables(metadata);
+                    System.out.println("Option 1: \"Create tables in disk\" selected.");
+                    System.out.print("Enter number of warehouses: ");
+                    numWare = Integer.parseInt(scanner.nextLine());
+                    System.out.println("Creating tables with "+numWare+" warehouses...");
+                    tables = StorageUtils.createTables(metadata, numWare);
+                    System.out.println("Tables created!");
                     break;
                 case "2":
-                    System.out.println("Option 2: Ingest data selected.");
+                    System.out.println("Option 2: \"Load services from tables in disk\" selected.");
                     if(tables == null) {
                         System.out.println("Loading tables from disk...");
-                        tables = StorageUtils.loadTables(metadata);
+                        // the number of warehouses must be exactly the same otherwise lead to errors in reading from files
+                        numWare = StorageUtils.getNumRecordsFromInDiskTable(metadata.entityToSchemaMap().get("warehouse"), "warehouse");
+                        tables = StorageUtils.loadTables(metadata, numWare);
                     }
                     DataLoader.load(tables, metadata.entityHandlerMap());
                     break;
                 case "3":
-                    System.out.println("Option 3: Create workload selected.");
-                    input = WorkloadUtils.createWorkload();
+                    System.out.println("Option 3: \"Create workload\" selected.");
+                    System.out.print("Enter number of warehouses: ");
+                    numWare = Integer.parseInt(scanner.nextLine());
+                    System.out.print("Enter number of transactions: ");
+                    String numTxnStr = scanner.nextLine();
+                    input = WorkloadUtils.createWorkload(numWare, Integer.parseInt(numTxnStr));
                     break;
                 case "4":
-                    System.out.println("Option 4: Submit workload selected.");
+                    System.out.println("Option 4: \"Submit workload\" selected.");
+                    // TODO number of worker threads...
                     if(input == null){
                         System.out.println("Loading workload from disk...");
                         input = WorkloadUtils.loadWorkloadData();
+                        // TODO output numwarehouses
                     }
                     WorkloadUtils.submitWorkload(input);
                     break;
@@ -71,8 +84,8 @@ public final class Main {
 
     private static void printMenu() {
         System.out.println("\n=== Main Menu ===");
-        System.out.println("1. Create tables");
-        System.out.println("2. Ingest data");
+        System.out.println("1. Create tables in disk");
+        System.out.println("2. Load services from tables in disk");
         System.out.println("3. Create workload");
         System.out.println("4. Submit workload");
         System.out.println("0. Exit");
