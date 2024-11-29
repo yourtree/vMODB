@@ -42,6 +42,5 @@ public final class CartHttpHandler extends DefaultHttpHandler {
         this.transactionManager.beginTransaction( 0, 0, 0,true );
         List<CartItem> cartItems = this.repository.getCartItemsByCustomerId(customerId);
         return SERDES.serializeList(cartItems);
-
     }
 }

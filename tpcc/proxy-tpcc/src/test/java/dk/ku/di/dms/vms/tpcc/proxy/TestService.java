@@ -6,7 +6,7 @@ import dk.ku.di.dms.vms.sdk.embed.client.DefaultHttpHandler;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 
-@Microservice("warehouse")
+@Microservice("warehouse-stub")
 public final class TestService implements Runnable {
     @Override
     public void run() {

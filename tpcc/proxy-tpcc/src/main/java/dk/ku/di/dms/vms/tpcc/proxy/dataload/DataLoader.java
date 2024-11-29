@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityHandler;
+import dk.ku.di.dms.vms.tpcc.proxy.infra.HttpWorker;
 import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants;
 
 import java.net.URI;
@@ -14,7 +15,6 @@ import java.net.http.HttpResponse;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.*;
-import java.util.function.Supplier;
 
 import static java.lang.System.Logger.Level.INFO;
 
@@ -22,27 +22,10 @@ public final class DataLoader {
 
     private static final System.Logger LOGGER = System.getLogger(DataLoader.class.getName());
 
-    public static final String CONTENT_TYPE = "Content-Type";
-    public static final String CONTENT_TYPE_VAL = "application/json";
-
-    private static final ConcurrentLinkedQueue<HttpClient> CLIENT_POOL = new ConcurrentLinkedQueue<>();
-
-    private static final Supplier<HttpClient> HTTP_CLIENT_SUPPLIER = () -> {
-        if (!CLIENT_POOL.isEmpty()) {
-            HttpClient client = CLIENT_POOL.poll();
-            if (client != null) return client;
-        }
-        return HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .build();
-    };
-
     @SuppressWarnings({"rawtypes"})
     public static boolean load(Map<String, UniqueHashBufferIndex> tableToIndexMap,
-                            Map<String, EntityHandler> entityHandlerMap) {
-
-        int cpus = 1;// Runtime.getRuntime().availableProcessors();
-        var threadPool = Executors.newFixedThreadPool(cpus);
+                            Map<String, EntityHandler> entityHandlerMap, int numWorkers) {
+        ExecutorService threadPool = Executors.newFixedThreadPool(numWorkers);
         BlockingQueue<Future<Void>> completionQueue = new ArrayBlockingQueue<>(tableToIndexMap.size());
         CompletionService<Void> service = new ExecutorCompletionService<>(threadPool, completionQueue);
 
@@ -64,13 +47,12 @@ public final class DataLoader {
         } finally {
             long end = System.currentTimeMillis();
             LOGGER.log(INFO, "Loading tables finished in "+(end-init)+"ms");
-            return true;
         }
-
+        return true;
     }
 
     @SuppressWarnings({"rawtypes"})
-    private static class IngestionWorker implements Runnable {
+    private static class IngestionWorker extends HttpWorker implements Runnable {
 
         private final String table;
         private final UniqueHashBufferIndex index;

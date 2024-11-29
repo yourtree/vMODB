@@ -252,11 +252,11 @@ public final class Coordinator extends ModbHttpServer {
 
         if(options.getNumTransactionWorkers() == 1){
             var inputQueue = this.transactionInputDeques.getFirst();
-            transactionInputConsumer = inputQueue::offerLast;
+            this.transactionInputConsumer = inputQueue::offerLast;
         } else {
             transactionInputConsumer = transactionInput -> {
-                int idx = ThreadLocalRandom.current().nextInt(0, options.getNumTransactionWorkers());
-                transactionInputDeques.get(idx).offerLast(transactionInput);
+                int idx = ThreadLocalRandom.current().nextInt(0, this.options.getNumTransactionWorkers());
+                this.transactionInputDeques.get(idx).offerLast(transactionInput);
             };
         }
 
@@ -856,7 +856,6 @@ public final class Coordinator extends ModbHttpServer {
             }
             // has this VMS participated in this batch?
             if(!batchContext.numberOfTIDsPerVms.containsKey(vms.identifier)){
-                //noinspection StringTemplateMigration
                 LOGGER.log(DEBUG,"Leader: Batch ("+batchContext.batchOffset+") commit command will not be sent to "+ vms.identifier + " because this VMS has not participated in this batch.");
                 continue;
             }
@@ -867,9 +866,12 @@ public final class Coordinator extends ModbHttpServer {
                         batchContext.numberOfTIDsPerVms.get(vms.identifier)
             ));
         }
-        // send to sse client if connected
-        if(!SSE_CLIENTS.isEmpty()){
-            SSE_CLIENTS.getFirst().sendToSseClient(this.numTIDsCommitted.get());
+
+        if(!BATCH_COMMIT_CONSUMERS.isEmpty()) {
+            final long tid = this.numTIDsCommitted.get();
+            for (var task : BATCH_COMMIT_CONSUMERS){
+                submitBackgroundTask(()-> task.accept(tid));
+            }
         }
     }
 

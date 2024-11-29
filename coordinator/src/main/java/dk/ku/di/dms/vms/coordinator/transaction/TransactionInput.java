@@ -19,8 +19,8 @@ public final class TransactionInput {
     }
 
     public static class Event {
-        public String name; // event name
-        public String payload; // event payload... I can avoid deserializing the payload for higher performance. but at the end
+        public String name;
+        public String payload;
 
         public Event(String name, String payload) {
             this.name = name;

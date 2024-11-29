@@ -225,11 +225,6 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
             }
             attemptsToFind--;
             pos = this.getPosition(key.hashCode() + Math.multiplyExact(aux, 2));
-            /*
-            if(pos > this.lastAddressableByte){
-                LOGGER.log(WARNING, "frrfr");
-            }
-            */
             aux++;
         }
         LOGGER.log(WARNING, "It was not possible to encounter the record");

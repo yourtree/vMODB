@@ -9,17 +9,17 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Consumer;
 
 public abstract class ModbHttpServer extends StoppableRunnable {
 
-    protected static final List<HttpReadCompletionHandler> SSE_CLIENTS = new CopyOnWriteArrayList<>();
+    protected static final List<HttpReadCompletionHandler> SSE_CLIENTS = new ArrayList<>();
 
     private static final ExecutorService BACKGROUND_EXECUTOR = Executors.newSingleThreadExecutor();
+
+    protected static final List<Consumer<Long>> BATCH_COMMIT_CONSUMERS = new ArrayList<>();
 
     private static final Set<Future<?>> TRACKED_FUTURES = ConcurrentHashMap.newKeySet();
 
@@ -224,7 +224,12 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             this.writeBuffer.clear();
             this.readBuffer.clear();
             this.connectionMetadata.channel.read(this.readBuffer, 0, this);
-            SSE_CLIENTS.add(this);
+            synchronized (SSE_CLIENTS) {
+                SSE_CLIENTS.add(this);
+                if (SSE_CLIENTS.size() == 1) {
+                    BATCH_COMMIT_CONSUMERS.add(aLong -> SSE_CLIENTS.get(0).sendToSseClient(aLong));
+                }
+            }
         }
 
         public void sendToSseClient(long numTIDsCommitted){
@@ -310,7 +315,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             @Override
             public void failed(Throwable exc, Void ignored) {
                 writeBuffer.clear();
-                SSE_CLIENTS.remove(r);
+                SSE_CLIENTS.remove(this.r);
             }
         }
 
@@ -340,6 +345,13 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             }
         }
         return false;
+    }
+
+    /**
+     * Useful for managed experiments, that is, when workload is generated in place
+     */
+    public void registerBatchCommitConsumer(Consumer<Long> consumer){
+        BATCH_COMMIT_CONSUMERS.add(consumer);
     }
 
 }
