@@ -89,12 +89,12 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
                 });
         List<WherePredicate> wherePredicates = this.analyzer.analyzeWhere(table, selectStatement.whereClause);
         if(scanOperator.isIndexScan()){
-            IKey key = this.getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
+            IKey key = this.getIndexedKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
             return scanOperator.asIndexScan().runAsEmbedded(this.txCtxMap.get(Thread.currentThread().threadId()), key);
         } else if(scanOperator.isIndexAggregationScan()){
             return scanOperator.asIndexAggregationScan().runAsEmbedded(this.txCtxMap.get(Thread.currentThread().threadId()));
         } else if(scanOperator.isIndexMultiAggregationScan()){
-            IKey key = this.getIndexKeysFromWhereClause(wherePredicates, scanOperator.asIndexMultiAggregationScan().index());
+            IKey key = this.getIndexedKeysFromWhereClause(wherePredicates, scanOperator.asIndexMultiAggregationScan().index());
             return scanOperator.asIndexMultiAggregationScan().runAsEmbedded(this.txCtxMap.get(Thread.currentThread().threadId()), key);
         } else {
             // future optimization is filter not including the columns of partial or non-unique index
@@ -346,10 +346,9 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         return null; // operator.run();
     }
 
-    private IKey getIndexKeysFromWhereClause(List<WherePredicate> wherePredicates, IMultiVersionIndex index){
+    private IKey getIndexedKeysFromWhereClause(List<WherePredicate> wherePredicates, IMultiVersionIndex index){
         int i = 0;
         Object[] keyList = new Object[index.indexColumns().length];
-        List<WherePredicate> wherePredicatesNoIndex = new ArrayList<>(wherePredicates.size());
         // build filters for only those columns not in selected index
         for (WherePredicate wherePredicate : wherePredicates) {
             // not found, then build filter
@@ -358,7 +357,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
                 i++;
             }
         }
-        return KeyUtils.buildIndexKey(keyList);
+        return KeyUtils.buildRecordKey(keyList);
     }
 
     public MemoryRefNode run(List<WherePredicate> wherePredicates,

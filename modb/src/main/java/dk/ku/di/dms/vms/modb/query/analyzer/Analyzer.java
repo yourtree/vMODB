@@ -176,16 +176,12 @@ public final class Analyzer {
         //  e.g., numeric comparisons between numbers and string/characters
         // where
         for (WhereClauseElement currWhere : statement.whereClause) {
-
             if (currWhere.value() == null) {
                 throw new AnalyzerException("Parameter of where clause cannot be null value");
             }
-
             ColumnReference columnReference;
-
             String tableName;
             String columnName;
-
             if (currWhere.column().contains(".")) {
                 String[] split = currWhere.column().split("\\.");
                 tableName = split[0];
@@ -203,9 +199,7 @@ public final class Analyzer {
             // 1. is it a reference to a table or a char? e.g., "'something'"
             // 2. check if there is some inner join. i.e., the object is a literal?
             if (currWhere.value() instanceof String value) {
-
                 ColumnReference columnReference1;
-
                 if (value.contains(".")) {
                     // <table>.<column>
                     String[] split = value.split("\\.");
@@ -220,15 +214,11 @@ public final class Analyzer {
                         continue;
                     }  // table is null, so no table, it is a literal
                 }
-
             }
-
             // simple where... maybe I should check the type is correct?
             WherePredicate whereClause = new WherePredicate(columnReference, currWhere.expression(), currWhere.value());
-
             // The order of the columns declared in the index definition matters
             queryTree.addWhereClauseSortedByColumnIndex(whereClause);
-
         }
 
         if(statement.limit != null){
@@ -236,9 +226,7 @@ public final class Analyzer {
         } else {
             queryTree.limit = Optional.empty();
         }
-
         return queryTree;
-
     }
 
     /**
@@ -256,6 +244,8 @@ public final class Analyzer {
             ColumnReference columnReference = new ColumnReference(element.column(), table);
             newList.add( new WherePredicate(columnReference, element.expression(), element.value()) );
         }
+        if(newList.size() > 1)
+            newList.sort(null);
         return newList;
     }
 

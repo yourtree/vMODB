@@ -856,7 +856,7 @@ public final class VmsEventHandler extends ModbHttpServer {
                         // events of this batch from VMSs may arrive before the batch commit info
                         // it means this VMS is a terminal node for the batch
                         BatchCommitInfo.Payload bPayload = BatchCommitInfo.read(this.readBuffer);
-                        LOGGER.log(INFO, me.identifier + ": Batch (" + bPayload.batch() + ") commit info received from the leader");
+                        LOGGER.log(DEBUG, me.identifier + ": Batch (" + bPayload.batch() + ") commit info received from the leader");
                         this.processNewBatchInfo(bPayload);
                     }
                     case (BATCH_COMMIT_COMMAND) -> {

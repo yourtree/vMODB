@@ -516,6 +516,13 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         // iterate over keys
         for(IKey key : keys){
             OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
+            if(operation == null) {
+                var record = this.underlyingIndex().record(key);
+                if(record != null){
+                    freshSet.put(key, record);
+                }
+                continue;
+            }
             Entry<Long, TransactionWrite> obj = operation.floorEntry(txCtx.tid);
             if (obj != null && obj.val().type != WriteType.DELETE) {
                 freshSet.put(key, obj.val().record);

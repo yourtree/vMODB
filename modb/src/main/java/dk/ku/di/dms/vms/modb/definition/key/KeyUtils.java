@@ -15,6 +15,26 @@ public final class KeyUtils {
 
     private KeyUtils(){}
 
+    public static IKey buildRecordKey(Object[] object){
+        switch (object.length){
+            case 1 -> {
+                return SimpleKey.of( object[0] );
+            }
+            case 2 -> {
+                return PairCompositeKey.of(object[0], object[1]);
+            }
+            case 3 -> {
+                return TripleCompositeKey.of(object[0], object[1], object[2]);
+            }
+            case 4 -> {
+                return QuadrupleCompositeKey.of(object[0], object[1], object[2], object[3]);
+            }
+            default -> {
+                return NCompositeKey.of( object );
+            }
+        }
+    }
+
     public static IKey buildRecordKey(int[] columns, Object[] object){
         switch (columns.length){
             case 1 -> {
@@ -69,11 +89,6 @@ public final class KeyUtils {
             key = NCompositeKey.of( values );
         }
         return key;
-    }
-
-    public static IKey buildIndexKey(Object[] values){
-        if(values.length == 1) return SimpleKey.of(values[0]);
-        return NCompositeKey.of(values);
     }
 
     public static IIndexKey buildIndexKey(int[] values){

@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.modb.definition.ColumnReference;
 import dk.ku.di.dms.vms.modb.definition.Table;
 
-public class WherePredicate {
+public final class WherePredicate implements Comparable<WherePredicate> {
 
     public final ColumnReference columnReference;
     public final ExpressionTypeEnum expression;
@@ -32,4 +32,8 @@ public class WherePredicate {
         return columnReference.columnPosition;
     }
 
+    @Override
+    public int compareTo(WherePredicate o) {
+        return Integer.compare(this.columnReference.columnPosition, o.columnReference.columnPosition);
+    }
 }

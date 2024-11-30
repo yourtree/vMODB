@@ -87,17 +87,17 @@ public final class QueryTree {
 
     private int getPosition(WherePredicate wherePredicate, int size) {
         int pos;
-        int start = 0, end = size - 1;
+        int start = 1, end = size;
         do {
             pos = ((end + start) / 2);
-            if(this.wherePredicates.get(pos).columnReference.columnPosition >
+            if(this.wherePredicates.get(pos-1).columnReference.columnPosition >
                     wherePredicate.columnReference.columnPosition){
-                end = pos - 1; // always guarantee end is within bounds
+                end = pos; // it guarantees "end" is within bounds
             } else {
-                start = pos + 1;// always guarantee start is within bounds
+                start = pos;// it guarantees "start" is within bounds
             }
         } while(start != end);
-        pos = start;
+        pos = start - 1;
         if(this.wherePredicates.get(pos).columnReference.columnPosition <
                 wherePredicate.columnReference.columnPosition){
             pos++;

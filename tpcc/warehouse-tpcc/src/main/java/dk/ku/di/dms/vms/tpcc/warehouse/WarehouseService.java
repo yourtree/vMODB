@@ -29,7 +29,7 @@ public final class WarehouseService {
     @PartitionBy(clazz = NewOrderWareIn.class, method = "getId")
     public NewOrderWareOut processNewOrder(NewOrderWareIn in) {
 
-        District district = this.districtRepository.lookupByKey(new District.DistrictId(in.w_id, in.d_id));
+        District district = this.districtRepository.lookupByKey(new District.DistrictId(in.d_id, in.w_id));
         float w_tax = this.warehouseRepository.getWarehouseTax(in.w_id);
 
         district.d_next_o_id++;

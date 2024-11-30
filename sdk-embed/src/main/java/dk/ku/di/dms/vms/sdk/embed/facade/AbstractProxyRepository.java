@@ -68,13 +68,13 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
                 @This AbstractProxyRepository self,
                 @Origin Method method,
                 @AllArguments Object[] args) {
-            return self.intercept(method.getName(), args);
+            return self.intercept(method, args);
         }
     }
 
-    public final List<T> intercept(String methodName, Object[] args) {
+    public final Object intercept(Method method, Object[] args) {
         // retrieve statically defined query
-        SelectStatement selectStatement = this.repositoryQueriesMap.get(methodName);
+        SelectStatement selectStatement = this.repositoryQueriesMap.get(method.getName());
 
         // set query arguments
         List<WhereClauseElement> whereClauseElements = new ArrayList<>(args.length);
@@ -85,10 +85,17 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
 
         // submit for execution
         List<Object[]> records = this.operationalAPI.fetch(this.table, selectStatement);
+
+        if(method.getReturnType().isPrimitive()) {
+            String column = selectStatement.selectClause.get(0);
+            return records.get(0)[this.table.schema().columnPosition(column)];
+        }
+
         List<T> result = new ArrayList<>(records.size());
         for(Object[] record : records) {
             result.add( this.parseObjectIntoEntity(record) );
         }
+
         return result;
     }
 

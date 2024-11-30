@@ -15,6 +15,7 @@ import dk.ku.di.dms.vms.tpcc.common.events.NewOrderWareIn;
 import dk.ku.di.dms.vms.web_common.IHttpHandler;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -61,12 +62,14 @@ public final class WorkloadUtils {
         return record;
     }
 
-    public static Result runExperiment(Coordinator coordinator, List<NewOrderWareIn> input, int numWorkers, int runTime) {
+    public static void runExperiment(Coordinator coordinator, List<NewOrderWareIn> input, int numWorkers, int runTime) {
 
         // provide a consumer to avoid depending on the coordinator
         Function<NewOrderWareIn, Long> func = newOrderInputBuilder(coordinator);
 
-        coordinator.registerBatchCommitConsumer((tid)-> BATCH_TO_FINISHED_TS_MAP.put(tid, System.currentTimeMillis()));
+        coordinator.registerBatchCommitConsumer((tid)-> BATCH_TO_FINISHED_TS_MAP.put(
+                (long) BATCH_TO_FINISHED_TS_MAP.size()+1,
+                new BatchStats( BATCH_TO_FINISHED_TS_MAP.size()+1, tid, System.currentTimeMillis())));
 
         Map<Long,List<Long>>[] submitted = WorkloadUtils.submitWorkload(input, numWorkers, runTime, func);
 
@@ -77,7 +80,7 @@ public final class WorkloadUtils {
             for(var batchEntry : BATCH_TO_FINISHED_TS_MAP.entrySet()) {
                 if(!workerEntry.containsKey(batchEntry.getKey())) continue;
                 for (var initTsEntry : workerEntry.get(batchEntry.getKey())){
-                    allLatencies.add(batchEntry.getValue() - initTsEntry);
+                    allLatencies.add(batchEntry.getValue().endTs - initTsEntry);
                 }
             }
         }
@@ -85,22 +88,30 @@ public final class WorkloadUtils {
         allLatencies.sort(null);
         double percentile = PercentileCalculator.calculatePercentile(allLatencies, 0.75);
 
-        var result = new Result(percentile, Map.copyOf(BATCH_TO_FINISHED_TS_MAP));
+        // var result = new Result(percentile, Map.copyOf(BATCH_TO_FINISHED_TS_MAP));
 
-        BATCH_TO_FINISHED_TS_MAP.clear();
-        return result;
+        resetBatchToFinishedTsMap();
+
+        // return result;
     }
 
     public record Result(double percentile, Map<Long, Long> batchTs){}
 
-    private static final ConcurrentSkipListMap<Long, Long> BATCH_TO_FINISHED_TS_MAP = new ConcurrentSkipListMap<>();
+    private static void resetBatchToFinishedTsMap(){
+        BATCH_TO_FINISHED_TS_MAP.clear();
+        //BATCH_TO_FINISHED_TS_MAP.put(0L, 0L);
+    }
+
+    private static final ConcurrentHashMap<Long, BatchStats> BATCH_TO_FINISHED_TS_MAP = new ConcurrentHashMap<>();
+
+    private record BatchStats(long batchId, long lastTid, long endTs){}
 
     private static Function<NewOrderWareIn, Long> newOrderInputBuilder(final Coordinator coordinator) {
         return newOrderWareIn -> {
-            TransactionInput.Event eventPayload = new TransactionInput.Event("new_order", newOrderWareIn.toString());
+            TransactionInput.Event eventPayload = new TransactionInput.Event("new-order-ware-in", newOrderWareIn.toString());
             TransactionInput txInput = new TransactionInput("new_order", eventPayload);
             coordinator.queueTransactionInput(txInput);
-            return BATCH_TO_FINISHED_TS_MAP.lastKey();
+            return (long) BATCH_TO_FINISHED_TS_MAP.size() + 1;
         };
     }
 
@@ -113,7 +124,7 @@ public final class WorkloadUtils {
             inputLists = List.of(input);
         }
 
-        LOGGER.log(INFO, "Submitting "+input.size()+" transactions through "+numWorkers+" workers");
+        LOGGER.log(INFO, "Submitting "+input.size()+" transactions through "+numWorkers+" worker(s)");
 
         CountDownLatch allThreadsStart = new CountDownLatch(numWorkers);
         CountDownLatch allThreadsAreDone = new CountDownLatch(numWorkers);
@@ -167,17 +178,20 @@ public final class WorkloadUtils {
             do {
                 try {
                     long batchId = func.apply(input.get(idx));
-                    if(startTsMap.containsKey(batchId)){
+                    if(!startTsMap.containsKey(batchId)){
                         startTsMap.put(batchId, new ArrayList<>());
                     }
                     startTsMap.get(batchId).add(currentTs);
                     idx++;
                 } catch (Exception e) {
-                    LOGGER.log(INFO,"Exception in Thread ID: " + (e.getMessage() == null ? "No message" : e.getMessage()));
+                    /*
+                    LOGGER.log(ERROR,"Exception in Thread ID: " + (e.getMessage() == null ? "No message" : e.getMessage()));
                     if(idx >= input.size()){
                         allThreadsAreDone.countDown();
                         throw new RuntimeException("Number of input events "+input.size()+" are not enough for runtime "+runTime+" ms");
                     }
+                    */
+                    idx = 0;
                 }
                 currentTs = System.currentTimeMillis();
             } while (currentTs < endTs);
@@ -331,7 +345,7 @@ public final class WorkloadUtils {
             qty[i] = randomNumber(1, 10);
         }
 
-        return new Object[]{ w_id, d_id, c_id, itemIds, supWares, qty, all_local == 0 };
+        return new Object[]{ w_id, d_id, c_id, itemIds, supWares, qty, all_local == 1 };
     }
 
     private static boolean foundItem(int[] itemIds, int length, int value){

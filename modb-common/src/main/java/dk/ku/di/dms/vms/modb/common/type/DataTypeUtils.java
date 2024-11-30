@@ -1,5 +1,7 @@
 package dk.ku.di.dms.vms.modb.common.type;
 
+import java.lang.reflect.Array;
+import java.util.Arrays;
 import java.util.Date;
 
 import static dk.ku.di.dms.vms.modb.common.memory.MemoryUtils.UNSAFE;
@@ -55,9 +57,14 @@ public final class DataTypeUtils {
             case INT_ARRAY -> {
                 int[] intArray = new int[MAX_ARRAY_NUM_ITEMS];
                 long currPos = address;
-                for (int j = 0; j < MAX_ARRAY_NUM_ITEMS; j++) {
+                int j;
+                for (j = 0; j < MAX_ARRAY_NUM_ITEMS; j++) {
                     intArray[j] = UNSAFE.getInt(null, currPos);
                     currPos += Integer.BYTES;
+                    if(intArray[j] == -1) break;
+                }
+                if(j < MAX_ARRAY_NUM_ITEMS){
+                    intArray = Arrays.copyOfRange(intArray, 0, j);
                 }
                 return intArray;
             }
