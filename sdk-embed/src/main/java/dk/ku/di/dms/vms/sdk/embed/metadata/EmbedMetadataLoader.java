@@ -457,7 +457,7 @@ public final class EmbedMetadataLoader {
         try {
             StandardOpenOption[] options = buildFileOpenOptions(false);
             FileChannel fc = FileChannel.open(Path.of(file.toURI()), options);
-            LOGGER.log(INFO, "Attempt to open file in directory completed successfully: "+file.getAbsolutePath());
+            LOGGER.log(DEBUG, "Attempt to open file in directory completed successfully: "+file.getAbsolutePath());
             return mapFileChannelIntoMemorySegment(fc, file.length());// also works: fc.size()
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -469,7 +469,7 @@ public final class EmbedMetadataLoader {
         try {
             StandardOpenOption[] options = buildFileOpenOptions(truncate);
             FileChannel fc = FileChannel.open(Path.of(file.toURI()), options);
-            LOGGER.log(INFO, "Attempt to open file in directory completed successfully: "+file.getAbsolutePath());
+            LOGGER.log(DEBUG, "Attempt to open file in directory completed successfully: "+file.getAbsolutePath());
             return mapFileChannelIntoMemorySegment(fc, bytes);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -485,11 +485,11 @@ public final class EmbedMetadataLoader {
             filePath = userHome + "/vms/" + fileName + ".data";
         }
         File file = new File(filePath);
-        LOGGER.log(INFO, "Attempt to create new file in directory: "+filePath);
+        LOGGER.log(DEBUG, "Attempt to create new file in directory: "+filePath);
         if(file.getParentFile().mkdirs()){
-            LOGGER.log(INFO, "Parent directory ("+file.getParentFile()+") required being created.");
+            LOGGER.log(DEBUG, "Parent directory ("+file.getParentFile()+") required being created.");
         } else {
-            LOGGER.log(INFO, "Parent directory ("+file.getParentFile()+") did not need being created.");
+            LOGGER.log(DEBUG, "Parent directory ("+file.getParentFile()+") did not need being created.");
         }
         return file;
     }

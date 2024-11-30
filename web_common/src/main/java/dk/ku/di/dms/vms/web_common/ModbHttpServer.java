@@ -9,19 +9,32 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 public abstract class ModbHttpServer extends StoppableRunnable {
 
-    protected static final List<HttpReadCompletionHandler> SSE_CLIENTS = new ArrayList<>();
-
     private static final ExecutorService BACKGROUND_EXECUTOR = Executors.newSingleThreadExecutor();
 
-    protected static final List<Consumer<Long>> BATCH_COMMIT_CONSUMERS = new ArrayList<>();
+    protected static final List<HttpReadCompletionHandler> SSE_CLIENTS = new CopyOnWriteArrayList<>();
+
+    // must be concurrent because it is accessed by different threads
+    protected static final List<Consumer<Long>> BATCH_COMMIT_CONSUMERS = new CopyOnWriteArrayList<>();
 
     private static final Set<Future<?>> TRACKED_FUTURES = ConcurrentHashMap.newKeySet();
+
+    static {
+        // register client as a batch commit consumer
+        BATCH_COMMIT_CONSUMERS.add(aLong -> {
+            for (var sseClient : SSE_CLIENTS){
+                sseClient.sendToSseClient(aLong);
+            }
+        });
+    }
 
     protected static void submitBackgroundTask(Runnable task){
         TRACKED_FUTURES.add(BACKGROUND_EXECUTOR.submit(task));
@@ -93,9 +106,13 @@ public abstract class ModbHttpServer extends StoppableRunnable {
 
         private static final byte[] OK_RESPONSE_BYTES = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
-        private static final String UNKNOWN_ACCEPT = "Accept header value is not supported";
-
-        private static final byte[] ERROR_RESPONSE_BYTES = ("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "+UNKNOWN_ACCEPT.length()+"\r\n\r\n"+UNKNOWN_ACCEPT).getBytes(StandardCharsets.UTF_8);
+        private static final byte[] ERROR_RESPONSE_BYTES =
+                ("HTTP/1.1 400 Bad Request\r\n"
+                + "Content-Type: text/plain\r\n"
+                + "Content-Length: 36\r\n"
+                + "Connection: close\r\n"
+                + "\r\n"
+                + "Accept header value is not supported").getBytes(StandardCharsets.UTF_8);
 
         private static final byte[] NO_ACCEPT_IN_HEADER_ERR_MSG =
                 ("HTTP/1.1 400 Bad Request\r\n"
@@ -104,6 +121,14 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 + "Connection: close\r\n"
                 + "\r\n"
                 + "No accept type in header").getBytes(StandardCharsets.UTF_8);
+
+        private static final byte[] NO_PAYLOAD_IN_BODY_ERR_MSG =
+                ("HTTP/1.1 400 Bad Request\r\n"
+                        + "Content-Type: text/plain\r\n"
+                        + "Content-Length: 22\r\n"
+                        + "Connection: close\r\n"
+                        + "\r\n"
+                        + "No payload in the body").getBytes(StandardCharsets.UTF_8);
 
         public void process(String request){
             try {
@@ -160,6 +185,10 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         }
                     }
                     case "POST" -> {
+                        if(httpRequest.body.isEmpty()){
+                            this.sendErrorMsgAndCloseConnection(NO_PAYLOAD_IN_BODY_ERR_MSG);
+                            return;
+                        }
                         this.httpHandler.post(httpRequest.uri(), httpRequest.body());
                         this.writeBuffer.put(OK_RESPONSE_BYTES);
                         this.writeBuffer.flip();
@@ -224,12 +253,6 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             this.writeBuffer.clear();
             this.readBuffer.clear();
             this.connectionMetadata.channel.read(this.readBuffer, 0, this);
-            synchronized (SSE_CLIENTS) {
-                SSE_CLIENTS.add(this);
-                if (SSE_CLIENTS.size() == 1) {
-                    BATCH_COMMIT_CONSUMERS.add(aLong -> SSE_CLIENTS.get(0).sendToSseClient(aLong));
-                }
-            }
         }
 
         public void sendToSseClient(long numTIDsCommitted){

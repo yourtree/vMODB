@@ -1,11 +1,7 @@
 package dk.ku.di.dms.vms.tpcc.proxy.datagen;
 
-import dk.ku.di.dms.vms.tpcc.inventory.entities.Item;
-import dk.ku.di.dms.vms.tpcc.inventory.entities.Stock;
+import dk.ku.di.dms.vms.tpcc.proxy.entities.*;
 import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants;
-import dk.ku.di.dms.vms.tpcc.warehouse.entities.Customer;
-import dk.ku.di.dms.vms.tpcc.warehouse.entities.District;
-import dk.ku.di.dms.vms.tpcc.warehouse.entities.Warehouse;
 
 import java.util.Date;
 import java.util.HashMap;

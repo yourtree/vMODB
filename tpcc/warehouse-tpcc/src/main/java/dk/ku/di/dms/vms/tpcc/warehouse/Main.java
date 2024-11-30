@@ -12,18 +12,22 @@ import dk.ku.di.dms.vms.tpcc.warehouse.repositories.IWarehouseRepository;
  */
 public final class Main {
     public static void main( String[] args ) throws Exception {
+        build().start();
+    }
+
+    public static VmsApplication build() throws Exception {
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 "0.0.0.0",
                 8001, new String[]{
-                        "dk.ku.di.dms.vms.tpcc.warehouse-tpcc",
-                        "dk.ku.di.dms.vms.tpcc.common-tpcc"
+                        "dk.ku.di.dms.vms.tpcc.warehouse",
+                        "dk.ku.di.dms.vms.tpcc.common"
                 });
-        VmsApplication vms = VmsApplication.build(options,
+        return VmsApplication.build(options,
                 (x,y) -> new WarehouseHttpHandler(x,
                         (IWarehouseRepository) y.apply("warehouse"),
                         (IDistrictRepository) y.apply("district"),
                         (ICustomerRepository) y.apply("customer")
-        ));
-        vms.start();
+                ));
     }
+
 }

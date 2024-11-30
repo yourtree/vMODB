@@ -272,6 +272,10 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         return false;
     }
 
+    /**
+     * This interface must be preferred when using {@link IRecordIterator}
+     * since it avoids a duplicate lookup on the key.
+     */
     @Override
     public Object[] record(IRecordIterator<IKey> iterator) {
         return this.readFromIndex(iterator.address() + Schema.RECORD_HEADER);

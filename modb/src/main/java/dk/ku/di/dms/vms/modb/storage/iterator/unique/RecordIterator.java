@@ -37,8 +37,7 @@ public final class RecordIterator implements IRecordIterator<IKey> {
 
     @Override
     public IKey next() {
-        // return this.keyOf(UNSAFE.getInt(nextAddress + 1));
-        var res = SimpleKey.of(UNSAFE.getInt(nextAddress + 1));
+        var res = SimpleKey.of(UNSAFE.getInt(this.nextAddress + 1));
         this.progress++;
         this.nextAddress += this.recordSize;
         return res;

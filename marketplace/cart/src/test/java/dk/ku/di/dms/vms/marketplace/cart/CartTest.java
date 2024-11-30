@@ -28,24 +28,24 @@ public final class CartTest {
     @Test
     public void testRetrieveCartsForPriceUpdate() throws Exception {
         ICartItemRepository cartItemRepository;
-        try (VmsApplication vms = loadCartVms()) {
-            vms.start();
-            IProductReplicaRepository productReplicaRepository = (IProductReplicaRepository) vms.getRepositoryProxy("product_replicas");
-            cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
+        VmsApplication vms = loadCartVms();
+        vms.start();
+        IProductReplicaRepository productReplicaRepository = (IProductReplicaRepository) vms.getRepositoryProxy("product_replicas");
+        cartItemRepository = (ICartItemRepository) vms.getRepositoryProxy("cart_items");
 
-            vms.getTransactionManager().beginTransaction(1, 0, 0, false);
-            productReplicaRepository.insert(new ProductReplica(
-                    1, 1, "test", "test", "test",
-                    "test", 10, 0, "test", "0"
-            ));
-            cartItemRepository.insert(new CartItem(1, 1, 1, "test", 10, 10, 1, 0, "0"));
-            cartItemRepository.insert(new CartItem(1, 1, 2, "test", 10, 10, 1, 0, "0"));
+        vms.getTransactionManager().beginTransaction(1, 0, 0, false);
+        productReplicaRepository.insert(new ProductReplica(
+                1, 1, "test", "test", "test",
+                "test", 10, 0, "test", "0"
+        ));
+        cartItemRepository.insert(new CartItem(1, 1, 1, "test", 10, 10, 1, 0, "0"));
+        cartItemRepository.insert(new CartItem(1, 1, 2, "test", 10, 10, 1, 0, "0"));
 
-            vms.getTransactionManager().beginTransaction(2, 0, 1, false);
-            cartItemRepository.delete(new CartItem(1, 1, 1, "test", 10, 10, 1, 0, "0"));
+        vms.getTransactionManager().beginTransaction(2, 0, 1, false);
+        cartItemRepository.delete(new CartItem(1, 1, 1, "test", 10, 10, 1, 0, "0"));
 
-            vms.getTransactionManager().beginTransaction(3, 0, 2, true);
-        }
+        vms.getTransactionManager().beginTransaction(3, 0, 2, true);
+
         var items = cartItemRepository.getCartItemsBySellerIdAndProductIdAndVersion(1, 1, "0");
         Assert.assertEquals(1, items.size());
     }

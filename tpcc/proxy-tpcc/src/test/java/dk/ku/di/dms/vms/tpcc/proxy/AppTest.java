@@ -14,13 +14,14 @@ public final class AppTest {
     public void testLoadAndIngest() throws Exception {
         StorageUtils.EntityMetadata metadata = StorageUtils.loadEntityMetadata();
         StorageUtils.createTables(metadata, NUM_WARE);
-        var tableToIndexMap = StorageUtils.loadTables(metadata,NUM_WARE);
+        var tableToIndexMap = StorageUtils.loadTables(metadata, NUM_WARE);
         int numWare = StorageUtils.getNumRecordsFromInDiskTable(metadata.entityToSchemaMap().get("warehouse"), "warehouse");
         Assert.assertEquals(NUM_WARE, numWare);
         // init stub warehouse service
-        new TestService().run();
+        var vms = new TestService().buildAndStart();
         // submit data to warehouse stub
         Assert.assertTrue(DataLoader.load(tableToIndexMap, metadata.entityHandlerMap(), 1));
+        vms.close();
     }
 
     @Test

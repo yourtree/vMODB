@@ -1045,4 +1045,10 @@ public final class VmsEventHandler extends ModbHttpServer {
         }
     }
 
+    public void close() {
+        try {
+            this.serverSocket.close();
+        } catch (IOException ignored){ }
+    }
+
 }

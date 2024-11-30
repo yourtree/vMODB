@@ -7,9 +7,9 @@ import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 
 @Microservice("warehouse-stub")
-public final class TestService implements Runnable {
-    @Override
-    public void run() {
+public final class TestService {
+
+    public VmsApplication buildAndStart() {
         VmsApplicationOptions options = VmsApplicationOptions.build(
                 "0.0.0.0",
                 8001, new String[]{
@@ -19,6 +19,7 @@ public final class TestService implements Runnable {
         try {
             vms = VmsApplication.build(options, (x, ignored) -> new TestHandler(x));
             vms.start();
+            return vms;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

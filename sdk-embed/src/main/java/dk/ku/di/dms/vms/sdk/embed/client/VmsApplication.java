@@ -61,11 +61,6 @@ public final class VmsApplication {
            return build(options, (ignored1, ignored2) -> IHttpHandler.DEFAULT);
     }
 
-    /**
-     * This method initializes two threads:
-     * (i) EventHandler, responsible for communicating with the external world
-     * (ii) Scheduler, responsible for scheduling transactions and returning resulting events
-     */
     public static VmsApplication build(VmsApplicationOptions options, HttpHandlerBuilder builder) throws Exception {
         // check first whether we are in decoupled or embed mode
         Optional<Package> optional = Arrays.stream(Package.getPackages()).filter(p ->
@@ -81,8 +76,6 @@ public final class VmsApplication {
         String packageName = optional.map(Package::getName).orElse("Nothing");
 
         if(packageName.equalsIgnoreCase("Nothing")) throw new IllegalStateException("Cannot identify package.");
-
-        VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
 
         Reflections reflections = VmsMetadataLoader.configureReflections(options.packages());
 
@@ -134,6 +127,8 @@ public final class VmsApplication {
 
         IHttpHandler httpHandler = builder.build(transactionManager, tableToRepositoryMap::get);
 
+        VmsEmbedInternalChannels vmsInternalPubSubService = new VmsEmbedInternalChannels();
+
         VmsEventHandler eventHandler = VmsEventHandler.build(vmsIdentifier, transactionManager, vmsInternalPubSubService, vmsMetadata, options, httpHandler, serdes);
 
         StoppableRunnable transactionScheduler = VmsTransactionScheduler.build(
@@ -158,6 +153,7 @@ public final class VmsApplication {
     }
 
     public void close(){
+        this.eventHandler.close();
         this.transactionScheduler.stop();
     }
 

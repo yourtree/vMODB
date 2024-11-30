@@ -1,18 +1,23 @@
 package dk.ku.di.dms.vms.tpcc.proxy.workload;
 
+import dk.ku.di.dms.vms.coordinator.Coordinator;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionBootstrap;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
+import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
 import dk.ku.di.dms.vms.modb.common.constraint.ConstraintReference;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.tpcc.common.events.NewOrderWareIn;
+import dk.ku.di.dms.vms.web_common.IHttpHandler;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.*;
+import java.util.*;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import static dk.ku.di.dms.vms.tpcc.proxy.datagen.DataGenUtils.nuRand;
@@ -56,6 +61,50 @@ public final class WorkloadUtils {
         return record;
     }
 
+    public static Result runExperiment(Coordinator coordinator, List<NewOrderWareIn> input, int numWorkers, int runTime) {
+
+        // provide a consumer to avoid depending on the coordinator
+        Function<NewOrderWareIn, Long> func = newOrderInputBuilder(coordinator);
+
+        coordinator.registerBatchCommitConsumer((tid)-> BATCH_TO_FINISHED_TS_MAP.put(tid, System.currentTimeMillis()));
+
+        Map<Long,List<Long>>[] submitted = WorkloadUtils.submitWorkload(input, numWorkers, runTime, func);
+
+        List<Long> allLatencies = new ArrayList<>();
+
+        // calculate latency based on the batch
+        for(var workerEntry : submitted){
+            for(var batchEntry : BATCH_TO_FINISHED_TS_MAP.entrySet()) {
+                if(!workerEntry.containsKey(batchEntry.getKey())) continue;
+                for (var initTsEntry : workerEntry.get(batchEntry.getKey())){
+                    allLatencies.add(batchEntry.getValue() - initTsEntry);
+                }
+            }
+        }
+
+        allLatencies.sort(null);
+        double percentile = PercentileCalculator.calculatePercentile(allLatencies, 0.75);
+
+        var result = new Result(percentile, Map.copyOf(BATCH_TO_FINISHED_TS_MAP));
+
+        BATCH_TO_FINISHED_TS_MAP.clear();
+        return result;
+    }
+
+    public record Result(double perc, Map<Long, Long> batchTs){}
+
+    private static final ConcurrentSkipListMap<Long, Long> BATCH_TO_FINISHED_TS_MAP = new ConcurrentSkipListMap<>();
+
+    private static Function<NewOrderWareIn, Long> newOrderInputBuilder(final Coordinator coordinator) {
+        return newOrderWareIn -> {
+            TransactionInput.Event eventPayload = new TransactionInput.Event("new_order", newOrderWareIn.toString());
+            TransactionInput txInput = new TransactionInput("new_order", eventPayload);
+            coordinator.queueTransactionInput(txInput);
+            return BATCH_TO_FINISHED_TS_MAP.lastKey();
+        };
+    }
+
+    @SuppressWarnings("unchecked")
     public static Map<Long,List<Long>>[] submitWorkload(List<NewOrderWareIn> input, int numWorkers, int runTime, Function<NewOrderWareIn, Long> func) {
         List<List<NewOrderWareIn>> inputLists;
         if(numWorkers > 1) {
@@ -98,7 +147,7 @@ public final class WorkloadUtils {
         public static Map<Long,List<Long>> run(CountDownLatch allThreadsStart,
                                          CountDownLatch allThreadsAreDone,
                                          List<NewOrderWareIn> input, int runTime,
-                                         Function<NewOrderWareIn,Long> func) {
+                                         Function<NewOrderWareIn, Long> func) {
             Map<Long,List<Long>> startTsMap = new HashMap<>();
             long threadId = Thread.currentThread().threadId();
 
@@ -186,6 +235,38 @@ public final class WorkloadUtils {
         long endTs = System.currentTimeMillis();
         LOGGER.log(INFO, "Finished generating "+numTransactions+" in "+(endTs-initTs)+" ms");
         return input;
+    }
+
+    public static Coordinator loadCoordinator(Properties properties) {
+        Map<String, TransactionDAG> transactionMap = new HashMap<>();
+        TransactionDAG newOrderDag = TransactionBootstrap.name("new_order")
+                .input("a", "warehouse", "new-order-ware-in")
+                .internal("b", "inventory", "new-order-ware-out", "a")
+                .terminal("c", "order", "b")
+                .build();
+        transactionMap.put(newOrderDag.name, newOrderDag);
+        Map<String, IdentifiableNode> starterVMSs = getVmsMap(properties);
+        Coordinator coordinator = Coordinator.build(properties, starterVMSs, transactionMap, (ignored1) -> IHttpHandler.DEFAULT);
+        Thread coordinatorThread = new Thread(coordinator);
+        coordinatorThread.start();
+        return coordinator;
+    }
+
+    private static Map<String, IdentifiableNode> getVmsMap(Properties properties) {
+        String warehouseHost = properties.getProperty("warehouse_host");
+        String inventoryHost = properties.getProperty("inventory_host");
+        String orderHost = properties.getProperty("order_host");
+        if(warehouseHost == null) throw new RuntimeException("Warehouse host is null");
+        if(inventoryHost == null) throw new RuntimeException("Inventory host is null");
+        if(orderHost == null) throw new RuntimeException("Order host is null");
+        IdentifiableNode warehouseAddress = new IdentifiableNode("warehouse", warehouseHost, 8001);
+        IdentifiableNode inventoryAddress = new IdentifiableNode("inventory", inventoryHost, 8002);
+        IdentifiableNode orderAddress = new IdentifiableNode("order", orderHost, 8003);
+        Map<String, IdentifiableNode> starterVMSs = new HashMap<>();
+        starterVMSs.putIfAbsent(warehouseAddress.identifier, warehouseAddress);
+        starterVMSs.putIfAbsent(inventoryAddress.identifier, inventoryAddress);
+        starterVMSs.putIfAbsent(orderAddress.identifier, orderAddress);
+        return starterVMSs;
     }
 
     private static NewOrderWareIn parseRecordIntoEntity(Object[] newOrderInput) {
