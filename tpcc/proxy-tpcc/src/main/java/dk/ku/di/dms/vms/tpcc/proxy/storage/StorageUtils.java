@@ -44,7 +44,7 @@ public final class StorageUtils {
     /**
      * Map already created tables in disk
      */
-    public static Map<String, UniqueHashBufferIndex> loadTables(EntityMetadata metadata, int numWare) {
+    public static Map<String, UniqueHashBufferIndex> mapTablesInDisk(EntityMetadata metadata, int numWare) {
         Map<String, UniqueHashBufferIndex> tableToIndexMap = new HashMap<>();
         for (var entry : metadata.entityToTableNameMap.entrySet()) {
             final Schema schema = metadata.entityToSchemaMap.get(entry.getValue());

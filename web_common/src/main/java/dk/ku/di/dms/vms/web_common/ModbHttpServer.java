@@ -69,7 +69,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             this.sseWriteCH = new SseWriteCH(this);
         }
 
-        private record HttpRequestInternal(String httpMethod, Map<String, String> headers, String uri, String body) {}
+        private record HttpRequestInternal(String httpMethod, Map<String, String> headers, String uri, int length, String body) {}
 
         private static HttpRequestInternal parseRequest(String request){
             String[] requestLines = request.split("\r\n");
@@ -86,15 +86,17 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 headers.put(headerParts[0], headerParts[1]);
                 i++;
             }
+            int length = headers.containsKey("Content-Length") ? Integer.parseInt(headers.get("Content-Length")) : 0;
             if(method.contentEquals("GET")){
-                return new HttpRequestInternal(method, headers, url, "");
+                return new HttpRequestInternal(method, headers, url, length, "");
             }
             StringBuilder body = new StringBuilder();
             for (i += 1; i < requestLines.length; i++) {
-                body.append(requestLines[i]).append("\r\n");
+                body.append(requestLines[i]);
+                // if(body.length() == length) break;
             }
-            String payload = body.toString().trim();
-            return new HttpRequestInternal(method, headers, url, payload);
+            String payload = body.toString();
+            return new HttpRequestInternal(method, headers, url, length, payload);
         }
 
         private static String createHttpHeaders(int contentLength) {
@@ -217,7 +219,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 this.writeBuffer.clear();
                 byte[] errorBytes;
                 if(e.getMessage() == null){
-                    System.out.println("Exception without message has been caught:\n"+e);
+                    System.out.println("Exception without message has been caught:\n"+e+"\nRequest:\n"+request);
                     e.printStackTrace(System.out);
                     errorBytes = ERROR_RESPONSE_BYTES;
                 } else {

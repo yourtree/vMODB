@@ -91,7 +91,7 @@ public final class WorkloadUtils {
         return result;
     }
 
-    public record Result(double perc, Map<Long, Long> batchTs){}
+    public record Result(double percentile, Map<Long, Long> batchTs){}
 
     private static final ConcurrentSkipListMap<Long, Long> BATCH_TO_FINISHED_TS_MAP = new ConcurrentSkipListMap<>();
 

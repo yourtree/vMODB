@@ -9,6 +9,7 @@ import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.IdClass;
 import java.io.Serializable;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 
 @Entity
@@ -84,4 +85,22 @@ public class Customer implements IEntity<Customer.CustomerId> {
         this.c_ytd_payment = c_ytd_payment;
     }
 
+    private static final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
+
+    @Override
+    public String toString() {
+        return "{"
+                + "\"c_id\":\"" + c_id + "\""
+                + ",\"c_w_id\":\"" + c_w_id + "\""
+                + ",\"c_d_id\":\"" + c_d_id + "\""
+                + ",\"c_first\":\"" + c_first + "\""
+                + ",\"c_last\":\"" + c_last + "\""
+                + ",\"c_since\":\"" + dateFormat.format(c_since) + "\""
+                + ",\"c_credit\":\"" + c_credit + "\""
+                + ",\"c_credit_lim\":\"" + c_credit_lim + "\""
+                + ",\"c_discount\":\"" + c_discount + "\""
+                + ",\"c_balance\":\"" + c_balance + "\""
+                + ",\"c_ytd_payment\":\"" + c_ytd_payment + "\""
+                + "}";
+    }
 }

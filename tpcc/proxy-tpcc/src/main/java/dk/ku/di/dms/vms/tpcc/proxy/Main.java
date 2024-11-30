@@ -4,7 +4,7 @@ import dk.ku.di.dms.vms.coordinator.Coordinator;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
 import dk.ku.di.dms.vms.tpcc.common.events.NewOrderWareIn;
-import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoader;
+import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoadUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.storage.StorageUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.workload.WorkloadUtils;
 
@@ -53,9 +53,9 @@ public final class Main {
                         System.out.println("Loading tables from disk...");
                         // the number of warehouses must be exactly the same otherwise lead to errors in reading from files
                         numWare = StorageUtils.getNumRecordsFromInDiskTable(metadata.entityToSchemaMap().get("warehouse"), "warehouse");
-                        tables = StorageUtils.loadTables(metadata, numWare);
+                        tables = StorageUtils.mapTablesInDisk(metadata, numWare);
                     }
-                    DataLoader.load(tables, metadata.entityHandlerMap(), numWorkers);
+                    DataLoadUtils.loadTablesInMemory(tables, metadata.entityHandlerMap());
                     break;
                 case "3":
                     System.out.println("Option 3: \"Create workload\" selected.");

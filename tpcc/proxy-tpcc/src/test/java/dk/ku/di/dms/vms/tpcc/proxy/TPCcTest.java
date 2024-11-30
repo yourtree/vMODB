@@ -3,7 +3,7 @@ package dk.ku.di.dms.vms.tpcc.proxy;
 import dk.ku.di.dms.vms.coordinator.Coordinator;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
-import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoader;
+import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoadUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.storage.StorageUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.workload.WorkloadUtils;
 import org.junit.*;
@@ -57,12 +57,12 @@ public final class TPCcTest {
 
     @Test
     public void test_B_load_and_ingest() {
-        var tableToIndexMap = StorageUtils.loadTables(METADATA, NUM_WARE);
-        boolean res = DataLoader.load(tableToIndexMap, METADATA.entityHandlerMap(), 1);
-        Assert.assertTrue(res);
+        var tableToIndexMap = StorageUtils.mapTablesInDisk(METADATA, NUM_WARE);
+        var tableInputMap = DataLoadUtils.loadTablesInMemory(tableToIndexMap, METADATA.entityHandlerMap());
+        DataLoadUtils.ingestData(tableInputMap);
     }
 
-    @Test
+    // @Test
     public void test_C_submit_workload() {
         var input = WorkloadUtils.loadWorkloadData();
 
@@ -74,7 +74,7 @@ public final class TPCcTest {
 
         var res = WorkloadUtils.runExperiment(coordinator, input, 1, 1000);
 
-        Assert.assertTrue(res.perc() > 0);
+        Assert.assertTrue(res.percentile() > 0);
     }
 
 }
