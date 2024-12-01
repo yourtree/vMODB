@@ -75,8 +75,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
         for(Map.Entry<PrimaryIndex, int[]> entry : table.foreignKeys().entrySet()){
             IKey fk = KeyUtils.buildRecordKey( entry.getValue(), values );
             // have some previous TID deleted it? or simply not exists
-            if (!entry.getKey().exists(txCtx, fk))
-                return true;
+            return !entry.getKey().exists(txCtx, fk);
         }
         return false;
     }

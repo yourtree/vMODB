@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.tpcc.inventory;
 
-import dk.ku.di.dms.vms.sdk.embed.client.DefaultHttpHandler;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
 import dk.ku.di.dms.vms.tpcc.inventory.infra.InventoryHttpHandler;

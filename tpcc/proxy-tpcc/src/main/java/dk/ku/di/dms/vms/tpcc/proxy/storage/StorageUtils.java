@@ -10,8 +10,8 @@ import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityHandler;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.tpcc.proxy.datagen.DataGenerator;
-import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants;
 import dk.ku.di.dms.vms.tpcc.proxy.entities.*;
+import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants;
 import org.reflections.Reflections;
 
 import java.io.File;

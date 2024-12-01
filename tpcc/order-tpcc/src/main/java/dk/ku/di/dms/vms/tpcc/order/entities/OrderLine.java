@@ -17,38 +17,35 @@ import java.util.Date;
 public final class OrderLine implements IEntity<OrderLine.OrderLineId> {
 
     public static class OrderLineId implements Serializable {
-        public int ol_w_id;
-        public int ol_d_id;
         public int ol_o_id;
+        public int ol_d_id;
+        public int ol_w_id;
         public int ol_number;
-
-        public OrderLineId(int ol_w_id, int ol_d_id, int ol_o_id, int ol_number) {
-            this.ol_w_id = ol_w_id;
-            this.ol_d_id = ol_d_id;
+        public OrderLineId(int ol_o_id, int ol_d_id, int ol_w_id, int ol_number) {
             this.ol_o_id = ol_o_id;
+            this.ol_d_id = ol_d_id;
+            this.ol_w_id = ol_w_id;
             this.ol_number = ol_number;
         }
     }
-
-    @Id
-    @VmsForeignKey(table=Order.class,column = "o_w_id")
-    public int ol_w_id;
-
-    @Id
-    @VmsForeignKey(table=Order.class,column = "o_d_id")
-    public int ol_d_id;
 
     @Id
     @VmsForeignKey(table=Order.class, column = "o_id")
     public int ol_o_id;
 
     @Id
+    @VmsForeignKey(table=Order.class,column = "o_d_id")
+    public int ol_d_id;
+
+    @Id
+    @VmsForeignKey(table=Order.class,column = "o_w_id")
+    public int ol_w_id;
+
+    @Id
     public int ol_number;
 
-    //@VmsForeignKey(table= Stock.class,column = "s_i_id")
     public int ol_i_id;
 
-    //@VmsForeignKey(table=Stock.class,column = "s_w_id")
     public int ol_supply_w_id;
 
     @Column

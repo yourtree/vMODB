@@ -16,7 +16,6 @@ import dk.ku.di.dms.vms.web_common.IHttpHandler;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -24,8 +23,7 @@ import java.util.function.Function;
 import static dk.ku.di.dms.vms.tpcc.proxy.datagen.DataGenUtils.nuRand;
 import static dk.ku.di.dms.vms.tpcc.proxy.datagen.DataGenUtils.randomNumber;
 import static dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants.*;
-import static java.lang.System.Logger.Level.ERROR;
-import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.*;
 
 public final class WorkloadUtils {
 
@@ -79,7 +77,8 @@ public final class WorkloadUtils {
         for(var workerEntry : submitted){
             for(var batchEntry : BATCH_TO_FINISHED_TS_MAP.entrySet()) {
                 if(!workerEntry.containsKey(batchEntry.getKey())) continue;
-                for (var initTsEntry : workerEntry.get(batchEntry.getKey())){
+                var initTsEntries = workerEntry.get(batchEntry.getKey());
+                for (var initTsEntry : initTsEntries){
                     allLatencies.add(batchEntry.getValue().endTs - initTsEntry);
                 }
             }
@@ -184,20 +183,20 @@ public final class WorkloadUtils {
                     startTsMap.get(batchId).add(currentTs);
                     idx++;
                 } catch (Exception e) {
+                    idx = 0;
                     /*
                     LOGGER.log(ERROR,"Exception in Thread ID: " + (e.getMessage() == null ? "No message" : e.getMessage()));
                     if(idx >= input.size()){
                         allThreadsAreDone.countDown();
-                        throw new RuntimeException("Number of input events "+input.size()+" are not enough for runtime "+runTime+" ms");
+                        LOGGER.log(WARNING,"Number of input events "+input.size()+" are not enough for runtime "+runTime+" ms");
+                        break;
                     }
                     */
-                    idx = 0;
                 }
                 currentTs = System.currentTimeMillis();
             } while (currentTs < endTs);
 
             allThreadsAreDone.countDown();
-
             return startTsMap;
         }
     }

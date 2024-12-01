@@ -73,7 +73,7 @@ public final class TPCcTest {
             numConnected = coordinator.getConnectedVMSs().size();
         } while (numConnected < 3);
 
-        WorkloadUtils.runExperiment(coordinator, input, 1, 1000000);
+        WorkloadUtils.runExperiment(coordinator, input, 1, 10000);
 
         Assert.assertTrue(true);
     }

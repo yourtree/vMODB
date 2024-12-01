@@ -869,9 +869,12 @@ public final class Coordinator extends ModbHttpServer {
 
         if(!BATCH_COMMIT_CONSUMERS.isEmpty()) {
             final long tid = this.numTIDsCommitted.get();
+            BATCH_COMMIT_CONSUMERS.forEach(c->c.accept(tid));
+            /* must test both approaches in the experiments
             for (var task : BATCH_COMMIT_CONSUMERS){
                 submitBackgroundTask(()-> task.accept(tid));
             }
+             */
         }
     }
 
