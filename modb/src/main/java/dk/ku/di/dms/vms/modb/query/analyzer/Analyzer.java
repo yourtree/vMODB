@@ -8,6 +8,8 @@ import dk.ku.di.dms.vms.modb.api.query.statement.DeleteStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.UpdateStatement;
+import dk.ku.di.dms.vms.modb.common.type.DataType;
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.ColumnReference;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.definition.Table;
@@ -125,8 +127,8 @@ public final class Analyzer {
             // cannot allow same column name without AS from multiple tables
             for (String columnRefStr : columns) {
                 if (columnRefStr.contains(".")) {
-                    String[] splitted = columnRefStr.split("\\.");
-                    ColumnReference columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
+                    String[] split = columnRefStr.split("\\.");
+                    ColumnReference columnReference = findColumnReference(split[1], split[0], queryTree.tables);
                     queryTree.projections.add(columnReference);
                 } else {
                     ColumnReference columnReference = findColumnReference(columnRefStr, queryTree.tables);
@@ -145,8 +147,8 @@ public final class Analyzer {
 
                 ColumnReference columnReference;
                 if (column.contains(".")) {
-                    String[] splitted = column.split("\\.");
-                    columnReference = findColumnReference(splitted[1], splitted[0], queryTree.tables);
+                    String[] split = column.split("\\.");
+                    columnReference = findColumnReference(split[1], split[0], queryTree.tables);
                 } else {
                     columnReference = findColumnReference(column, queryTree.tables);
                 }
@@ -160,8 +162,8 @@ public final class Analyzer {
             for (GroupBySelectElement element : groupByProjections) {
                 ColumnReference columnReference;
                 if (element.column().contains(".")) {
-                    String[] splitted = element.column().split("\\.");
-                    columnReference = this.findColumnReference(splitted[1], splitted[0], queryTree.tables);
+                    String[] split = element.column().split("\\.");
+                    columnReference = this.findColumnReference(split[1], split[0], queryTree.tables);
                 } else {
                     columnReference = this.findColumnReference(element.column(), queryTree.tables);
                 }
@@ -179,6 +181,7 @@ public final class Analyzer {
             if (currWhere.value() == null) {
                 throw new AnalyzerException("Parameter of where clause cannot be null value");
             }
+
             ColumnReference columnReference;
             String tableName;
             String columnName;
@@ -215,9 +218,15 @@ public final class Analyzer {
                     }  // table is null, so no table, it is a literal
                 }
             }
-            // simple where... maybe I should check the type is correct?
+            // check if the type is correct
+            if(CHECK_PARAM_TYPE) {
+                DataType dataType = DataTypeUtils.getColumnDataTypeFromAttributeType(currWhere.value().getClass());
+                if (dataType != columnReference.dataType) {
+                    throw new AnalyzerException("Incompatible data types. Expected: " + columnReference.dataType + " Provided: " + dataType + "\nQuery:\n" + statement.SQL);
+                }
+            }
             WherePredicate whereClause = new WherePredicate(columnReference, currWhere.expression(), currWhere.value());
-            // The order of the columns declared in the index definition matters
+            // the order of the columns declared in the index definition matters
             queryTree.addWhereClauseSortedByColumnIndex(whereClause);
         }
 
@@ -228,6 +237,8 @@ public final class Analyzer {
         }
         return queryTree;
     }
+
+    private static final boolean CHECK_PARAM_TYPE = false;
 
     /**
      * Analyze simple where clauses, those not involving join, only a table

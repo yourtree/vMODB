@@ -47,6 +47,13 @@ public final class SelectStatement extends AbstractStatement {
         this.whereClause.addAll(whereClause);
     }
 
+    public SelectStatement(List<String> selectClause, String table, List<WhereClauseElement> whereClause, List<OrderByClauseElement> orderByClause) {
+        this.selectClause = selectClause;
+        this.fromClause = List.of(table);;
+        this.whereClause.addAll(whereClause);
+        this.orderByClause = orderByClause;
+    }
+
     public SelectStatement(StringBuilder sql, List<String> selectClause, List<GroupBySelectElement> groupBySelectClause,
                            List<String> fromClause, List<WhereClauseElement> whereClause, List<String> groupByClause) {
         super(sql);

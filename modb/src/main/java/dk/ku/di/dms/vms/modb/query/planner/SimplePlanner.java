@@ -257,7 +257,7 @@ public final class SimplePlanner {
     private IndexSelectionVerdict getOptimalIndex(final Table table, List<WherePredicate> wherePredicates) {
         final IntStream intStream = wherePredicates.stream()
                 .filter( wherePredicate ->
-                        wherePredicate.expression == ExpressionTypeEnum.EQUALS
+                        ExpressionTypeEnum.equality(wherePredicate.expression)
                                 && wherePredicate.columnReference.table.equals(table)
                 )
                 .mapToInt( WherePredicate::getColumnPosition );

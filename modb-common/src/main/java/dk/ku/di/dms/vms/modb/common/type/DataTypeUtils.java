@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.modb.common.type;
 
-import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.Date;
 
@@ -70,6 +69,19 @@ public final class DataTypeUtils {
             }
             default -> throw new IllegalStateException("Unknown data type");
         }
+    }
+
+    public static Object parseToPrimitive(Class<?> primitiveType, Object value){
+        return switch (primitiveType.getName()) {
+            case "float" -> ((Number) value).floatValue();
+            case "int" -> ((Number) value).intValue();
+            case "double" -> ((Number) value).doubleValue();
+            case "long" -> ((Number) value).longValue();
+            case "short" -> ((Number) value).shortValue();
+            case "byte" -> ((Number) value).byteValue();
+            case "char", "boolean" -> value;
+            default -> throw new UnsupportedOperationException("Unsupported primitive type: " + primitiveType);
+        };
     }
 
     // just a wrapper

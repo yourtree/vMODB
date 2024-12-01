@@ -17,13 +17,6 @@ public final class WherePredicate implements Comparable<WherePredicate> {
         this.value = value;
     }
 
-    public WherePredicate(ColumnReference columnReference, ExpressionTypeEnum expression) {
-        this.columnReference = columnReference;
-        this.expression = expression;
-        // for equals, not equals NULL, value is not necessary
-        this.value = null;
-    }
-
     public Table getTable() {
         return columnReference.table;
     }

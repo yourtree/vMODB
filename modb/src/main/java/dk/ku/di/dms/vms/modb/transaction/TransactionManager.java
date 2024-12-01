@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.transaction;
 
+import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.modb.api.query.statement.IStatement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
@@ -9,6 +10,7 @@ import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
+import dk.ku.di.dms.vms.modb.definition.key.SimpleKey;
 import dk.ku.di.dms.vms.modb.query.analyzer.Analyzer;
 import dk.ku.di.dms.vms.modb.query.analyzer.QueryTree;
 import dk.ku.di.dms.vms.modb.query.analyzer.exception.AnalyzerException;
@@ -87,10 +89,22 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
                     QueryTree queryTree = this.analyzer.analyze(selectStatement);
                     return this.planner.plan(queryTree);
                 });
-        List<WherePredicate> wherePredicates = this.analyzer.analyzeWhere(table, selectStatement.whereClause);
+        List<WherePredicate> wherePredicates;
+        if(!selectStatement.whereClause.isEmpty()) {
+            wherePredicates = this.analyzer.analyzeWhere(table, selectStatement.whereClause);
+        } else {
+            wherePredicates = Collections.emptyList();
+        }
         if(scanOperator.isIndexScan()){
-            IKey key = this.getIndexedKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
-            return scanOperator.asIndexScan().runAsEmbedded(this.txCtxMap.get(Thread.currentThread().threadId()), key);
+            if(//!wherePredicates.isEmpty() && // if it is index scan, then there is where predicate
+                    wherePredicates.get(0).expression == ExpressionTypeEnum.EQUALS) {
+                IKey key = this.getIndexedKeysFromWhereClause(wherePredicates, scanOperator.asIndexScan().index());
+                return scanOperator.asIndexScan().runAsEmbedded(this.txCtxMap.get(Thread.currentThread().threadId()), key);
+            } else {
+                // can only be IN
+                IKey[] keys = this.getMultiKeysFromWhereClause(wherePredicates.get(0));
+                return scanOperator.asIndexScan().runAsEmbedded(this.txCtxMap.get(Thread.currentThread().threadId()), keys);
+            }
         } else if(scanOperator.isIndexAggregationScan()){
             return scanOperator.asIndexAggregationScan().runAsEmbedded(this.txCtxMap.get(Thread.currentThread().threadId()));
         } else if(scanOperator.isIndexMultiAggregationScan()){
@@ -344,6 +358,19 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     public MemoryRefNode run(List<WherePredicate> wherePredicates,
                              IndexGroupByMinWithProjection operator){
         return null; // operator.run();
+    }
+
+    private IKey[] getMultiKeysFromWhereClause(WherePredicate wherePredicate){
+        if(wherePredicate.value instanceof int[] intArray){
+            SimpleKey[] keysToRet = new SimpleKey[intArray.length];
+            int idx = 0;
+            for(var key : intArray){
+               keysToRet[idx] = SimpleKey.of(key);
+               idx++;
+            }
+            return keysToRet;
+        }
+        throw new RuntimeException("Do not support IN clause of types other than INT");
     }
 
     private IKey getIndexedKeysFromWhereClause(List<WherePredicate> wherePredicates, IMultiVersionIndex index){

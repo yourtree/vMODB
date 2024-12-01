@@ -20,10 +20,7 @@ import java.util.List;
  */
 public final class IndexScanWithProjection extends AbstractScan {
 
-    public IndexScanWithProjection(
-                     IMultiVersionIndex index,
-                     int[] projectionColumns,
-                     int entrySize) {
+    public IndexScanWithProjection(IMultiVersionIndex index, int[] projectionColumns, int entrySize) {
         super(entrySize, index, projectionColumns);
     }
 
@@ -37,25 +34,20 @@ public final class IndexScanWithProjection extends AbstractScan {
         return this;
     }
 
-    public List<Object[]> runAsEmbedded(TransactionContext txCtx){
+    public List<Object[]> runAsEmbedded(TransactionContext txCtx, IKey key) {
         List<Object[]> res = new ArrayList<>();
-        Iterator<Object[]> iterator = this.index.iterator(txCtx);
+        Iterator<Object[]> iterator = this.index.iterator(txCtx, key);
         while(iterator.hasNext()){
-            res.add( iterator.next() );
+            res.add(iterator.next());
         }
         return res;
     }
 
-    public List<Object[]> runAsEmbedded(TransactionContext txCtx, IKey... keys) {
+    public List<Object[]> runAsEmbedded(TransactionContext txCtx, IKey[] keys) {
         List<Object[]> res = new ArrayList<>();
-        Iterator<Object[]> iterator;
-        if (keys.length > 1) {
-            iterator = this.index.iterator(txCtx, keys);
-        } else {
-            iterator = this.index.iterator(txCtx, keys[0]);
-        }
+        Iterator<Object[]> iterator = this.index.iterator(txCtx, keys);
         while(iterator.hasNext()){
-            res.add( iterator.next() );
+            res.add(iterator.next());
         }
         return res;
     }

@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.modb.api.query.parser;
 
+import dk.ku.di.dms.vms.modb.api.query.clause.OrderByClauseElement;
 import dk.ku.di.dms.vms.modb.api.query.clause.WhereClauseElement;
 import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
@@ -42,7 +43,7 @@ public final class Parser {
         List<WhereClauseElement> whereClauseElements = new ArrayList<>(2);
 
         // get triples of values
-        while(i < tokens.length){
+        while(i < tokens.length && !tokens[i].equalsIgnoreCase("order")){
             // remove comma from all
             String left = tokens[i];
             i++;
@@ -56,11 +57,16 @@ public final class Parser {
             if(i < tokens.length && (tokens[i].equalsIgnoreCase("and") || tokens[i].equalsIgnoreCase("or"))){
                 i++;
             }
-
         }
 
-        return new SelectStatement(projection, table, whereClauseElements);
+        if(i == tokens.length)
+            return new SelectStatement(projection, table, whereClauseElements);
 
+        // ORDER BY
+        i+=2;
+        String orderByColumn = tokens[i];
+        List<OrderByClauseElement> orderByClauseElement = List.of(new OrderByClauseElement(orderByColumn));
+        return new SelectStatement(projection, table, whereClauseElements, orderByClauseElement);
     }
 
     private static ExpressionTypeEnum getExpressionFromString(String exp){

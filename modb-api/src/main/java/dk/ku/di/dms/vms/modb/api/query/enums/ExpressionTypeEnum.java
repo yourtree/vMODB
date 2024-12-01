@@ -47,4 +47,8 @@ public enum ExpressionTypeEnum {
         this.name = name;
     }
 
+    public static boolean equality(ExpressionTypeEnum expressionType){
+        return expressionType == EQUALS || expressionType == IN;
+    }
+
 }

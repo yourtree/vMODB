@@ -494,41 +494,45 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      */
     protected class MultiVersionIterator implements Iterator<Object[]>{
 
-        private final Iterator<Map.Entry<IKey, Object[]>> freshSetIterator;
+        private final TransactionContext txCtx;
+        private final IKey[] keys;
+        private int idx = 0;
+        private Object[] next;
 
         public MultiVersionIterator(TransactionContext txCtx, IKey[] keys){
-            this.freshSetIterator = collectFreshSet(txCtx, keys).entrySet().iterator();
+            this.txCtx = txCtx;
+            this.keys = keys;
         }
 
         @Override
         public boolean hasNext() {
-            return this.freshSetIterator.hasNext();
+            while(this.idx < this.keys.length){
+                OperationSetOfKey operation = updatesPerKeyMap.get(keys[idx]);
+                if(operation == null) {
+                    var record = underlyingIndex().record(keys[idx]);
+                    if(record != null){
+                        this.next = record;
+                        this.idx++;
+                        return true;
+                    }
+                    idx++;
+                    continue;
+                }
+                Entry<Long, TransactionWrite> obj = operation.floorEntry(this.txCtx.tid);
+                if (obj != null && obj.val().type != WriteType.DELETE) {
+                    this.next = obj.val().record;
+                    this.idx++;
+                    return true;
+                }
+                idx++;
+            }
+            return false;
         }
 
         @Override
         public Object[] next() {
-            return this.freshSetIterator.next().getValue();
+            return this.next;
         }
-    }
-
-    private Map<IKey, Object[]> collectFreshSet(TransactionContext txCtx, IKey[] keys) {
-        Map<IKey, Object[]> freshSet = new HashMap<>();
-        // iterate over keys
-        for(IKey key : keys){
-            OperationSetOfKey operation = this.updatesPerKeyMap.get(key);
-            if(operation == null) {
-                var record = this.underlyingIndex().record(key);
-                if(record != null){
-                    freshSet.put(key, record);
-                }
-                continue;
-            }
-            Entry<Long, TransactionWrite> obj = operation.floorEntry(txCtx.tid);
-            if (obj != null && obj.val().type != WriteType.DELETE) {
-                freshSet.put(key, obj.val().record);
-            }
-        }
-        return freshSet;
     }
 
     public Object[] getRecord(long tid, IKey key){

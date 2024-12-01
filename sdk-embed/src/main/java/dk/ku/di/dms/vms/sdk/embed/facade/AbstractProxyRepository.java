@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.clause.WhereClauseElement;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
+import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityHandler;
@@ -14,10 +15,7 @@ import net.bytebuddy.implementation.bind.annotation.RuntimeType;
 import net.bytebuddy.implementation.bind.annotation.This;
 
 import java.io.Serializable;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.lang.reflect.*;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -83,20 +81,36 @@ public abstract class AbstractProxyRepository<PK extends Serializable, T extends
         }
         selectStatement = selectStatement.clone(whereClauseElements);
 
-        // submit for execution
+        // submit for execution. could also see if it is possible to project only what is in the select clause
         List<Object[]> records = this.operationalAPI.fetch(this.table, selectStatement);
+
+        if (List.class.isAssignableFrom(method.getReturnType())) {
+            List<T> result = new ArrayList<>(records.size());
+            for(Object[] record : records) {
+                result.add( this.parseObjectIntoEntity(record) );
+            }
+            return result;
+        }
 
         if(method.getReturnType().isPrimitive()) {
             String column = selectStatement.selectClause.get(0);
             return records.get(0)[this.table.schema().columnPosition(column)];
         }
 
-        List<T> result = new ArrayList<>(records.size());
-        for(Object[] record : records) {
-            result.add( this.parseObjectIntoEntity(record) );
+        // assuming app objects never return with array, it only works for arrays of primitive types
+        if(method.getReturnType().isArray()){
+            String column = selectStatement.selectClause.get(0);
+            // parse to array of given type
+            Class<?> primitiveType = method.getReturnType().getComponentType();
+            Object primitiveArray = Array.newInstance(primitiveType, records.size());
+            int columnPos = this.table.schema().columnPosition(column);
+            for (int i = 0; i < records.size(); i++) {
+                Array.set(primitiveArray, i, DataTypeUtils.parseToPrimitive(primitiveType, records.get(i)[columnPos]));
+            }
+            return primitiveArray;
         }
 
-        return result;
+        return null;
     }
 
     @Override

@@ -8,7 +8,7 @@ import dk.ku.di.dms.vms.tpcc.inventory.entities.Item;
 @Repository
 public interface IItemRepository extends IRepository<Integer, Item> {
 
-    @Query("SELECT i_price FROM item WHERE i_id IN (:itemIds) order by i_id")
-    float[] getItemsById(int[] itemIds);
+    @Query("SELECT i_price FROM item WHERE i_id IN (:itemIds)")
+    float[] getPricePerItemId(int[] itemIds);
 
 }

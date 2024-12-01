@@ -29,11 +29,11 @@ public final class InventoryService {
     @PartitionBy(clazz = NewOrderWareOut.class, method = "getId")
     public NewOrderInvOut processNewOrder(NewOrderWareOut in) {
 
-        float[] prices = this.itemRepository.getItemsById(in.itemsIds);
+        float[] prices = this.itemRepository.getPricePerItemId(in.itemsIds);
 
         String[] ol_dist_info = new String[in.itemsIds.length];
 
-        assert prices.length == in.itemsIds.length;
+        // assert prices.length == in.itemsIds.length;
 
         List<Stock> stockItemsToUpdate = new ArrayList<>(prices.length);
 
