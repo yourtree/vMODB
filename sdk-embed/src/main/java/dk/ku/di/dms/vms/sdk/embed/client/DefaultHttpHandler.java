@@ -7,6 +7,8 @@ import dk.ku.di.dms.vms.web_common.IHttpHandler;
 
 public class DefaultHttpHandler implements IHttpHandler {
 
+    protected static final System.Logger LOGGER = System.getLogger(DefaultHttpHandler.class.getName());
+
     protected static final IVmsSerdesProxy SERDES = VmsSerdesProxyBuilder.build();
 
     protected final ITransactionManager transactionManager;

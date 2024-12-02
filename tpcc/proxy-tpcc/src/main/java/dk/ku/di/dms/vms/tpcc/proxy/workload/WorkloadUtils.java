@@ -19,8 +19,7 @@ import java.util.function.Function;
 import static dk.ku.di.dms.vms.tpcc.proxy.datagen.DataGenUtils.nuRand;
 import static dk.ku.di.dms.vms.tpcc.proxy.datagen.DataGenUtils.randomNumber;
 import static dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants.*;
-import static java.lang.System.Logger.Level.ERROR;
-import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.*;
 
 public final class WorkloadUtils {
 
@@ -107,6 +106,8 @@ public final class WorkloadUtils {
         return new WorkloadStats(initTs, submittedArray);
     }
 
+    private static final boolean RECYCLE_TXS = true;
+
     private static final class Worker {
 
         public static Map<Long,List<Long>> run(CountDownLatch allThreadsStart,
@@ -135,15 +136,18 @@ public final class WorkloadUtils {
                     startTsMap.get(batchId).add(currentTs);
                     idx++;
                 } catch (Exception e) {
-                    idx = 0;
-                    /*
-                    LOGGER.log(ERROR,"Exception in Thread ID: " + (e.getMessage() == null ? "No message" : e.getMessage()));
                     if(idx >= input.size()){
-                        allThreadsAreDone.countDown();
-                        LOGGER.log(WARNING,"Number of input events "+input.size()+" are not enough for runtime "+runTime+" ms");
-                        break;
+                        LOGGER.log(WARNING, "Number of input events " + input.size() + " are not enough for runtime " + runTime + " ms");
+                        if(RECYCLE_TXS){
+                            idx = 0;
+                        } else {
+                            allThreadsAreDone.countDown();
+                            break;
+                        }
+                    } else {
+                        LOGGER.log(ERROR,"Exception in Thread ID: " + (e.getMessage() == null ? "No message" : e.getMessage()));
+                        throw new RuntimeException(e);
                     }
-                    */
                 }
                 currentTs = System.currentTimeMillis();
             } while (currentTs < endTs);

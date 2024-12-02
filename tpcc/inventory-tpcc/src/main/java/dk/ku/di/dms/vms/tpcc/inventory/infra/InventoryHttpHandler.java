@@ -22,6 +22,31 @@ public final class InventoryHttpHandler extends DefaultHttpHandler {
     }
 
     @Override
+    public String getAsJson(String uri) throws RuntimeException {
+        String[] uriSplit = uri.split("/");
+        String table = uriSplit[uriSplit.length - 1];
+        switch (table){
+            case "item" -> {
+                int itemId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
+                this.transactionManager.beginTransaction(0, 0, 0, true);
+                Item item = this.itemRepository.lookupByKey(itemId);
+                return item.toString();
+            }
+            case "stock" -> {
+                int wareId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
+                int itemId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
+                this.transactionManager.beginTransaction(0, 0, 0, true);
+                Stock stock = this.stockRepository.lookupByKey(new Stock.StockId( itemId, wareId ));
+                return stock.toString();
+            }
+            case null, default -> {
+                LOGGER.log(System.Logger.Level.WARNING, "URI not recognized: "+uri);
+                return "";
+            }
+        }
+    }
+
+    @Override
     public void post(String uri, String payload) {
         String[] uriSplit = uri.split("/");
         String table = uriSplit[uriSplit.length - 1];

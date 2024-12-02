@@ -99,7 +99,6 @@ public final class DataLoadUtils {
         for (int i = 0; i < numCpus; i++) {
             service.submit(new IngestionWorker(tableInputMap), null);
         }
-
         try {
             for (int i = 0; i < numCpus; i++) {
                 completionQueue.poll(5, TimeUnit.MINUTES);
@@ -111,7 +110,6 @@ public final class DataLoadUtils {
             long end = System.currentTimeMillis();
             LOGGER.log(INFO, "Ingesting tables finished in " + (end - init) + "ms");
         }
-
     }
 
     private static class IngestionWorker implements Runnable {
@@ -156,7 +154,7 @@ public final class DataLoadUtils {
                     var queue = table.getValue();
                     String entity;
                     while ((entity = queue.poll()) != null) {
-                        client.sendRequest(entity, table.getKey());
+                        client.sendRequest("POST", entity, table.getKey());
                     }
                     LOGGER.log(INFO, "Thread "+Thread.currentThread().threadId()+" finished with table "+table.getKey());
                     returnConnection(table.getKey(), client);

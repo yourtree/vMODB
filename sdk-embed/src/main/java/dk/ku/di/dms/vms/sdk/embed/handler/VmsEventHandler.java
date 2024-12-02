@@ -367,7 +367,7 @@ public final class VmsEventHandler extends ModbHttpServer {
                 multiVmsContainer.addConsumerVms(consumerVmsWorker);
             } else {
                 // stop previous, replace by the new one
-                ((ConsumerVmsWorker)vmsContainer).stop();
+                vmsContainer.stop();
                 this.consumerVmsContainerMap.put(node, consumerVmsWorker);
             }
         }
@@ -425,7 +425,13 @@ public final class VmsEventHandler extends ModbHttpServer {
                     }
                     this.processSingleEvent(this.readBuffer);
                 }
-                default -> LOGGER.log(ERROR,me.identifier+": Unknown message type "+messageType+" received from: "+node.identifier);
+                default -> {
+                    LOGGER.log(ERROR,me.identifier+": Unknown message type "+messageType+" received from: "+node.identifier);
+                    if(!isRunning()){
+                        // avoid spamming the logging
+                        return;
+                    }
+                }
             }
             if(this.readBuffer.hasRemaining()){
                 this.completed(result, this.readBuffer.position());
@@ -1046,6 +1052,10 @@ public final class VmsEventHandler extends ModbHttpServer {
     }
 
     public void close() {
+        this.stop();
+        for(var consumer : this.consumerVmsContainerMap.entrySet()){
+            consumer.getValue().stop();
+        }
         try {
             this.serverSocket.close();
         } catch (IOException ignored){ }

@@ -33,8 +33,6 @@ public final class InventoryService {
 
         String[] ol_dist_info = new String[in.itemsIds.length];
 
-        // assert prices.length == in.itemsIds.length;
-
         List<Stock> stockItemsToUpdate = new ArrayList<>(prices.length);
 
         for(int i = 0; i < in.itemsIds.length; i++){

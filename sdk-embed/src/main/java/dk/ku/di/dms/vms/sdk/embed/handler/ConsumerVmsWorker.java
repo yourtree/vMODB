@@ -130,7 +130,6 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
 
     @SuppressWarnings("StatementWithEmptyBody")
     public void acquireLock(){
-        // System.out.println(me.identifier +": somebody called meeee");
         while(! WRITE_SYNCHRONIZER.compareAndSet(this, 0, 1) );
     }
 
@@ -303,8 +302,11 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
                 this.channel.write(writeBuffer).get();
             } while (writeBuffer.hasRemaining());
         } catch (Exception e){
-            LOGGER.log(ERROR, "Error caught on sending single event: "+e);
-            this.transactionEventQueue.offer(payload);
+            if(this.isRunning()) {
+                LOGGER.log(ERROR, "Error caught on sending single event: " + e);
+                this.transactionEventQueue.offer(payload);
+            }
+            writeBuffer.clear();
         }
         finally {
             this.returnByteBuffer(writeBuffer);
@@ -397,6 +399,12 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     @Override
     public String identifier() {
         return this.consumerVms.identifier;
+    }
+
+    @Override
+    public void stop(){
+        super.stop();
+        this.channel.close();
     }
 
 }

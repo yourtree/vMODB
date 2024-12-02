@@ -9,20 +9,27 @@ import dk.ku.di.dms.vms.tpcc.common.events.NewOrderWareIn;
 import dk.ku.di.dms.vms.tpcc.proxy.workload.WorkloadUtils;
 import dk.ku.di.dms.vms.web_common.IHttpHandler;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 public final class ExperimentUtils {
 
-    public static void runExperiment(Coordinator coordinator, List<NewOrderWareIn> input, int numWorkers, int runTime, int warmUp) {
+    public static ExperimentStats runExperiment(Coordinator coordinator, List<NewOrderWareIn> input, int numWorkers, int runTime, int warmUp) {
 
         // provide a consumer to avoid depending on the coordinator
         Function<NewOrderWareIn, Long> func = newOrderInputBuilder(coordinator);
 
         coordinator.registerBatchCommitConsumer((tid)-> BATCH_TO_FINISHED_TS_MAP.put(
                 (long) BATCH_TO_FINISHED_TS_MAP.size()+1,
-                new BatchStats( BATCH_TO_FINISHED_TS_MAP.size()+1, tid, System.currentTimeMillis())));
+                new BatchStats(BATCH_TO_FINISHED_TS_MAP.size()+1, tid, System.currentTimeMillis())));
 
         int newRuntime = runTime + warmUp;
 
@@ -49,10 +56,7 @@ public final class ExperimentUtils {
             }
         }
 
-        double average = allLatencies.stream()
-                .mapToLong(Long::longValue)
-                .average().orElse(0.0);
-
+        double average = allLatencies.stream().mapToLong(Long::longValue).average().orElse(0.0);
         allLatencies.sort(null);
         double percentile_50 = PercentileCalculator.calculatePercentile(allLatencies, 0.50);
         double percentile_75 = PercentileCalculator.calculatePercentile(allLatencies, 0.75);
@@ -65,18 +69,60 @@ public final class ExperimentUtils {
         System.out.println("Latency at 90th percentile: "+ percentile_90);
         System.out.println("Number of completed transactions: "+ numCompleted);
         System.out.println("Transactions per second: "+txPerSec);
-        // var result = new Result(percentile, Map.copyOf(BATCH_TO_FINISHED_TS_MAP));
 
         resetBatchToFinishedTsMap();
-        // return result;
+
+        return new ExperimentStats(workloadStats.initTs(), numCompleted, txPerSec, average, percentile_50, percentile_75, percentile_90);
+    }
+
+    public record ExperimentStats(long initTs, int numCompleted, long txPerSec, double average,
+                                   double percentile_50, double percentile_75, double percentile_90){}
+
+    public static void writeResultsToFile(int numWare, ExperimentStats expStats, int numWorkers, int runTime, int warmUp){
+        LocalDateTime time = LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(expStats.initTs),
+                ZoneId.systemDefault()
+        );
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd_MM_yy_HH_mm_ss");
+        String formattedDate = time.format(formatter);
+        String fileName = "tpcc_" + formattedDate + ".txt";
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(fileName))) {
+            writer.write("======= TPC-C in vMODB =======");
+            writer.newLine();
+            writer.write("Experiment start: " + formattedDate);
+            writer.newLine();
+            writer.write("Experiment duration (ms): " + runTime);
+            writer.newLine();
+            writer.write("Experiment warm up (ms): " + warmUp);
+            writer.newLine();
+            writer.write("Number of warehouses: " + numWare);
+            writer.newLine();
+            writer.write("Number of workers: " + numWorkers);
+            writer.newLine();
+            writer.newLine();
+            writer.write("Average latency: "+ expStats.average);
+            writer.newLine();
+            writer.write("Latency at 50th percentile: "+ expStats.percentile_50);
+            writer.newLine();
+            writer.write("Latency at 75th percentile: "+ expStats.percentile_75);
+            writer.newLine();
+            writer.write("Latency at 90th percentile: "+ expStats.percentile_90);
+            writer.newLine();
+            writer.write("Number of completed transactions: "+ expStats.numCompleted);
+            writer.newLine();
+            writer.write("Transactions per second: "+expStats.txPerSec);
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static void resetBatchToFinishedTsMap(){
         BATCH_TO_FINISHED_TS_MAP.clear();
-        //BATCH_TO_FINISHED_TS_MAP.put(0L, 0L);
     }
 
-    private static final ConcurrentSkipListMap<Long, BatchStats> BATCH_TO_FINISHED_TS_MAP = new ConcurrentSkipListMap<>();
+    private static final Map<Long, BatchStats> BATCH_TO_FINISHED_TS_MAP = new ConcurrentHashMap<>();
 
     private record BatchStats(long batchId, long lastTid, long endTs){}
 

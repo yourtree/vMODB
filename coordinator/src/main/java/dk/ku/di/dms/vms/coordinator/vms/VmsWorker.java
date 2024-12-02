@@ -754,6 +754,7 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     @Override
     public void stop() {
         super.stop();
+        this.channel.close();
     }
 
 }

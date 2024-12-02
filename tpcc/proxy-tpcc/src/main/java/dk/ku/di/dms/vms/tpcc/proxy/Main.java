@@ -9,10 +9,7 @@ import dk.ku.di.dms.vms.tpcc.proxy.experiment.ExperimentUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.storage.StorageUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.workload.WorkloadUtils;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Scanner;
+import java.util.*;
 
 public final class Main {
 
@@ -24,7 +21,7 @@ public final class Main {
 
     private static void menu() throws NoSuchFieldException, IllegalAccessException {
         Coordinator coordinator = null;
-        int numWare;
+        int numWare = 0;
         int numWorkers;
         Map<String, UniqueHashBufferIndex> tables = null;
         List<NewOrderWareIn> input = null;
@@ -47,16 +44,14 @@ public final class Main {
                     break;
                 case "2":
                     System.out.println("Option 2: \"Load services with data from tables in disk\" selected.");
-                    // number of worker threads
-                    System.out.print("Enter number of workers: ");
-                    numWorkers = Integer.parseInt(scanner.nextLine());
                     if(tables == null) {
                         System.out.println("Loading tables from disk...");
                         // the number of warehouses must be exactly the same otherwise lead to errors in reading from files
                         numWare = StorageUtils.getNumRecordsFromInDiskTable(metadata.entityToSchemaMap().get("warehouse"), "warehouse");
                         tables = StorageUtils.mapTablesInDisk(metadata, numWare);
                     }
-                    DataLoadUtils.loadTablesInMemory(tables, metadata.entityHandlerMap());
+                    Map<String, Queue<String>> tablesInMem = DataLoadUtils.loadTablesInMemory(tables, metadata.entityHandlerMap());
+                    DataLoadUtils.ingestData(tablesInMem);
                     break;
                 case "3":
                     System.out.println("Option 3: \"Create workload\" selected.");
@@ -94,7 +89,9 @@ public final class Main {
                         } while (numConnected < 3);
                     }
 
-                    ExperimentUtils.runExperiment(coordinator, input, numWorkers, runTime, warmUp);
+                    var expStats = ExperimentUtils.runExperiment(coordinator, input, numWorkers, runTime, warmUp);
+
+                    ExperimentUtils.writeResultsToFile(numWare, expStats, numWorkers, runTime, warmUp);
 
                     break;
                 case "0":

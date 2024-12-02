@@ -28,6 +28,45 @@ public final class WarehouseHttpHandler extends DefaultHttpHandler {
     }
 
     @Override
+    public String getAsJson(String uri) throws RuntimeException {
+        String[] uriSplit = uri.split("/");
+        String table;
+        switch (uriSplit.length){
+            case 3 -> table = uriSplit[uriSplit.length - 2];
+            case 4 -> table = uriSplit[uriSplit.length - 3];
+            case 5 -> table = uriSplit[uriSplit.length - 4];
+            default -> table = "";
+        }
+        switch (table){
+            case "warehouse" -> {
+                int wareId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
+                this.transactionManager.beginTransaction(0, 0, 0, true);
+                Warehouse warehouse = this.warehouseRepository.lookupByKey(wareId);
+                return warehouse.toString();
+            }
+            case "district" -> {
+                int distId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
+                int wareId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
+                this.transactionManager.beginTransaction(Long.MAX_VALUE, 0, Long.MAX_VALUE, true);
+                District district = this.districtRepository.lookupByKey(new District.DistrictId( distId, wareId ));
+                return district.toString();
+            }
+            case "customer" -> {
+                int cId = Integer.parseInt(uriSplit[uriSplit.length - 3]);
+                int distId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
+                int wareId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
+                this.transactionManager.beginTransaction(0, 0, 0, true);
+                Customer customer = this.customerRepository.lookupByKey(new Customer.CustomerId( cId, distId, wareId ));
+                return customer.toString();
+            }
+            case null, default -> {
+                LOGGER.log(System.Logger.Level.WARNING, "URI not recognized: "+uri);
+                return "{ \"message\":\" URI not recognized = "+uri+"\" }";
+            }
+        }
+    }
+
+    @Override
     public void post(String uri, String payload) {
         String[] uriSplit = uri.split("/");
         String table = uriSplit[uriSplit.length - 1];

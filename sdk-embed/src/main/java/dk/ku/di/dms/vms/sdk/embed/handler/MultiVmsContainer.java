@@ -41,6 +41,13 @@ public final class MultiVmsContainer implements IVmsContainer {
     public String identifier(){
         return this.node.identifier;
     }
+
+    @Override
+    public void stop(){
+        for(var consumer : consumerVmsWorkers){
+            consumer.stop();
+        }
+    }
 }
 
 

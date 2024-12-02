@@ -462,7 +462,7 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
     @Override
     public ITransactionContext beginTransaction(long tid, int identifier, long lastTid, boolean readOnly) {
         return this.txCtxMap.compute(Thread.currentThread().threadId(),
-                (k,v) -> {
+                (ignored,v) -> {
                     if (v != null && tid == 0 && v.tid == 0)
                         return v;
                     return new TransactionContext(tid, lastTid, readOnly);
@@ -478,8 +478,8 @@ public final class TransactionManager implements OperationalAPI, ITransactionMan
             for(var secIdx : table.secondaryIndexMap.values()){
                 secIdx.reset();
             }
-            for(var uniqIdx : table.partialIndexMap.values()){
-                uniqIdx.reset();
+            for(var uniqueIdx : table.partialIndexMap.values()){
+                uniqueIdx.reset();
             }
         }
         LOGGER.log(INFO, "Reset finished at "+System.currentTimeMillis());
