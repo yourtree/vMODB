@@ -253,7 +253,7 @@ public final class VmsEventHandler extends ModbHttpServer {
         }
         // if terminal, must send batch complete
         if (thisBatch.terminal) {
-            LOGGER.log(INFO, this.me.identifier + ": Requesting leader worker to send batch " + thisBatch.batch + " complete");
+            LOGGER.log(DEBUG, this.me.identifier + ": Requesting leader worker to send batch " + thisBatch.batch + " complete");
             // must be queued in case leader is off and comes back online
             this.leaderWorker.queueMessage(BatchComplete.of(thisBatch.batch, this.me.identifier));
         }
@@ -1026,10 +1026,10 @@ public final class VmsEventHandler extends ModbHttpServer {
             }
             BatchMetadata batchMetadata = trackingBatchMap.get(batchCommitCommand.batch());
             if(batchContext.numberOfTIDsBatch != batchMetadata.numberTIDsExecuted) {
-                LOGGER.log(INFO,me.identifier+": Batch "+ batchCommitCommand.batch()+" has not yet finished!");
+                LOGGER.log(WARNING,me.identifier+": Batch "+ batchCommitCommand.batch()+" has not yet finished!");
                 return;
             }
-            LOGGER.log(INFO, me.identifier + ": All TIDs for the batch " + batchCommitCommand.batch() + " have been executed");
+            LOGGER.log(DEBUG, me.identifier + ": All TIDs for the batch " + batchCommitCommand.batch() + " have been executed");
             batchContext.setStatus(BatchContext.BATCH_COMPLETED);
             if(options.checkpointing()){
                 LOGGER.log(INFO, me.identifier + ": Requesting checkpoint for batch " + batchCommitCommand.batch());

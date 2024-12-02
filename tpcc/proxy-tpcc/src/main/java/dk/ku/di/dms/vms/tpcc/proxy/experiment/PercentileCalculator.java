@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.tpcc.proxy.workload;
+package dk.ku.di.dms.vms.tpcc.proxy.experiment;
 
 import java.util.List;
 

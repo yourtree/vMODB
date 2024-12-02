@@ -10,4 +10,6 @@ public interface IVmsWorker {
 
     default long getTid() { return 0; }
 
+    default void stop() { }
+
 }

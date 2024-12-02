@@ -314,7 +314,7 @@ public final class Coordinator extends ModbHttpServer {
             e.printStackTrace(System.out);
         }
 
-        this.failSafeClose();
+        this.close();
         LOGGER.log(INFO,"Leader: Finished execution.");
     }
 
@@ -529,8 +529,13 @@ public final class Coordinator extends ModbHttpServer {
         return list;
     }
 
-    private void failSafeClose(){
-        // safe close
+    private void close(){
+        for(var txWorker : this.transactionWorkers){
+            txWorker.t1.stop();
+        }
+        for(var vmsWorker : this.vmsWorkerContainerMap.entrySet()){
+            vmsWorker.getValue().stop();
+        }
         try { this.serverSocket.close(); } catch (IOException ignored) {}
     }
 

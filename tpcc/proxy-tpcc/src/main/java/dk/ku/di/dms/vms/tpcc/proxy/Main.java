@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
 import dk.ku.di.dms.vms.tpcc.common.events.NewOrderWareIn;
 import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoadUtils;
+import dk.ku.di.dms.vms.tpcc.proxy.experiment.ExperimentUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.storage.StorageUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.workload.WorkloadUtils;
 
@@ -70,9 +71,14 @@ public final class Main {
                     // number of worker threads
                     System.out.print("Enter number of workers: ");
                     numWorkers = Integer.parseInt(scanner.nextLine());
+
                     System.out.print("Enter duration (ms): [0 for default to 10s]");
                     int runTime = Integer.parseInt(scanner.nextLine());
                     if(runTime == 0) runTime = 10000;
+
+                    System.out.print("Enter warm up period (ms):");
+                    int warmUp = Integer.parseInt(scanner.nextLine());
+
                     if(input == null){
                         System.out.println("Loading workload from disk...");
                         input = WorkloadUtils.loadWorkloadData();
@@ -80,7 +86,7 @@ public final class Main {
 
                     // load coordinator
                     if(coordinator == null){
-                        coordinator = WorkloadUtils.loadCoordinator(PROPERTIES);
+                        coordinator = ExperimentUtils.loadCoordinator(PROPERTIES);
                         // wait for all starter VMSes to connect
                         int numConnected;
                         do {
@@ -88,7 +94,7 @@ public final class Main {
                         } while (numConnected < 3);
                     }
 
-                    WorkloadUtils.runExperiment(coordinator, input, numWorkers, runTime);
+                    ExperimentUtils.runExperiment(coordinator, input, numWorkers, runTime, warmUp);
 
                     break;
                 case "0":

@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.coordinator.Coordinator;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
 import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoadUtils;
+import dk.ku.di.dms.vms.tpcc.proxy.experiment.ExperimentUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.storage.StorageUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.workload.WorkloadUtils;
 import org.junit.*;
@@ -67,13 +68,13 @@ public final class TPCcTest {
     public void test_C_submit_workload() {
         var input = WorkloadUtils.loadWorkloadData();
 
-        Coordinator coordinator = WorkloadUtils.loadCoordinator(PROPERTIES);
+        Coordinator coordinator = ExperimentUtils.loadCoordinator(PROPERTIES);
         int numConnected;
         do {
             numConnected = coordinator.getConnectedVMSs().size();
         } while (numConnected < 3);
 
-        WorkloadUtils.runExperiment(coordinator, input, 1, 10000);
+        ExperimentUtils.runExperiment(coordinator, input, 1, 10000, 2000);
 
         Assert.assertTrue(true);
     }
