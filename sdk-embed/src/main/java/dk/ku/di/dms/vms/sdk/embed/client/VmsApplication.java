@@ -86,6 +86,7 @@ public final class VmsApplication {
         Map<String, VmsDataModel> vmsDataModelMap = VmsMetadataLoader.buildVmsDataModel( entityToVirtualMicroservice, entityToTableNameMap );
 
         boolean isCheckpointing = options.isCheckpointing();
+        boolean isTruncating = options.isTruncating();
         if(!isCheckpointing){
             String checkpointingStr = System.getProperty("checkpointing");
             if(Boolean.parseBoolean(checkpointingStr)){
@@ -94,7 +95,7 @@ public final class VmsApplication {
         }
 
         // load catalog so we can pass the table instance to proxy repository
-        Map<String, Table> catalog = EmbedMetadataLoader.loadCatalog(vmsDataModelMap, entityToTableNameMap, isCheckpointing, options.getMaxRecords());
+        Map<String, Table> catalog = EmbedMetadataLoader.loadCatalog(vmsDataModelMap, entityToTableNameMap, isCheckpointing, isTruncating, options.getMaxRecords());
 
         // operational API and checkpoint API
         TransactionManager transactionManager = new TransactionManager(catalog, isCheckpointing);

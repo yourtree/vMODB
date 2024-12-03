@@ -8,11 +8,11 @@ public final class PercentileCalculator {
      * The data must be sorted
      */
     public static double calculatePercentile(List<Long> data, double percentile) {
-        if (data == null || data.isEmpty()) {
-            throw new IllegalArgumentException("Data array must not be null or empty.");
-        }
         if (percentile < 0 || percentile > 1) {
             throw new IllegalArgumentException("Percentile must be between 0 and 1.");
+        }
+        if (data == null || data.isEmpty()) {
+            return 0;
         }
 
         double rank = percentile * (data.size() - 1);

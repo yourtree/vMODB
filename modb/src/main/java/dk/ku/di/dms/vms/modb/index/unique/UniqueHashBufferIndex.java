@@ -107,7 +107,11 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public void insert(IKey key, long srcAddress) {
-        long pos = this.findRecordAddress(key);
+        long pos = this.getFreePositionToInsert(key);
+        if(pos == -1){
+            LOGGER.log(ERROR, "Cannot find an empty entry for record. Perhaps should increase number of entries?\nKey: " + key+ " Hash: " + key.hashCode());
+            return;
+        }
         if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE){
             LOGGER.log(WARNING, "Overwriting previously written record for key: "+key);
         }
@@ -128,17 +132,21 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     @Override
     public void update(IKey key, long srcAddress) {
         long pos = this.findRecordAddress(key);
-        UNSAFE.copyMemory(null, srcAddress, null, pos, this.recordSize);
+        if(pos != -1) {
+            UNSAFE.copyMemory(null, srcAddress, null, pos, this.recordSize);
+            return;
+        }
+        LOGGER.log(WARNING, ERROR_FINDING);
     }
 
     @Override
     public void update(IKey key, Object[] record){
         long pos = this.findRecordAddress(key);
-        if(pos == -1) {
-            LOGGER.log(ERROR, "Cannot find an existing record. Perhaps something wrong in the insertion logic?\nKey: " + key+ " Hash: " + key.hashCode());
+        if(pos != -1) {
+            this.doWrite(pos, record);
             return;
         }
-        this.doWrite(pos, record);
+        LOGGER.log(ERROR, "Cannot find an existing record. Perhaps something wrong in the insertion logic?\nKey: " + key+ " Hash: " + key.hashCode());
     }
 
     private void doWrite(long pos, Object[] record) {
@@ -186,7 +194,9 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         if(pos != -1) {
             UNSAFE.putByte(null, pos, Header.INACTIVE_BYTE);
             this.updateSize(-1);
+            return;
         }
+        LOGGER.log(WARNING, ERROR_FINDING);
     }
 
     @Override
@@ -227,7 +237,6 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
             pos = this.getPosition(key.hashCode() + Math.multiplyExact(aux, 2));
             aux++;
         }
-        LOGGER.log(WARNING, "It was not possible to encounter the record");
         return -1;
     }
 
@@ -238,12 +247,15 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     public boolean exists(IKey key){
         return this.findRecordAddress(key) != -1;
     }
+    
+    private static final String ERROR_FINDING = "It was not possible to encounter the record";
 
     @Override
     public Object[] lookupByKey(IKey key){
         long pos = this.findRecordAddress(key);
         if(pos != -1)
             return this.readFromIndex(pos + Schema.RECORD_HEADER);
+        LOGGER.log(WARNING, ERROR_FINDING);
         return null;
     }
 

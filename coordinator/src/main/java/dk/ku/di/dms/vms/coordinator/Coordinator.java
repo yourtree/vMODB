@@ -26,6 +26,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
+import dk.ku.di.dms.vms.web_common.HttpUtils;
 import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import dk.ku.di.dms.vms.web_common.ModbHttpServer;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
@@ -629,7 +630,7 @@ public final class Coordinator extends ModbHttpServer {
             if(messageIdentifier != PRESENTATION){
                 buffer.flip();
                 String request = StandardCharsets.UTF_8.decode(buffer).toString();
-                if(isHttpClient(request)){
+                if(HttpUtils.isHttpClient(request)){
                     var readCompletionHandler = new HttpReadCompletionHandler(
                             new ConnectionMetadata("http_client".hashCode(),
                                     ConnectionMetadata.NodeType.HTTP_CLIENT,

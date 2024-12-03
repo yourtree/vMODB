@@ -9,9 +9,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
@@ -69,36 +67,6 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             this.sseWriteCH = new SseWriteCH(this);
         }
 
-        private record HttpRequestInternal(String httpMethod, Map<String, String> headers, String uri, int length, String body) {}
-
-        private static HttpRequestInternal parseRequest(String request){
-            String[] requestLines = request.split("\r\n");
-            String requestLine = requestLines[0];  // First line is the request line
-            String[] requestLineParts = requestLine.split(" ");
-            String method = requestLineParts[0];
-            String url = requestLineParts[1];
-            // String httpVersion = requestLineParts[2];
-            // process header
-            Map<String, String> headers = new HashMap<>();
-            int i = 1;
-            while (requestLines.length > i && !requestLines[i].isEmpty()) {
-                String[] headerParts = requestLines[i].split(": ");
-                headers.put(headerParts[0], headerParts[1]);
-                i++;
-            }
-            int length = headers.containsKey("Content-Length") ? Integer.parseInt(headers.get("Content-Length")) : 0;
-            if(method.contentEquals("GET")){
-                return new HttpRequestInternal(method, headers, url, length, "");
-            }
-            StringBuilder body = new StringBuilder();
-            for (i += 1; i < requestLines.length; i++) {
-                body.append(requestLines[i]);
-                // if(body.length() == length) break;
-            }
-            String payload = body.toString();
-            return new HttpRequestInternal(method, headers, url, length, payload);
-        }
-
         private static String createHttpHeaders(int contentLength) {
             return "HTTP/1.1 200 OK\r\n" +
                     "Content-Type: application/json\r\n" +
@@ -134,13 +102,13 @@ public abstract class ModbHttpServer extends StoppableRunnable {
 
         public void process(String request){
             try {
-                final HttpRequestInternal httpRequest = parseRequest(request);
+                final HttpUtils.HttpRequestInternal httpRequest = HttpUtils.parseRequest(request);
                 switch (httpRequest.httpMethod()){
                     case "GET" -> {
-                        if(!httpRequest.headers.containsKey("Accept")){
+                        if(!httpRequest.headers().containsKey("Accept")){
                             this.sendErrorMsgAndCloseConnection(NO_ACCEPT_IN_HEADER_ERR_MSG);
                         } else {
-                            switch (httpRequest.headers.get("Accept")) {
+                            switch (httpRequest.headers().get("Accept")) {
                                 case "*/*", "application/json" -> ForkJoinPool.commonPool().submit(() -> {
                                     String dashJson = this.httpHandler.getAsJson(httpRequest.uri());
                                     byte[] dashJsonBytes = dashJson.getBytes(StandardCharsets.UTF_8);
@@ -187,7 +155,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         }
                     }
                     case "POST" -> {
-                        if(httpRequest.body.isEmpty()){
+                        if(httpRequest.body().isEmpty()){
                             this.sendErrorMsgAndCloseConnection(NO_PAYLOAD_IN_BODY_ERR_MSG);
                             return;
                         }
@@ -215,7 +183,6 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 this.readBuffer.clear();
                 this.connectionMetadata.channel.read(this.readBuffer, 0, this);
             } catch (Exception e){
-                // LOGGER.log(WARNING, me.identifier+": Error caught in HTTP handler.\n"+e);
                 this.writeBuffer.clear();
                 byte[] errorBytes;
                 if(e.getMessage() == null){
@@ -360,16 +327,6 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 MemoryManager.releaseTemporaryDirectBuffer(byteBuffer);
             }
         }
-    }
-
-    protected static boolean isHttpClient(String request) {
-        String subStr = request.substring(0, Math.max(request.indexOf(' '), 0));
-        switch (subStr){
-            case "GET", "PATCH", "POST", "PUT" -> {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**

@@ -103,6 +103,7 @@ local.properties
 */.data
 .txt
 */.txt
+*.txt
 
 *.data
 */*.data

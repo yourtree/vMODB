@@ -17,6 +17,7 @@ import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
+import dk.ku.di.dms.vms.web_common.HttpUtils;
 import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import dk.ku.di.dms.vms.web_common.ModbHttpServer;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
@@ -209,10 +210,9 @@ public final class VmsEventHandler extends ModbHttpServer {
 
     @Override
     public void run() {
-        LOGGER.log(INFO,this.me.identifier+": Event handler will be setup");
         // setup accept since we need to accept connections from the coordinator and other VMSs
         this.serverSocket.accept(null, new AcceptCompletionHandler());
-        LOGGER.log(INFO,this.me.identifier+": Accept handler has been setup");
+        LOGGER.log(INFO,this.me.identifier+": Accept handler setup");
     }
 
     public void processOutputEvent(IVmsTransactionResult txResult) {
@@ -247,15 +247,15 @@ public final class VmsEventHandler extends ModbHttpServer {
         }
         LOGGER.log(DEBUG, this.me.identifier + ": All TIDs for the batch " + thisBatch.batch + " have been executed");
         thisBatch.setStatus(BatchContext.BATCH_COMPLETED);
-        if(this.options.checkpointing()){
-            LOGGER.log(INFO, this.me.identifier + ": Requesting checkpoint for batch " + thisBatch.batch);
-            submitBackgroundTask(()->checkpoint(thisBatch.batch, batchMetadata.maxTidExecuted));
-        }
         // if terminal, must send batch complete
         if (thisBatch.terminal) {
             LOGGER.log(DEBUG, this.me.identifier + ": Requesting leader worker to send batch " + thisBatch.batch + " complete");
             // must be queued in case leader is off and comes back online
             this.leaderWorker.queueMessage(BatchComplete.of(thisBatch.batch, this.me.identifier));
+        }
+        if(this.options.checkpointing()){
+            LOGGER.log(INFO, this.me.identifier + ": Requesting checkpoint for batch " + thisBatch.batch);
+            submitBackgroundTask(()->checkpoint(thisBatch.batch, batchMetadata.maxTidExecuted));
         }
     }
 
@@ -555,7 +555,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             if(messageIdentifier != PRESENTATION){
                 this.buffer.flip();
                 String request = StandardCharsets.UTF_8.decode(this.buffer).toString();
-                if(isHttpClient(request)){
+                if(HttpUtils.isHttpClient(request)){
                     HttpReadCompletionHandler readCompletionHandler = new HttpReadCompletionHandler(
                             new ConnectionMetadata("http_client".hashCode(),
                                     ConnectionMetadata.NodeType.HTTP_CLIENT,

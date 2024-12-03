@@ -33,9 +33,7 @@ public final class DataLoadUtils {
             // for testing only
             // if(!idx.getKey().contentEquals("stock")) continue;
             LOGGER.log(INFO, "Submitting data load worker for table "+idx.getKey());
-            futures.add(
-                    THREAD_POOL.submit(new DataLoadWorker(idx.getValue(), entityHandlerMap.get(idx.getKey())))
-                    );
+            futures.add(THREAD_POOL.submit(new DataLoadWorker(idx.getValue(), entityHandlerMap.get(idx.getKey()))));
         }
 
         Map<String, Queue<String>> tableInputMap = new HashMap<>();
@@ -94,7 +92,7 @@ public final class DataLoadUtils {
         ExecutorService threadPool = Executors.newFixedThreadPool(numCpus);
         BlockingQueue<Future<Void>> completionQueue = new ArrayBlockingQueue<>(numCpus);
         CompletionService<Void> service = new ExecutorCompletionService<>(threadPool, completionQueue);
-        LOGGER.log(INFO, "Ingesting tables starting...");
+        LOGGER.log(INFO, "Table ingestion starting...");
         long init = System.currentTimeMillis();
         for (int i = 0; i < numCpus; i++) {
             service.submit(new IngestionWorker(tableInputMap), null);
@@ -108,7 +106,7 @@ public final class DataLoadUtils {
             e.printStackTrace(System.err);
         } finally{
             long end = System.currentTimeMillis();
-            LOGGER.log(INFO, "Ingesting tables finished in " + (end - init) + "ms");
+            LOGGER.log(INFO, "Table ingestion finished in " + (end - init) + "ms");
         }
     }
 

@@ -31,6 +31,8 @@ public final class VmsApplicationOptions {
 
     private final boolean checkpointing;
 
+    private final boolean truncating;
+
     private final int maxRecords;
 
     public static VmsApplicationOptions build(String host, int port, String[] packages) {
@@ -51,6 +53,7 @@ public final class VmsApplicationOptions {
         int maxSleep = Integer.parseInt(properties.getProperty("max_sleep"));
         boolean logging = Boolean.parseBoolean(properties.getProperty("logging"));
         boolean checkpointing = Boolean.parseBoolean(properties.getProperty("checkpointing"));
+        boolean truncating = Boolean.parseBoolean(properties.getProperty("truncating"));
         int maxRecords = Integer.parseInt(properties.getProperty("max_records"));
 
         return new VmsApplicationOptions(
@@ -65,6 +68,7 @@ public final class VmsApplicationOptions {
                 soBufferSize,
                 logging,
                 checkpointing,
+                truncating,
                 maxRecords == 0 ? 100000 : maxRecords,
                 maxSleep);
     }
@@ -72,7 +76,7 @@ public final class VmsApplicationOptions {
     private VmsApplicationOptions(String host, int port, String[] packages,
                                   int networkBufferSize, int networkThreadPoolSize, int numVmsWorkers,
                                   int vmsThreadPoolSize, int networkSendTimeout, int osBufferSize,
-                                  boolean logging, boolean checkpointing, int maxRecords, int maxSleep) {
+                                  boolean logging, boolean checkpointing, boolean truncating, int maxRecords, int maxSleep) {
         this.host = host;
         this.port = port;
         this.packages = packages;
@@ -84,6 +88,7 @@ public final class VmsApplicationOptions {
         this.osBufferSize = osBufferSize;
         this.logging = logging;
         this.checkpointing = checkpointing;
+        this.truncating = truncating;
         this.maxRecords = maxRecords;
         this.maxSleep = maxSleep;
     }
@@ -134,6 +139,10 @@ public final class VmsApplicationOptions {
 
     public boolean isCheckpointing() {
         return this.checkpointing;
+    }
+
+    public boolean isTruncating() {
+        return this.truncating;
     }
 
     public int getMaxRecords() {
