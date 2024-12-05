@@ -22,7 +22,7 @@ import java.util.function.Function;
 
 public final class ExperimentUtils {
 
-    public static ExperimentStats runExperiment(Coordinator coordinator, List<NewOrderWareIn> input, int numWorkers, int runTime, int warmUp) {
+    public static ExperimentStats runExperiment(Coordinator coordinator, List<Iterator<NewOrderWareIn>> input, int runTime, int warmUp) {
 
         // provide a consumer to avoid depending on the coordinator
         Function<NewOrderWareIn, Long> func = newOrderInputBuilder(coordinator);
@@ -33,12 +33,11 @@ public final class ExperimentUtils {
 
         int newRuntime = runTime + warmUp;
 
-        WorkloadUtils.WorkloadStats workloadStats = WorkloadUtils.submitWorkload(input, numWorkers, newRuntime, func);
-
-        coordinator.stop();
+        WorkloadUtils.WorkloadStats workloadStats = WorkloadUtils.submitWorkload(input, newRuntime, func);
 
         long endTs = workloadStats.initTs() + newRuntime;
         long initTs = workloadStats.initTs() + warmUp;
+        int numCompletedWithWarmUp = 0;
         int numCompleted = 0;
         List<Long> allLatencies = new ArrayList<>();
         // calculate latency based on the batch
@@ -47,6 +46,7 @@ public final class ExperimentUtils {
                 if(batchEntry.getValue().endTs > endTs) continue;
                 if(!workerEntry.containsKey(batchEntry.getKey())) continue;
                 var initTsEntries = workerEntry.get(batchEntry.getKey());
+                numCompletedWithWarmUp += initTsEntries.size();
                 for (var initTsEntry : initTsEntries){
                     if(initTsEntry >= initTs) {
                         numCompleted += 1;
@@ -67,18 +67,19 @@ public final class ExperimentUtils {
         System.out.println("Latency at 50th percentile: "+ percentile_50);
         System.out.println("Latency at 75th percentile: "+ percentile_75);
         System.out.println("Latency at 90th percentile: "+ percentile_90);
+        System.out.println("Number of completed transactions (with warm up): "+ numCompletedWithWarmUp);
         System.out.println("Number of completed transactions: "+ numCompleted);
         System.out.println("Transactions per second: "+txPerSec);
 
         resetBatchToFinishedTsMap();
 
-        return new ExperimentStats(workloadStats.initTs(), numCompleted, txPerSec, average, percentile_50, percentile_75, percentile_90);
+        return new ExperimentStats(workloadStats.initTs(), numCompletedWithWarmUp, numCompleted, txPerSec, average, percentile_50, percentile_75, percentile_90);
     }
 
-    public record ExperimentStats(long initTs, int numCompleted, long txPerSec, double average,
+    public record ExperimentStats(long initTs, int numCompletedWithWarmUp, int numCompleted, long txPerSec, double average,
                                    double percentile_50, double percentile_75, double percentile_90){}
 
-    public static void writeResultsToFile(int numWare, ExperimentStats expStats, int numWorkers, int runTime, int warmUp){
+    public static void writeResultsToFile(int numWare, ExperimentStats expStats, int runTime, int warmUp){
         LocalDateTime time = LocalDateTime.ofInstant(
                 Instant.ofEpochMilli(expStats.initTs),
                 ZoneId.systemDefault()
@@ -98,8 +99,6 @@ public final class ExperimentUtils {
             writer.newLine();
             writer.write("Number of warehouses: " + numWare);
             writer.newLine();
-            writer.write("Number of workers: " + numWorkers);
-            writer.newLine();
             writer.newLine();
             writer.write("Average latency: "+ expStats.average);
             writer.newLine();
@@ -108,6 +107,8 @@ public final class ExperimentUtils {
             writer.write("Latency at 75th percentile: "+ expStats.percentile_75);
             writer.newLine();
             writer.write("Latency at 90th percentile: "+ expStats.percentile_90);
+            writer.newLine();
+            writer.write("Number of completed transactions (with warm up): "+ expStats.numCompletedWithWarmUp);
             writer.newLine();
             writer.write("Number of completed transactions: "+ expStats.numCompleted);
             writer.newLine();

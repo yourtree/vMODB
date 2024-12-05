@@ -419,38 +419,19 @@ public final class EmbedMetadataLoader {
      */
     public static RecordBufferContext loadRecordBuffer(int maxNumberOfRecords, int recordSize, String fileName, boolean truncate){
         long sizeInBytes = (long) maxNumberOfRecords * recordSize;
-        try {
-            MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, fileName, truncate);
-            return new RecordBufferContext(segment);
-        } catch (Exception e){
-            LOGGER.log(WARNING, "Could not map file. Resorting to direct memory allocation attempt: \n"+e);
-            try (Arena arena = Arena.ofShared()) {
-                return new RecordBufferContext(arena.allocate(sizeInBytes));
-            }
-        }
+        MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, fileName, truncate);
+        return new RecordBufferContext(segment);
     }
 
     public static AppendOnlyBuffer loadAppendOnlyBuffer(int maxNumberOfRecords, int recordSize, String fileName, boolean truncate){
         long sizeInBytes = (long) maxNumberOfRecords * recordSize;
-        try {
-            MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, fileName, truncate);
-            return new AppendOnlyBuffer(segment);
-        } catch (Exception e){
-            LOGGER.log(ERROR, "Could not map file. Resorting to direct memory allocation attempt: \n"+e);
-            try (Arena arena = Arena.ofShared()) {
-                var segment = arena.allocate(sizeInBytes);
-                return new AppendOnlyBuffer(segment);
-            }
-        }
+        MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, fileName, truncate);
+        return new AppendOnlyBuffer(segment);
     }
 
     public static AppendOnlyBuffer loadAppendOnlyBufferUnknownSize(String fileName){
-        try {
-            MemorySegment segment = mapFileIntoMemorySegment(fileName);
-            return new AppendOnlyBuffer(segment);
-        } catch (Exception e){
-            throw new RuntimeException(e);
-        }
+        MemorySegment segment = mapFileIntoMemorySegment(fileName);
+        return new AppendOnlyBuffer(segment);
     }
 
     private static MemorySegment mapFileIntoMemorySegment(String fileName) {
@@ -477,14 +458,19 @@ public final class EmbedMetadataLoader {
         }
     }
 
-    public static File buildFile(String fileName) {
+    public static String getBasePath(){
         String userHome = ConfigUtils.getUserHome();
-        String filePath;
+        String basePath;
         if(ConfigUtils.isWindows()){
-            filePath = userHome + "\\vms\\" + fileName + ".data";
+            basePath = userHome + "\\vms\\";
         } else {
-            filePath = userHome + "/vms/" + fileName + ".data";
+            basePath = userHome + "/vms/";
         }
+        return basePath;
+    }
+
+    public static File buildFile(String fileName) {
+        String filePath = getBasePath() + fileName + ".data";
         File file = new File(filePath);
         LOGGER.log(DEBUG, "Attempt to create new file in directory: "+filePath);
         if(file.getParentFile().mkdirs()){

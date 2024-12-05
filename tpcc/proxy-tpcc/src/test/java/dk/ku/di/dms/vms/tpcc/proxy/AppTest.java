@@ -27,9 +27,9 @@ public final class AppTest {
     @Test
     public void testWorkload() {
         // create
-        var created = WorkloadUtils.createWorkload(1, 100000);
+        var created = WorkloadUtils.createWorkload(NUM_WARE, 100000);
         // load
-        var loaded = WorkloadUtils.loadWorkloadData();
+        var loaded = WorkloadUtils.mapWorkloadInputFiles(NUM_WARE);
         Assert.assertEquals(created.size(), loaded.size());
         for(int i = 0; i < created.size(); i++){
             Assert.assertEquals(created.get(i), loaded.get(i));

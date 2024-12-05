@@ -467,7 +467,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     public void appendWrite(TransactionContext txCtx, IKey key){
-        this.writeSetMap.computeIfAbsent(txCtx.tid, k ->
+        this.writeSetMap.computeIfAbsent(txCtx.tid, ignored ->
                 Objects.requireNonNullElseGet(WRITE_SET_BUFFER.poll(), HashSet::new)).add(key);
     }
 
@@ -507,15 +507,15 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         @Override
         public boolean hasNext() {
             while(this.idx < this.keys.length){
-                OperationSetOfKey operation = updatesPerKeyMap.get(keys[idx]);
+                OperationSetOfKey operation = updatesPerKeyMap.get(this.keys[this.idx]);
                 if(operation == null) {
-                    var record = underlyingIndex().record(keys[idx]);
+                    var record = underlyingIndex().record(this.keys[this.idx]);
                     if(record != null){
                         this.next = record;
                         this.idx++;
                         return true;
                     }
-                    idx++;
+                    this.idx++;
                     continue;
                 }
                 Entry<Long, TransactionWrite> obj = operation.floorEntry(this.txCtx.tid);
@@ -524,7 +524,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                     this.idx++;
                     return true;
                 }
-                idx++;
+                this.idx++;
             }
             return false;
         }

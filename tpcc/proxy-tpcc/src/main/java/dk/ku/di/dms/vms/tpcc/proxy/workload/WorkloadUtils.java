@@ -8,10 +8,11 @@ import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
 import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.tpcc.common.events.NewOrderWareIn;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -24,6 +25,8 @@ import static java.lang.System.Logger.Level.*;
 public final class WorkloadUtils {
 
     private static final System.Logger LOGGER = System.getLogger(WorkloadUtils.class.getName());
+
+    private static final String BASE_WORKLOAD_FILE_NAME = "new_order_input_";
 
     private static final Schema SCHEMA = new Schema(
             new String[]{ "w_id", "d_id", "c_id", "itemIds", "supWares", "qty", "allLocal" },
@@ -63,23 +66,15 @@ public final class WorkloadUtils {
     public record WorkloadStats(long initTs, Map<Long, List<Long>>[] submitted){}
 
     @SuppressWarnings("unchecked")
-    public static WorkloadStats submitWorkload(List<NewOrderWareIn> input, int numWorkers, int runTime, Function<NewOrderWareIn, Long> func) {
-        List<List<NewOrderWareIn>> inputLists;
-        if(numWorkers > 1) {
-            inputLists = partition(input, numWorkers);
-        } else {
-            inputLists = List.of(input);
-        }
-
-        LOGGER.log(INFO, "Submitting "+input.size()+" transactions through "+numWorkers+" worker(s)");
-
+    public static WorkloadStats submitWorkload(List<Iterator<NewOrderWareIn>> input, int runTime, Function<NewOrderWareIn, Long> func) {
+        int numWorkers = input.size();
+        LOGGER.log(INFO, "Submitting transactions through "+numWorkers+" worker(s)");
         CountDownLatch allThreadsStart = new CountDownLatch(numWorkers+1);
         CountDownLatch allThreadsAreDone = new CountDownLatch(numWorkers);
-
         Map<Long, List<Long>>[] submittedArray = new Map[numWorkers];
 
         for(int i = 0; i < numWorkers; i++) {
-            final List<NewOrderWareIn> workerInput = inputLists.get(i);
+            final Iterator<NewOrderWareIn> workerInput = input.get(i);
             int finalI = i;
             Thread thread = new Thread(()-> submittedArray[finalI] =
                             Worker.run(allThreadsStart, allThreadsAreDone, workerInput, runTime, func));
@@ -91,9 +86,7 @@ public final class WorkloadUtils {
         try {
             allThreadsStart.await();
             initTs = System.currentTimeMillis();
-
             LOGGER.log(INFO,"Experiment main going to wait for the workers to finish.");
-
             if (!allThreadsAreDone.await(runTime * 2L, TimeUnit.MILLISECONDS)) {
                 LOGGER.log(ERROR,"Latch has not reached zero. Something wrong with the worker(s)");
             } else {
@@ -106,18 +99,13 @@ public final class WorkloadUtils {
         return new WorkloadStats(initTs, submittedArray);
     }
 
-    private static final boolean RECYCLE_TXS = true;
-
     private static final class Worker {
 
-        public static Map<Long,List<Long>> run(CountDownLatch allThreadsStart,
-                                         CountDownLatch allThreadsAreDone,
-                                         List<NewOrderWareIn> input, int runTime,
-                                         Function<NewOrderWareIn, Long> func) {
+        public static Map<Long, List<Long>> run(CountDownLatch allThreadsStart, CountDownLatch allThreadsAreDone,
+                                                Iterator<NewOrderWareIn> input, int runTime, Function<NewOrderWareIn, Long> func) {
             Map<Long,List<Long>> startTsMap = new HashMap<>();
             long threadId = Thread.currentThread().threadId();
             LOGGER.log(INFO,"Thread ID " + threadId + " started");
-            int idx = 0;
             allThreadsStart.countDown();
             try {
                 allThreadsStart.await();
@@ -129,21 +117,16 @@ public final class WorkloadUtils {
             long endTs = System.currentTimeMillis() + runTime;
             do {
                 try {
-                    long batchId = func.apply(input.get(idx));
+                    long batchId = func.apply(input.next());
                     if(!startTsMap.containsKey(batchId)){
                         startTsMap.put(batchId, new ArrayList<>());
                     }
                     startTsMap.get(batchId).add(currentTs);
-                    idx++;
                 } catch (Exception e) {
-                    if(idx >= input.size()){
-                        LOGGER.log(WARNING, "Number of input events " + input.size() + " are not enough for runtime " + runTime + " ms");
-                        if(RECYCLE_TXS){
-                            idx = 0;
-                        } else {
-                            allThreadsAreDone.countDown();
-                            break;
-                        }
+                    if(!input.hasNext()){
+                        LOGGER.log(WARNING, "Number of input events are not enough for runtime " + runTime + " ms");
+                        allThreadsAreDone.countDown();
+                        break;
                     } else {
                         LOGGER.log(ERROR,"Exception in Thread ID: " + (e.getMessage() == null ? "No message" : e.getMessage()));
                         throw new RuntimeException(e);
@@ -157,53 +140,70 @@ public final class WorkloadUtils {
         }
     }
 
-    private static List<List<NewOrderWareIn>> partition(List<NewOrderWareIn> input, int numWorkers){
-        List<List<NewOrderWareIn>> partitions = new ArrayList<>();
-        int totalSize = input.size();
-        int basePartitionSize = totalSize / numWorkers;
-        int remainder = totalSize % numWorkers;
-        int startIndex = 0;
-        for (int i = 0; i < numWorkers; i++) {
-            int endIndex = startIndex + basePartitionSize + (remainder-- > 0 ? 1 : 0);
-            partitions.add(new ArrayList<>(input.subList(startIndex, Math.min(endIndex, totalSize))));
-            startIndex = endIndex;
-        }
-        return partitions;
-    }
-
-    public static List<NewOrderWareIn> loadWorkloadData(){
-        AppendOnlyBuffer buffer = EmbedMetadataLoader.loadAppendOnlyBufferUnknownSize("new_order_input");
-        // calculate number of entries (i.e., transactions)
-        int numTransactions = (int) buffer.size() / SCHEMA.getRecordSize();
-        LOGGER.log(INFO, "Starting loading "+numTransactions+" from disk...");
+    public static List<Iterator<NewOrderWareIn>> mapWorkloadInputFiles(int numWare){
+        LOGGER.log(INFO, "Mapping "+numWare+" warehouse files from disk...");
         long initTs = System.currentTimeMillis();
-        List<NewOrderWareIn> input = new ArrayList<>(numTransactions);
-        for(int txIdx = 1; txIdx <= numTransactions; txIdx++) {
-            Object[] newOrderInput = read(buffer.nextOffset());
-            input.add(parseRecordIntoEntity(newOrderInput));
-            buffer.forwardOffset(SCHEMA.getRecordSize());
+        List<Iterator<NewOrderWareIn>> input = new ArrayList<>(numWare);
+        for(int i = 0; i < numWare; i++){
+            AppendOnlyBuffer buffer = EmbedMetadataLoader.loadAppendOnlyBufferUnknownSize(BASE_WORKLOAD_FILE_NAME+"1");
+            // calculate number of entries (i.e., transactions)
+            int numTransactions = (int) buffer.size() / SCHEMA.getRecordSize();
+            input.add( createWorkloadInputIterator(buffer, numTransactions) );
         }
         long endTs = System.currentTimeMillis();
-        LOGGER.log(INFO, "Finished loading "+numTransactions+" from disk in "+(endTs-initTs)+" ms");
+        LOGGER.log(INFO, "Mapped "+numWare+" warehouse files from disk in "+(endTs-initTs)+" ms");
         return input;
     }
 
-    public static List<NewOrderWareIn> createWorkload(int numWare, int numTransactions){
-        LOGGER.log(INFO, "Starting the generation of "+numTransactions+"...");
+    private static Iterator<NewOrderWareIn> createWorkloadInputIterator(AppendOnlyBuffer buffer, int numTransactions){
+        return new Iterator<>() {
+            int txIdx = 1;
+            @Override
+            public boolean hasNext() {
+                return this.txIdx <= numTransactions;
+            }
+            @Override
+            public NewOrderWareIn next() {
+                Object[] newOrderInput = read(buffer.nextOffset());
+                buffer.forwardOffset(SCHEMA.getRecordSize());
+                this.txIdx++;
+                return parseRecordIntoEntity(newOrderInput);
+            }
+        };
+    }
+
+    public static List<Iterator<NewOrderWareIn>> createWorkload(int numWare, int numTransactions){
+        LOGGER.log(INFO, "Generating of "+(numTransactions * numWare)+"...");
         long initTs = System.currentTimeMillis();
-        List<NewOrderWareIn> input = new ArrayList<>(numTransactions);
-        AppendOnlyBuffer buffer = EmbedMetadataLoader.loadAppendOnlyBuffer(numTransactions, SCHEMA.getRecordSize(),"new_order_input", true);
-        for(int txIdx = 1; txIdx <= numTransactions; txIdx++) {
-            int w_id = randomNumber(1, numWare);
-            Object[] newOrderInput = generateNewOrder(w_id, numWare);
-            input.add(parseRecordIntoEntity(newOrderInput));
-            write(buffer.nextOffset(), newOrderInput);
-            buffer.forwardOffset(SCHEMA.getRecordSize());
+        List<Iterator<NewOrderWareIn>> input = new ArrayList<>(numWare);
+        for(int ware = 1; ware <= numWare; ware++) {
+            LOGGER.log(INFO, "Generating "+numTransactions+" transactions for warehouse "+ware);
+            String fileName = BASE_WORKLOAD_FILE_NAME+ware;
+            AppendOnlyBuffer buffer = EmbedMetadataLoader.loadAppendOnlyBuffer(numTransactions, SCHEMA.getRecordSize(), fileName, true);
+            for (int txIdx = 1; txIdx <= numTransactions; txIdx++) {
+                Object[] newOrderInput = generateNewOrder(ware, numWare);
+                write(buffer.nextOffset(), newOrderInput);
+                buffer.forwardOffset(SCHEMA.getRecordSize());
+            }
+            buffer.force();
         }
-        buffer.force();
         long endTs = System.currentTimeMillis();
-        LOGGER.log(INFO, "Finished generating "+numTransactions+" in "+(endTs-initTs)+" ms");
+        LOGGER.log(INFO, "Generated "+(numTransactions * numWare)+" in "+(endTs-initTs)+" ms");
         return input;
+    }
+
+    public static int getNumWorkloadInputFiles(){
+        String basePathStr = EmbedMetadataLoader.getBasePath();
+        Path basePath = Paths.get(basePathStr);
+        try(var paths = Files
+                // retrieve all files in the folder
+                .walk(basePath)
+                // find the log files
+                .filter(path -> path.toString().contains(BASE_WORKLOAD_FILE_NAME))) {
+            return paths.toList().size();
+        } catch (IOException ignored){
+            return 0;
+        }
     }
 
     private static NewOrderWareIn parseRecordIntoEntity(Object[] newOrderInput) {

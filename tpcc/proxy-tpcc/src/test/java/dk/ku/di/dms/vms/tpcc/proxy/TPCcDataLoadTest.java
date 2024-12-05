@@ -6,9 +6,9 @@ import org.junit.*;
 import org.junit.runners.MethodSorters;
 
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public final class TPCcTestDataLoad {
+public final class TPCcDataLoadTest {
 
-    private static final int NUM_WARE = 1;
+    private static final int NUM_WARE = 2;
 
     private static final StorageUtils.EntityMetadata METADATA;
 
@@ -27,6 +27,7 @@ public final class TPCcTestDataLoad {
 
     @Test
     public void test_B_create_workload() {
+        // 2.5M~483 MB - 5M~966MB
         WorkloadUtils.createWorkload(NUM_WARE, 5000000);
     }
 

@@ -22,9 +22,8 @@ public final class Main {
     private static void menu() throws NoSuchFieldException, IllegalAccessException {
         Coordinator coordinator = null;
         int numWare = 0;
-        int numWorkers;
         Map<String, UniqueHashBufferIndex> tables = null;
-        List<NewOrderWareIn> input = null;
+        List<Iterator<NewOrderWareIn>> input = null;
         StorageUtils.EntityMetadata metadata = StorageUtils.loadEntityMetadata();
         Scanner scanner = new Scanner(System.in);
         boolean running = true;
@@ -63,22 +62,19 @@ public final class Main {
                     break;
                 case "4":
                     System.out.println("Option 4: \"Submit workload\" selected.");
-                    // number of worker threads
-                    System.out.print("Enter number of workers: ");
-                    numWorkers = Integer.parseInt(scanner.nextLine());
-
                     System.out.print("Enter duration (ms): [0 for default to 10s]");
                     int runTime = Integer.parseInt(scanner.nextLine());
                     if(runTime == 0) runTime = 10000;
-
-                    System.out.print("Enter warm up period (ms):");
+                    System.out.print("Enter warm up period (ms): [0 for default to 2s]");
                     int warmUp = Integer.parseInt(scanner.nextLine());
-
+                    if(warmUp == 0) warmUp = 2000;
                     if(input == null){
-                        System.out.println("Loading workload from disk...");
-                        input = WorkloadUtils.loadWorkloadData();
+                        if(numWare == 0){
+                            // get number of files
+                            numWare = WorkloadUtils.getNumWorkloadInputFiles();
+                        }
+                        input = WorkloadUtils.mapWorkloadInputFiles(numWare);
                     }
-
                     // load coordinator
                     if(coordinator == null){
                         coordinator = ExperimentUtils.loadCoordinator(PROPERTIES);
@@ -88,11 +84,8 @@ public final class Main {
                             numConnected = coordinator.getConnectedVMSs().size();
                         } while (numConnected < 3);
                     }
-
-                    var expStats = ExperimentUtils.runExperiment(coordinator, input, numWorkers, runTime, warmUp);
-
-                    ExperimentUtils.writeResultsToFile(numWare, expStats, numWorkers, runTime, warmUp);
-
+                    var expStats = ExperimentUtils.runExperiment(coordinator, input, runTime, warmUp);
+                    ExperimentUtils.writeResultsToFile(numWare, expStats, runTime, warmUp);
                     break;
                 case "0":
                     System.out.println("Exiting the application. Goodbye!");

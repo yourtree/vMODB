@@ -4,6 +4,7 @@ import dk.ku.di.dms.vms.coordinator.Coordinator;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
+import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoadUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.entities.District;
 import dk.ku.di.dms.vms.tpcc.proxy.entities.Warehouse;
@@ -16,32 +17,33 @@ import dk.ku.di.dms.vms.web_common.HttpUtils;
 import org.junit.*;
 import org.junit.runners.MethodSorters;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Properties;
 
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public final class TPCcTestWorkload {
+public final class TPCcWorkloadTest {
 
-    private static final int NUM_WARE = 1;
+    private static final int NUM_WARE = 2;
 
-    private static final int RUN_TIME = 20000;
+    private static final int RUN_TIME = 10000;
 
     private static final int WARM_UP = 2000;
 
     private static final Properties PROPERTIES = ConfigUtils.loadProperties();
 
-    private static final VmsApplication WAREHOUSE_SVC;
-    private static final VmsApplication INVENTORY_SVC;
-    private static final VmsApplication ORDER_SVC;
+    private static VmsApplication WAREHOUSE_SVC;
+    private static VmsApplication INVENTORY_SVC;
+    private static VmsApplication ORDER_SVC;
 
     private static final StorageUtils.EntityMetadata METADATA;
 
     static {
         try {
             METADATA = StorageUtils.loadEntityMetadata();
-            WAREHOUSE_SVC = dk.ku.di.dms.vms.tpcc.warehouse.Main.build();
-            INVENTORY_SVC = dk.ku.di.dms.vms.tpcc.inventory.Main.build();
-            ORDER_SVC = dk.ku.di.dms.vms.tpcc.order.Main.build();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -49,6 +51,35 @@ public final class TPCcTestWorkload {
 
     @BeforeClass
     public static void startTPCcServices(){
+         // clean up
+        File orderLineFile = EmbedMetadataLoader.buildFile("order_line");
+        File ordersFile = EmbedMetadataLoader.buildFile("orders");
+        File newOrdersFile = EmbedMetadataLoader.buildFile("new_orders");
+
+        orderLineFile.delete();
+        ordersFile.delete();
+        newOrdersFile.delete();
+
+        String basePathStr = EmbedMetadataLoader.getBasePath();
+        Path basePath = Paths.get(basePathStr);
+        try(var paths = Files
+                // retrieve all files in the folder
+                .walk(basePath)
+                // find the log files
+                .filter(path -> path.toString().contains(".llog"))) {
+            for(var path : paths.toList()){
+                path.toFile().delete();
+            }
+        } catch (IOException ignored){ }
+
+        try {
+            WAREHOUSE_SVC = dk.ku.di.dms.vms.tpcc.warehouse.Main.build();
+            INVENTORY_SVC = dk.ku.di.dms.vms.tpcc.inventory.Main.build();
+            ORDER_SVC = dk.ku.di.dms.vms.tpcc.order.Main.build();
+        } catch (Exception e){
+            throw new RuntimeException(e);
+        }
+
         WAREHOUSE_SVC.start();
         INVENTORY_SVC.start();
         ORDER_SVC.start();
@@ -69,11 +100,12 @@ public final class TPCcTestWorkload {
         hasDataBeenIngested();
     }
 
-    private static final int NUM_WORKERS = 1;
-
     @Test
     public void test_C_submit_workload() throws IOException {
-        var input = WorkloadUtils.loadWorkloadData();
+        // mapping all the workload data is not a good idea, it overloads the Java heap
+        //  perhaps it is better to iteratively load from memory. instead of list, pass an iterator to the worker
+        //  link a file/worker to a warehouse, so there is no need to partition the file among workers
+        var input = WorkloadUtils.mapWorkloadInputFiles(NUM_WARE);
 
         Coordinator coordinator = ExperimentUtils.loadCoordinator(PROPERTIES);
         int numConnected;
@@ -81,20 +113,19 @@ public final class TPCcTestWorkload {
             numConnected = coordinator.getConnectedVMSs().size();
         } while (numConnected < 3);
 
-        var expStats = ExperimentUtils.runExperiment(coordinator, input, NUM_WORKERS, RUN_TIME, WARM_UP);
+        var expStats = ExperimentUtils.runExperiment(coordinator, input, RUN_TIME, WARM_UP);
 
-        ExperimentUtils.writeResultsToFile(NUM_WARE, expStats, NUM_WORKERS, RUN_TIME, WARM_UP);
+        coordinator.stop();
+
+        ExperimentUtils.writeResultsToFile(NUM_WARE, expStats, RUN_TIME, WARM_UP);
 
         String host = PROPERTIES.getProperty("warehouse_host");
         int port = TPCcConstants.VMS_TO_PORT_MAP.get("warehouse");
         var serdesProxy = VmsSerdesProxyBuilder.build();
         // query get some items and assert correctness
         try(MinimalHttpClient httpClient = new MinimalHttpClient(host, port)){
-            //String resp1 = httpClient.sendGetRequest("warehouse/1");
-            //System.out.println(resp1);
-            for(int i=1;i<=10;i++) {
+            for(int i = 1; i <= 10; i++) {
                 String resp2 = httpClient.sendGetRequest("district/"+i+"/1");
-                // System.out.println(resp2);
                 var parsedResp = HttpUtils.parseRequest(resp2);
                 var district = serdesProxy.deserialize(parsedResp.body(), District.class);
                 Assert.assertTrue(district.d_next_o_id > 3001);
@@ -111,7 +142,7 @@ public final class TPCcTestWorkload {
             var parsedResp1 = HttpUtils.parseRequest(resp1);
             var ware = serdesProxy.deserialize(parsedResp1.body(), Warehouse.class);
             Assert.assertEquals(1, ware.w_id);
-            for(int i=1;i<=10;i++) {
+            for(int i = 1 ; i <= 10; i++) {
                 String resp2 = httpClient.sendGetRequest("district/"+i+"/1");
                 // System.out.println(resp2);
                 var parsedResp2 = HttpUtils.parseRequest(resp2);

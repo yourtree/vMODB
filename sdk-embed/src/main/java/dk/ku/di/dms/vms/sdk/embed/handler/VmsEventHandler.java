@@ -245,7 +245,7 @@ public final class VmsEventHandler extends ModbHttpServer {
         if(thisBatch.numberOfTIDsBatch != batchMetadata.numberTIDsExecuted) {
             return;
         }
-        LOGGER.log(DEBUG, this.me.identifier + ": All TIDs for the batch " + thisBatch.batch + " have been executed");
+        LOGGER.log(INFO, this.me.identifier + ": All TIDs for the batch " + thisBatch.batch + " have been executed");
         thisBatch.setStatus(BatchContext.BATCH_COMPLETED);
         // if terminal, must send batch complete
         if (thisBatch.terminal) {
@@ -1025,12 +1025,11 @@ public final class VmsEventHandler extends ModbHttpServer {
         private void processNewBatchCommand(BatchCommitCommand.Payload batchCommitCommand){
             BatchContext batchContext = BatchContext.build(batchCommitCommand);
             batchContextMap.put(batchCommitCommand.batch(), batchContext);
-            LOGGER.log(DEBUG,me.identifier+": Batch command received from leader for batch ("+ batchCommitCommand.batch()+")");
-            if(!trackingBatchMap.containsKey(batchCommitCommand.batch())){
+            BatchMetadata batchMetadata = trackingBatchMap.get(batchCommitCommand.batch());
+            if(batchMetadata == null){
                 LOGGER.log(WARNING,me.identifier+": Cannot find tracking of batch "+ batchCommitCommand.batch());
                 return;
             }
-            BatchMetadata batchMetadata = trackingBatchMap.get(batchCommitCommand.batch());
             if(batchContext.numberOfTIDsBatch != batchMetadata.numberTIDsExecuted) {
                 LOGGER.log(WARNING,me.identifier+": Batch "+ batchCommitCommand.batch()+" has not yet finished!");
                 return;
