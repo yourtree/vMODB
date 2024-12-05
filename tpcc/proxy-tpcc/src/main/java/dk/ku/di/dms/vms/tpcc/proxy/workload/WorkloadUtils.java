@@ -117,20 +117,19 @@ public final class WorkloadUtils {
             long endTs = System.currentTimeMillis() + runTime;
             do {
                 try {
+                    if(!input.hasNext()){
+                        LOGGER.log(WARNING, "Number of input events are not enough for runtime " + runTime + " ms");
+                        allThreadsAreDone.countDown();
+                        break;
+                    }
                     long batchId = func.apply(input.next());
                     if(!startTsMap.containsKey(batchId)){
                         startTsMap.put(batchId, new ArrayList<>());
                     }
                     startTsMap.get(batchId).add(currentTs);
                 } catch (Exception e) {
-                    if(!input.hasNext()){
-                        LOGGER.log(WARNING, "Number of input events are not enough for runtime " + runTime + " ms");
-                        allThreadsAreDone.countDown();
-                        break;
-                    } else {
-                        LOGGER.log(ERROR,"Exception in Thread ID: " + (e.getMessage() == null ? "No message" : e.getMessage()));
-                        throw new RuntimeException(e);
-                    }
+                    LOGGER.log(ERROR,"Exception in Thread ID: " + (e.getMessage() == null ? "No message" : e.getMessage()));
+                    throw new RuntimeException(e);
                 }
                 currentTs = System.currentTimeMillis();
             } while (currentTs < endTs);
@@ -195,13 +194,12 @@ public final class WorkloadUtils {
     public static int getNumWorkloadInputFiles(){
         String basePathStr = EmbedMetadataLoader.getBasePath();
         Path basePath = Paths.get(basePathStr);
-        try(var paths = Files
-                // retrieve all files in the folder
-                .walk(basePath)
-                // find the log files
-                .filter(path -> path.toString().contains(BASE_WORKLOAD_FILE_NAME))) {
-            return paths.toList().size();
-        } catch (IOException ignored){
+        try {
+            var paths = Files.walk(basePath)
+                .filter(path -> path.toString().contains(BASE_WORKLOAD_FILE_NAME)).toList();
+            return paths.size();
+        } catch (IOException e){
+            LOGGER.log(ERROR, "Error captured while trying to access base path: \n"+e);
             return 0;
         }
     }

@@ -62,16 +62,23 @@ public final class Main {
                     break;
                 case "4":
                     System.out.println("Option 4: \"Submit workload\" selected.");
-                    System.out.print("Enter duration (ms): [0 for default to 10s]");
+                    System.out.print("Enter duration (ms): [0 for default to 10s] ");
                     int runTime = Integer.parseInt(scanner.nextLine());
                     if(runTime == 0) runTime = 10000;
-                    System.out.print("Enter warm up period (ms): [0 for default to 2s]");
+                    System.out.print("Enter warm up period (ms): [0 for default to 2s] ");
                     int warmUp = Integer.parseInt(scanner.nextLine());
                     if(warmUp == 0) warmUp = 2000;
                     if(input == null){
                         if(numWare == 0){
                             // get number of files
                             numWare = WorkloadUtils.getNumWorkloadInputFiles();
+                            if(numWare == 0){
+                                // some unknown bug....
+                                System.out.print("Zero warehouses identified. Falling back to warehouse table information...");
+                                // fallback to table information
+                                numWare = StorageUtils.getNumRecordsFromInDiskTable(metadata.entityToSchemaMap().get("warehouse"), "warehouse");
+                            }
+                            System.out.print(numWare+" warehouses identified");
                         }
                         input = WorkloadUtils.mapWorkloadInputFiles(numWare);
                     }

@@ -424,6 +424,12 @@ public final class Coordinator extends ModbHttpServer {
         }
     }
 
+    public void cleanTransactionInputs() {
+        for(var inputDeque : this.transactionInputDeques){
+            inputDeque.clear();
+        }
+    }
+
     /**
      * A container of vms workers for the same VMS
      * Make a circular buffer. so events are spread among the workers (i.e., channels)

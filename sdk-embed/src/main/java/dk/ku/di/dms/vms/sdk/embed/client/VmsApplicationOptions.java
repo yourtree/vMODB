@@ -50,7 +50,13 @@ public final class VmsApplicationOptions {
         int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
         int vmsThreadPoolSize = Integer.parseInt(properties.getProperty("vms_thread_pool_size"));
         int numVmsWorkers = Integer.parseInt(properties.getProperty("num_vms_workers"));
-        int maxSleep = Integer.parseInt(properties.getProperty("max_sleep"));
+
+        int maxSleep = 0;
+        String maxSleepStr = properties.getProperty("max_sleep");
+        if(maxSleepStr != null) {
+            maxSleep = Integer.parseInt(maxSleepStr);
+        }
+
         boolean logging = Boolean.parseBoolean(properties.getProperty("logging"));
         boolean checkpointing = Boolean.parseBoolean(properties.getProperty("checkpointing"));
         boolean truncating = Boolean.parseBoolean(properties.getProperty("truncating"));

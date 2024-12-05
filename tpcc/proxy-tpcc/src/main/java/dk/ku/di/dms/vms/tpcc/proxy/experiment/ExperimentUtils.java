@@ -22,18 +22,26 @@ import java.util.function.Function;
 
 public final class ExperimentUtils {
 
+    private static boolean CONSUMER_REGISTERED = false;
+
     public static ExperimentStats runExperiment(Coordinator coordinator, List<Iterator<NewOrderWareIn>> input, int runTime, int warmUp) {
 
         // provide a consumer to avoid depending on the coordinator
         Function<NewOrderWareIn, Long> func = newOrderInputBuilder(coordinator);
 
-        coordinator.registerBatchCommitConsumer((tid)-> BATCH_TO_FINISHED_TS_MAP.put(
-                (long) BATCH_TO_FINISHED_TS_MAP.size()+1,
-                new BatchStats(BATCH_TO_FINISHED_TS_MAP.size()+1, tid, System.currentTimeMillis())));
+        if(!CONSUMER_REGISTERED) {
+            coordinator.registerBatchCommitConsumer((tid) -> BATCH_TO_FINISHED_TS_MAP.put(
+                    (long) BATCH_TO_FINISHED_TS_MAP.size() + 1,
+                    new BatchStats(BATCH_TO_FINISHED_TS_MAP.size() + 1, tid, System.currentTimeMillis())));
+            CONSUMER_REGISTERED = true;
+        }
 
         int newRuntime = runTime + warmUp;
 
         WorkloadUtils.WorkloadStats workloadStats = WorkloadUtils.submitWorkload(input, newRuntime, func);
+
+        // avoid submitting after experiment termination
+        coordinator.cleanTransactionInputs();
 
         long endTs = workloadStats.initTs() + newRuntime;
         long initTs = workloadStats.initTs() + warmUp;
@@ -70,6 +78,7 @@ public final class ExperimentUtils {
         System.out.println("Number of completed transactions (with warm up): "+ numCompletedWithWarmUp);
         System.out.println("Number of completed transactions: "+ numCompleted);
         System.out.println("Transactions per second: "+txPerSec);
+        System.out.println();
 
         resetBatchToFinishedTsMap();
 
@@ -113,7 +122,7 @@ public final class ExperimentUtils {
             writer.write("Number of completed transactions: "+ expStats.numCompleted);
             writer.newLine();
             writer.write("Transactions per second: "+expStats.txPerSec);
-
+            writer.newLine();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
