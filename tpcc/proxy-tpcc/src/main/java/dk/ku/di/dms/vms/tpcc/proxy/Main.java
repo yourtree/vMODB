@@ -35,7 +35,7 @@ public final class Main {
             switch (choice) {
                 case "1":
                     System.out.println("Option 1: \"Create tables in disk\" selected.");
-                    System.out.print("Enter number of warehouses: ");
+                    System.out.println("Enter number of warehouses: ");
                     numWare = Integer.parseInt(scanner.nextLine());
                     System.out.println("Creating tables with "+numWare+" warehouses...");
                     tables = StorageUtils.createTables(metadata, numWare);
@@ -54,34 +54,39 @@ public final class Main {
                     break;
                 case "3":
                     System.out.println("Option 3: \"Create workload\" selected.");
-                    System.out.print("Enter number of warehouses: ");
+                    System.out.println("Enter number of warehouses: ");
                     numWare = Integer.parseInt(scanner.nextLine());
-                    System.out.print("Enter number of transactions: ");
+                    System.out.println("Enter number of transactions per warehouse: ");
                     String numTxnStr = scanner.nextLine();
-                    input = WorkloadUtils.createWorkload(numWare, Integer.parseInt(numTxnStr));
+                    WorkloadUtils.createWorkload(numWare, Integer.parseInt(numTxnStr));
                     break;
                 case "4":
                     System.out.println("Option 4: \"Submit workload\" selected.");
                     System.out.print("Enter duration (ms): [0 for default to 10s] ");
                     int runTime = Integer.parseInt(scanner.nextLine());
                     if(runTime == 0) runTime = 10000;
-                    System.out.print("Enter warm up period (ms): [0 for default to 2s] ");
+                    System.out.println("Enter warm up period (ms): [0 for default to 2s] ");
                     int warmUp = Integer.parseInt(scanner.nextLine());
                     if(warmUp == 0) warmUp = 2000;
-                    if(input == null){
+
+                    if(numWare == 0){
+                        // get number of input files
+                        numWare = WorkloadUtils.getNumWorkloadInputFiles();
                         if(numWare == 0){
-                            // get number of files
-                            numWare = WorkloadUtils.getNumWorkloadInputFiles();
-                            if(numWare == 0){
-                                // some unknown bug....
-                                System.out.print("Zero warehouses identified. Falling back to warehouse table information...");
-                                // fallback to table information
-                                numWare = StorageUtils.getNumRecordsFromInDiskTable(metadata.entityToSchemaMap().get("warehouse"), "warehouse");
-                            }
-                            System.out.print(numWare+" warehouses identified");
+                            // some unknown bug....
+                            System.out.println("Zero warehouses identified. Falling back to warehouse table information...");
+                            // fallback to table information
+                            numWare = StorageUtils.getNumRecordsFromInDiskTable(metadata.entityToSchemaMap().get("warehouse"), "warehouse");
                         }
-                        input = WorkloadUtils.mapWorkloadInputFiles(numWare);
+                        if(numWare == 0){
+                            System.out.println("No warehouses identified! Maybe you forgot to generate?");
+                            break;
+                        }
+                        System.out.println(numWare+" warehouses identified");
                     }
+                    // reload iterators
+                    input = WorkloadUtils.mapWorkloadInputFiles(numWare);
+
                     // load coordinator
                     if(coordinator == null){
                         coordinator = ExperimentUtils.loadCoordinator(PROPERTIES);

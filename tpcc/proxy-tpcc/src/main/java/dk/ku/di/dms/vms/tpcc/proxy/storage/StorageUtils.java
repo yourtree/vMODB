@@ -63,7 +63,11 @@ public final class StorageUtils {
                 case "customer" -> {
                     int maxRecords = numWare * TPCcConstants.NUM_DIST_PER_WARE * TPCcConstants.NUM_CUST_PER_DIST;
                     LOGGER.log(INFO, "Loading "+maxRecords+" customers...");
-                    UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, maxRecords * 2, false);
+                    int maxRecordsDisk = maxRecords * 2;
+                    if(numWare >= 8){
+                        maxRecordsDisk = maxRecords * 3;
+                    }
+                    UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, maxRecordsDisk, false);
                     tableToIndexMap.put(entry.getValue(), idx);
                 }
                 case "item" -> {
@@ -154,8 +158,12 @@ public final class StorageUtils {
                 case "customer" -> {
                     int maxRecords = numWare * TPCcConstants.NUM_DIST_PER_WARE * TPCcConstants.NUM_CUST_PER_DIST;
                     LOGGER.log(INFO, "Creating "+maxRecords+" customer records...");
+                    int maxRecordsDisk = maxRecords * 2;
+                    if(numWare >= 8){
+                        maxRecordsDisk = maxRecords * 3;
+                    }
                     long initTs = System.currentTimeMillis();
-                    UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, maxRecords * 2, true);
+                    UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, maxRecordsDisk, true);
                     tableToIndexMap.put(entry.getValue(), idx);
                     for(int w_id = 1; w_id <= numWare; w_id++){
                         for(int d_id = 1; d_id <= TPCcConstants.NUM_DIST_PER_WARE; d_id++) {

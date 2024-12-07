@@ -140,7 +140,7 @@ public final class WorkloadUtils {
     }
 
     public static List<Iterator<NewOrderWareIn>> mapWorkloadInputFiles(int numWare){
-        LOGGER.log(INFO, "Mapping "+numWare+" warehouse files from disk...");
+        LOGGER.log(INFO, "Mapping "+numWare+" warehouse input files from disk...");
         long initTs = System.currentTimeMillis();
         List<Iterator<NewOrderWareIn>> input = new ArrayList<>(numWare);
         for(int i = 0; i < numWare; i++){
@@ -150,7 +150,7 @@ public final class WorkloadUtils {
             input.add( createWorkloadInputIterator(buffer, numTransactions) );
         }
         long endTs = System.currentTimeMillis();
-        LOGGER.log(INFO, "Mapped "+numWare+" warehouse files from disk in "+(endTs-initTs)+" ms");
+        LOGGER.log(INFO, "Mapped "+numWare+" warehouse input files from disk in "+(endTs-initTs)+" ms");
         return input;
     }
 
@@ -171,10 +171,9 @@ public final class WorkloadUtils {
         };
     }
 
-    public static List<Iterator<NewOrderWareIn>> createWorkload(int numWare, int numTransactions){
-        LOGGER.log(INFO, "Generating of "+(numTransactions * numWare)+"...");
+    public static void createWorkload(int numWare, int numTransactions){
+        LOGGER.log(INFO, "Generating "+(numTransactions * numWare)+" transactions ("+numTransactions+" per warehouse/worker)");
         long initTs = System.currentTimeMillis();
-        List<Iterator<NewOrderWareIn>> input = new ArrayList<>(numWare);
         for(int ware = 1; ware <= numWare; ware++) {
             LOGGER.log(INFO, "Generating "+numTransactions+" transactions for warehouse "+ware);
             String fileName = BASE_WORKLOAD_FILE_NAME+ware;
@@ -188,7 +187,6 @@ public final class WorkloadUtils {
         }
         long endTs = System.currentTimeMillis();
         LOGGER.log(INFO, "Generated "+(numTransactions * numWare)+" in "+(endTs-initTs)+" ms");
-        return input;
     }
 
     public static int getNumWorkloadInputFiles(){

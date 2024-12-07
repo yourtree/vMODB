@@ -121,7 +121,7 @@ public final class DataLoadUtils {
             var clientPool = CONNECTION_POOL.computeIfAbsent(service, (ignored)-> new ConcurrentLinkedDeque<>());
             if (!clientPool.isEmpty()) {
                 MinimalHttpClient client = clientPool.poll();
-                if (client != null) return client;
+                if (client != null && client.isConnected()) return client;
             }
             String host = PROPERTIES.getProperty(service + "_host");
             int port = TPCcConstants.VMS_TO_PORT_MAP.get(service);

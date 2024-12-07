@@ -124,7 +124,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
         this.loggingHandler = loggingHandler;
         this.serdesProxy = serdesProxy;
         this.options = options;
-        this.transactionEventQueue = new MpscBlockingConsumerArrayQueue<>(1024*1000);
+        this.transactionEventQueue = new MpscBlockingConsumerArrayQueue<>(1024*1500);
         this.state = NEW;
     }
 

@@ -20,7 +20,11 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
+import static java.lang.System.Logger.Level.INFO;
+
 public final class ExperimentUtils {
+
+    private static final System.Logger LOGGER = System.getLogger(ExperimentUtils.class.getName());
 
     private static boolean CONSUMER_REGISTERED = false;
 
@@ -41,7 +45,8 @@ public final class ExperimentUtils {
         WorkloadUtils.WorkloadStats workloadStats = WorkloadUtils.submitWorkload(input, newRuntime, func);
 
         // avoid submitting after experiment termination
-        coordinator.cleanTransactionInputs();
+        coordinator.clearTransactionInputs();
+        LOGGER.log(INFO,"Transaction input queue(s) cleared.");
 
         long endTs = workloadStats.initTs() + newRuntime;
         long initTs = workloadStats.initTs() + warmUp;

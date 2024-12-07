@@ -84,6 +84,10 @@ public final class MinimalHttpClient implements Closeable {
 //        response.setLength(0);
     }
 
+    public boolean isConnected(){
+        return this.socketChannel.isConnected();
+    }
+
     @Override
     public void close() throws IOException {
         this.socketChannel.close();

@@ -17,6 +17,7 @@ import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 
 import java.util.concurrent.locks.ReentrantLock;
 
+import static dk.ku.di.dms.vms.modb.common.memory.MemoryUtils.UNSAFE;
 import static java.lang.System.Logger.Level.*;
 
 /**

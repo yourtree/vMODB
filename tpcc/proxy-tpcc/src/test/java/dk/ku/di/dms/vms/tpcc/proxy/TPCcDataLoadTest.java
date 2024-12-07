@@ -2,7 +2,8 @@ package dk.ku.di.dms.vms.tpcc.proxy;
 
 import dk.ku.di.dms.vms.tpcc.proxy.storage.StorageUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.workload.WorkloadUtils;
-import org.junit.*;
+import org.junit.FixMethodOrder;
+import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)

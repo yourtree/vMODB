@@ -424,7 +424,7 @@ public final class Coordinator extends ModbHttpServer {
         }
     }
 
-    public void cleanTransactionInputs() {
+    public void clearTransactionInputs() {
         for(var inputDeque : this.transactionInputDeques){
             inputDeque.clear();
         }
