@@ -117,7 +117,7 @@ public final class TPCcWorkloadTest {
 
         coordinator.stop();
 
-        ExperimentUtils.writeResultsToFile(NUM_WARE, expStats, RUN_TIME, WARM_UP);
+        ExperimentUtils.writeResultsToFile(NUM_WARE, expStats, RUN_TIME, WARM_UP, coordinator.getNumTransactionWorkers());
 
         String host = PROPERTIES.getProperty("warehouse_host");
         int port = TPCcConstants.VMS_TO_PORT_MAP.get("warehouse");
@@ -144,7 +144,6 @@ public final class TPCcWorkloadTest {
             Assert.assertEquals(1, ware.w_id);
             for(int i = 1 ; i <= 10; i++) {
                 String resp2 = httpClient.sendGetRequest("district/"+i+"/1");
-                // System.out.println(resp2);
                 var parsedResp2 = HttpUtils.parseRequest(resp2);
                 var district = serdesProxy.deserialize(parsedResp2.body(), District.class);
                 Assert.assertEquals(3001, district.d_next_o_id);

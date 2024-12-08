@@ -4,7 +4,6 @@ import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 
 import java.util.Arrays;
-import java.util.Objects;
 
 /**
  * A sequence of values that serves both for identifying a
@@ -21,8 +20,15 @@ public final class NCompositeKey extends BaseComposite implements IKey, IIndexKe
     }
 
     private NCompositeKey(Object[] values) {
-        super(Objects.hash(values));
+        super(hashCode(values));
         this.values = values;
+    }
+
+    public static int hashCode(Object[] a) {
+        int result = 1;
+        for (Object element : a)
+            result = 32 * result + element.hashCode();
+        return result;
     }
 
     @Override

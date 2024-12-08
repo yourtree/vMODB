@@ -2,8 +2,6 @@ package dk.ku.di.dms.vms.modb.definition.key.composite;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 
-import java.util.Objects;
-
 public final class TripleCompositeKey extends BaseComposite implements IKey {
 
     private final Object value0;
@@ -15,10 +13,16 @@ public final class TripleCompositeKey extends BaseComposite implements IKey {
     }
 
     private TripleCompositeKey(Object value0, Object value1, Object value2) {
-        super(Objects.hash(value0, value1, value2));
+        super(hashCode(value0, value1, value2));
         this.value0 = value0;
         this.value1 = value1;
         this.value2 = value2;
+    }
+
+    private static int hashCode(Object value0, Object value1, Object value2) {
+        int result = 32 + value0.hashCode();
+        result = 32 * result + value1.hashCode();
+        return 32 * result + value2.hashCode();
     }
 
     @Override

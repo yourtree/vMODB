@@ -45,12 +45,12 @@ public final class DataGenerator {
         return new District(D_ID, D_W_ID, D_NAME, D_STREET_1, D_STREET_2, D_CITY, D_STATE, D_ZIP, D_TAX, D_YTD, D_NEXT_O_ID);
     }
 
-    public static Customer generateCustomer(int c_d_id, int c_w_id, int C_ID) {
+    public static Customer generateCustomer(int c_id, int c_d_id, int c_w_id) {
         String C_FIRST = makeAlphaString(8, 16);
         String C_MIDDLE = "O" + "E";
         String C_LAST;
-        if (C_ID <= 1000) {
-            C_LAST = lastName(C_ID - 1);
+        if (c_id <= 1000) {
+            C_LAST = lastName(c_id - 1);
         } else {
             C_LAST = lastName(nuRand(255, 0, 999));
         }
@@ -79,7 +79,7 @@ public final class DataGenerator {
         int C_DELIVERY_CNT = 0;
         String C_DATA = makeAlphaString(300, 500);
 
-        return new Customer(C_ID, c_d_id, c_w_id, C_FIRST, C_MIDDLE, C_LAST, C_STREET_1, C_STREET_2, C_CITY, C_STATE, C_ZIP,
+        return new Customer(c_id, c_d_id, c_w_id, C_FIRST, C_MIDDLE, C_LAST, C_STREET_1, C_STREET_2, C_CITY, C_STATE, C_ZIP,
                 C_PHONE, C_SINCE, C_CREDIT, C_CREDIT_LIM, C_DISCOUNT, C_BALANCE, C_YTD_PAYMENT, C_PAYMENT_CNT, C_DELIVERY_CNT, C_DATA);
     }
 

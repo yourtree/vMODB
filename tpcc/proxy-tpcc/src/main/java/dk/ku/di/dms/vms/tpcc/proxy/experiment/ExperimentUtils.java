@@ -93,7 +93,7 @@ public final class ExperimentUtils {
     public record ExperimentStats(long initTs, int numCompletedWithWarmUp, int numCompleted, long txPerSec, double average,
                                    double percentile_50, double percentile_75, double percentile_90){}
 
-    public static void writeResultsToFile(int numWare, ExperimentStats expStats, int runTime, int warmUp){
+    public static void writeResultsToFile(int numWare, ExperimentStats expStats, int runTime, int warmUp, int numTransactionWorkers){
         LocalDateTime time = LocalDateTime.ofInstant(
                 Instant.ofEpochMilli(expStats.initTs),
                 ZoneId.systemDefault()
@@ -110,6 +110,8 @@ public final class ExperimentUtils {
             writer.write("Experiment duration (ms): " + runTime);
             writer.newLine();
             writer.write("Experiment warm up (ms): " + warmUp);
+            writer.newLine();
+            writer.write("Number of transaction workers: " + numTransactionWorkers);
             writer.newLine();
             writer.write("Number of warehouses: " + numWare);
             writer.newLine();

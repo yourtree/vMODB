@@ -95,11 +95,11 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     /**
      * <a href="https://algs4.cs.princeton.edu/34hash/">Why (key & 0x7fffffff)?</a>
-     * "The code masks off the sign bit (to turn the 32-bit integer into a 31-bit non-negative integer)
-     * and then computing the remainder when dividing by M, as in modular hashing."
+     * The % operator returns a negative value if the key is negative
+     * Therefore, this function assumes input is always positive
      */
     private long getPosition(int key){
-        long logicalPosition = (key & 0x7fffffff) % this.capacity;
+        long logicalPosition = key % this.capacity;
         if(logicalPosition > 0){
             return this.recordBufferContext.address + ( this.recordSize * logicalPosition );
         }
@@ -110,7 +110,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     public void insert(IKey key, long srcAddress) {
         long pos = this.getFreePositionToInsert(key);
         if(pos == -1){
-            LOGGER.log(ERROR, "Cannot find an empty entry for record. Perhaps should increase number of entries?\nKey: " + key+ " Hash: " + key.hashCode());
+            LOGGER.log(ERROR, "Cannot find an empty entry for inserting the record from address. Perhaps should increase number of entries?\nKey: " + key+ " Hash: " + key.hashCode());
             return;
         }
         if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE){
@@ -177,7 +177,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         try {
             long pos = this.getFreePositionToInsert(key);
             if(pos == -1){
-                LOGGER.log(ERROR, "Cannot find an empty entry for record. Perhaps should increase number of entries?\nKey: " + key+ " Hash: " + key.hashCode());
+                LOGGER.log(ERROR, "Cannot find an empty entry for record object. \nKey: " + key+ " Hash: " + key.hashCode());
                 return;
             }
             UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
@@ -213,7 +213,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         long pos = this.getPosition(key.hashCode());
         boolean busy = UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE;
         while (busy && attemptsToFind > 0) {
-            pos = this.getPosition(key.hashCode() + Math.multiplyExact(aux,2));
+            pos = this.getPosition(key.hashCode() + Math.multiplyExact(aux, 2));
             attemptsToFind--;
             aux++;
             busy = UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE;

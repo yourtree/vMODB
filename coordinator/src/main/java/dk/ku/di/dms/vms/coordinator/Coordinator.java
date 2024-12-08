@@ -902,6 +902,10 @@ public final class Coordinator extends ModbHttpServer {
         return sumTIDs;
     }
 
+    public int getNumTransactionWorkers(){
+        return this.transactionWorkers.size();
+    }
+
     public Map<String, VmsNode> getConnectedVMSs() {
         return this.vmsMetadataMap;
     }

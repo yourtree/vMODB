@@ -59,7 +59,13 @@ public final class VmsApplicationOptions {
 
         boolean logging = Boolean.parseBoolean(properties.getProperty("logging"));
         boolean checkpointing = Boolean.parseBoolean(properties.getProperty("checkpointing"));
-        boolean truncating = Boolean.parseBoolean(properties.getProperty("truncating"));
+
+        boolean truncating = true;
+        String truncatingStr = properties.getProperty("checkpointing_truncate");
+        if(truncatingStr != null){
+            truncating = Boolean.parseBoolean(truncatingStr);
+        }
+
         int maxRecords = Integer.parseInt(properties.getProperty("max_records"));
 
         return new VmsApplicationOptions(

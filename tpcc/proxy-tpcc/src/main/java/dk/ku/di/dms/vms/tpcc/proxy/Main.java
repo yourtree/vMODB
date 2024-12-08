@@ -97,7 +97,7 @@ public final class Main {
                         } while (numConnected < 3);
                     }
                     var expStats = ExperimentUtils.runExperiment(coordinator, input, runTime, warmUp);
-                    ExperimentUtils.writeResultsToFile(numWare, expStats, runTime, warmUp);
+                    ExperimentUtils.writeResultsToFile(numWare, expStats, runTime, warmUp, coordinator.getNumTransactionWorkers());
                     break;
                 case "0":
                     System.out.println("Exiting the application. Goodbye!");

@@ -2,8 +2,6 @@ package dk.ku.di.dms.vms.modb.definition.key.composite;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 
-import java.util.Objects;
-
 public final class PairCompositeKey extends BaseComposite implements IKey {
 
     private final Object value0;
@@ -14,9 +12,14 @@ public final class PairCompositeKey extends BaseComposite implements IKey {
     }
 
     private PairCompositeKey(Object value0, Object value1) {
-        super(Objects.hash(value0, value1));
+        super(hashCode(value0, value1));
         this.value0 = value0;
         this.value1 = value1;
+    }
+
+    private static int hashCode(Object value0, Object value1) {
+        int result = 32 + value0.hashCode();
+        return 32 * result + value1.hashCode();
     }
 
     @Override
