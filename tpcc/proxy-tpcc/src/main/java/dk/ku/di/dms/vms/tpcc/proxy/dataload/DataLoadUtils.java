@@ -1,15 +1,15 @@
 package dk.ku.di.dms.vms.tpcc.proxy.dataload;
 
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
-import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
-import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityHandler;
 import dk.ku.di.dms.vms.tpcc.proxy.infra.MinimalHttpClient;
 import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.*;
 import java.util.function.Function;
 
@@ -19,75 +19,40 @@ public final class DataLoadUtils {
 
     private static final System.Logger LOGGER = System.getLogger(DataLoadUtils.class.getName());
 
-    private static final ExecutorService THREAD_POOL = Executors.newCachedThreadPool();
-
     @SuppressWarnings("rawtypes")
-    public static Map<String, Queue<String>> loadTablesInMemory(Map<String, UniqueHashBufferIndex> tableToIndexMap,
-                                             Map<String, EntityHandler> entityHandlerMap) {
+    public static Map<String, QueueTableIterator> mapTablesFromDisk(Map<String, UniqueHashBufferIndex> tableToIndexMap,
+                                                                    Map<String, EntityHandler> entityHandlerMap) {
         LOGGER.log(INFO, "Loading tables in memory starting...");
         long init = System.currentTimeMillis();
-
-        // iterate over tables, for each, create a set of threads to ingest data
-        List<Future<Queue<String>>> futures = new ArrayList<>();
-        for(var idx : tableToIndexMap.entrySet()){
-            // for testing only
-            // if(!idx.getKey().contentEquals("stock")) continue;
-            LOGGER.log(INFO, "Submitting data load worker for table "+idx.getKey());
-            futures.add(THREAD_POOL.submit(new DataLoadWorker(idx.getValue(), entityHandlerMap.get(idx.getKey()))));
-        }
-
-        Map<String, Queue<String>> tableInputMap = new HashMap<>();
-        int i = 0;
-        LOGGER.log(INFO, "Waiting for tables to load...");
+        Map<String, QueueTableIterator> tableInputMap = new HashMap<>();
         try {
             for(var idx : tableToIndexMap.entrySet()){
-                var queue = futures.get(i).get();
-                LOGGER.log(INFO, "Table "+idx.getKey()+" finished loading.");
-                if(queue != null){
-                    tableInputMap.put(idx.getKey(), queue);
-                }
-                i++;
+                tableInputMap.put(idx.getKey(), new QueueTableIterator(idx.getValue(), entityHandlerMap.get(idx.getKey())));
             }
-        } catch (InterruptedException | ExecutionException e){
+        } catch (Exception e){
             throw new RuntimeException(e);
         } finally {
             long end = System.currentTimeMillis();
             LOGGER.log(INFO, "Loading tables in memory finished in "+(end-init)+"ms");
         }
-
         return tableInputMap;
     }
 
-    @SuppressWarnings("rawtypes")
-    private static class DataLoadWorker implements Callable<Queue<String>> {
-
-        private final UniqueHashBufferIndex index;
-        private final EntityHandler entityHandler;
-
-        private DataLoadWorker(UniqueHashBufferIndex index, EntityHandler entityHandler) {
-            this.index = index;
-            this.entityHandler = entityHandler;
-        }
-
-        @Override
-        public Queue<String> call() {
-            Queue<String> queue = new ConcurrentLinkedQueue<>();
-            try {
-                IRecordIterator<IKey> iterator = this.index.iterator();
-                while (iterator.hasNext()) {
-                    Object[] record = this.index.record(iterator);
-                    var entity = this.entityHandler.parseObjectIntoEntity(record);
-                    queue.add(entity.toString());
-                    iterator.next();
-                }
-            } catch (Exception e){
-                e.printStackTrace(System.err);
+    /**
+     * In case the services have been restarted, the cached connections won't work anymore
+     * Calling this method is a conservative way to avoid errors on ingesting again in the same experiment session
+     */
+    private static void releaseAllConnections(){
+        for(var entries : IngestionWorker.CONNECTION_POOL.values()){
+            for(var conn : entries){
+                conn.close();
             }
-            return queue;
         }
+        IngestionWorker.CONNECTION_POOL.clear();
     }
 
-    public static void ingestData(Map<String, Queue<String>> tableInputMap) {
+    public static void ingestData(Map<String, QueueTableIterator> tableInputMap) {
+        releaseAllConnections();
         int numCpus = Runtime.getRuntime().availableProcessors();
         ExecutorService threadPool = Executors.newFixedThreadPool(numCpus);
         BlockingQueue<Future<Void>> completionQueue = new ArrayBlockingQueue<>(numCpus);
@@ -121,7 +86,7 @@ public final class DataLoadUtils {
             var clientPool = CONNECTION_POOL.computeIfAbsent(service, (ignored)-> new ConcurrentLinkedDeque<>());
             if (!clientPool.isEmpty()) {
                 MinimalHttpClient client = clientPool.poll();
-                if (client != null && client.isConnected()) return client;
+                if (client != null) return client;
             }
             String host = PROPERTIES.getProperty(service + "_host");
             int port = TPCcConstants.VMS_TO_PORT_MAP.get(service);
@@ -138,9 +103,9 @@ public final class DataLoadUtils {
             CONNECTION_POOL.get(service).add(client);
         }
 
-        private final Map<String, Queue<String>> tableInputMap;
+        private final Map<String, QueueTableIterator> tableInputMap;
 
-        private IngestionWorker(Map<String, Queue<String>> tableInputMap) {
+        private IngestionWorker(Map<String, QueueTableIterator> tableInputMap) {
             this.tableInputMap = tableInputMap;
         }
 
@@ -151,10 +116,13 @@ public final class DataLoadUtils {
                     MinimalHttpClient client = HTTP_CLIENT_SUPPLIER.apply(table.getKey());
                     var queue = table.getValue();
                     String entity;
+                    int count = 0;
+                    LOGGER.log(INFO, "Thread "+Thread.currentThread().threadId()+" starting with table "+table.getKey());
                     while ((entity = queue.poll()) != null) {
                         client.sendRequest("POST", entity, table.getKey());
+                        count++;
                     }
-                    LOGGER.log(INFO, "Thread "+Thread.currentThread().threadId()+" finished with table "+table.getKey());
+                    LOGGER.log(INFO, "Thread "+Thread.currentThread().threadId()+" finished with table "+table.getKey()+": "+count+" records sent.");
                     returnConnection(table.getKey(), client);
                 }
             } catch (Exception e){

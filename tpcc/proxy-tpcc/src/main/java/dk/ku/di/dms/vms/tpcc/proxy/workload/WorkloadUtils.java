@@ -186,7 +186,7 @@ public final class WorkloadUtils {
             buffer.force();
         }
         long endTs = System.currentTimeMillis();
-        LOGGER.log(INFO, "Generated "+(numTransactions * numWare)+" in "+(endTs-initTs)+" ms");
+        LOGGER.log(INFO, "Generated "+(numTransactions * numWare)+" transactions in "+(endTs-initTs)+" ms");
     }
 
     public static int getNumWorkloadInputFiles(){

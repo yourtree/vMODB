@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.tpcc.proxy.entities;
 
-import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 
@@ -35,11 +34,9 @@ public class Customer implements IEntity<Customer.CustomerId> {
     public int c_id;
 
     @Id
-    @VmsForeignKey(table=District.class, column = "d_id")
     public int c_d_id;
 
     @Id
-    @VmsForeignKey(table=District.class, column = "d_w_id")
     public int c_w_id;
 
     @Column

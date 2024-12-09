@@ -28,11 +28,9 @@ public final class Stock implements IEntity<Stock.StockId> {
     }
 
     @Id
-    @VmsForeignKey(table=Item.class, column = "i_id")
     public int s_i_id;
 
     @Id
-    // @VmsForeignKey(table=Warehouse.class, column = "w_id")
     public int s_w_id;
 
     @Column

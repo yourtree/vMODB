@@ -74,8 +74,9 @@ public final class StorageUtils {
                 }
                 case "stock" -> {
                     int maxRecords = numWare * TPCcConstants.NUM_ITEMS;
+                    int overflowDisk = maxRecords * 2;
                     LOGGER.log(INFO, "Loading "+maxRecords+" stock items...");
-                    UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, maxRecords, false);
+                    UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, overflowDisk, false);
                     tableToIndexMap.put(entry.getValue(), idx);
                 }
             }
@@ -199,8 +200,9 @@ public final class StorageUtils {
             case "stock" -> {
                 int maxRecords = numWare * TPCcConstants.NUM_ITEMS;
                 LOGGER.log(INFO, "Creating "+maxRecords+" stock records...");
+                int overflowDisk = maxRecords * 2;
                 long initTs = System.currentTimeMillis();
-                UniqueHashBufferIndex idx = buildHashIndex(tableName, schema, maxRecords, true);
+                UniqueHashBufferIndex idx = buildHashIndex(tableName, schema, overflowDisk, true);
                 for(int w_id = 1; w_id <= numWare; w_id++) {
                     for (int i_id = 1; i_id <= TPCcConstants.NUM_ITEMS; i_id++) {
                         Stock stock = DataGenerator.generateStockItem(w_id, i_id);

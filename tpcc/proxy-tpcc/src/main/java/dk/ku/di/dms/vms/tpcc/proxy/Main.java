@@ -5,6 +5,7 @@ import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
 import dk.ku.di.dms.vms.tpcc.common.events.NewOrderWareIn;
 import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoadUtils;
+import dk.ku.di.dms.vms.tpcc.proxy.dataload.QueueTableIterator;
 import dk.ku.di.dms.vms.tpcc.proxy.experiment.ExperimentUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.storage.StorageUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.workload.WorkloadUtils;
@@ -49,7 +50,7 @@ public final class Main {
                         numWare = StorageUtils.getNumRecordsFromInDiskTable(metadata.entityToSchemaMap().get("warehouse"), "warehouse");
                         tables = StorageUtils.mapTablesInDisk(metadata, numWare);
                     }
-                    Map<String, Queue<String>> tablesInMem = DataLoadUtils.loadTablesInMemory(tables, metadata.entityHandlerMap());
+                    Map<String, QueueTableIterator> tablesInMem = DataLoadUtils.mapTablesFromDisk(tables, metadata.entityHandlerMap());
                     DataLoadUtils.ingestData(tablesInMem);
                     break;
                 case "3":

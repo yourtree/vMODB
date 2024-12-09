@@ -2,10 +2,12 @@ package dk.ku.di.dms.vms.tpcc.proxy.infra;
 
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
+import jdk.net.ExtendedSocketOptions;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
@@ -19,9 +21,13 @@ public final class MinimalHttpClient implements Closeable {
     private StringBuilder response;
 
     public MinimalHttpClient(String hostname, int port) throws IOException {
-        this.socketChannel = SocketChannel.open();
+        this.socketChannel = SocketChannel.open(new InetSocketAddress(hostname, port));
         this.socketChannel.configureBlocking(true);
-        this.socketChannel.connect(new InetSocketAddress(hostname, port));
+        this.socketChannel.setOption(StandardSocketOptions.SO_KEEPALIVE, true);
+        this.socketChannel.setOption(StandardSocketOptions.TCP_NODELAY, true);
+        if(this.socketChannel.supportedOptions().contains(ExtendedSocketOptions.TCP_QUICKACK)) {
+            this.socketChannel.setOption(ExtendedSocketOptions.TCP_QUICKACK, true);
+        }
         this.writeBuffer = MemoryManager.getTemporaryDirectBuffer(MemoryUtils.DEFAULT_PAGE_SIZE);
         this.readBuffer = MemoryManager.getTemporaryDirectBuffer(MemoryUtils.DEFAULT_PAGE_SIZE);
     }
@@ -74,23 +80,12 @@ public final class MinimalHttpClient implements Closeable {
 
         // read to block waiting for response and avoid concatenating requests
         this.socketChannel.read(this.readBuffer);
-//        this.readBuffer.flip();
-////            while (readBuffer.hasRemaining()) {
-////                response.append((char) readBuffer.get());
-////            }
         this.readBuffer.clear();
-//        }
-//        System.out.println(response);
-//        response.setLength(0);
-    }
-
-    public boolean isConnected(){
-        return this.socketChannel.isConnected();
     }
 
     @Override
-    public void close() throws IOException {
-        this.socketChannel.close();
+    public void close() {
+        try { this.socketChannel.close(); } catch (IOException ignored) {}
         this.readBuffer.clear();
         this.writeBuffer.clear();
         MemoryManager.releaseTemporaryDirectBuffer(this.readBuffer);

@@ -95,7 +95,7 @@ public final class TPCcWorkloadTest {
     @Test
     public void test_B_load_and_ingest() throws IOException {
         var tableToIndexMap = StorageUtils.mapTablesInDisk(METADATA, NUM_WARE);
-        var tableInputMap = DataLoadUtils.loadTablesInMemory(tableToIndexMap, METADATA.entityHandlerMap());
+        var tableInputMap = DataLoadUtils.mapTablesFromDisk(tableToIndexMap, METADATA.entityHandlerMap());
         DataLoadUtils.ingestData(tableInputMap);
         hasDataBeenIngested();
     }
@@ -106,6 +106,8 @@ public final class TPCcWorkloadTest {
         //  perhaps it is better to iteratively load from memory. instead of list, pass an iterator to the worker
         //  link a file/worker to a warehouse, so there is no need to partition the file among workers
         var input = WorkloadUtils.mapWorkloadInputFiles(NUM_WARE);
+
+        Assert.assertFalse(input.isEmpty());
 
         Coordinator coordinator = ExperimentUtils.loadCoordinator(PROPERTIES);
         int numConnected;
@@ -124,7 +126,7 @@ public final class TPCcWorkloadTest {
         var serdesProxy = VmsSerdesProxyBuilder.build();
         // query get some items and assert correctness
         try(MinimalHttpClient httpClient = new MinimalHttpClient(host, port)){
-            for(int i = 1; i <= 10; i++) {
+            for(int i = 1; i <= TPCcConstants.NUM_DIST_PER_WARE; i++) {
                 String resp2 = httpClient.sendGetRequest("district/"+i+"/1");
                 var parsedResp = HttpUtils.parseRequest(resp2);
                 var district = serdesProxy.deserialize(parsedResp.body(), District.class);
@@ -142,7 +144,7 @@ public final class TPCcWorkloadTest {
             var parsedResp1 = HttpUtils.parseRequest(resp1);
             var ware = serdesProxy.deserialize(parsedResp1.body(), Warehouse.class);
             Assert.assertEquals(1, ware.w_id);
-            for(int i = 1 ; i <= 10; i++) {
+            for(int i = 1 ; i <= TPCcConstants.NUM_DIST_PER_WARE; i++) {
                 String resp2 = httpClient.sendGetRequest("district/"+i+"/1");
                 var parsedResp2 = HttpUtils.parseRequest(resp2);
                 var district = serdesProxy.deserialize(parsedResp2.body(), District.class);

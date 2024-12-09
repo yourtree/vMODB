@@ -20,7 +20,7 @@ public final class AppTest {
         // init stub warehouse service
         var vms = new TestService().buildAndStart();
         // submit data to warehouse stub
-        Assert.assertNotNull(DataLoadUtils.loadTablesInMemory(tableToIndexMap, metadata.entityHandlerMap()));
+        Assert.assertNotNull(DataLoadUtils.mapTablesFromDisk(tableToIndexMap, metadata.entityHandlerMap()));
         vms.close();
     }
 

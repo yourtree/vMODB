@@ -17,7 +17,7 @@ import java.util.Map;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public final class TPCcDataLoadTest {
 
-    private static final int NUM_WARE = 32;
+    private static final int NUM_WARE = 2;
 
     private static final StorageUtils.EntityMetadata METADATA;
 

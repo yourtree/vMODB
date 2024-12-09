@@ -113,9 +113,6 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
             LOGGER.log(ERROR, "Cannot find an empty entry for inserting the record from address. Perhaps should increase number of entries?\nKey: " + key+ " Hash: " + key.hashCode());
             return;
         }
-        if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE){
-            LOGGER.log(WARNING, "Overwriting previously written record for key: "+key);
-        }
         UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
         UNSAFE.putInt(null, pos, key.hashCode());
         UNSAFE.copyMemory(null, srcAddress, null, pos + Schema.RECORD_HEADER, this.schema.getRecordSizeWithoutHeader());
@@ -165,28 +162,24 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     @Override
     public void upsert(IKey key, Object[] record){
         long pos = this.findRecordAddress(key);
-        if(pos == -1) {
-            this.insert(key, record);
+        if(pos != -1) {
+            this.doWrite(pos, record);
             return;
         }
-        this.doWrite(pos, record);
+        this.insert(key, record);
     }
 
     @Override
     public void insert(IKey key, Object[] record){
-        try {
-            long pos = this.getFreePositionToInsert(key);
-            if(pos == -1){
-                LOGGER.log(ERROR, "Cannot find an empty entry for record object. \nKey: " + key+ " Hash: " + key.hashCode());
-                return;
-            }
-            UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
-            UNSAFE.putInt(null, pos + Header.SIZE, key.hashCode());
-            this.doWrite(pos, record);
-            this.updateSize(1);
-        } catch (Exception e){
-            throw new RuntimeException("Error inserting record: "+e.getMessage());
+        long pos = this.getFreePositionToInsert(key);
+        if(pos == -1){
+            LOGGER.log(ERROR, "Cannot find an empty entry for record object. \nKey: " + key+ " Hash: " + key.hashCode());
+            return;
         }
+        UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
+        UNSAFE.putInt(null, pos + Header.SIZE, key.hashCode());
+        this.doWrite(pos, record);
+        this.updateSize(1);
     }
 
     @Override

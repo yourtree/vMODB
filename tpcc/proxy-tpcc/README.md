@@ -25,6 +25,15 @@ When executing the project, a menu will show up on screen. The menu offers diffe
 
 Make sure warehouse-tpcc, inventory-tpcc, and order-tpcc are deployed before initializing an experiment through <i>TPC-C Proxy</i>.
 
+For number of warehouses == 8, it is recommended to increase the number of transaction workers to at least 2 in order to experience a higher throughput.
+
+For number of warehouses >= 16, it is recommended to increase the number of transaction workers to 4 to get the highest throughput possible.
+
+For number of warehouses >= 32, make sure to increase the heap size to match the size of the input tables. You can use the command below:
+```
+java --enable-preview --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.util=ALL-UNNAMED -jar tpcc/proxy-tpcc/target/proxy-tpcc-1.0-SNAPSHOT-jar-with-dependencies.jar -Xms100g
+```
+
 ## Troubleshooting
 
 Make sure to generate enough transactions for your experiment. It should account for the period selected. If less transaction inputs are available, that can lead to errors.
