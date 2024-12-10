@@ -22,7 +22,7 @@ public final class DataLoadUtils {
     @SuppressWarnings("rawtypes")
     public static Map<String, QueueTableIterator> mapTablesFromDisk(Map<String, UniqueHashBufferIndex> tableToIndexMap,
                                                                     Map<String, EntityHandler> entityHandlerMap) {
-        LOGGER.log(INFO, "Loading tables in memory starting...");
+        LOGGER.log(INFO, "Mapping tables from disk starting...");
         long init = System.currentTimeMillis();
         Map<String, QueueTableIterator> tableInputMap = new HashMap<>();
         try {
@@ -33,7 +33,7 @@ public final class DataLoadUtils {
             throw new RuntimeException(e);
         } finally {
             long end = System.currentTimeMillis();
-            LOGGER.log(INFO, "Loading tables in memory finished in "+(end-init)+"ms");
+            LOGGER.log(INFO, "Mapping tables from disk finished in "+(end-init)+" ms");
         }
         return tableInputMap;
     }
@@ -64,7 +64,7 @@ public final class DataLoadUtils {
         }
         try {
             for (int i = 0; i < numCpus; i++) {
-                completionQueue.poll(5, TimeUnit.MINUTES);
+                completionQueue.take();
             }
         } catch(InterruptedException e){
             threadPool.shutdownNow();

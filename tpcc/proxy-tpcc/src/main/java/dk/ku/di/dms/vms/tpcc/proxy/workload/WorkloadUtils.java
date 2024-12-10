@@ -171,7 +171,7 @@ public final class WorkloadUtils {
         };
     }
 
-    public static void createWorkload(int numWare, int numTransactions){
+    public static void createWorkload(int numWare, int numTransactions, boolean allowMultiWarehouses){
         LOGGER.log(INFO, "Generating "+(numTransactions * numWare)+" transactions ("+numTransactions+" per warehouse/worker)");
         long initTs = System.currentTimeMillis();
         for(int ware = 1; ware <= numWare; ware++) {
@@ -179,7 +179,7 @@ public final class WorkloadUtils {
             String fileName = BASE_WORKLOAD_FILE_NAME+ware;
             AppendOnlyBuffer buffer = EmbedMetadataLoader.loadAppendOnlyBuffer(numTransactions, SCHEMA.getRecordSize(), fileName, true);
             for (int txIdx = 1; txIdx <= numTransactions; txIdx++) {
-                Object[] newOrderInput = generateNewOrder(ware, numWare);
+                Object[] newOrderInput = generateNewOrder(ware, numWare, allowMultiWarehouses);
                 write(buffer.nextOffset(), newOrderInput);
                 buffer.forwardOffset(SCHEMA.getRecordSize());
             }
@@ -214,7 +214,7 @@ public final class WorkloadUtils {
         );
     }
 
-    private static Object[] generateNewOrder(int w_id, int num_ware){
+    private static Object[] generateNewOrder(int w_id, int num_ware, boolean allowMultiWarehouses){
         int d_id;
         int c_id;
         int ol_cnt;
@@ -251,7 +251,7 @@ public final class WorkloadUtils {
                 }
             }
 
-            if (ALLOW_MULTI_WAREHOUSE_TX) {
+            if (allowMultiWarehouses) {
                 if (randomNumber(1, 100) != 1) {
                     supWares[i] = w_id;
                 } else {

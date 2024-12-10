@@ -24,7 +24,7 @@ public final class Main {
         Coordinator coordinator = null;
         int numWare = 0;
         Map<String, UniqueHashBufferIndex> tables = null;
-        List<Iterator<NewOrderWareIn>> input = null;
+        List<Iterator<NewOrderWareIn>> input;
         StorageUtils.EntityMetadata metadata = StorageUtils.loadEntityMetadata();
         Scanner scanner = new Scanner(System.in);
         boolean running = true;
@@ -57,9 +57,11 @@ public final class Main {
                     System.out.println("Option 3: \"Create workload\" selected.");
                     System.out.println("Enter number of warehouses: ");
                     numWare = Integer.parseInt(scanner.nextLine());
+                    System.out.println("Allow multi warehouse transactions? [0/1]");
+                    boolean multiWarehouses = Integer.parseInt(scanner.nextLine()) > 0;
                     System.out.println("Enter number of transactions per warehouse: ");
-                    String numTxnStr = scanner.nextLine();
-                    WorkloadUtils.createWorkload(numWare, Integer.parseInt(numTxnStr));
+                    int numTxn = Integer.parseInt(scanner.nextLine());
+                    WorkloadUtils.createWorkload(numWare, numTxn, multiWarehouses);
                     break;
                 case "4":
                     System.out.println("Option 4: \"Submit workload\" selected.");
@@ -97,11 +99,13 @@ public final class Main {
                             numConnected = coordinator.getConnectedVMSs().size();
                         } while (numConnected < 3);
                     }
+                    // TODO implement the gather in network send
                     var expStats = ExperimentUtils.runExperiment(coordinator, input, runTime, warmUp);
-                    ExperimentUtils.writeResultsToFile(numWare, expStats, runTime, warmUp, coordinator.getNumTransactionWorkers());
+                    ExperimentUtils.writeResultsToFile(numWare, expStats, runTime, warmUp,
+                            coordinator.getOptions().getNumTransactionWorkers(), coordinator.getOptions().getBatchWindow(), coordinator.getOptions().getMaxTransactionsPerBatch());
                     break;
                 case "0":
-                    System.out.println("Exiting the application. Goodbye!");
+                    System.out.println("Exiting the application...");
                     running = false;
                     break;
                 default:

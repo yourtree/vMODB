@@ -2,6 +2,11 @@ package dk.ku.di.dms.vms.tpcc.common.events;
 
 import dk.ku.di.dms.vms.modb.api.annotations.Event;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 @Event
 public final class NewOrderWareOut {
 
@@ -35,8 +40,16 @@ public final class NewOrderWareOut {
     }
 
     @SuppressWarnings("unused")
-    public int getId(){
-        return this.w_id;
+    public List<Integer> getId(){
+        if(this.allLocal) return List.of(this.w_id);
+        Set<Integer> set = new HashSet<>(4);
+        List<Integer> list = new ArrayList<>(4);
+        for (int supWare : this.supWares) {
+            if (set.add(supWare)) {
+                list.add(supWare);
+            }
+        }
+        return list;
     }
 
 }

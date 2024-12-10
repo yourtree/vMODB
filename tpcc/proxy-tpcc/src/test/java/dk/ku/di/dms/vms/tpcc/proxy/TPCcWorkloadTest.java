@@ -119,7 +119,8 @@ public final class TPCcWorkloadTest {
 
         coordinator.stop();
 
-        ExperimentUtils.writeResultsToFile(NUM_WARE, expStats, RUN_TIME, WARM_UP, coordinator.getNumTransactionWorkers());
+        ExperimentUtils.writeResultsToFile(NUM_WARE, expStats, RUN_TIME, WARM_UP,
+                coordinator.getOptions().getNumTransactionWorkers(), coordinator.getOptions().getBatchWindow(), coordinator.getOptions().getMaxTransactionsPerBatch());
 
         String host = PROPERTIES.getProperty("warehouse_host");
         int port = TPCcConstants.VMS_TO_PORT_MAP.get("warehouse");

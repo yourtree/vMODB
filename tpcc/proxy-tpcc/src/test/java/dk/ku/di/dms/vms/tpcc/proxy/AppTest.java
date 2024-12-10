@@ -27,7 +27,7 @@ public final class AppTest {
     @Test
     public void testWorkload() {
         // create
-        WorkloadUtils.createWorkload(NUM_WARE, 100000);
+        WorkloadUtils.createWorkload(NUM_WARE, 100000, false);
         // load
         var loaded = WorkloadUtils.mapWorkloadInputFiles(NUM_WARE);
         Assert.assertEquals(NUM_WARE, loaded.size());

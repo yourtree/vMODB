@@ -93,7 +93,8 @@ public final class ExperimentUtils {
     public record ExperimentStats(long initTs, int numCompletedWithWarmUp, int numCompleted, long txPerSec, double average,
                                    double percentile_50, double percentile_75, double percentile_90){}
 
-    public static void writeResultsToFile(int numWare, ExperimentStats expStats, int runTime, int warmUp, int numTransactionWorkers){
+    public static void writeResultsToFile(int numWare, ExperimentStats expStats, int runTime, int warmUp,
+                                          int numTransactionWorkers, int batchWindow, int maxTransactionsPerBatch){
         LocalDateTime time = LocalDateTime.ofInstant(
                 Instant.ofEpochMilli(expStats.initTs),
                 ZoneId.systemDefault()
@@ -110,6 +111,10 @@ public final class ExperimentUtils {
             writer.write("Experiment duration (ms): " + runTime);
             writer.newLine();
             writer.write("Experiment warm up (ms): " + warmUp);
+            writer.newLine();
+            writer.write("Batch window (ms): " + batchWindow);
+            writer.newLine();
+            writer.write("Max transactions per batch: " +maxTransactionsPerBatch);
             writer.newLine();
             writer.write("Number of transaction workers: " + numTransactionWorkers);
             writer.newLine();
@@ -128,7 +133,7 @@ public final class ExperimentUtils {
             writer.newLine();
             writer.write("Number of completed transactions: "+ expStats.numCompleted);
             writer.newLine();
-            writer.write("Transactions per second: "+expStats.txPerSec);
+            writer.write("Throughput (tx/sec): "+expStats.txPerSec);
             writer.newLine();
         } catch (IOException e) {
             throw new RuntimeException(e);

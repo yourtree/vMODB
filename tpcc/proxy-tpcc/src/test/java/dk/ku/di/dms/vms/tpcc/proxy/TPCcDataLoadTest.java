@@ -37,7 +37,7 @@ public final class TPCcDataLoadTest {
     @Test
     public void test_B_create_workload() {
         // 2.5M~483 MB - 5M~966MB
-        WorkloadUtils.createWorkload(NUM_WARE, 5000000);
+        WorkloadUtils.createWorkload(NUM_WARE, 2000000, true);
     }
 
     @Test

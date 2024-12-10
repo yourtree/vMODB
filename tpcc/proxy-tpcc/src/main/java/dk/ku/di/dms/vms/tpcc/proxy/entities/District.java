@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.tpcc.proxy.entities;
 
-import dk.ku.di.dms.vms.modb.api.annotations.VmsForeignKey;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsTable;
 import dk.ku.di.dms.vms.modb.api.interfaces.IEntity;
 

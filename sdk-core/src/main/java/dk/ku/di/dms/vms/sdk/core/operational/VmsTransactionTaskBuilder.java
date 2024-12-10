@@ -6,7 +6,7 @@ import dk.ku.di.dms.vms.modb.common.transaction.ITransactionContext;
 import dk.ku.di.dms.vms.modb.common.transaction.ITransactionManager;
 
 import java.lang.reflect.InvocationTargetException;
-import java.util.Optional;
+import java.util.List;
 
 import static java.lang.System.Logger.Level.ERROR;
 
@@ -46,39 +46,47 @@ public final class VmsTransactionTaskBuilder {
         // the information necessary to run the method
         private final VmsTransactionSignature signature;
 
-        private final Object input;
+        private final Object inputEvent;
 
         private volatile int status;
 
-        @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-        private final Optional<Object> partitionId;
+        private final List<Object> partitionKeys;
 
         private VmsTransactionTask(long tid, long lastTid, long batch,
                                    VmsTransactionSignature signature,
-                                   Object input) {
+                                   Object inputEvent) {
             this.tid = tid;
             this.lastTid = lastTid;
             this.batch = batch;
             this.signature = signature;
-            this.input = input;
-            Optional<Object> partitionIdAux;
+            this.inputEvent = inputEvent;
+            this.partitionKeys = getPartitionKeys(signature, inputEvent);
+        }
+
+        @SuppressWarnings("unchecked")
+        private static List<Object> getPartitionKeys(VmsTransactionSignature signature, Object inputEvent) {
+            List<Object> partitionIdAux;
             try {
                 if (signature.executionMode() == ExecutionModeEnum.PARTITIONED) {
-                    partitionIdAux = Optional.of(signature.partitionByMethod().invoke(input()));
+                    if (List.class.isAssignableFrom(signature.partitionByMethod().getReturnType())) {
+                        partitionIdAux = (List<Object>) signature.partitionByMethod().invoke(inputEvent);
+                    } else {
+                        partitionIdAux = List.of(signature.partitionByMethod().invoke(inputEvent));
+                    }
                 } else {
-                    partitionIdAux = Optional.empty();
+                    partitionIdAux = List.of();
                 }
             } catch (InvocationTargetException | IllegalAccessException e){
-                LOGGER.log(ERROR, "Failed to obtain partition key from method "+signature.partitionByMethod().getName());
-                partitionIdAux = Optional.empty();
+                LOGGER.log(ERROR, "Failed to obtain partition key(s) from method "+ signature.partitionByMethod().getName());
+                partitionIdAux = List.of();
             }
-            this.partitionId = partitionIdAux;
+            return partitionIdAux;
         }
 
         private void readOnlyRun(){
             try{
-                ITransactionContext txCtx = transactionManager.beginTransaction(this.tid, -1, this.lastTid, true);
-                Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.input);
+                transactionManager.beginTransaction(this.tid, -1, this.lastTid, true);
+                Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.inputEvent);
                 OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
                 schedulerCallback.success(this.signature.executionMode(), eventOutput);
             } catch (IllegalAccessException | InvocationTargetException e) {
@@ -109,7 +117,7 @@ public final class VmsTransactionTaskBuilder {
             }
             ITransactionContext txCtx = transactionManager.beginTransaction(this.tid, -1, this.lastTid, false);
             try {
-                Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.input);
+                Object output = this.signature.method().invoke(this.signature.vmsInstance(), this.inputEvent);
                 OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
                 transactionManager.commit();
                 schedulerCallback.success(this.signature.executionMode(), eventOutput);
@@ -131,7 +139,7 @@ public final class VmsTransactionTaskBuilder {
         }
 
         public Object input(){
-            return this.input;
+            return this.inputEvent;
         }
 
         public int status(){
@@ -163,8 +171,8 @@ public final class VmsTransactionTaskBuilder {
             this.status = FAILED;
         }
 
-        public Optional<Object> partitionId() {
-            return this.partitionId;
+        public List<Object> partitionKeys() {
+            return this.partitionKeys;
         }
 
         @Override

@@ -71,10 +71,7 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         return new VmsTransactionScheduler(
                 vmsIdentifier,
                 vmsThreadPoolSize == 0 ? ForkJoinPool.commonPool() :
-                        Executors.newFixedThreadPool( vmsThreadPoolSize,
-                                Thread.ofPlatform().name("vms-task-thread")
-                                        //.priority(Thread.MAX_PRIORITY)
-                                        .factory() ),
+                        Executors.newFixedThreadPool( vmsThreadPoolSize, Thread.ofPlatform().name("vms-task-thread").factory() ),
                 transactionInputQueue,
                 transactionMetadataMap,
                 transactionalHandler,
@@ -167,9 +164,11 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                 case SINGLE_THREADED -> singleThreadTaskRunning = false;
                 case PARALLEL -> numParallelTasksRunning.decrementAndGet();
                 case PARTITIONED -> {
-                    if(task.partitionId().isPresent()){
-                        if(!partitionKeyTrackingMap.remove(task.partitionId().get())){
-                            LOGGER.log(WARNING, vmsIdentifier+": Partitioned task "+ task.tid()+" did not find its partition ID ("+ task.partitionId().get()+") in the tracking map!");
+                    if(!task.partitionKeys().isEmpty()){
+                        for(var partitionKey : task.partitionKeys()) {
+                            if (!partitionKeyTrackingMap.remove(partitionKey)) {
+                                LOGGER.log(WARNING, vmsIdentifier + ": Partitioned task " + task.tid() + " did not find its partition ID (" + partitionKey + ") in the tracking map!");
+                            }
                         }
                         numPartitionedTasksRunning.decrementAndGet();
                         LOGGER.log(DEBUG, vmsIdentifier + ": Partitioned task " + task.tid() + " finished execution.");
@@ -231,15 +230,16 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
                     this.sharedTaskPool.submit(task);
                 }
                 case PARTITIONED -> {
-                    if(task.partitionId().isEmpty()){
+                    if(task.partitionKeys().isEmpty()){
                         if(this.canSingleThreadTaskRun()){
                             LOGGER.log(WARNING, this.vmsIdentifier + ": Task will run as single-threaded even though it is marked as partitioned:\n"+task);
                             this.submitSingleThreadTaskForExecution(task);
                         }
                         return;
                     }
-                    if (!this.canPartitionedTaskRun() || this.partitionKeyTrackingMap.contains(task.partitionId().get())) {
-                        return;
+                    if (!this.canPartitionedTaskRun()) { return; }
+                    for(Object partitionKey : task.partitionKeys()){
+                        if(this.partitionKeyTrackingMap.contains(partitionKey)) return;
                     }
                     this.submitPartitionedTaskForExecution(task);
                 }
@@ -251,9 +251,8 @@ public final class VmsTransactionScheduler extends StoppableRunnable {
         }
     }
 
-    @SuppressWarnings("OptionalGetWithoutIsPresent")
     private void submitPartitionedTaskForExecution(VmsTransactionTask task) {
-        this.partitionKeyTrackingMap.add(task.partitionId().get());
+        this.partitionKeyTrackingMap.addAll(task.partitionKeys());
         this.numPartitionedTasksRunning.incrementAndGet();
         task.signalReady();
         LOGGER.log(DEBUG, this.vmsIdentifier+": Scheduling partitioned task for execution:\n"+ task);

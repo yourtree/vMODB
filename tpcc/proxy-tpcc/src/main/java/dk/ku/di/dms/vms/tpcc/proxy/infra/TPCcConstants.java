@@ -8,7 +8,6 @@ public final class TPCcConstants {
     /**
      * WORKLOAD
      */
-    public static final boolean ALLOW_MULTI_WAREHOUSE_TX = false;
     public static final boolean FORCE_ABORTS = false;
 
     /**
