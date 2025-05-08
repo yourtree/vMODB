@@ -113,6 +113,7 @@ public final class Main {
             }
         }
         scanner.close();
+        System.exit(0);
     }
 
     private static void printMenu() {

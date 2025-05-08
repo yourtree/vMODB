@@ -13,6 +13,7 @@ import java.util.Properties;
 import java.util.concurrent.*;
 import java.util.function.Function;
 
+import static java.lang.System.Logger.Level.ERROR;
 import static java.lang.System.Logger.Level.INFO;
 
 public final class DataLoadUtils {
@@ -27,7 +28,11 @@ public final class DataLoadUtils {
         Map<String, QueueTableIterator> tableInputMap = new HashMap<>();
         try {
             for(var idx : tableToIndexMap.entrySet()){
-                tableInputMap.put(idx.getKey(), new QueueTableIterator(idx.getValue(), entityHandlerMap.get(idx.getKey())));
+                if(idx.getKey().contains("stock")){
+                    tableInputMap.put(idx.getKey(), new QueueTableIterator(idx.getValue(), entityHandlerMap.get("stock")));
+                } else {
+                    tableInputMap.put(idx.getKey(), new QueueTableIterator(idx.getValue(), entityHandlerMap.get(idx.getKey())));
+                }
             }
         } catch (Exception e){
             throw new RuntimeException(e);
@@ -82,14 +87,20 @@ public final class DataLoadUtils {
         private static final Map<String, ConcurrentLinkedDeque<MinimalHttpClient>> CONNECTION_POOL = new ConcurrentHashMap<>();
 
         private static final Function<String, MinimalHttpClient> HTTP_CLIENT_SUPPLIER = (table) -> {
-            String service = TPCcConstants.TABLE_TO_VMS_MAP.get(table);
-            var clientPool = CONNECTION_POOL.computeIfAbsent(service, (ignored)-> new ConcurrentLinkedDeque<>());
-            if (!clientPool.isEmpty()) {
-                MinimalHttpClient client = clientPool.poll();
-                if (client != null) return client;
+            String vms = TPCcConstants.TABLE_TO_VMS_MAP.get(table);
+
+            if(vms != null){
+                var clientPool = CONNECTION_POOL.computeIfAbsent(vms, (ignored)-> new ConcurrentLinkedDeque<>());
+                if (!clientPool.isEmpty()) {
+                    MinimalHttpClient client = clientPool.poll();
+                    if (client != null) return client;
+                }
+            } else {
+                LOGGER.log(ERROR, table+" not found! Set it correctly in TPCcConstants.TABLE_TO_VMS_MAP");
             }
-            String host = PROPERTIES.getProperty(service + "_host");
-            int port = TPCcConstants.VMS_TO_PORT_MAP.get(service);
+
+            String host = PROPERTIES.getProperty(vms + "_host");
+            int port = TPCcConstants.VMS_TO_PORT_MAP.get(vms);
             try {
                 return new MinimalHttpClient(host, port);
             } catch (IOException e) {
@@ -116,10 +127,11 @@ public final class DataLoadUtils {
                     MinimalHttpClient client = HTTP_CLIENT_SUPPLIER.apply(table.getKey());
                     var queue = table.getValue();
                     String entity;
+                    String actualTable = table.getKey().contains("stock") ? "stock" : table.getKey();
                     int count = 0;
                     LOGGER.log(INFO, "Thread "+Thread.currentThread().threadId()+" starting with table "+table.getKey());
                     while ((entity = queue.poll()) != null) {
-                        client.sendRequest("POST", entity, table.getKey());
+                        client.sendRequest("POST", entity, actualTable);
                         count++;
                     }
                     LOGGER.log(INFO, "Thread "+Thread.currentThread().threadId()+" finished with table "+table.getKey()+": "+count+" records sent.");

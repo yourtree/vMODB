@@ -16,7 +16,7 @@ public final class OrderHttpHandler extends DefaultHttpHandler {
     }
 
     @Override
-    public String getAsJson(String uri) throws RuntimeException {
+    public Object getAsJson(String uri) throws RuntimeException {
         String[] uriSplit = uri.split("/");
         String table = uriSplit[uriSplit.length - 1];
         switch (table){
@@ -25,8 +25,7 @@ public final class OrderHttpHandler extends DefaultHttpHandler {
                 int distId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
                 int wareId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
                 this.transactionManager.beginTransaction(0, 0, 0, true);
-                Order order = this.orderRepository.lookupByKey(new Order.OrderId(orderId, distId, wareId));
-                return order.toString();
+                return this.orderRepository.lookupByKey(new Order.OrderId(orderId, distId, wareId));
             }
             case null, default -> {
                 LOGGER.log(System.Logger.Level.WARNING, "URI not recognized: "+uri);

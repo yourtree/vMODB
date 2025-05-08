@@ -51,7 +51,7 @@ public final class Main {
         }
 
         @Override
-        public String getAsJson(String uri) {
+        public Object getAsJson(String uri) {
             String[] uriSplit = uri.split("/");
             int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
             long lastTid = VMS.lastTidFinished();

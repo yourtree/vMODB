@@ -28,7 +28,7 @@ public final class WarehouseHttpHandler extends DefaultHttpHandler {
     }
 
     @Override
-    public String getAsJson(String uri) throws RuntimeException {
+    public Object getAsJson(String uri) throws RuntimeException {
         String[] uriSplit = uri.split("/");
         String table;
         switch (uriSplit.length){
@@ -41,23 +41,20 @@ public final class WarehouseHttpHandler extends DefaultHttpHandler {
             case "warehouse" -> {
                 int wareId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
                 this.transactionManager.beginTransaction(0, 0, 0, true);
-                Warehouse warehouse = this.warehouseRepository.lookupByKey(wareId);
-                return warehouse.toString();
+                return this.warehouseRepository.lookupByKey(wareId);
             }
             case "district" -> {
                 int distId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
                 int wareId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
                 this.transactionManager.beginTransaction(Long.MAX_VALUE, 0, Long.MAX_VALUE, true);
-                District district = this.districtRepository.lookupByKey(new District.DistrictId( distId, wareId ));
-                return district.toString();
+                return this.districtRepository.lookupByKey(new District.DistrictId( distId, wareId ));
             }
             case "customer" -> {
                 int cId = Integer.parseInt(uriSplit[uriSplit.length - 3]);
                 int distId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
                 int wareId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
                 this.transactionManager.beginTransaction(0, 0, 0, true);
-                Customer customer = this.customerRepository.lookupByKey(new Customer.CustomerId( cId, distId, wareId ));
-                return customer.toString();
+                return this.customerRepository.lookupByKey(new Customer.CustomerId( cId, distId, wareId ));
             }
             case null, default -> {
                 LOGGER.log(System.Logger.Level.WARNING, "URI not recognized: "+uri);

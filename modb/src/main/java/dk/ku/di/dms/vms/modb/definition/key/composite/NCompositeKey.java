@@ -25,10 +25,12 @@ public final class NCompositeKey extends BaseComposite implements IKey, IIndexKe
     }
 
     public static int hashCode(Object[] a) {
-        int result = 1;
+        StringBuilder sb = new StringBuilder();
         for (Object element : a)
-            result = 32 * result + element.hashCode();
-        return result;
+            sb.append(element).append("|");
+        sb.setLength(sb.length()-1);
+        int value = sb.toString().hashCode();
+        return value < 0 ? value & 0x7fffffff : value;
     }
 
     @Override

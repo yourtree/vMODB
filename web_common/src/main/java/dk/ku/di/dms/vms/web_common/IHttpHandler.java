@@ -6,7 +6,7 @@ public interface IHttpHandler {
 
     default void post(String uri, String body) throws RuntimeException { }
 
-    default String getAsJson(String uri) throws RuntimeException { return null; }
+    default Object getAsJson(String uri) throws RuntimeException { return null; }
 
     default byte[] getAsBytes(String uri) { return null; }
 

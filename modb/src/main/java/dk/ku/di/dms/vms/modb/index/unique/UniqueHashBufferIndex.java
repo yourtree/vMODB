@@ -39,6 +39,9 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     // the conjunction of all buffers can possibly hold
     private final int capacity;
 
+    // last addressable record
+    private final long limit;
+
     // for operations that require exclusive access to the whole buffer like reset and checkpoint
     private final ReentrantLock lock = new ReentrantLock();
 
@@ -48,6 +51,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         this.recordSize = schema.getRecordSize();
         this.size = 0;
         this.capacity = capacity;
+        this.limit = recordBufferContext.address + (this.recordSize * (this.capacity - 1));
     }
 
     @Override
@@ -95,7 +99,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     /**
      * <a href="https://algs4.cs.princeton.edu/34hash/">Why (key & 0x7fffffff)?</a>
-     * The % operator returns a negative value if the key is negative
+     * % 0x7fffffff returns a positive value if the key is negative
      * Therefore, this function assumes input is always positive
      */
     private long getPosition(int key){
@@ -206,12 +210,12 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         long pos = this.getPosition(key.hashCode());
         boolean busy = UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE;
         while (busy && attemptsToFind > 0) {
-            pos = this.getPosition(key.hashCode() + Math.multiplyExact(aux, 2));
+            pos = pos + (this.recordSize * Math.multiplyExact(aux, 2));
             attemptsToFind--;
             aux++;
             busy = UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE;
         }
-        if(!busy) return pos;
+        if(!busy && pos <= this.limit) return pos;
         return -1;
     }
 
@@ -228,7 +232,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
                 }
             }
             attemptsToFind--;
-            pos = this.getPosition(key.hashCode() + Math.multiplyExact(aux, 2));
+            pos = pos + (this.recordSize * Math.multiplyExact(aux, 2));
             aux++;
         }
         return -1;

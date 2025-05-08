@@ -90,20 +90,20 @@ public final class VmsTransactionTaskBuilder {
                 OutboundEventResult eventOutput = new OutboundEventResult(this.tid, this.batch, this.signature.outputQueue(), output);
                 schedulerCallback.success(this.signature.executionMode(), eventOutput);
             } catch (IllegalAccessException | InvocationTargetException e) {
-                this.handleErrorOnTask(e);
+                this.handleErrorOnTask(e, this.inputEvent);
             } catch (Exception e){
-                this.handleGenericError(e);
+                this.handleGenericError(e, this.inputEvent);
             }
         }
 
-        private void handleGenericError(Exception e) {
-            LOGGER.log(ERROR, "Error not related to invoking task "+this.toString()+"\n"+ e);
+        private void handleGenericError(Exception e, Object input) {
+            LOGGER.log(ERROR, "Error not related to invoking task "+this.toString()+"\n Input event: "+input+"\n"+ e);
             e.printStackTrace(System.out);
             schedulerCallback.error(signature.executionMode(), this.tid, e);
         }
 
-        private void handleErrorOnTask(ReflectiveOperationException e) {
-            LOGGER.log(ERROR, "Error during invoking task "+this.toString()+"\n"+ e);
+        private void handleErrorOnTask(ReflectiveOperationException e, Object input) {
+            LOGGER.log(ERROR, "Error during invoking task "+this.toString()+"\n Input event: "+input+"\n"+ e);
             e.printStackTrace(System.out);
             schedulerCallback.error(signature.executionMode(), this.tid, e);
         }
@@ -122,9 +122,9 @@ public final class VmsTransactionTaskBuilder {
                 transactionManager.commit();
                 schedulerCallback.success(this.signature.executionMode(), eventOutput);
             } catch (IllegalAccessException | InvocationTargetException e) {
-                this.handleErrorOnTask(e);
+                this.handleErrorOnTask(e, this.inputEvent);
             } catch (Exception e){
-                this.handleGenericError(e);
+                this.handleGenericError(e, this.inputEvent);
             }
             // avoid returning indexes to pool before committing
             txCtx.release();

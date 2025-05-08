@@ -70,13 +70,12 @@ public final class Main {
         }
 
         @Override
-        public String getAsJson(String uri) {
+        public Object getAsJson(String uri) {
             final String[] uriSplit = uri.split("/");
             int sellerId = Integer.parseInt(uriSplit[uriSplit.length - 2]);
             int productId = Integer.parseInt(uriSplit[uriSplit.length - 1]);
             this.transactionManager.beginTransaction(0, 0, 0, true);
-            StockItem stockItem = this.repository.lookupByKey(new StockItem.StockId(sellerId, productId));
-            return stockItem.toString();
+            return this.repository.lookupByKey(new StockItem.StockId(sellerId, productId));
         }
     }
 

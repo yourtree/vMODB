@@ -97,6 +97,15 @@
               <arg>java.base/jdk.internal.misc=ALL-UNNAMED</arg>
               <arg>--add-opens</arg>
               <arg>java.base/jdk.internal.misc=ALL-UNNAMED</arg>
+              <arg>-parameters</arg>
+              <arg>-Xlint:deprecation</arg>
+              <arg>-Xlint:path</arg>
+              <arg>-Xlint:serial</arg>
+              <arg>-Xlint:unchecked</arg>
+              <arg>-Xmaxerrs</arg>
+              <arg>10000</arg>
+              <arg>-Xmaxwarns</arg>
+              <arg>999999</arg>
             </compilerArgs>
           </configuration>
         </plugin>

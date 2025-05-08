@@ -100,6 +100,14 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         + "\r\n"
                         + "No payload in the body").getBytes(StandardCharsets.UTF_8);
 
+        private static final byte[] NOT_FOUND_ERR_MSG =
+                ("HTTP/1.1 404 Not Found\r\n"
+                        + "Content-Type: text/plain\r\n"
+                        + "Content-Length: 30\r\n"
+                        + "Connection: close\r\n"
+                        + "\r\n"
+                        + "Object requested was not found").getBytes(StandardCharsets.UTF_8);
+
         public void process(String request){
             try {
                 final HttpUtils.HttpRequestInternal httpRequest = HttpUtils.parseRequest(request);
@@ -110,8 +118,19 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         } else {
                             switch (httpRequest.headers().get("Accept")) {
                                 case "*/*", "application/json" -> ForkJoinPool.commonPool().submit(() -> {
-                                    String dashJson = this.httpHandler.getAsJson(httpRequest.uri());
-                                    byte[] dashJsonBytes = dashJson.getBytes(StandardCharsets.UTF_8);
+                                    Object objectJson = this.httpHandler.getAsJson(httpRequest.uri());
+
+                                    if(objectJson == null){
+                                        try {
+                                            this.sendErrorMsgAndCloseConnection(NOT_FOUND_ERR_MSG);
+                                            return;
+                                        } catch (Exception e){
+                                            this.processError(request, e);
+                                            return;
+                                        }
+                                    }
+
+                                    byte[] dashJsonBytes = objectJson.toString().getBytes(StandardCharsets.UTF_8);
                                     String headers = createHttpHeaders(dashJsonBytes.length);
                                     byte[] headerBytes = headers.getBytes(StandardCharsets.UTF_8);
                                     // ask memory utils for a byte buffer big enough to fit the seller dashboard
@@ -183,22 +202,26 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 this.readBuffer.clear();
                 this.connectionMetadata.channel.read(this.readBuffer, 0, this);
             } catch (Exception e){
-                this.writeBuffer.clear();
-                byte[] errorBytes;
-                if(e.getMessage() == null){
-                    System.out.println("Exception without message has been caught:\n"+e+"\nRequest:\n"+request);
-                    e.printStackTrace(System.out);
-                    errorBytes = ERROR_RESPONSE_BYTES;
-                } else {
-                    errorBytes = ("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "+
-                            e.getMessage().length()+"\r\n\r\n" + e.getMessage()).getBytes(StandardCharsets.UTF_8);
-                }
-                this.writeBuffer.put(errorBytes);
-                this.writeBuffer.flip();
-                this.connectionMetadata.channel.write(this.writeBuffer, null, this.defaultWriteCH);
-                this.readBuffer.clear();
-                this.connectionMetadata.channel.read(this.readBuffer, 0, this);
+                this.processError(request, e);
             }
+        }
+
+        private void processError(String request, Exception e) {
+            this.writeBuffer.clear();
+            byte[] errorBytes;
+            if(e.getMessage() == null){
+                System.out.println("Exception without message has been caught:\n"+ e +"\nRequest:\n"+ request);
+                e.printStackTrace(System.out);
+                errorBytes = ERROR_RESPONSE_BYTES;
+            } else {
+                errorBytes = ("HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "+
+                        e.getMessage().length()+"\r\n\r\n" + e.getMessage()).getBytes(StandardCharsets.UTF_8);
+            }
+            this.writeBuffer.put(errorBytes);
+            this.writeBuffer.flip();
+            this.connectionMetadata.channel.write(this.writeBuffer, null, this.defaultWriteCH);
+            this.readBuffer.clear();
+            this.connectionMetadata.channel.read(this.readBuffer, 0, this);
         }
 
         private void sendErrorMsgAndCloseConnection(byte[] errorResponseBytes) throws IOException {

@@ -64,13 +64,12 @@ public final class Main {
         }
 
         @Override
-        public String getAsJson(String uri) {
+        public Object getAsJson(String uri) {
             String[] split = uri.split("/");
             int sellerId = Integer.parseInt(split[split.length - 2]);
             int productId = Integer.parseInt(split[split.length - 1]);
             this.transactionManager.beginTransaction(0, 0, 0,true);
-            Product product = this.repository.lookupByKey(new Product.ProductId(sellerId, productId));
-            return product.toString();
+            return this.repository.lookupByKey(new Product.ProductId(sellerId, productId));
         }
 
     }
