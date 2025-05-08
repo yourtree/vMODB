@@ -200,7 +200,7 @@ public final class ConsumerVmsWorker extends StoppableRunnable implements IVmsCo
     private boolean connect() {
         ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize());
         try{
-            NetworkUtils.configure(this.channel, options.osBufferSize());
+            NetworkUtils.configure(this.channel, options.soBufferSize());
             this.channel.connect(this.consumerVms.asInetSocketAddress()).get();
             this.state = CONNECTED;
             LOGGER.log(DEBUG,this.me.identifier+ ": The node "+ this.consumerVms.host+" "+ this.consumerVms.port+" status = "+this.state);

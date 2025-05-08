@@ -43,10 +43,7 @@ public final class TPCcConstants {
         TABLE_TO_VMS_MAP.put("customer", "warehouse");
 
         TABLE_TO_VMS_MAP.put("item", "inventory");
-
-        for(int ware = 1; ware <= 32; ware = ware * 2){
-            TABLE_TO_VMS_MAP.put("stock_"+ware, "inventory");
-        }
+        TABLE_TO_VMS_MAP.put("stock", "inventory");
 
         TABLE_TO_VMS_MAP.put("orders", "order");
         TABLE_TO_VMS_MAP.put("new_orders", "order");

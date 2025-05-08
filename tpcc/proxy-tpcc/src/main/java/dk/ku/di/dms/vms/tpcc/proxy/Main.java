@@ -99,10 +99,10 @@ public final class Main {
                             numConnected = coordinator.getConnectedVMSs().size();
                         } while (numConnected < 3);
                     }
-                    // TODO implement the gather in network send
                     var expStats = ExperimentUtils.runExperiment(coordinator, input, runTime, warmUp);
                     ExperimentUtils.writeResultsToFile(numWare, expStats, runTime, warmUp,
                             coordinator.getOptions().getNumTransactionWorkers(), coordinator.getOptions().getBatchWindow(), coordinator.getOptions().getMaxTransactionsPerBatch());
+                    // TODO cleanup order state
                     break;
                 case "0":
                     System.out.println("Exiting the application...");

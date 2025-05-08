@@ -6,15 +6,11 @@ import dk.ku.di.dms.vms.sdk.embed.entity.EntityHandler;
 import dk.ku.di.dms.vms.tpcc.proxy.infra.MinimalHttpClient;
 import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Function;
 
-import static java.lang.System.Logger.Level.ERROR;
-import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.*;
 
 public final class DataLoadUtils {
 
@@ -28,8 +24,10 @@ public final class DataLoadUtils {
         Map<String, QueueTableIterator> tableInputMap = new HashMap<>();
         try {
             for(var idx : tableToIndexMap.entrySet()){
-                if(idx.getKey().contains("stock")){
+                if (idx.getKey().contains("stock")){
                     tableInputMap.put(idx.getKey(), new QueueTableIterator(idx.getValue(), entityHandlerMap.get("stock")));
+                } else if (idx.getKey().contains("customer")) {
+                    tableInputMap.put(idx.getKey(), new QueueTableIterator(idx.getValue(), entityHandlerMap.get("customer")));
                 } else {
                     tableInputMap.put(idx.getKey(), new QueueTableIterator(idx.getValue(), entityHandlerMap.get(idx.getKey())));
                 }
@@ -99,12 +97,12 @@ public final class DataLoadUtils {
                 LOGGER.log(ERROR, table+" not found! Set it correctly in TPCcConstants.TABLE_TO_VMS_MAP");
             }
 
-            String host = PROPERTIES.getProperty(vms + "_host");
-            int port = TPCcConstants.VMS_TO_PORT_MAP.get(vms);
             try {
+                String host = PROPERTIES.getProperty(vms + "_host");
+                int port = TPCcConstants.VMS_TO_PORT_MAP.get(vms);
                 return new MinimalHttpClient(host, port);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            } catch (Exception e) {
+                throw new RuntimeException("Exception captured for VMS "+vms+" table "+table+" \n"+ e);
             }
         };
 
@@ -124,18 +122,28 @@ public final class DataLoadUtils {
         public void run() {
             try {
                 for(var table : this.tableInputMap.entrySet()) {
-                    MinimalHttpClient client = HTTP_CLIENT_SUPPLIER.apply(table.getKey());
-                    var queue = table.getValue();
-                    String entity;
                     String actualTable = table.getKey().contains("stock") ? "stock" : table.getKey();
+                    actualTable = table.getKey().contains("customer") ? "customer" : actualTable;
+                    MinimalHttpClient client = HTTP_CLIENT_SUPPLIER.apply(actualTable);
+                    QueueTableIterator queue = table.getValue();
+                    String entity;
                     int count = 0;
                     LOGGER.log(INFO, "Thread "+Thread.currentThread().threadId()+" starting with table "+table.getKey());
+                    List<String> errors = new ArrayList<>();
                     while ((entity = queue.poll()) != null) {
-                        client.sendRequest("POST", entity, actualTable);
+                        if(client.sendRequest("POST", entity, actualTable) != 200){
+                            errors.add(entity);
+                            continue;
+                        }
                         count++;
                     }
-                    LOGGER.log(INFO, "Thread "+Thread.currentThread().threadId()+" finished with table "+table.getKey()+": "+count+" records sent.");
-                    returnConnection(table.getKey(), client);
+
+                    if(!errors.isEmpty()){
+                        LOGGER.log(WARNING, "Thread "+Thread.currentThread().threadId()+" finished with table "+table.getKey()+": "+count+" records sent and "+errors.size()+ " errors.");
+                    } else {
+                        LOGGER.log(INFO, "Thread "+Thread.currentThread().threadId()+" finished with table "+table.getKey()+": "+count+" records sent.");
+                    }
+                    returnConnection(actualTable, client);
                 }
             } catch (Exception e){
                 e.printStackTrace(System.err);

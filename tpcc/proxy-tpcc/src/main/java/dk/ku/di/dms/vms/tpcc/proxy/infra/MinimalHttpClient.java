@@ -71,16 +71,14 @@ public final class MinimalHttpClient implements Closeable {
         return response.toString();
     }
 
-    public void sendRequest(String method, String jsonBody, String param) throws IOException {
+    public int sendRequest(String method, String jsonBody, String param) throws IOException {
         String httpRequest = buildHttpRequest(method, jsonBody, jsonBody.getBytes(StandardCharsets.UTF_8).length, param);
         this.writeBuffer.put(httpRequest.getBytes(StandardCharsets.UTF_8));
         this.writeBuffer.flip();
         this.socketChannel.write(this.writeBuffer);
         this.writeBuffer.clear();
-
-        // read to block waiting for response and avoid concatenating requests
-        this.socketChannel.read(this.readBuffer);
-        this.readBuffer.clear();
+        // must read everything to avoid errors
+        return this.readFully();
     }
 
     @Override
@@ -90,6 +88,54 @@ public final class MinimalHttpClient implements Closeable {
         this.writeBuffer.clear();
         MemoryManager.releaseTemporaryDirectBuffer(this.readBuffer);
         MemoryManager.releaseTemporaryDirectBuffer(this.writeBuffer);
+    }
+
+    private int readFully() throws IOException {
+        StringBuilder responseBuilder = new StringBuilder();
+
+        // headers
+        boolean headersEnded = false;
+        while (!headersEnded && socketChannel.read(this.readBuffer) > 0) {
+            this.readBuffer.flip();
+            byte[] bytes = new byte[this.readBuffer.remaining()];
+            this.readBuffer.get(bytes);
+            String chunk = new String(bytes, StandardCharsets.UTF_8);
+            responseBuilder.append(chunk);
+            this.readBuffer.clear();
+            if (responseBuilder.toString().contains("\r\n\r\n")) {
+                headersEnded = true;
+            }
+        }
+
+        String headersPart = responseBuilder.toString();
+        int status = Integer.parseInt(headersPart.split("\r\n", 2)[0].split(" ")[1]);
+
+        // content-Length
+        int contentLength = 0;
+        for (String line : headersPart.split("\r\n")) {
+            if (line.toLowerCase().startsWith("content-length:")) {
+                contentLength = Integer.parseInt(line.split(":")[1].trim());
+                break;
+            }
+        }
+
+        // body
+        //StringBuilder bodyBuilder = new StringBuilder();
+        int remaining = contentLength;
+        while (remaining > 0) {
+            int read = socketChannel.read(this.readBuffer);
+            if (read == -1) break;  // end of stream
+            this.readBuffer.flip();
+            byte[] bytes = new byte[this.readBuffer.remaining()];
+            this.readBuffer.get(bytes);
+            //bodyBuilder.append(new String(bytes, StandardCharsets.UTF_8));
+            remaining -= bytes.length;
+            this.readBuffer.clear();
+        }
+
+//        String fullResponse = headersPart + bodyBuilder;
+//        System.out.println("HTTP response:\n" + fullResponse);
+        return status;
     }
 
 }

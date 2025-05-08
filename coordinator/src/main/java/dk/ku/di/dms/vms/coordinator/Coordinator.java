@@ -137,7 +137,7 @@ public final class Coordinator extends ModbHttpServer {
 
         // network
         int networkBufferSize = Integer.parseInt( properties.getProperty("network_buffer_size") );
-        int osBufferSize = Integer.parseInt( properties.getProperty("os_buffer_size") );
+        int soBufferSize = Integer.parseInt( properties.getProperty("so_buffer_size") );
         int groupPoolSize = Integer.parseInt( properties.getProperty("network_thread_pool_size") );
         int networkSendTimeout = Integer.parseInt( properties.getProperty("network_send_timeout") );
         int definiteBufferSize = networkBufferSize == 0 ? MemoryUtils.DEFAULT_PAGE_SIZE : networkBufferSize;
@@ -162,7 +162,7 @@ public final class Coordinator extends ModbHttpServer {
                 serverIdentifier,
                 new CoordinatorOptions()
                         .withNetworkBufferSize(definiteBufferSize)
-                        .withOsBufferSize(osBufferSize)
+                        .withSoBufferSize(soBufferSize)
                         .withNetworkThreadPoolSize(groupPoolSize)
                         .withNetworkSendTimeout(networkSendTimeout)
                         .withBatchWindow(batchWindow)
@@ -557,7 +557,7 @@ public final class Coordinator extends ModbHttpServer {
         public void completed(AsynchronousSocketChannel channel, Void void_) {
             ByteBuffer buffer = null;
             try {
-                NetworkUtils.configure(channel, options.getOsBufferSize());
+                NetworkUtils.configure(channel, options.getSoBufferSize());
 
                 // right now I cannot discern whether it is a VMS or follower. perhaps I can keep alive channels from leader election?
                 buffer = MemoryManager.getTemporaryDirectBuffer(options.getNetworkBufferSize());
@@ -645,7 +645,7 @@ public final class Coordinator extends ModbHttpServer {
                             MemoryManager.getTemporaryDirectBuffer(options.getNetworkBufferSize()),
                             httpHandler
                     );
-                    try { NetworkUtils.configure(channel, options.getOsBufferSize()); } catch (IOException ignored) { }
+                    try { NetworkUtils.configure(channel, options.getSoBufferSize()); } catch (IOException ignored) { }
                     readCompletionHandler.process(request);
                 } else {
                     LOGGER.log(WARNING,"Leader: A node is trying to connect without a presentation message. \n" + request);
@@ -765,7 +765,7 @@ public final class Coordinator extends ModbHttpServer {
         // only if it is not a duplicate vote
         batchContext.missingVotes.remove( batchComplete.vms() );
         if(batchContext.missingVotes.isEmpty()){
-            LOGGER.log(INFO,"Leader: Received all missing votes of batch: "+ batchContext.batchOffset);
+            LOGGER.log(INFO,"Leader: Received all missing votes of batch "+ batchContext.batchOffset + " with "+batchContext.numTIDsOverall+" transactions");
             this.updateBatchOffsetPendingCommit(batchContext);
         }
     }

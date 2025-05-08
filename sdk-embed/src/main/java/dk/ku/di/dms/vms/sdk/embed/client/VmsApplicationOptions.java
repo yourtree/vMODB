@@ -23,7 +23,7 @@ public final class VmsApplicationOptions {
 
     private final int networkSendTimeout;
 
-    private final int osBufferSize;
+    private final int soBufferSize;
 
     private final int maxSleep;
 
@@ -45,7 +45,7 @@ public final class VmsApplicationOptions {
         System.out.println("Properties: \n" + properties.toString());
 
         int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
-        int soBufferSize = Integer.parseInt(properties.getProperty("os_buffer_size"));
+        int soBufferSize = Integer.parseInt(properties.getProperty("so_buffer_size"));
         int networkSendTimeout = Integer.parseInt(properties.getProperty("network_send_timeout"));
         int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
         int vmsThreadPoolSize = Integer.parseInt(properties.getProperty("vms_thread_pool_size"));
@@ -87,7 +87,7 @@ public final class VmsApplicationOptions {
 
     private VmsApplicationOptions(String host, int port, String[] packages,
                                   int networkBufferSize, int networkThreadPoolSize, int numVmsWorkers,
-                                  int vmsThreadPoolSize, int networkSendTimeout, int osBufferSize,
+                                  int vmsThreadPoolSize, int networkSendTimeout, int soBufferSize,
                                   boolean logging, boolean checkpointing, boolean truncating, int maxRecords, int maxSleep) {
         this.host = host;
         this.port = port;
@@ -97,7 +97,7 @@ public final class VmsApplicationOptions {
         this.numVmsWorkers = numVmsWorkers;
         this.vmsThreadPoolSize = vmsThreadPoolSize;
         this.networkSendTimeout = networkSendTimeout;
-        this.osBufferSize = osBufferSize;
+        this.soBufferSize = soBufferSize;
         this.logging = logging;
         this.checkpointing = checkpointing;
         this.truncating = truncating;
@@ -133,8 +133,8 @@ public final class VmsApplicationOptions {
         return this.vmsThreadPoolSize;
     }
 
-    public int osBufferSize() {
-        return this.osBufferSize;
+    public int soBufferSize() {
+        return this.soBufferSize;
     }
 
     public int numVmsWorkers() {

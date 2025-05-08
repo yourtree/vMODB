@@ -14,7 +14,12 @@ import java.util.Set;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 
+import static java.lang.System.Logger.Level.ERROR;
+import static java.lang.System.Logger.Level.WARNING;
+
 public abstract class ModbHttpServer extends StoppableRunnable {
+
+    private static final System.Logger LOGGER = System.getLogger(ModbHttpServer.class.getName());
 
     private static final ExecutorService BACKGROUND_EXECUTOR = Executors.newSingleThreadExecutor();
 
@@ -144,7 +149,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                                         this.connectionMetadata.channel.write(bigBB, bigBB, this.bigBbWriteCH);
                                     } else {
                                         if (this.writeBuffer.position() != 0) {
-                                            System.out.println("This buffer has not been cleaned appropriately!");
+                                            LOGGER.log(ERROR, "This buffer has not been cleaned appropriately!");
                                             this.writeBuffer.clear();
                                         }
                                         this.writeBuffer.put(headerBytes);
@@ -179,6 +184,10 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                             return;
                         }
                         this.httpHandler.post(httpRequest.uri(), httpRequest.body());
+                        if(this.writeBuffer.remaining() < OK_RESPONSE_BYTES.length){
+                            LOGGER.log(WARNING, "Write buffer has no sufficient space. Did you forget to clean it up?");
+                            writeBuffer.clear();
+                        }
                         this.writeBuffer.put(OK_RESPONSE_BYTES);
                         this.writeBuffer.flip();
                         this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
@@ -210,7 +219,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             this.writeBuffer.clear();
             byte[] errorBytes;
             if(e.getMessage() == null){
-                System.out.println("Exception without message has been caught:\n"+ e +"\nRequest:\n"+ request);
+                LOGGER.log(ERROR, "Exception without message has been caught:\n"+ e +"\nRequest:\n"+ request);
                 e.printStackTrace(System.out);
                 errorBytes = ERROR_RESPONSE_BYTES;
             } else {
@@ -254,7 +263,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             try {
                 this.connectionMetadata.channel.write(this.writeBuffer, null, this.sseWriteCH);
             } catch (Exception e) {
-                System.out.println("Error caught: "+e.getMessage());
+                LOGGER.log(ERROR, "Error caught: "+e.getMessage());
                 SSE_CLIENTS.remove(this);
                 this.writeBuffer.clear();
             }

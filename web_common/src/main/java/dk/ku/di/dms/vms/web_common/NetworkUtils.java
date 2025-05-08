@@ -14,22 +14,22 @@ public final class NetworkUtils {
 
     private static final System.Logger LOGGER = System.getLogger(NetworkUtils.class.getName());
 
-    public static void configure(AsynchronousSocketChannel channel, int osBufferSize) throws IOException {
+    public static void configure(AsynchronousSocketChannel channel, int soBufferSize) throws IOException {
         channel.setOption(TCP_NODELAY, true);
         channel.setOption(SO_KEEPALIVE, true);
         if (channel.supportedOptions().contains(ExtendedSocketOptions.TCP_QUICKACK)) {
             channel.setOption(ExtendedSocketOptions.TCP_QUICKACK, false);
         }
-        if (osBufferSize > 0) {
-            LOGGER.log(DEBUG, "Configuring channel " + channel + " with " + osBufferSize + " as size of SO_SNDBUF and SO_RCVBUF");
-            channel.setOption(SO_SNDBUF, osBufferSize);
-            channel.setOption(SO_RCVBUF, osBufferSize);
+        if (soBufferSize > 0) {
+            LOGGER.log(DEBUG, "Configuring channel " + channel + " with " + soBufferSize + " as size of SO_SNDBUF and SO_RCVBUF");
+            channel.setOption(SO_SNDBUF, soBufferSize);
+            channel.setOption(SO_RCVBUF, soBufferSize);
         }
     }
 
-    public static void configure(IChannel channel_, int osBufferSize) throws IOException {
+    public static void configure(IChannel channel_, int soBufferSize) throws IOException {
         if(channel_ instanceof AsynchronousSocketChannel channel) {
-            configure(channel, osBufferSize);
+            configure(channel, soBufferSize);
         }
     }
 

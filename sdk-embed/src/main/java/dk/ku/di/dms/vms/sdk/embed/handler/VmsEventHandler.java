@@ -139,7 +139,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             return new VmsEventHandler(me, vmsMetadata,
                     transactionalHandler, vmsInternalChannels,
                     new VmsEventHandler.VmsHandlerOptions( options.maxSleep(), options.networkBufferSize(),
-                            options.osBufferSize(), options.networkThreadPoolSize(), options.networkSendTimeout(),
+                            options.soBufferSize(), options.networkThreadPoolSize(), options.networkSendTimeout(),
                             options.vmsThreadPoolSize(), options.numVmsWorkers(), options.isLogging(), options.isCheckpointing()),
                     httpHandler, serdesProxy);
         } catch (IOException e){
@@ -149,7 +149,7 @@ public final class VmsEventHandler extends ModbHttpServer {
 
     public record VmsHandlerOptions(int maxSleep,
                                     int networkBufferSize,
-                                    int osBufferSize,
+                                    int soBufferSize,
                                     int networkThreadPoolSize,
                                     int networkSendTimeout,
                                     int vmsThreadPoolSize,
@@ -563,7 +563,7 @@ public final class VmsEventHandler extends ModbHttpServer {
                             this.buffer,
                             MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize),
                             httpHandler);
-                    try { NetworkUtils.configure(this.channel, options.osBufferSize()); } catch (IOException ignored) { }
+                    try { NetworkUtils.configure(this.channel, options.soBufferSize()); } catch (IOException ignored) { }
                     readCompletionHandler.process(request);
                 } else {
                     LOGGER.log(WARNING, me.identifier + ": A node is trying to connect without a presentation message.\n"+request);
@@ -661,7 +661,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             LOGGER.log(DEBUG,me.identifier+": An unknown host has started a connection attempt.");
             final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize);
             try {
-                NetworkUtils.configure(channel, options.osBufferSize);
+                NetworkUtils.configure(channel, options.soBufferSize);
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 channel.read(buffer, null, new UnknownNodeReadCompletionHandler(channel, buffer));
             } catch(Exception e){
