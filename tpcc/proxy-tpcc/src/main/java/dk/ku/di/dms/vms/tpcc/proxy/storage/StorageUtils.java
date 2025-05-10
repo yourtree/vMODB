@@ -37,7 +37,7 @@ public final class StorageUtils {
     }
 
     public static int getNumRecordsFromInDiskTable(Schema schema, String fileName){
-        File file = EmbedMetadataLoader.buildFile(fileName);
+        File file = dk.ku.di.dms.vms.modb.utils.StorageUtils.buildFile(fileName);
         return (int) file.length() / schema.getRecordSize();
     }
 
@@ -91,8 +91,8 @@ public final class StorageUtils {
         return tableToIndexMap;
     }
 
-    private static int getOverflow(int numRecords, int growFactor){
-        return numRecords * growFactor;
+    private static int getOverflow(int numRecords){
+        return numRecords * 2;
     }
 
     @SuppressWarnings("unchecked")
@@ -102,7 +102,7 @@ public final class StorageUtils {
         var entityHandler = metadata.entityHandlerMap.get("stock");
         int maxRecords = numWare * TPCcConstants.NUM_ITEMS;
         LOGGER.log(INFO, "Creating "+maxRecords+" stock records...");
-        int overflowDisk = getOverflow(TPCcConstants.NUM_ITEMS, 2);
+        int overflowDisk = getOverflow(TPCcConstants.NUM_ITEMS);
         long initTs = System.currentTimeMillis();
         for(int w_id = 1; w_id <= numWare; w_id++) {
             String tableName = "stock_"+w_id;
@@ -131,7 +131,7 @@ public final class StorageUtils {
         int maxRecordsPerWarehouse = TPCcConstants.NUM_DIST_PER_WARE*TPCcConstants.NUM_CUST_PER_DIST;
         int maxRecords = numWare * maxRecordsPerWarehouse;
         LOGGER.log(INFO, "Creating "+maxRecords+" customer records...");
-        int overflowDisk = getOverflow(maxRecordsPerWarehouse, 2);
+        int overflowDisk = getOverflow(maxRecordsPerWarehouse);
         long initTs = System.currentTimeMillis();
         for(int w_id = 1; w_id <= numWare; w_id++){
             String tableName = "customer_"+w_id;
@@ -178,7 +178,7 @@ public final class StorageUtils {
             case "district" -> {
                 int maxRecords = numWare * TPCcConstants.NUM_DIST_PER_WARE;
                 LOGGER.log(INFO, "Creating "+maxRecords+" district records...");
-                int overflowDisk = getOverflow(maxRecords, 2);
+                int overflowDisk = getOverflow(maxRecords);
                 long initTs = System.currentTimeMillis();
                 UniqueHashBufferIndex idx = buildHashIndex(tableName, schema, overflowDisk, true);
                 for(int w_id = 1; w_id <= numWare; w_id++){
@@ -214,7 +214,7 @@ public final class StorageUtils {
     }
 
     public static UniqueHashBufferIndex buildHashIndex(String tableName, Schema schema, int maxRecords, boolean truncate) {
-        RecordBufferContext recordBufferContext = EmbedMetadataLoader.loadRecordBuffer(maxRecords, schema.getRecordSizeWithHeader(), tableName, truncate);
+        RecordBufferContext recordBufferContext = dk.ku.di.dms.vms.modb.utils.StorageUtils.loadRecordBuffer(maxRecords, schema.getRecordSizeWithHeader(), tableName, truncate);
         return new UniqueHashBufferIndex(recordBufferContext, schema, schema.getPrimaryKeyColumns(), maxRecords);
     }
 
@@ -233,7 +233,7 @@ public final class StorageUtils {
                 }
                 case "district" -> {
                     int maxRecords = numWare * TPCcConstants.NUM_DIST_PER_WARE;
-                    int overflowDisk = getOverflow(maxRecords, 2);
+                    int overflowDisk = getOverflow(maxRecords);
                     LOGGER.log(INFO, "Loading "+maxRecords+" districts...");
                     UniqueHashBufferIndex idx = buildHashIndex(entry.getValue(), schema, overflowDisk, false);
                     tableToIndexMap.put(entry.getValue(), idx);
@@ -242,7 +242,7 @@ public final class StorageUtils {
                     int maxRecordsPerWarehouse = TPCcConstants.NUM_DIST_PER_WARE * TPCcConstants.NUM_CUST_PER_DIST;
                     int maxRecords = numWare * maxRecordsPerWarehouse;
                     LOGGER.log(INFO, "Loading "+maxRecords+" customers...");
-                    int overflowDisk = getOverflow(maxRecordsPerWarehouse, 2);
+                    int overflowDisk = getOverflow(maxRecordsPerWarehouse);
                     for(int ware_id = 1; ware_id <= numWare; ware_id++) {
                         var tableName = entry.getValue()+"_"+ware_id;
                         UniqueHashBufferIndex idx = buildHashIndex(tableName, schema, overflowDisk, false);
@@ -256,7 +256,7 @@ public final class StorageUtils {
                 }
                 case "stock" -> {
                     int maxRecords = numWare * TPCcConstants.NUM_ITEMS;
-                    int overflowDisk = getOverflow(TPCcConstants.NUM_ITEMS, 2);
+                    int overflowDisk = getOverflow(TPCcConstants.NUM_ITEMS);
                     LOGGER.log(INFO, "Loading "+maxRecords+" stock items...");
                     for(int ware_id = 1; ware_id <= numWare; ware_id++) {
                         var tableName = entry.getValue()+"_"+ware_id;

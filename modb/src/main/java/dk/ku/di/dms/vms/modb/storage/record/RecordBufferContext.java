@@ -12,9 +12,21 @@ public sealed class RecordBufferContext permits AppendOnlyBuffer {
 
     protected final MemorySegment memorySegment;
 
-    public RecordBufferContext(MemorySegment memorySegment) {
+    // if segment is a mapped file
+    public final String fileName;
+
+    public static RecordBufferContext build(MemorySegment memorySegment){
+        return new RecordBufferContext(memorySegment, null);
+    }
+
+    public static RecordBufferContext build(MemorySegment memorySegment, String fileName){
+        return new RecordBufferContext(memorySegment, fileName);
+    }
+
+    protected RecordBufferContext(MemorySegment memorySegment, String fileName) {
         this.memorySegment = memorySegment;
         this.address = this.memorySegment.address();
+        this.fileName = fileName;
     }
 
     public final void force(){

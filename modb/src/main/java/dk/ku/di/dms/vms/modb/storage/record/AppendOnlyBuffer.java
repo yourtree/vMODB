@@ -29,8 +29,8 @@ public final class AppendOnlyBuffer extends RecordBufferContext {
     // the offset of the bucket
     private long nextOffset;
 
-    public AppendOnlyBuffer(MemorySegment memorySegment) {
-        super(memorySegment);
+    public AppendOnlyBuffer(MemorySegment memorySegment, String fileName) {
+        super(memorySegment, fileName);
         this.nextOffset = memorySegment.address();
     }
 

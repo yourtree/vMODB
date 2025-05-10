@@ -5,7 +5,6 @@ import dk.ku.di.dms.vms.modb.api.annotations.VmsIndex;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsPartialIndex;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
@@ -13,19 +12,11 @@ import dk.ku.di.dms.vms.modb.definition.Table;
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.index.IIndexKey;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
-import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashBufferIndex;
-import dk.ku.di.dms.vms.modb.index.non_unique.NonUniqueHashMapIndex;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
-import dk.ku.di.dms.vms.modb.index.unique.UniqueHashMapIndex;
-import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
-import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBufferOld;
-import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
-import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 import dk.ku.di.dms.vms.modb.transaction.OperationalAPI;
-import dk.ku.di.dms.vms.modb.transaction.multiversion.IntegerPrimaryKeyGenerator;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.NonUniqueSecondaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.UniqueSecondaryIndex;
+import dk.ku.di.dms.vms.modb.utils.StorageUtils;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 import net.bytebuddy.ByteBuddy;
@@ -37,25 +28,12 @@ import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
 
 import javax.persistence.GeneratedValue;
-import java.io.File;
-import java.io.IOException;
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
 import java.lang.reflect.*;
-import java.nio.channels.FileChannel;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.lang.System.Logger.Level.DEBUG;
-
 public final class EmbedMetadataLoader {
-
-    private static final System.Logger LOGGER = System.getLogger(EmbedMetadataLoader.class.getName());
-
-    private static final boolean SEC_IDX_IN_MEMORY_STORAGE = true;
 
     public static Map<String, Object> loadRepositoryClasses(Set<Class<?>> vmsClasses,
                                                           Map<Class<?>, String> entityToTableNameMap,
@@ -226,14 +204,14 @@ public final class EmbedMetadataLoader {
             // should overwrite max records?
             int maxRecords_ = maxRecords;
             String numRec = properties.getProperty("max_records."+entry.getKey().tableName);
-            if(numRec != null && !numRec.isEmpty() && !numRec.isBlank()){
+            if(numRec != null && !numRec.isBlank()){
                 maxRecords_ = Integer.parseInt(numRec);
             }
 
-            PrimaryIndex primaryIndex = createPrimaryIndex(entry.getKey().tableName, schema, isCheckpointing, isTruncating, maxRecords_);
+            PrimaryIndex primaryIndex = StorageUtils.createPrimaryIndex(entry.getKey().tableName, schema, isCheckpointing, isTruncating, maxRecords_);
             tableToPrimaryIndexMap.put(entry.getKey().tableName, primaryIndex);
 
-            // normal indexes (i.e., non partial) and foreign key indexes go here?
+            // normal indexes (i.e., non-partial) and foreign key indexes go here?
             List<ReadWriteIndex<IKey>> listSecondaryIndexes = new ArrayList<>();
             tableToSecondaryIndexMap.put(entry.getKey().tableName, listSecondaryIndexes);
 
@@ -244,7 +222,7 @@ public final class EmbedMetadataLoader {
             if(!entry.getValue().secondaryIndexMap().isEmpty()) {
                 // now create the secondary index (a - based on foreign keys and b - based on non-foreign keys)
                 for (var secIdx : entry.getValue().secondaryIndexMap().entrySet()) {
-                    ReadWriteIndex<IKey> nuhi = createNonUniqueIndex(schema, secIdx.getValue().t1(), "FK_"+secIdx.getKey() );
+                    ReadWriteIndex<IKey> nuhi = StorageUtils.createNonUniqueIndex(schema, secIdx.getValue().t1(), "FK_"+secIdx.getKey() );
                     listSecondaryIndexes.add(nuhi);
                 }
             }
@@ -255,10 +233,10 @@ public final class EmbedMetadataLoader {
                 for (var idxEntry : indexMetadataByName.entrySet()) {
                     ReadWriteIndex<IKey> nuhi;
                     if(idxEntry.getValue().size() == 1) {
-                        nuhi = createNonUniqueIndex(schema, new int[]{idxEntry.getValue().getFirst().columnPos()}, idxEntry.getKey());
+                        nuhi = StorageUtils.createNonUniqueIndex(schema, new int[]{idxEntry.getValue().getFirst().columnPos()}, idxEntry.getKey());
                     } else {
                         int[] columnList = idxEntry.getValue().stream().mapToInt(c-> c.columnPos).toArray();
-                        nuhi = createNonUniqueIndex(schema, columnList, idxEntry.getKey() );
+                        nuhi = StorageUtils.createNonUniqueIndex(schema, columnList, idxEntry.getKey() );
                     }
                     listSecondaryIndexes.add(nuhi);
                 }
@@ -268,7 +246,7 @@ public final class EmbedMetadataLoader {
             if(!entry.getValue().partialIndexMetadataList().isEmpty()) {
                 for (PartialIndexMetadata partialIdx : entry.getValue().partialIndexMetadataList()) {
                     // not all partial indexes are unique.... how is it working?
-                    ReadWriteIndex<IKey> uniquePartialIndex = createUniqueIndex(schema, new int[]{ partialIdx.columnPos() }, partialIdx.indexName() );
+                    ReadWriteIndex<IKey> uniquePartialIndex = StorageUtils.createUniqueIndex(schema, new int[]{ partialIdx.columnPos() }, partialIdx.indexName() );
                     partialIndexMetaMap.put( uniquePartialIndex.key(), new Tuple<>(partialIdx.columnPos(), partialIdx.value() ) );
                     listPartialIndexes.add(uniquePartialIndex);
                 }
@@ -328,61 +306,6 @@ public final class EmbedMetadataLoader {
                 vmsDataModel.primaryKeyColumns, vmsDataModel.constraintReferences, generated);
     }
 
-    private static ReadWriteIndex<IKey> createUniqueIndex(Schema schema, int[] columnsIndex, String indexName){
-        if(SEC_IDX_IN_MEMORY_STORAGE){
-            return new UniqueHashMapIndex(schema, columnsIndex);
-        }
-        RecordBufferContext recordBufferContext = loadRecordBuffer(10, schema.getRecordSize(), indexName, true);
-        return new UniqueHashBufferIndex(recordBufferContext, schema, columnsIndex, 10);
-    }
-
-    private static ReadWriteIndex<IKey> createNonUniqueIndex(Schema schema, int[] columnsIndex, String indexName){
-        if(SEC_IDX_IN_MEMORY_STORAGE){
-            return new NonUniqueHashMapIndex(schema, columnsIndex);
-        } else {
-            OrderedRecordBuffer[] buffers = loadOrderedBuffers(MemoryUtils.DEFAULT_NUM_BUCKETS, MemoryUtils.DEFAULT_PAGE_SIZE, indexName);
-            return new NonUniqueHashBufferIndex(buffers, schema, columnsIndex);
-        }
-    }
-
-    private static OrderedRecordBuffer[] loadOrderedBuffers(int numBuckets, int bucketSize, String fileName){
-        long sizeInBytes = (long) numBuckets * bucketSize;
-        MemorySegment segment;
-        try {
-            segment = mapFileIntoMemorySegment(sizeInBytes, fileName, true);
-        } catch (Exception e){
-            e.printStackTrace(System.err);
-            try (Arena arena = Arena.ofShared()) {
-                segment = arena.allocate(sizeInBytes);
-            }
-        }
-        long address = segment.address();
-        OrderedRecordBuffer[] buffers = new OrderedRecordBuffer[numBuckets];
-        for(int i = 0; i < numBuckets; i++){
-            buffers[i] = loadOrderedRecordBuffer(address, bucketSize);
-            address = address + bucketSize;
-        }
-        return buffers;
-    }
-
-    private static PrimaryIndex createPrimaryIndex(String tableName, Schema schema, boolean isCheckpointing, boolean isTruncating, int maxRecords) {
-        if(isCheckpointing){
-            // map this to a file, so whenever a batch commit event arrives, it can trigger checkpointing the entire file
-            RecordBufferContext recordBufferContext = loadRecordBuffer(maxRecords, schema.getRecordSizeWithHeader(), tableName, isTruncating);
-            UniqueHashBufferIndex pkIndex = new UniqueHashBufferIndex(recordBufferContext, schema, schema.getPrimaryKeyColumns(), maxRecords);
-            if(schema.isPrimaryKeyAutoGenerated()) {
-                return PrimaryIndex.build(pkIndex, new IntegerPrimaryKeyGenerator());
-            } else {
-                return PrimaryIndex.build(pkIndex);
-            }
-        } else {
-            if(schema.isPrimaryKeyAutoGenerated()){
-                return PrimaryIndex.build(new UniqueHashMapIndex(schema, schema.getPrimaryKeyColumns()), new IntegerPrimaryKeyGenerator());
-            }
-            return PrimaryIndex.build(new UniqueHashMapIndex(schema, schema.getPrimaryKeyColumns()));
-        }
-    }
-
     private static Map<String, Tuple<int[],int[]>> buildSchemaForeignKeyMap(VmsDataModel childDataModel,
             Map<String, List<ForeignKeyReference>> fksPerTable, Map<String, VmsDataModel> dataModelMap) {
         Map<String, Tuple<int[],int[]>> res = new HashMap<>();
@@ -407,103 +330,6 @@ public final class EmbedMetadataLoader {
             res.put( parentDataModel.tableName, new Tuple<>(parentColumns, childColumns) );
         }
         return res;
-    }
-
-    private static OrderedRecordBuffer loadOrderedRecordBuffer(long address, int size){
-        AppendOnlyBufferOld appendOnlyBuffer = new AppendOnlyBufferOld(address, size);
-        return new OrderedRecordBuffer(appendOnlyBuffer);
-    }
-
-    /**
-     * Must consider the header in the record size
-     */
-    public static RecordBufferContext loadRecordBuffer(int maxNumberOfRecords, int recordSize, String fileName, boolean truncate){
-        long sizeInBytes = (long) maxNumberOfRecords * recordSize;
-        MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, fileName, truncate);
-        return new RecordBufferContext(segment);
-    }
-
-    public static AppendOnlyBuffer loadAppendOnlyBuffer(int maxNumberOfRecords, int recordSize, String fileName, boolean truncate){
-        long sizeInBytes = (long) maxNumberOfRecords * recordSize;
-        MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, fileName, truncate);
-        return new AppendOnlyBuffer(segment);
-    }
-
-    public static AppendOnlyBuffer loadAppendOnlyBufferUnknownSize(String fileName){
-        MemorySegment segment = mapFileIntoMemorySegment(fileName);
-        return new AppendOnlyBuffer(segment);
-    }
-
-    private static MemorySegment mapFileIntoMemorySegment(String fileName) {
-        File file = buildFile(fileName);
-        try {
-            StandardOpenOption[] options = buildFileOpenOptions(false);
-            FileChannel fc = FileChannel.open(Path.of(file.toURI()), options);
-            LOGGER.log(DEBUG, "Attempt to open file in directory completed successfully: "+file.getAbsolutePath());
-            return mapFileChannelIntoMemorySegment(fc, file.length());// also works: fc.size()
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static MemorySegment mapFileIntoMemorySegment(long bytes, String fileName, boolean truncate) {
-        File file = buildFile(fileName);
-        try {
-            StandardOpenOption[] options = buildFileOpenOptions(truncate);
-            FileChannel fc = FileChannel.open(Path.of(file.toURI()), options);
-            LOGGER.log(DEBUG, "Attempt to open file in directory completed successfully: "+file.getAbsolutePath());
-            return mapFileChannelIntoMemorySegment(fc, bytes);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static String getBasePath(){
-        String userHome = ConfigUtils.getUserHome();
-        String basePath;
-        if(ConfigUtils.isWindows()){
-            basePath = userHome + "\\vms\\";
-        } else {
-            basePath = userHome + "/vms/";
-        }
-        return basePath;
-    }
-
-    public static File buildFile(String fileName) {
-        String filePath = getBasePath() + fileName + ".data";
-        File file = new File(filePath);
-        LOGGER.log(DEBUG, "Attempt to create new file in directory: "+filePath);
-        if(file.getParentFile().mkdirs()){
-            LOGGER.log(DEBUG, "Parent directory ("+file.getParentFile()+") required being created.");
-        } else {
-            LOGGER.log(DEBUG, "Parent directory ("+file.getParentFile()+") did not need being created.");
-        }
-        return file;
-    }
-
-    private static MemorySegment mapFileChannelIntoMemorySegment(FileChannel fc, long bytes) throws IOException {
-        return fc.map(FileChannel.MapMode.READ_WRITE, 0, bytes, Arena.global());
-    }
-
-    private static StandardOpenOption[] buildFileOpenOptions(boolean truncate) {
-        StandardOpenOption[] options;
-        if(truncate){
-            options = new StandardOpenOption[]{
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING,
-                    StandardOpenOption.SPARSE,
-                    StandardOpenOption.READ,
-                    StandardOpenOption.WRITE
-            };
-        } else {
-            options = new StandardOpenOption[]{
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.SPARSE,
-                    StandardOpenOption.READ,
-                    StandardOpenOption.WRITE
-            };
-        }
-        return options;
     }
 
 }

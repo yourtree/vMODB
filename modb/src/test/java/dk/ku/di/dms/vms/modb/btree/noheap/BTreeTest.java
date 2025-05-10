@@ -1,9 +1,9 @@
 package dk.ku.di.dms.vms.modb.btree.noheap;
 
+import dk.ku.di.dms.vms.modb.btree.noheap.b_plus_tree.INode;
+import dk.ku.di.dms.vms.modb.btree.noheap.b_plus_tree.NonLeafNode;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.definition.key.IntKey;
-import dk.ku.di.dms.vms.modb.index.non_unique.b_plus_tree.INode;
-import dk.ku.di.dms.vms.modb.index.non_unique.b_plus_tree.NonLeafNode;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import org.junit.Test;
 

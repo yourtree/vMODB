@@ -37,7 +37,7 @@ public final class NonUniqueHashMapIndex extends ReadWriteIndex<IKey> {
 
     @Override
     public void insert(IKey key, Object[] record) {
-        this.store.computeIfAbsent(key, (x)-> new ConcurrentLinkedQueue<>() );
+        this.store.computeIfAbsent(key, (_)-> new ConcurrentLinkedQueue<>() );
         this.store.get(key).add(record);
     }
 

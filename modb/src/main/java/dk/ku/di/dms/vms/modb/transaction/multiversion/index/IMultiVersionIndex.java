@@ -34,8 +34,7 @@ public interface IMultiVersionIndex {
     }
 
     /**
-     * This is the basic check condition. Does not take into consideration the
-     * versioned values.
+     * This is the basic check condition. Does not take into consideration the versioned values.
      * @param record record values
      * @param filterContext the filter to be applied
      * @return the correct data item version

@@ -1,4 +1,4 @@
-package dk.ku.di.dms.vms.modb.index.non_unique.b_plus_tree;
+package dk.ku.di.dms.vms.modb.btree.noheap.b_plus_tree;
 
 import dk.ku.di.dms.vms.modb.definition.key.IKey;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;

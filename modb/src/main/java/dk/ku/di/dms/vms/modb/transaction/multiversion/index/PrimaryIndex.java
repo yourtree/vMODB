@@ -46,7 +46,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     private static final Deque<Set<IKey>> WRITE_SET_BUFFER = new ConcurrentLinkedDeque<>();
 
-    private final ReadWriteIndex<IKey> primaryKeyIndex;
+    private final ReadWriteIndex<IKey> rawIndex;
 
     private final Map<IKey, OperationSetOfKey> updatesPerKeyMap;
 
@@ -67,12 +67,12 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         return new PrimaryIndex(primaryKeyIndex, primaryKeyGenerator);
     }
 
-    private PrimaryIndex(ReadWriteIndex<IKey> primaryKeyIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
-        this.primaryKeyIndex = primaryKeyIndex;
+    private PrimaryIndex(ReadWriteIndex<IKey> rawIndex, IPrimaryKeyGenerator<?> primaryKeyGenerator) {
+        this.rawIndex = rawIndex;
         this.updatesPerKeyMap = new ConcurrentHashMap<>(1024*1000);
         this.primaryKeyGenerator = Optional.ofNullable(primaryKeyGenerator);
         this.writeSetMap = new ConcurrentHashMap<>();
-        if(primaryKeyIndex instanceof UniqueHashBufferIndex){
+        if(this.rawIndex instanceof UniqueHashBufferIndex){
             this.keysToFlush = ConcurrentHashMap.newKeySet();
         } else {
             this.keysToFlush = new Set0<>();
@@ -86,7 +86,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     @Override
     public int hashCode() {
-        return this.primaryKeyIndex.key().hashCode();
+        return this.rawIndex.key().hashCode();
     }
 
     /**
@@ -103,14 +103,14 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 return opSet.lastWriteType != WriteType.DELETE;
             }
             Entry<Long, TransactionWrite> floorEntry = opSet.floorEntry(txCtx.lastTid);
-            if(floorEntry == null) return this.primaryKeyIndex.exists(key);
+            if(floorEntry == null) return this.rawIndex.exists(key);
             return floorEntry.val().type != WriteType.DELETE;
         }
-        return this.primaryKeyIndex.exists(key);
+        return this.rawIndex.exists(key);
     }
 
     public boolean meetPartialIndex(Object[] values, int column, Object expectedValue){
-        Schema schema = this.primaryKeyIndex.schema();
+        Schema schema = this.rawIndex.schema();
         switch (schema.columnDataType(column)) {
             case CHAR -> {
                 return ((String) values[column]).contentEquals((String) expectedValue);
@@ -130,9 +130,9 @@ public final class PrimaryIndex implements IMultiVersionIndex {
      * Methods for insert/update operations.
      */
     private boolean nonPkConstraintViolation(Object[] values) {
-        if(this.primaryKeyIndex.schema().constraints().isEmpty())
+        if(this.rawIndex.schema().constraints().isEmpty())
             return false;
-        Schema schema = this.primaryKeyIndex.schema();
+        Schema schema = this.rawIndex.schema();
         boolean constraintHolds = true;
         for(Map.Entry<Integer, ConstraintReference> c : schema.constraints().entrySet()) {
             switch (c.getValue().constraint.type){
@@ -216,7 +216,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     public Object[] lookupByKey(TransactionContext txCtx, IKey key){
         OperationSetOfKey operationSet = this.updatesPerKeyMap.get( key );
         if (operationSet == null) {
-            return this.primaryKeyIndex.lookupByKey(key);
+            return this.rawIndex.lookupByKey(key);
         }
         if(txCtx.readOnly) {
             Entry<Long, TransactionWrite> entry = operationSet.floorEntry(txCtx.lastTid);
@@ -248,8 +248,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         (b) the reset is not appropriately cleaning the buffer or
         (c) some hash buffer operation is buggy (although the record returned below indeed has the same key)
          */
-        else if(this.primaryKeyIndex.exists(key)){
-            var existingRecord = this.primaryKeyIndex.lookupByKey(key);
+        else if(this.rawIndex.exists(key)){
+            var existingRecord = this.rawIndex.lookupByKey(key);
             LOGGER.log(WARNING, "Primary key violation found in underlying primary key index: "+key+" Existing record:\n"+Arrays.stream(existingRecord).toList());
             // return false;
         }
@@ -283,7 +283,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         if (operationSet != null){
             exists = operationSet.lastWriteType != WriteType.DELETE;
         } else {
-            exists = this.primaryKeyIndex.exists(key);
+            exists = this.rawIndex.exists(key);
         }
         if(exists) {
             this.doUpdate(txCtx, key, values, operationSet);
@@ -300,7 +300,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         if (operationSet != null){
             pkConstraintViolation = operationSet.lastWriteType == WriteType.DELETE;
         } else {
-            pkConstraintViolation = !this.primaryKeyIndex.exists(key);
+            pkConstraintViolation = !this.rawIndex.exists(key);
         }
         if(pkConstraintViolation || this.nonPkConstraintViolation(values)) {
             return false;
@@ -325,14 +325,14 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         if(this.primaryKeyGenerator.isPresent()) {
             Object key_ = this.primaryKeyGenerator.get().next();
             // set to record
-            values[this.primaryKeyIndex.columns()[0]] = key_;
-            IKey key = KeyUtils.buildRecordKey(this.primaryKeyIndex.schema().getPrimaryKeyColumns(), new Object[]{key_});
+            values[this.rawIndex.columns()[0]] = key_;
+            IKey key = KeyUtils.buildRecordKey(this.rawIndex.schema().getPrimaryKeyColumns(), new Object[]{key_});
             if (this.insert(txCtx, key, values)) {
                 return key;
             }
             return null;
         }
-        IKey key = KeyUtils.buildRecordKey(this.primaryKeyIndex.schema().getPrimaryKeyColumns(), values);
+        IKey key = KeyUtils.buildRecordKey(this.rawIndex.schema().getPrimaryKeyColumns(), values);
         if(this.insert(txCtx, key, values)){
             return key;
         }
@@ -355,7 +355,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
             return Optional.of( lastRecord );
             // does this key even exist? if not, don't even need to save it on transaction metadata
         }
-        Object[] obj = this.primaryKeyIndex.lookupByKey(key);
+        Object[] obj = this.rawIndex.lookupByKey(key);
         if(obj != null) {
             // that means we haven't had any previous transaction performing writes to this key
             operationSet = new OperationSetOfKey(WriteType.DELETE);
@@ -370,12 +370,12 @@ public final class PrimaryIndex implements IMultiVersionIndex {
 
     @Override
     public int[] indexColumns() {
-        return this.primaryKeyIndex.columns();
+        return this.rawIndex.columns();
     }
 
     @Override
     public boolean containsColumn(int columnPos) {
-        return this.primaryKeyIndex.containsColumn(columnPos);
+        return this.rawIndex.containsColumn(columnPos);
     }
 
     /**
@@ -396,8 +396,8 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     @Override
     public void reset(){
         this.writeSetMap.clear();
-        if(this.primaryKeyIndex instanceof UniqueHashBufferIndex){
-            this.primaryKeyIndex.reset();
+        if(this.rawIndex instanceof UniqueHashBufferIndex){
+            this.rawIndex.reset();
         }
         this.updatesPerKeyMap.clear();
         this.keysToFlush.clear();
@@ -423,12 +423,12 @@ public final class PrimaryIndex implements IMultiVersionIndex {
         if(this.keysToFlush.isEmpty() || this.updatesPerKeyMap.isEmpty()) return;
         int numRecords = 0;
         Iterator<IKey> it = this.keysToFlush.iterator();
-        this.primaryKeyIndex.lock();
+        this.rawIndex.lock();
         while(it.hasNext()){
             IKey key = it.next();
             OperationSetOfKey operationSetOfKey = this.updatesPerKeyMap.get(key);
             if(operationSetOfKey == null){
-                this.primaryKeyIndex.unlock();
+                this.rawIndex.unlock();
                 throw new RuntimeException("Error on retrieving operation set for key "+key);
             }
             Entry<Long, TransactionWrite> entry = operationSetOfKey.floorEntry(maxTid);
@@ -440,16 +440,16 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 operationSetOfKey.removeChildren(entry);
             }
             switch (operationSetOfKey.lastWriteType) {
-                case UPDATE -> this.primaryKeyIndex.upsert(key, entry.val().record);
-                case INSERT -> this.primaryKeyIndex.insert(key, entry.val().record);
-                case DELETE -> this.primaryKeyIndex.delete(key);
+                case UPDATE -> this.rawIndex.upsert(key, entry.val().record);
+                case INSERT -> this.rawIndex.insert(key, entry.val().record);
+                case DELETE -> this.rawIndex.delete(key);
             }
             numRecords++;
         }
-        this.primaryKeyIndex.unlock();
+        this.rawIndex.unlock();
         if(numRecords > 0) {
             LOGGER.log(INFO, "Updated "+numRecords+" records in disk");
-            this.primaryKeyIndex.flush();
+            this.rawIndex.flush();
         } else {
             LOGGER.log(WARNING, "No records have been flushed");
         }
@@ -476,7 +476,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
     }
 
     public ReadWriteIndex<IKey> underlyingIndex(){
-        return this.primaryKeyIndex;
+        return this.rawIndex;
     }
 
     @Override
@@ -543,7 +543,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 return entry.val().record;
             }
         }
-        return this.primaryKeyIndex.lookupByKey(key);
+        return this.rawIndex.lookupByKey(key);
     }
 
     public Entry<Long, TransactionWrite> getFloorEntry(TransactionContext txCtx, IKey key){
@@ -576,7 +576,7 @@ public final class PrimaryIndex implements IMultiVersionIndex {
                 Map.Entry<IKey, OperationSetOfKey> next = this.iterator.next();
                 Entry<Long, TransactionWrite> entry = next.getValue().getHigherEntryUpToKey(this.txCtx.tid);
                 if(entry == null) {
-                    this.currRecord = primaryKeyIndex.lookupByKey(next.getKey());
+                    this.currRecord = rawIndex.lookupByKey(next.getKey());
                     if(this.currRecord == null){
                         if(this.iterator.hasNext()) {
                             continue;

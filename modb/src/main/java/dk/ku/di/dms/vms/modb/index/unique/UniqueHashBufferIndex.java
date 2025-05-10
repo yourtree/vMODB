@@ -9,7 +9,6 @@ import dk.ku.di.dms.vms.modb.definition.key.KeyUtils;
 import dk.ku.di.dms.vms.modb.index.IndexTypeEnum;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteBufferIndex;
 import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
-import dk.ku.di.dms.vms.modb.query.execution.filter.FilterContext;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
@@ -25,15 +24,17 @@ import static java.lang.System.Logger.Level.*;
  * Could deal with collisions by having a linked list.
  * This index is oblivious to isolation level and relational constraints.
  */
-public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements ReadWriteBufferIndex<IKey> {
+public class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements ReadWriteBufferIndex<IKey> {
 
-    private static final System.Logger LOGGER = System.getLogger(UniqueHashBufferIndex.class.getName());
+    protected static final System.Logger LOGGER = System.getLogger(UniqueHashBufferIndex.class.getName());
 
-    private final RecordBufferContext recordBufferContext;
+    protected static final int OPEN_ADDRESSING_ATTEMPTS = 20;
+
+    protected final RecordBufferContext recordBufferCtx;
 
     private long size;
 
-    private final long recordSize;
+    protected final long recordSize;
 
     // total number of records (of a given schema)
     // the conjunction of all buffers can possibly hold
@@ -45,13 +46,13 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     // for operations that require exclusive access to the whole buffer like reset and checkpoint
     private final ReentrantLock lock = new ReentrantLock();
 
-    public UniqueHashBufferIndex(RecordBufferContext recordBufferContext, Schema schema, int[] columnsIndex, int capacity){
+    public UniqueHashBufferIndex(RecordBufferContext recordBufferCtx, Schema schema, int[] columnsIndex, int capacity){
         super(schema, columnsIndex);
-        this.recordBufferContext = recordBufferContext;
+        this.recordBufferCtx = recordBufferCtx;
         this.recordSize = schema.getRecordSize();
         this.size = 0;
         this.capacity = capacity;
-        this.limit = recordBufferContext.address + (this.recordSize * (this.capacity - 1));
+        this.limit = recordBufferCtx.address + (this.recordSize * (this.capacity - 1));
     }
 
     @Override
@@ -77,10 +78,8 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         }
         long initialSize = this.size;
         LOGGER.log(INFO, "Reset started with initial size: "+initialSize);
-        long lastPos = this.recordBufferContext.address +
-                (this.capacity * this.recordSize) - 1;
-        long pos = this.recordBufferContext.address;
-        while(pos < lastPos){
+        long pos = this.recordBufferCtx.address;
+        while(pos <= limit){
             if(UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE){
                 UNSAFE.putByte(null, pos, Header.INACTIVE_BYTE);
                 this.size--;
@@ -101,12 +100,12 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
      * <a href="https://algs4.cs.princeton.edu/34hash/">Why (key & 0x7fffffff)?</a>
      * % 0x7fffffff returns a positive value if the key is negative
      */
-    private long getPosition(int key){
+    long getPosition(int key){
         long logicalPosition = key > 0 ? key % this.capacity : (key & 0x7fffffff) & this.capacity;
         if(logicalPosition > 0){
-            return this.recordBufferContext.address + ( this.recordSize * logicalPosition );
+            return this.recordBufferCtx.address + ( this.recordSize * logicalPosition );
         }
-        return this.recordBufferContext.address;
+        return this.recordBufferCtx.address;
     }
 
     @Override
@@ -122,7 +121,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         this.updateSize(1);
     }
 
-    private void updateSize(int val){
+    void updateSize(int val){
         this.size = this.size + val;
     }
 
@@ -150,7 +149,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         LOGGER.log(ERROR, "Cannot find an existing record. Perhaps something wrong in the insertion logic?\nKey: " + key+ " Hash: " + key.hashCode());
     }
 
-    private void doWrite(long pos, Object[] record) {
+    void doWrite(long pos, Object[] record) {
         int maxColumns = this.schema.columnOffset().length;
         long currAddress = pos + Schema.RECORD_HEADER;
         for (int index = 0; index < maxColumns; index++) {
@@ -201,10 +200,8 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         return this.findRecordAddress(key);
     }
 
-    private static final int DEFAULT_ATTEMPTS = 20;
-
-    private long getFreePositionToInsert(IKey key){
-        int attemptsToFind = DEFAULT_ATTEMPTS;
+    long getFreePositionToInsert(IKey key){
+        int attemptsToFind = OPEN_ADDRESSING_ATTEMPTS;
         int aux = 1;
         long pos = this.getPosition(key.hashCode());
         boolean busy = UNSAFE.getByte(null, pos) == Header.ACTIVE_BYTE;
@@ -219,7 +216,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     }
 
     private long findRecordAddress(IKey key){
-        int attemptsToFind = DEFAULT_ATTEMPTS;
+        int attemptsToFind = OPEN_ADDRESSING_ATTEMPTS;
         int aux = 1;
         long pos = this.getPosition(key.hashCode());
         while(attemptsToFind > 0){
@@ -268,17 +265,12 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public IRecordIterator<IKey> iterator() {
-        return new RecordIterator(this.recordBufferContext.address, this.schema.getRecordSize(), this.capacity);
+        return new RecordIterator(this.recordBufferCtx.address, this.schema.getRecordSize(), this.capacity);
     }
 
     @Override
     public IRecordIterator<IKey> iterator(IKey[] keys) {
         return new KeyRecordIterator(this, keys);
-    }
-
-    @Override
-    public boolean checkCondition(IRecordIterator<IKey> iterator, FilterContext filterContext) {
-        return false;
     }
 
     /**
@@ -302,7 +294,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
 
     @Override
     public void flush() {
-        this.recordBufferContext.force();
+        this.recordBufferCtx.force();
     }
 
 }

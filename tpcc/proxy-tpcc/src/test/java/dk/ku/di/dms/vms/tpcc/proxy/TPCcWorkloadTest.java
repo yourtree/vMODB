@@ -4,7 +4,6 @@ import dk.ku.di.dms.vms.coordinator.Coordinator;
 import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplication;
-import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoadUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.entities.District;
 import dk.ku.di.dms.vms.tpcc.proxy.entities.Warehouse;
@@ -52,15 +51,15 @@ public final class TPCcWorkloadTest {
     @BeforeClass
     public static void startTPCcServices(){
          // clean up
-        File orderLineFile = EmbedMetadataLoader.buildFile("order_line");
-        File ordersFile = EmbedMetadataLoader.buildFile("orders");
-        File newOrdersFile = EmbedMetadataLoader.buildFile("new_orders");
+        File orderLineFile = dk.ku.di.dms.vms.modb.utils.StorageUtils.buildFile("order_line");
+        File ordersFile = dk.ku.di.dms.vms.modb.utils.StorageUtils.buildFile("orders");
+        File newOrdersFile = dk.ku.di.dms.vms.modb.utils.StorageUtils.buildFile("new_orders");
 
         orderLineFile.delete();
         ordersFile.delete();
         newOrdersFile.delete();
 
-        String basePathStr = EmbedMetadataLoader.getBasePath();
+        String basePathStr = dk.ku.di.dms.vms.modb.utils.StorageUtils.getBasePath();
         Path basePath = Paths.get(basePathStr);
         try(var paths = Files
                 // retrieve all files in the folder

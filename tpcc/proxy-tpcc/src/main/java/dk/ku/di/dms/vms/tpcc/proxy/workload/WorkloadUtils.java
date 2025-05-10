@@ -5,7 +5,7 @@ import dk.ku.di.dms.vms.modb.common.type.DataType;
 import dk.ku.di.dms.vms.modb.common.type.DataTypeUtils;
 import dk.ku.di.dms.vms.modb.definition.Schema;
 import dk.ku.di.dms.vms.modb.storage.record.AppendOnlyBuffer;
-import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
+import dk.ku.di.dms.vms.modb.utils.StorageUtils;
 import dk.ku.di.dms.vms.tpcc.common.events.NewOrderWareIn;
 
 import java.io.IOException;
@@ -144,7 +144,7 @@ public final class WorkloadUtils {
         long initTs = System.currentTimeMillis();
         List<Iterator<NewOrderWareIn>> input = new ArrayList<>(numWare);
         for(int i = 0; i < numWare; i++){
-            AppendOnlyBuffer buffer = EmbedMetadataLoader.loadAppendOnlyBufferUnknownSize(BASE_WORKLOAD_FILE_NAME+"1");
+            AppendOnlyBuffer buffer = StorageUtils.loadAppendOnlyBufferUnknownSize(BASE_WORKLOAD_FILE_NAME+"1");
             // calculate number of entries (i.e., transactions)
             int numTransactions = (int) buffer.size() / SCHEMA.getRecordSize();
             input.add( createWorkloadInputIterator(buffer, numTransactions) );
@@ -177,7 +177,7 @@ public final class WorkloadUtils {
         for(int ware = 1; ware <= numWare; ware++) {
             LOGGER.log(INFO, "Generating "+numTransactions+" transactions for warehouse "+ware);
             String fileName = BASE_WORKLOAD_FILE_NAME+ware;
-            AppendOnlyBuffer buffer = EmbedMetadataLoader.loadAppendOnlyBuffer(numTransactions, SCHEMA.getRecordSize(), fileName, true);
+            AppendOnlyBuffer buffer = StorageUtils.loadAppendOnlyBuffer(numTransactions, SCHEMA.getRecordSize(), fileName, true);
             for (int txIdx = 1; txIdx <= numTransactions; txIdx++) {
                 Object[] newOrderInput = generateNewOrder(ware, numWare, allowMultiWarehouses);
                 write(buffer.nextOffset(), newOrderInput);
@@ -190,7 +190,7 @@ public final class WorkloadUtils {
     }
 
     public static int getNumWorkloadInputFiles(){
-        String basePathStr = EmbedMetadataLoader.getBasePath();
+        String basePathStr = StorageUtils.getBasePath();
         Path basePath = Paths.get(basePathStr);
         try {
             var paths = Files.walk(basePath)
