@@ -18,8 +18,7 @@ public final class PairCompositeKey extends BaseComposite implements IKey {
     }
 
     private static int hashCode(Object value0, Object value1) {
-        int result = 31 + value0.hashCode();
-        return 31 * result + value1.hashCode();
+        return 31 * value0.hashCode() + value1.hashCode();
     }
 
     @Override

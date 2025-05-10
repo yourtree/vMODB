@@ -20,8 +20,7 @@ public final class TripleCompositeKey extends BaseComposite implements IKey {
     }
 
     private static int hashCode(Object value0, Object value1, Object value2) {
-        int result = 31 + value0.hashCode();
-        result = 31 * result + value1.hashCode();
+        int result = 31 * value0.hashCode() + value1.hashCode();
         return 31 * result + value2.hashCode();
     }
 

@@ -100,10 +100,9 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     /**
      * <a href="https://algs4.cs.princeton.edu/34hash/">Why (key & 0x7fffffff)?</a>
      * % 0x7fffffff returns a positive value if the key is negative
-     * Therefore, this function assumes input is always positive
      */
     private long getPosition(int key){
-        long logicalPosition = key % this.capacity;
+        long logicalPosition = key > 0 ? key % this.capacity : (key & 0x7fffffff) & this.capacity;
         if(logicalPosition > 0){
             return this.recordBufferContext.address + ( this.recordSize * logicalPosition );
         }
@@ -114,7 +113,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
     public void insert(IKey key, long srcAddress) {
         long pos = this.getFreePositionToInsert(key);
         if(pos == -1){
-            LOGGER.log(ERROR, "Cannot find an empty entry for inserting the record from address. Perhaps should increase number of entries?\nKey: " + key+ " Hash: " + key.hashCode());
+            LOGGER.log(ERROR, "Cannot find an empty entry for inserting the record from address. Perhaps should increase number of entries?\nKey: " + key + " Hash: " + key.hashCode());
             return;
         }
         UNSAFE.putByte(null, pos, Header.ACTIVE_BYTE);
@@ -202,7 +201,7 @@ public final class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements
         return this.findRecordAddress(key);
     }
 
-    private static final int DEFAULT_ATTEMPTS = 10;
+    private static final int DEFAULT_ATTEMPTS = 20;
 
     private long getFreePositionToInsert(IKey key){
         int attemptsToFind = DEFAULT_ATTEMPTS;

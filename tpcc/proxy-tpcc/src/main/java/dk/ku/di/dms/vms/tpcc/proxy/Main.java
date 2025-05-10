@@ -7,9 +7,12 @@ import dk.ku.di.dms.vms.tpcc.common.events.NewOrderWareIn;
 import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoadUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.dataload.QueueTableIterator;
 import dk.ku.di.dms.vms.tpcc.proxy.experiment.ExperimentUtils;
+import dk.ku.di.dms.vms.tpcc.proxy.infra.MinimalHttpClient;
+import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants;
 import dk.ku.di.dms.vms.tpcc.proxy.storage.StorageUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.workload.WorkloadUtils;
 
+import java.io.IOException;
 import java.util.*;
 
 public final class Main {
@@ -65,12 +68,29 @@ public final class Main {
                     break;
                 case "4":
                     System.out.println("Option 4: \"Submit workload\" selected.");
-                    System.out.print("Enter duration (ms): [0 for default to 10s] ");
-                    int runTime = Integer.parseInt(scanner.nextLine());
-                    if(runTime == 0) runTime = 10000;
-                    System.out.println("Enter warm up period (ms): [0 for default to 2s] ");
-                    int warmUp = Integer.parseInt(scanner.nextLine());
-                    if(warmUp == 0) warmUp = 2000;
+                    int batchWindow = Integer.parseInt( PROPERTIES.getProperty("batch_window_ms") );
+                    int runTime;
+                    while(true) {
+                        System.out.print("Enter duration (ms): [press 0 for 10s] ");
+                        runTime = Integer.parseInt(scanner.nextLine());
+                        if (runTime == 0) runTime = 10000;
+                        if(runTime < (batchWindow*2)){
+                            System.out.print("Duration must be at least 2 * "+batchWindow+" (ms)");
+                            continue;
+                        }
+                        break;
+                    }
+                    int warmUp;
+                    while(true) {
+                        System.out.println("Enter warm up period (ms): [press 0 for 2s] ");
+                        warmUp = Integer.parseInt(scanner.nextLine());
+                        if (warmUp == 0) warmUp = 2000;
+                        if(warmUp >= runTime){
+                            System.out.print("Warm up must be lower than run time "+runTime+" (ms)");
+                            continue;
+                        }
+                        break;
+                    }
 
                     if(numWare == 0){
                         // get number of input files
@@ -102,7 +122,30 @@ public final class Main {
                     var expStats = ExperimentUtils.runExperiment(coordinator, input, runTime, warmUp);
                     ExperimentUtils.writeResultsToFile(numWare, expStats, runTime, warmUp,
                             coordinator.getOptions().getNumTransactionWorkers(), coordinator.getOptions().getBatchWindow(), coordinator.getOptions().getMaxTransactionsPerBatch());
-                    // TODO cleanup order state
+                    break;
+                case "5":
+                    System.out.println("Option 5: \"Reset service states\" selected.");
+                    // has to wait for all submitted transactions to commit in order to send the reset
+                    if(coordinator != null){
+                        long numTIDsCommitted = coordinator.getNumTIDsCommitted();
+                        long numTIDsSubmitted = coordinator.getNumTIDsSubmitted();
+                        if(numTIDsCommitted != numTIDsSubmitted){
+                            System.out.println("There are ongoing batches executing! Cannot reset states now. \n Number of TIDs committed: "+numTIDsCommitted+"\n Number of TIDs submitted: "+numTIDsSubmitted);
+                            break;
+                        }
+                    }
+                    // cleanup service states
+                    for(var vms : TPCcConstants.VMS_TO_PORT_MAP.entrySet()){
+                        String host = PROPERTIES.getProperty(vms.getKey() + "_host");
+                        try(var client = new MinimalHttpClient(host, vms.getValue())){
+                            if(client.sendRequest("PATCH", "", "reset") != 200){
+                                System.out.println("Error on resetting "+vms+" state!");
+                            }
+                        } catch (IOException e) {
+                            System.out.println("Exception on resetting "+vms+" state: \n"+e);
+                        }
+                    }
+                    System.out.println("Service states reset.");
                     break;
                 case "0":
                     System.out.println("Exiting the application...");
@@ -122,6 +165,7 @@ public final class Main {
         System.out.println("2. Load services with data from tables in disk");
         System.out.println("3. Create workload");
         System.out.println("4. Submit workload");
+        System.out.println("5. Reset service states");
         System.out.println("0. Exit");
     }
 
