@@ -201,22 +201,29 @@ public final class EmbedMetadataLoader {
 
             Schema schema = entry.getValue().schema();
 
-            // should overwrite max records?
+            String tableName = entry.getKey().tableName;
+
+            // overwrite max records if necessary
             int maxRecords_ = maxRecords;
-            String numRec = properties.getProperty("max_records."+entry.getKey().tableName);
+            String numRec = properties.getProperty("max_records."+tableName);
             if(numRec != null && !numRec.isBlank()){
                 maxRecords_ = Integer.parseInt(numRec);
             }
 
-            PrimaryIndex primaryIndex = StorageUtils.createPrimaryIndex(entry.getKey().tableName, schema, isCheckpointing, isTruncating, maxRecords_);
-            tableToPrimaryIndexMap.put(entry.getKey().tableName, primaryIndex);
+            boolean chaining = false;
+            if(properties.getProperty("table."+tableName+".chaining") != null){
+                chaining = Boolean.parseBoolean( properties.getProperty("table."+tableName+".chaining") );
+            }
+
+            PrimaryIndex primaryIndex = StorageUtils.createPrimaryIndex(tableName, schema, isCheckpointing, isTruncating, chaining, maxRecords_);
+            tableToPrimaryIndexMap.put(tableName, primaryIndex);
 
             // normal indexes (i.e., non-partial) and foreign key indexes go here?
             List<ReadWriteIndex<IKey>> listSecondaryIndexes = new ArrayList<>();
-            tableToSecondaryIndexMap.put(entry.getKey().tableName, listSecondaryIndexes);
+            tableToSecondaryIndexMap.put(tableName, listSecondaryIndexes);
 
             List<ReadWriteIndex<IKey>> listPartialIndexes = new ArrayList<>();
-            tableToPartialIndexMap.put(entry.getKey().tableName, listPartialIndexes);
+            tableToPartialIndexMap.put(tableName, listPartialIndexes);
 
             // secondary indexes based on foreign keys
             if(!entry.getValue().secondaryIndexMap().isEmpty()) {

@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static dk.ku.di.dms.vms.modb.common.memory.MemoryUtils.UNSAFE;
-import static java.lang.System.Logger.Level.DEBUG;
+import static java.lang.System.Logger.Level.INFO;
 
 public final class UniqueHashChainingBufferIndex extends UniqueHashBufferIndex {
 
@@ -28,12 +28,12 @@ public final class UniqueHashChainingBufferIndex extends UniqueHashBufferIndex {
         if(pos == -1){
             long headPos = this.getPosition(key.hashCode());
             AppendOnlyBuffer aob;
-            if(chainingMap.containsKey(headPos)){
-                aob = chainingMap.get(headPos);
+            if(this.chainingMap.containsKey(headPos)){
+                aob = this.chainingMap.get(headPos);
             } else {
-                LOGGER.log(DEBUG, "Cannot find an empty entry for record object. Creating a new chaining.... \nKey: " + key+ " Hash: " + key.hashCode());
-                aob = StorageUtils.loadAppendOnlyBuffer(OPEN_ADDRESSING_ATTEMPTS, (int) this.recordSize, STR."\{this.recordBufferCtx.fileName}_\{headPos}.data", true);
-                chainingMap.put(headPos, aob);
+                LOGGER.log(INFO, "Cannot find an empty entry for record object. Creating a new chaining.... \nKey: " + key+ " Hash: " + key.hashCode());
+                aob = StorageUtils.loadAppendOnlyBuffer(OPEN_ADDRESSING_ATTEMPTS, (int) this.recordSize, STR."\{this.recordBufferCtx.fileName}_\{headPos}", true);
+                this.chainingMap.put(headPos, aob);
             }
             pos = aob.address;
             aob.forwardOffset(Schema.RECORD_HEADER + this.recordSize);

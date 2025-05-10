@@ -1,4 +1,4 @@
-# Microservice-Oriented Database System (MODB)
+# Virtual Microservice-Oriented Database System (vMODB)
 
 MODB is a distributed, event-driven, microservice-oriented database management system. The first principled approach for designing stateful microservices that require advanced data management requirements.
 
@@ -8,12 +8,14 @@ MODB runs application logic in seamlessly within the application tier, not requi
 
 Developers can plug and play any microservice at any time, the MODB then adapt the event streams seamlessly as requested by the application. In the end, developers still experience the flexibility and dinamicity offered by microservice architectures, but with built-in system-level database support to alleviate several challenges usually found in the practice.
 
+Differently from traditional server-based database systems, where users interact via a well-defined network protocol, in MODB, users solely write code and all the data management complexity is abstracted by the runtime.
+
 ## Table of Contents
 - [Getting Started](#getting-started)
     * [Prerequisites](#prerequisites)
     * [Compilation](#compilation)
     * [Configuration](#config)
-- [MODB](#modb)
+- [vMODB](#vmodb)
     * [Abstractions](#abstractions)
     * [Architecture](#architecture)
     * [APIs](#apis)
@@ -62,9 +64,7 @@ java.base/jdk.internal.misc=ALL-UNNAMED
 java.base/jdk.internal.misc=ALL-UNNAMED
 ```
 
-## <a name="modb"></a>MODB
-
-Differently from traditional server-based database systems, where users interact via a well-defined network protocol, in MODB, users solely write code and all the data management complexity is abstracted by the runtime.
+### <a name="vmodb"></a>vMODB
 
 ## <a name="links"></a>Useful links
 

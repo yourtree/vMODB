@@ -52,9 +52,7 @@ public final class MinimalHttpClient implements Closeable {
         String httpRequest = buildHttpGetRequest(param);
         this.writeBuffer.put(httpRequest.getBytes(StandardCharsets.UTF_8));
         this.writeBuffer.flip();
-        while(this.writeBuffer.hasRemaining()) {
-            this.socketChannel.write(this.writeBuffer);
-        }
+        this.socketChannel.write(this.writeBuffer);
         this.writeBuffer.clear();
 
         if(this.response == null) {
@@ -77,9 +75,7 @@ public final class MinimalHttpClient implements Closeable {
         String httpRequest = buildHttpRequest(method, jsonBody, jsonBody.getBytes(StandardCharsets.UTF_8).length, param);
         this.writeBuffer.put(httpRequest.getBytes(StandardCharsets.UTF_8));
         this.writeBuffer.flip();
-        while(this.writeBuffer.hasRemaining()) {
-            this.socketChannel.write(this.writeBuffer);
-        }
+        this.socketChannel.write(this.writeBuffer);
         this.writeBuffer.clear();
         // must read everything to avoid errors
         return this.readFully();
@@ -127,7 +123,7 @@ public final class MinimalHttpClient implements Closeable {
         //StringBuilder bodyBuilder = new StringBuilder();
         int remaining = contentLength;
         while (remaining > 0) {
-            int read = socketChannel.read(this.readBuffer);
+            int read = this.socketChannel.read(this.readBuffer);
             if (read == -1) break;  // end of stream
             this.readBuffer.flip();
             byte[] bytes = new byte[this.readBuffer.remaining()];
