@@ -564,7 +564,7 @@ public final class VmsEventHandler extends ModbHttpServer {
                             MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize),
                             httpHandler);
                     try { NetworkUtils.configure(this.channel, options.soBufferSize()); } catch (IOException ignored) { }
-                    readCompletionHandler.process(request);
+                    readCompletionHandler.parse(new HttpReadCompletionHandler.RequestTracking());
                 } else {
                     LOGGER.log(WARNING, me.identifier + ": A node is trying to connect without a presentation message.\n"+request);
                     this.buffer.clear();

@@ -14,8 +14,7 @@ import java.util.Set;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 
-import static java.lang.System.Logger.Level.ERROR;
-import static java.lang.System.Logger.Level.WARNING;
+import static java.lang.System.Logger.Level.*;
 
 public abstract class ModbHttpServer extends StoppableRunnable {
 
@@ -50,7 +49,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
         TRACKED_FUTURES.clear();
     }
 
-    protected static final class HttpReadCompletionHandler implements CompletionHandler<Integer, Integer> {
+    protected static final class HttpReadCompletionHandler implements CompletionHandler<Integer, HttpReadCompletionHandler.RequestTracking> {
 
         private final ConnectionMetadata connectionMetadata;
         private final ByteBuffer readBuffer;
@@ -61,6 +60,20 @@ public abstract class ModbHttpServer extends StoppableRunnable {
         private final CloseWriteCH closeWriteCH = new CloseWriteCH();
         private final BigBbWriteCH bigBbWriteCH = new BigBbWriteCH();
         private final SseWriteCH sseWriteCH;
+
+        // tracking of current client request
+        public static final class RequestTracking {
+            public final StringBuilder requestBuilder;
+            public volatile boolean headersParsed = false;
+            public volatile int contentLength = 0;
+            public volatile int bodyBytesRead = 0;
+            public volatile String method;
+            public volatile String accept;
+            public volatile String uri;
+            public RequestTracking() {
+                this.requestBuilder = new StringBuilder();
+            }
+        }
 
         public HttpReadCompletionHandler(ConnectionMetadata connectionMetadata,
                                          ByteBuffer readBuffer, ByteBuffer writeBuffer,
@@ -113,77 +126,136 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         + "\r\n"
                         + "Object requested was not found").getBytes(StandardCharsets.UTF_8);
 
-        public void process(String request){
+        public void parse(RequestTracking requestTracking){
+            this.readBuffer.rewind();
+            byte[] data = new byte[this.readBuffer.remaining()];
+            this.readBuffer.get(data);
+            this.readBuffer.clear();
+            requestTracking.requestBuilder.append(new String(data, StandardCharsets.UTF_8));
+
+            if (!requestTracking.headersParsed) {
+                int headersEnd = requestTracking.requestBuilder.indexOf("\r\n\r\n");
+                if (headersEnd != -1) {
+                    requestTracking.headersParsed = true;
+                    String headersPart = requestTracking.requestBuilder.substring(0, headersEnd);
+                    String[] lines = headersPart.split("\r\n");
+
+                    String[] requestParts = lines[0].split(" ");
+                    requestTracking.method = requestParts[0];
+                    requestTracking.uri = requestParts[1];
+
+                    for (int i = 1; i < lines.length; i++) {
+                        var lineLC = lines[i].toLowerCase();
+                        if (lineLC.startsWith("content-length:")) {
+                            requestTracking.contentLength = Integer.parseInt(lines[i].split(":")[1].trim());
+                        }
+                        if(lineLC.startsWith("accept:")){
+                            requestTracking.accept = lines[i].substring(7).trim();
+                        }
+                    }
+                    requestTracking.bodyBytesRead = requestTracking.requestBuilder.length() - (headersEnd + 4);
+                    if (requestTracking.bodyBytesRead >= requestTracking.contentLength) {
+                        this.process(requestTracking.method,
+                                requestTracking.accept,
+                                requestTracking.uri,
+                                requestTracking.requestBuilder.substring(headersEnd+4));
+                        return;
+                    }
+
+                    // java http client may be miscalculating content length
+                    // if it is a well-formed JSON, then it is safe to proceed
+                    // e.g., if(requestTracking.contentLength - requestTracking.bodyBytesRead == 1)
+
+                }
+            } else {
+                int newBodyByteRead = requestTracking.bodyBytesRead + data.length;
+                requestTracking.bodyBytesRead = newBodyByteRead;
+                if (requestTracking.bodyBytesRead  >= requestTracking.contentLength) {
+                    int headersEnd = requestTracking.requestBuilder.indexOf("\r\n\r\n");
+                    this.process(requestTracking.method,
+                            requestTracking.accept,
+                            requestTracking.uri,
+                            requestTracking.requestBuilder.substring(headersEnd+4));
+                    return;
+                }
+            }
+            this.connectionMetadata.channel.read(this.readBuffer, requestTracking, this);
+        }
+
+        public void process(String httpMethod,
+                            String accept,
+                            String uri,
+                            String body){
             try {
-                final HttpUtils.HttpRequestInternal httpRequest = HttpUtils.parseRequest(request);
-                switch (httpRequest.httpMethod()){
+                switch (httpMethod){
                     case "GET" -> {
-                        if(!httpRequest.headers().containsKey("Accept")){
+                        if(accept == null || accept.isBlank()){
                             this.sendErrorMsgAndCloseConnection(NO_ACCEPT_IN_HEADER_ERR_MSG);
-                        } else {
-                            switch (httpRequest.headers().get("Accept")) {
-                                case "*/*", "application/json" -> ForkJoinPool.commonPool().submit(() -> {
-                                    Object objectJson = this.httpHandler.getAsJson(httpRequest.uri());
+                            return;
+                        }
+                        switch (accept) {
+                            case "*/*", "application/json" -> ForkJoinPool.commonPool().submit(() -> {
+                                Object objectJson = this.httpHandler.getAsJson(uri);
 
-                                    if(objectJson == null){
-                                        try {
-                                            this.sendErrorMsgAndCloseConnection(NOT_FOUND_ERR_MSG);
-                                            return;
-                                        } catch (Exception e){
-                                            this.processError(request, e);
-                                            return;
-                                        }
+                                if(objectJson == null){
+                                    try {
+                                        this.sendErrorMsgAndCloseConnection(NOT_FOUND_ERR_MSG);
+                                        return;
+                                    } catch (Exception e){
+                                        this.processError(body, e);
+                                        return;
                                     }
+                                }
 
-                                    byte[] dashJsonBytes = objectJson.toString().getBytes(StandardCharsets.UTF_8);
-                                    String headers = createHttpHeaders(dashJsonBytes.length);
-                                    byte[] headerBytes = headers.getBytes(StandardCharsets.UTF_8);
-                                    // ask memory utils for a byte buffer big enough to fit the seller dashboard
-                                    int totalBytes = headerBytes.length + dashJsonBytes.length;
-                                    // use remaining to be error-proof
-                                    if (this.writeBuffer.remaining() < totalBytes) {
-                                        ByteBuffer bigBB = MemoryManager.getTemporaryDirectBuffer(MemoryUtils.nextPowerOfTwo(totalBytes));
-                                        bigBB.put(headerBytes);
-                                        bigBB.put(dashJsonBytes);
-                                        bigBB.flip();
-                                        this.connectionMetadata.channel.write(bigBB, bigBB, this.bigBbWriteCH);
-                                    } else {
-                                        if (this.writeBuffer.position() != 0) {
-                                            LOGGER.log(ERROR, "This buffer has not been cleaned appropriately!");
-                                            this.writeBuffer.clear();
-                                        }
-                                        this.writeBuffer.put(headerBytes);
-                                        this.writeBuffer.put(dashJsonBytes);
-                                        this.writeBuffer.flip();
-                                        this.connectionMetadata.channel.write(this.writeBuffer, null, this.defaultWriteCH);
+                                byte[] dashJsonBytes = objectJson.toString().getBytes(StandardCharsets.UTF_8);
+                                String headers = createHttpHeaders(dashJsonBytes.length);
+                                byte[] headerBytes = headers.getBytes(StandardCharsets.UTF_8);
+                                // ask memory utils for a byte buffer big enough to fit the seller dashboard
+                                int totalBytes = headerBytes.length + dashJsonBytes.length;
+                                // use remaining to be error-proof
+                                if (this.writeBuffer.remaining() < totalBytes) {
+                                    ByteBuffer bigBB = MemoryManager.getTemporaryDirectBuffer(MemoryUtils.nextPowerOfTwo(totalBytes));
+                                    bigBB.put(headerBytes);
+                                    bigBB.put(dashJsonBytes);
+                                    bigBB.flip();
+                                    this.connectionMetadata.channel.write(bigBB, bigBB, this.bigBbWriteCH);
+                                } else {
+                                    if (this.writeBuffer.position() != 0) {
+                                        LOGGER.log(ERROR, "This buffer has not been cleaned appropriately!");
+                                        this.writeBuffer.clear();
                                     }
-                                });
-                                case "application/octet-stream" -> {
-                                    byte[] byteArray = this.httpHandler.getAsBytes(httpRequest.uri());
-                                    String headers = "HTTP/1.1 200 OK\r\nContent-Length: " + byteArray.length +
-                                            "\r\nContent-Type: application/octet-stream\r\n\r\n";
-                                    this.writeBuffer.put(headers.getBytes(StandardCharsets.UTF_8));
-                                    this.writeBuffer.put(byteArray);
+                                    this.writeBuffer.put(headerBytes);
+                                    this.writeBuffer.put(dashJsonBytes);
                                     this.writeBuffer.flip();
                                     this.connectionMetadata.channel.write(this.writeBuffer, null, this.defaultWriteCH);
                                 }
-                                case "text/event-stream" -> {
-                                    this.processSseClient();
-                                    return;
-                                }
-                                case null, default -> {
-                                    this.sendErrorMsgAndCloseConnection(ERROR_RESPONSE_BYTES);
-                                    return;
-                                }
+                            });
+                            case "application/octet-stream" -> {
+                                byte[] byteArray = this.httpHandler.getAsBytes(uri);
+                                String headers = "HTTP/1.1 200 OK\r\nContent-Length: " + byteArray.length +
+                                        "\r\nContent-Type: application/octet-stream\r\n\r\n";
+                                this.writeBuffer.put(headers.getBytes(StandardCharsets.UTF_8));
+                                this.writeBuffer.put(byteArray);
+                                this.writeBuffer.flip();
+                                this.connectionMetadata.channel.write(this.writeBuffer, null, this.defaultWriteCH);
                             }
-                        }
+                            case "text/event-stream" -> {
+                                this.processSseClient();
+                                return;
+                            }
+                            case null, default -> {
+                                this.sendErrorMsgAndCloseConnection(ERROR_RESPONSE_BYTES);
+                                return;
+                            }
+
+                    }
                     }
                     case "POST" -> {
-                        if(httpRequest.body().isEmpty()){
+                        if(body.isEmpty()){
                             this.sendErrorMsgAndCloseConnection(NO_PAYLOAD_IN_BODY_ERR_MSG);
                             return;
                         }
-                        this.httpHandler.post(httpRequest.uri(), httpRequest.body());
+                        this.httpHandler.post(uri, body);
                         if(this.writeBuffer.remaining() < OK_RESPONSE_BYTES.length){
                             LOGGER.log(WARNING, "Write buffer has no sufficient space. Did you forget to clean it up?");
                             writeBuffer.clear();
@@ -193,25 +265,28 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
                     }
                     case "PATCH" -> {
-                        if(httpRequest.uri().contains("reset")) {
+                        if(uri.contains("reset")) {
                             cancelBackgroundTasks();
                         }
-                        this.httpHandler.patch(httpRequest.uri(), httpRequest.body());
+                        this.httpHandler.patch(uri, body);
                         this.writeBuffer.put(OK_RESPONSE_BYTES);
                         this.writeBuffer.flip();
                         this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
                     }
                     case "PUT" -> {
-                        this.httpHandler.put(httpRequest.uri(), httpRequest.body());
+                        this.httpHandler.put(uri, body);
                         this.writeBuffer.put(OK_RESPONSE_BYTES);
                         this.writeBuffer.flip();
                         this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
                     }
                 }
                 this.readBuffer.clear();
-                this.connectionMetadata.channel.read(this.readBuffer, 0, this);
+                this.connectionMetadata.channel.read(
+                        this.readBuffer,
+                        new RequestTracking(),
+                        this);
             } catch (Exception e){
-                this.processError(request, e);
+                this.processError(body, e);
             }
         }
 
@@ -230,7 +305,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             this.writeBuffer.flip();
             this.connectionMetadata.channel.write(this.writeBuffer, null, this.defaultWriteCH);
             this.readBuffer.clear();
-            this.connectionMetadata.channel.read(this.readBuffer, 0, this);
+            this.connectionMetadata.channel.read(this.readBuffer, null, this);
         }
 
         private void sendErrorMsgAndCloseConnection(byte[] errorResponseBytes) throws IOException {
@@ -253,7 +328,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
             // need to set up read before adding this connection to sse client
             this.writeBuffer.clear();
             this.readBuffer.clear();
-            this.connectionMetadata.channel.read(this.readBuffer, 0, this);
+            this.connectionMetadata.channel.read(this.readBuffer, null, this);
         }
 
         public void sendToSseClient(long numTIDsCommitted){
@@ -270,7 +345,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
         }
 
         @Override
-        public void completed(Integer result, Integer attachment) {
+        public void completed(Integer result, RequestTracking requestTracking) {
             if(result == -1){
                 this.readBuffer.clear();
                 this.writeBuffer.clear();
@@ -281,14 +356,19 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                 return;
             }
             this.readBuffer.flip();
-            String request = StandardCharsets.UTF_8.decode(this.readBuffer).toString();
-            this.process(request);
+            this.parse(requestTracking);
         }
 
         @Override
-        public void failed(Throwable exc, Integer attachment) {
-            this.readBuffer.clear();
-            this.connectionMetadata.channel.read(this.readBuffer, 0, this);
+        public void failed(Throwable exc, RequestTracking requestTracking) {
+            LOGGER.log(ERROR, "Error captured: \n"+exc);
+            try {
+                this.connectionMetadata.channel.close();
+            } catch (Exception ignored){}
+            finally {
+                this.readBuffer.clear();
+            }
+            // this.connectionMetadata.channel.read(this.readBuffer, null, this);
         }
 
         private final class CloseWriteCH implements CompletionHandler<Integer, Void> {

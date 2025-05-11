@@ -646,7 +646,7 @@ public final class Coordinator extends ModbHttpServer {
                             httpHandler
                     );
                     try { NetworkUtils.configure(channel, options.getSoBufferSize()); } catch (IOException ignored) { }
-                    readCompletionHandler.process(request);
+                    readCompletionHandler.parse(new HttpReadCompletionHandler.RequestTracking());
                 } else {
                     LOGGER.log(WARNING,"Leader: A node is trying to connect without a presentation message. \n" + request);
                     buffer.clear();

@@ -5,7 +5,10 @@ import java.util.Map;
 
 public final class HttpUtils {
 
-    public record HttpRequestInternal(String httpMethod, Map<String, String> headers, String uri, int length, String body) {}
+    public record HttpRequestInternal(String httpMethod,
+                                      String accept,
+                                      String uri,
+                                      String body) {}
 
     public static HttpRequestInternal parseRequest(String request){
         String[] requestLines = request.split("\r\n");
@@ -24,7 +27,7 @@ public final class HttpUtils {
         }
         int length = headers.containsKey("Content-Length") ? Integer.parseInt(headers.get("Content-Length")) : 0;
         if(method.contentEquals("GET")){
-            return new HttpRequestInternal(method, headers, url, length, "");
+            return new HttpRequestInternal(method, headers.get("Accept"), url, "");
         }
         StringBuilder body = new StringBuilder();
         for (i += 1; i < requestLines.length; i++) {
@@ -32,7 +35,7 @@ public final class HttpUtils {
             // if(body.length() == length) break;
         }
         String payload = body.toString();
-        return new HttpRequestInternal(method, headers, url, length, payload);
+        return new HttpRequestInternal(method, headers.get("Accept"), url, payload);
     }
 
     public static boolean isHttpClient(String request) {

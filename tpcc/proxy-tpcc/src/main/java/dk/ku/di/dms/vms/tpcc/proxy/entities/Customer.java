@@ -92,7 +92,7 @@ public class Customer implements IEntity<Customer.CustomerId> {
                 + ",\"c_d_id\":\"" + c_d_id + "\""
                 + ",\"c_first\":\"" + c_first + "\""
                 + ",\"c_last\":\"" + c_last + "\""
-                + ",\"c_since\":\"" + dateFormat.format(c_since) + "\""
+                + ",\"c_since\":\"" + c_since.getTime() + "\""
                 + ",\"c_credit\":\"" + c_credit + "\""
                 + ",\"c_credit_lim\":\"" + c_credit_lim + "\""
                 + ",\"c_discount\":\"" + c_discount + "\""
