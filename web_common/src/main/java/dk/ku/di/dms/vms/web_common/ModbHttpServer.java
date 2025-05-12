@@ -14,7 +14,8 @@ import java.util.Set;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 
-import static java.lang.System.Logger.Level.*;
+import static java.lang.System.Logger.Level.ERROR;
+import static java.lang.System.Logger.Level.WARNING;
 
 public abstract class ModbHttpServer extends StoppableRunnable {
 

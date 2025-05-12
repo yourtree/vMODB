@@ -63,12 +63,12 @@ public final class DataGenerator {
         String C_PHONE = makeNumberString(16, 16);
         Date C_SINCE = new Date();
 
-        char C_CREDIT;
+        String C_CREDIT;
         if (randomNumber(0, 1) == 1)
-            C_CREDIT = 'G';
+            C_CREDIT = "G";
         else
-            C_CREDIT = 'B';
-        C_CREDIT += 'C';
+            C_CREDIT = "B";
+        C_CREDIT += "C";
 
         int C_CREDIT_LIM = 50000;
         float C_DISCOUNT = (float) (((float) randomNumber(0, 50)) / 100.0);

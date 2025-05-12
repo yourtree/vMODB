@@ -8,7 +8,6 @@ import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.IdClass;
 import java.io.Serializable;
-import java.text.SimpleDateFormat;
 import java.util.Date;
 
 @Entity
@@ -49,7 +48,7 @@ public class Customer implements IEntity<Customer.CustomerId> {
     public Date c_since;
 
     @Column
-    public char c_credit;
+    public String c_credit;
 
     @Column
     public int c_credit_lim;
@@ -69,7 +68,7 @@ public class Customer implements IEntity<Customer.CustomerId> {
                     String c_first, String c_middle, String c_last,
                     String  C_STREET_1, String C_STREET_2,
                     String C_CITY, String C_STATE, String C_ZIP, String C_PHONE,
-                    Date c_since, char c_credit, int c_credit_lim, float c_discount, float c_balance, int c_ytd_payment, int C_PAYMENT_CNT, int C_DELIVERY_CNT, String C_DATA) {
+                    Date c_since, String c_credit, int c_credit_lim, float c_discount, float c_balance, int c_ytd_payment, int C_PAYMENT_CNT, int C_DELIVERY_CNT, String C_DATA) {
         this.c_id = c_id;
         this.c_d_id = c_d_id;
         this.c_w_id = c_w_id;
@@ -81,8 +80,6 @@ public class Customer implements IEntity<Customer.CustomerId> {
         this.c_balance = c_balance;
         this.c_ytd_payment = c_ytd_payment;
     }
-
-    private static final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 
     @Override
     public String toString() {
