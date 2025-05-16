@@ -1,19 +1,24 @@
 package dk.ku.di.dms.vms.tpcc.proxy;
 
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Scanner;
+
 import dk.ku.di.dms.vms.coordinator.Coordinator;
 import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
 import dk.ku.di.dms.vms.tpcc.common.events.NewOrderWareIn;
 import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoadUtils;
+import dk.ku.di.dms.vms.tpcc.proxy.dataload.DataLoadUtilsJdk;
 import dk.ku.di.dms.vms.tpcc.proxy.dataload.QueueTableIterator;
 import dk.ku.di.dms.vms.tpcc.proxy.experiment.ExperimentUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.infra.MinimalHttpClient;
 import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants;
 import dk.ku.di.dms.vms.tpcc.proxy.storage.StorageUtils;
 import dk.ku.di.dms.vms.tpcc.proxy.workload.WorkloadUtils;
-
-import java.io.IOException;
-import java.util.*;
 
 public final class Main {
 
@@ -54,7 +59,7 @@ public final class Main {
                         tables = StorageUtils.mapTablesInDisk(metadata, numWare);
                     }
                     Map<String, QueueTableIterator> tablesInMem = DataLoadUtils.mapTablesFromDisk(tables, metadata.entityHandlerMap());
-                    DataLoadUtils.ingestData(tablesInMem);
+                    DataLoadUtilsJdk.ingestData(tablesInMem);
                     break;
                 case "3":
                     System.out.println("Option 3: \"Create workload\" selected.");
