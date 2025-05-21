@@ -1,14 +1,5 @@
 package dk.ku.di.dms.vms.coordinator.election;
 
-import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
-import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
-import dk.ku.di.dms.vms.coordinator.election.schema.VoteResponse;
-import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
-import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
-import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
-import dk.ku.di.dms.vms.web_common.NetworkUtils;
-import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -18,13 +9,23 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
-import static java.lang.System.Logger.Level.INFO;
-import static java.lang.System.Logger.Level.WARNING;
+import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
+import dk.ku.di.dms.vms.coordinator.election.schema.VoteRequest;
+import dk.ku.di.dms.vms.coordinator.election.schema.VoteResponse;
+import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
+import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
+import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
+import dk.ku.di.dms.vms.web_common.NetworkUtils;
+import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
 
 /**
  * An election task is a thread that encapsulates all subtasks (i.e., threads)

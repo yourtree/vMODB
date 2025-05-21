@@ -1,0 +1,85 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+sourceCompatibility = JavaVersion.VERSION_21
+targetCompatibility = JavaVersion.VERSION_21
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.3'
+}
+
+//
+// Native build configuration
+//
+
+// Source directory: root directory containing CMakeLists.txt
+def nativeSrcDir   = projectDir
+// Build directory: iouring/build/native
+def nativeBuildDir = file("$buildDir/native")
+
+task compileNative(type: Exec) {
+    group       = 'build'
+    description = 'Run CMake configure + build for the JNI io_uring library'
+
+    // Ensure build/native directory exists
+    doFirst {
+        nativeBuildDir.mkdirs()
+    }
+
+    // Step 1: CMake configure
+    commandLine 'cmake',
+                "-S", nativeSrcDir.absolutePath,
+                "-B", nativeBuildDir.absolutePath,
+                "-DCMAKE_BUILD_TYPE=Release"
+    // Working directory doesn't matter for Exec tasks as we specify out-dir with -B
+}
+
+compileNative.doLast {
+    // Step 2: Build using cmake --build (equivalent to make/ninja depending on CMake generator)
+    exec {
+        workingDir nativeBuildDir
+        commandLine 'cmake', '--build', '.', '--', "-j${Runtime.runtime.availableProcessors()}"
+    }
+}
+
+//
+// Make Java compilation depend on native build
+//
+tasks.named('compileJava') {
+    dependsOn compileNative
+}
+
+//
+// Package .so into JAR
+//
+tasks.named('jar') {
+    dependsOn compileNative
+    from("$nativeBuildDir/libvms-iouring.so") {
+        into 'native/linux_x86-64'
+    }
+}
+
+//
+// Test configuration
+//
+tasks.named('test') {
+    // Ensure JVM can find libvms-iouring.so in build/native
+    systemProperty 'java.library.path', nativeBuildDir.absolutePath
+
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
+}
+ 

@@ -1,5 +1,11 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteBuffer;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
 import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
 import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
@@ -7,16 +13,7 @@ import dk.ku.di.dms.vms.modb.common.schema.network.node.ServerNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionAbort;
 import dk.ku.di.dms.vms.modb.common.schema.network.transaction.TransactionEvent;
-
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.nio.ByteBuffer;
-import java.nio.channels.AsynchronousSocketChannel;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
-import static java.lang.System.Logger.Level.*;
-import static java.lang.Thread.sleep;
+import dk.ku.di.dms.vms.web_common.channel.IChannel;
 
 /**
  * This class is responsible for all writes to the leader.
@@ -44,7 +41,7 @@ final class LeaderWorker extends StoppableRunnable {
 
     private final ServerNode leader;
 
-    private final AsynchronousSocketChannel channel;
+    private final IChannel channel;
     
     private final ByteBuffer writeBuffer;
 
@@ -54,7 +51,7 @@ final class LeaderWorker extends StoppableRunnable {
 
     public LeaderWorker(VmsNode vmsNode,
                         ServerNode leader,
-                        AsynchronousSocketChannel channel,
+                        IChannel channel,
                         ByteBuffer writeBuffer){
         this.vmsNode = vmsNode;
         this.leader = leader;

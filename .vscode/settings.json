@@ -1,0 +1,10 @@
+{
+    "C_Cpp.default.compilerPath": "/usr/bin/gcc",
+    "files.associations": {
+        "string": "cpp",
+        "memory": "cpp",
+        "cstring": "cpp"
+    },
+    "java.jdt.ls.java.home": "/home/calvin/.sdkman/candidates/java/current",
+    "java.compile.nullAnalysis.mode": "automatic"
+}

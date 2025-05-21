@@ -1,8 +1,10 @@
 package dk.ku.di.dms.vms.web_common.meta;
 
 import java.nio.ByteBuffer;
-import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.Semaphore;
+
+import dk.ku.di.dms.vms.web_common.channel.IChannel;
+import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType;
 
 /**
  * Reads are performed via single-thread anyway by design (completion handler),
@@ -26,7 +28,7 @@ public final class LockConnectionMetadata extends ConnectionMetadata {
                                   NodeType nodeType,
                                   ByteBuffer readBuffer,
                                   ByteBuffer writeBuffer,
-                                  AsynchronousSocketChannel channel,
+                                  IChannel channel,
                                   Semaphore writeLock) {
         super(key, nodeType, channel);
         this.readBuffer = readBuffer;

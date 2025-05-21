@@ -1,7 +1,36 @@
 package dk.ku.di.dms.vms.sdk.embed.handler;
 
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_ABORT_REQUEST;
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_COMMIT_COMMAND;
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_COMMIT_INFO;
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.BATCH_OF_EVENTS;
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.CONSUMER_SET;
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.EVENT;
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.PRESENTATION;
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.TX_ABORT;
+
+import java.io.IOException;
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousCloseException;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.CompletionHandler;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
-import dk.ku.di.dms.vms.modb.common.schema.network.batch.*;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchAbortRequest;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitAck;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitCommand;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchCommitInfo;
+import dk.ku.di.dms.vms.modb.common.schema.network.batch.BatchComplete;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.ConsumerSet;
 import dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
@@ -17,23 +46,20 @@ import dk.ku.di.dms.vms.sdk.core.operational.OutboundEventResult;
 import dk.ku.di.dms.vms.sdk.core.scheduler.IVmsTransactionResult;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.client.VmsApplicationOptions;
+import dk.ku.di.dms.vms.sdk.embed.handler.ConsumerVmsWorker.State;
+import dk.ku.di.dms.vms.sdk.embed.handler.VmsEventHandler.BatchMetadata;
+import dk.ku.di.dms.vms.sdk.embed.handler.VmsEventHandler.VmsHandlerOptions;
+import dk.ku.di.dms.vms.sdk.embed.iouring.IoUringAsyncChannel;
+import dk.ku.di.dms.vms.sdk.embed.iouring.IoUringChannel;
+import dk.ku.di.dms.vms.sdk.embed.iouring.IoUringChannelGroup;
+import dk.ku.di.dms.vms.sdk.embed.iouring.IoUringUtils;
 import dk.ku.di.dms.vms.web_common.HttpUtils;
 import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import dk.ku.di.dms.vms.web_common.ModbHttpServer;
-import dk.ku.di.dms.vms.web_common.NetworkUtils;
-import dk.ku.di.dms.vms.web_common.channel.JdkAsyncChannel;
+import dk.ku.di.dms.vms.web_common.ModbHttpServer.HttpReadCompletionHandler;
+import dk.ku.di.dms.vms.web_common.channel.IChannel;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 
-import java.io.IOException;
-import java.nio.BufferUnderflowException;
-import java.nio.ByteBuffer;
-import java.nio.channels.*;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
-
-import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.*;
 import static java.lang.System.Logger.Level.*;
 
 /**
@@ -42,8 +68,7 @@ import static java.lang.System.Logger.Level.*;
  * the DBMS must also be run within this code.
  * The virtual microservice doesn't know who is the coordinator. It should be passive.
  * The leader and followers must share a list of VMSs.
- * Could also try to adapt to JNI:
- * <a href="https://nachtimwald.com/2017/06/17/calling-java-from-c/">...</a>
+ * This implementation uses Linux's io_uring API for high-performance network I/O.
  */
 public final class VmsEventHandler extends ModbHttpServer {
 
@@ -51,9 +76,9 @@ public final class VmsEventHandler extends ModbHttpServer {
     
     /** SERVER SOCKET **/
     // other VMSs may want to connect in order to send events
-    private final AsynchronousServerSocketChannel serverSocket;
+    private final IoUringChannel serverSocket;
 
-    private final AsynchronousChannelGroup group;
+    private final IoUringChannelGroup group;
 
     /** INTERNAL CHANNELS **/
     private final VmsEmbedInternalChannels vmsInternalChannels;
@@ -89,9 +114,6 @@ public final class VmsEventHandler extends ModbHttpServer {
 
     // the thread responsible to send data to the leader
     private LeaderWorker leaderWorker;
-
-    // refer to what operation must be performed
-    // private final BlockingQueue<Object> leaderWorkerQueue;
 
     // cannot be final, may differ across time and new leaders
     @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
@@ -169,14 +191,11 @@ public final class VmsEventHandler extends ModbHttpServer {
         // network and executor
         if(options.networkThreadPoolSize > 0){
             // at least two, one for acceptor and one for new events
-            this.group = AsynchronousChannelGroup.withFixedThreadPool(
-                    options.networkThreadPoolSize,
-                    Thread.ofPlatform().name("vms-network-thread").factory()
-            );
-            this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+            this.group = IoUringChannelGroup.open(1024, options.networkThreadPoolSize);
+            this.serverSocket = IoUringChannel.open(this.group);
         } else {
-            this.group = null;
-            this.serverSocket = AsynchronousServerSocketChannel.open(null);
+            this.group = IoUringChannelGroup.open();
+            this.serverSocket = IoUringChannel.open(this.group);
         }
         this.serverSocket.bind(me.asInetSocketAddress());
 
@@ -342,7 +361,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             return;
         }
         ConsumerVmsWorker consumerVmsWorker = ConsumerVmsWorker.build(this.me, node,
-                        () -> JdkAsyncChannel.create(this.group),
+                        () -> createAsyncChannel(),
                         this.options,
                         this.serdesProxy);
         Thread.ofPlatform().name("vms-consumer-"+node.identifier+"-"+identifier)
@@ -375,6 +394,14 @@ public final class VmsEventHandler extends ModbHttpServer {
         // channel.read(buffer, 0, new VmsReadCompletionHandler(this.node, connMetadata, buffer));
     }
 
+    private IChannel createAsyncChannel() {
+        try {
+            return IoUringAsyncChannel.create(this.group);
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Failed to create io_uring channel", e);
+        }
+    }
+
     /**
      * The completion handler must execute fast
      */
@@ -399,9 +426,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             if(result == -1){
                 // end-of-stream signal, no more data can be read
                 LOGGER.log(WARNING,me.identifier+": VMS "+node.identifier+" has disconnected!");
-                try {
-                    this.connectionMetadata.channel.close();
-                } catch (IOException ignored) { }
+                this.connectionMetadata.channel.close();
                 return;
             }
             if(startPos == 0){
@@ -527,10 +552,10 @@ public final class VmsEventHandler extends ModbHttpServer {
      */
     private final class UnknownNodeReadCompletionHandler implements CompletionHandler<Integer, Void> {
 
-        private final AsynchronousSocketChannel channel;
+        private final IoUringChannel channel;
         private final ByteBuffer buffer;
 
-        public UnknownNodeReadCompletionHandler(AsynchronousSocketChannel channel, ByteBuffer buffer) {
+        public UnknownNodeReadCompletionHandler(IoUringChannel channel, ByteBuffer buffer) {
             this.channel = channel;
             this.buffer = buffer;
         }
@@ -543,11 +568,11 @@ public final class VmsEventHandler extends ModbHttpServer {
             } catch (IOException ignored) { }
             if(result == 0){
                 LOGGER.log(WARNING,me.identifier+": A node ("+remoteAddress+") is trying to connect with an empty message!");
-                try { this.channel.close(); } catch (IOException ignored) {}
+                this.channel.close();
                 return;
             } else if(result == -1){
                 LOGGER.log(WARNING,me.identifier+": A node ("+remoteAddress+") died before sending the presentation message");
-                try { this.channel.close(); } catch (IOException ignored) {}
+                this.channel.close();
                 return;
             }
             // message identifier
@@ -559,17 +584,19 @@ public final class VmsEventHandler extends ModbHttpServer {
                     HttpReadCompletionHandler readCompletionHandler = new HttpReadCompletionHandler(
                             new ConnectionMetadata("http_client".hashCode(),
                                     ConnectionMetadata.NodeType.HTTP_CLIENT,
-                                    this.channel),
+                                    new IoUringAsyncChannel(this.channel)),
                             this.buffer,
                             MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize),
                             httpHandler);
-                    try { NetworkUtils.configure(this.channel, options.soBufferSize()); } catch (IOException ignored) { }
+                    try { 
+                        IoUringUtils.configureSocket(this.channel, options.soBufferSize()); 
+                    } catch (IOException ignored) { }
                     readCompletionHandler.parse(new HttpReadCompletionHandler.RequestTracking());
                 } else {
                     LOGGER.log(WARNING, me.identifier + ": A node is trying to connect without a presentation message.\n"+request);
                     this.buffer.clear();
                     MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
-                    try { this.channel.close(); } catch (IOException ignored) { }
+                    this.channel.close();
                 }
                 return;
             }
@@ -595,7 +622,7 @@ public final class VmsEventHandler extends ModbHttpServer {
                 if(serverNode.asInetSocketAddress().equals(leader.asInetSocketAddress())) {
                     LOGGER.log(INFO, me.identifier + ": Leader requested an additional connection");
                     this.buffer.clear();
-                    channel.read(buffer, 0, new LeaderReadCompletionHandler(new ConnectionMetadata(leader.hashCode(), ConnectionMetadata.NodeType.SERVER, channel), buffer));
+                    channel.read(buffer, 0, new LeaderReadCompletionHandler(new ConnectionMetadata(leader.hashCode(), ConnectionMetadata.NodeType.SERVER, new IoUringAsyncChannel(this.channel)), buffer));
                 } else {
                     try {
                         LOGGER.log(WARNING,"Dropping a connection attempt from a node claiming to be leader");
@@ -617,7 +644,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             ConnectionMetadata connMetadata = new ConnectionMetadata(
                     producerVms.hashCode(),
                     ConnectionMetadata.NodeType.VMS,
-                    this.channel
+                    new IoUringAsyncChannel(this.channel)
             );
 
             // what if a vms is both producer to and consumer from this vms?
@@ -641,9 +668,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             LOGGER.log(WARNING,me.identifier+": Presentation message from unknown source:" + nodeTypeIdentifier);
             this.buffer.clear();
             MemoryManager.releaseTemporaryDirectBuffer(this.buffer);
-            try {
-                this.channel.close();
-            } catch (IOException ignored) { }
+            this.channel.close();
         }
 
         @Override
@@ -655,13 +680,13 @@ public final class VmsEventHandler extends ModbHttpServer {
     /**
      * Class is iteratively called by the socket pool threads.
      */
-    private final class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, Void> {
+    private final class AcceptCompletionHandler implements CompletionHandler<IoUringChannel, Void> {
         @Override
-        public void completed(AsynchronousSocketChannel channel, Void void_) {
+        public void completed(IoUringChannel channel, Void void_) {
             LOGGER.log(DEBUG,me.identifier+": An unknown host has started a connection attempt.");
             final ByteBuffer buffer = MemoryManager.getTemporaryDirectBuffer(options.networkBufferSize);
             try {
-                NetworkUtils.configure(channel, options.soBufferSize);
+                IoUringUtils.configureSocket(channel, options.soBufferSize, options.soBufferSize);
                 // read presentation message. if vms, receive metadata, if follower, nothing necessary
                 channel.read(buffer, null, new UnknownNodeReadCompletionHandler(channel, buffer));
             } catch(Exception e){
@@ -698,17 +723,16 @@ public final class VmsEventHandler extends ModbHttpServer {
             } else if(logError) {
                 LOGGER.log(WARNING,me.identifier+": Socket is not open anymore. Cannot set up accept again");
             }
-
         }
     }
 
     private final class ConnectionFromLeaderProtocol {
         private State state;
-        private final AsynchronousSocketChannel channel;
+        private final IoUringChannel channel;
         private final ByteBuffer buffer;
         public final CompletionHandler<Integer, Void> writeCompletionHandler;
 
-        public ConnectionFromLeaderProtocol(AsynchronousSocketChannel channel, ByteBuffer buffer) {
+        public ConnectionFromLeaderProtocol(IoUringChannel channel, ByteBuffer buffer) {
             this.state = State.PRESENTATION_RECEIVED;
             this.channel = channel;
             this.writeCompletionHandler = new WriteCompletionHandler();
@@ -769,7 +793,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             leaderConnectionMetadata = new ConnectionMetadata(
                     leader.hashCode(),
                     ConnectionMetadata.NodeType.SERVER,
-                    channel
+                    new IoUringAsyncChannel(channel)
             );
             leader.on();
             this.buffer.clear();
@@ -822,11 +846,7 @@ public final class VmsEventHandler extends ModbHttpServer {
             if(result == -1){
                 LOGGER.log(INFO,me.identifier+": Leader has disconnected");
                 leader.off();
-                try {
-                    this.connectionMetadata.channel.close();
-                } catch (IOException e) {
-                    e.printStackTrace(System.out);
-                }
+                this.connectionMetadata.channel.close();
                 return;
             }
             if(startPos == 0){
@@ -1057,7 +1077,8 @@ public final class VmsEventHandler extends ModbHttpServer {
         }
         try {
             this.serverSocket.close();
-        } catch (IOException ignored){ }
+            this.group.close();
+        } catch (IOException ignored) { }
     }
 
 }

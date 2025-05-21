@@ -12,10 +12,28 @@ public interface IChannel {
     default Future<Integer> write(ByteBuffer src) { return CompletableFuture.completedFuture(0); }
 
     default <A> void write(ByteBuffer src,
-                                   long timeout,
-                                   TimeUnit unit,
-                                   A attachment,
-                                   CompletionHandler<Integer,? super A> handler) {}
+                           long timeout,
+                           TimeUnit unit,
+                           A attachment,
+                           CompletionHandler<Integer,? super A> handler) {}
+    
+    // Additional overloaded write methods for compatibility
+    default <A> void write(ByteBuffer src, 
+                           A attachment, 
+                           CompletionHandler<Integer,? super A> handler) {
+        write(src, 0, TimeUnit.MILLISECONDS, attachment, handler);
+    }
+    
+    default void write(ByteBuffer src, 
+                       CompletionHandler<Integer, ByteBuffer> handler) {
+        write(src, src, handler);
+    }
+    
+    default void write(ByteBuffer src, 
+                       Object attachment, 
+                       CompletionHandler<Integer, ?> handler) {
+        write(src, 0, TimeUnit.MILLISECONDS, attachment, (CompletionHandler<Integer, Object>) handler);
+    }
 
     default boolean isOpen() {
         return true;
@@ -27,6 +45,11 @@ public interface IChannel {
 
     default Future<Void> connect(InetSocketAddress inetSocketAddress) { return CompletableFuture.completedFuture(null); }
 
+    /**
+     * Closes this channel without throwing exceptions.
+     * Implementations that extend NetworkChannel should provide
+     * a closeQuietly() method that calls close() in a try-catch block.
+     */
     default void close() { }
 
 }

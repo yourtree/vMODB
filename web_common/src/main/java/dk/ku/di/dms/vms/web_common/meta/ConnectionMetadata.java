@@ -1,6 +1,7 @@
 package dk.ku.di.dms.vms.web_common.meta;
 
-import java.nio.channels.AsynchronousSocketChannel;
+import dk.ku.di.dms.vms.web_common.channel.IChannel;
+import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType;
 
 public class ConnectionMetadata {
 
@@ -14,7 +15,7 @@ public class ConnectionMetadata {
 
     // unfortunately cannot set to final because of the election protocol in coordinator
     // see processServerPresentationMessage
-    public final AsynchronousSocketChannel channel;
+    public final IChannel channel;
 
     public enum NodeType {
         SERVER,
@@ -22,7 +23,7 @@ public class ConnectionMetadata {
         HTTP_CLIENT
     }
 
-    public ConnectionMetadata(int key, NodeType nodeType, AsynchronousSocketChannel channel) {
+    public ConnectionMetadata(int key, NodeType nodeType, IChannel channel) {
         this.key = key;
         this.nodeType = nodeType;
         this.channel = channel;

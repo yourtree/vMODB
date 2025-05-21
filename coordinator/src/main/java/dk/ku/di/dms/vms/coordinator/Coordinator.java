@@ -1,5 +1,34 @@
 package dk.ku.di.dms.vms.coordinator;
 
+import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.PRESENTATION;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousChannelGroup;
+import java.nio.channels.AsynchronousServerSocketChannel;
+import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.CompletionHandler;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
+import java.util.function.Function;
+
+import dk.ku.di.dms.vms.coordinator.Coordinator.VmsWorkerContainer;
 import dk.ku.di.dms.vms.coordinator.batch.BatchAlgo;
 import dk.ku.di.dms.vms.coordinator.batch.BatchContext;
 import dk.ku.di.dms.vms.coordinator.election.schema.LeaderRequest;
@@ -29,29 +58,12 @@ import dk.ku.di.dms.vms.modb.common.serdes.VmsSerdesProxyBuilder;
 import dk.ku.di.dms.vms.web_common.HttpUtils;
 import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import dk.ku.di.dms.vms.web_common.ModbHttpServer;
+import dk.ku.di.dms.vms.web_common.ModbHttpServer.HttpReadCompletionHandler;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.channel.JdkAsyncChannel;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 import dk.ku.di.dms.vms.web_common.meta.LockConnectionMetadata;
-
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.AsynchronousChannelGroup;
-import java.nio.channels.AsynchronousServerSocketChannel;
-import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.CompletionHandler;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
-import java.util.function.Function;
-
-import static dk.ku.di.dms.vms.coordinator.election.Constants.*;
-import static dk.ku.di.dms.vms.modb.common.schema.network.Constants.PRESENTATION;
-import static dk.ku.di.dms.vms.modb.common.schema.network.control.Presentation.SERVER_TYPE;
-import static dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata.NodeType.SERVER;
-import static java.lang.System.Logger.Level.*;
+import static java.util.logging.Level.*;
 
 /**
  * Also known as the "Leader"
