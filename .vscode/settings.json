@@ -1,0 +1,19 @@
+{
+    "java.format.enabled": false,
+    "java.format.comments.enabled": false,
+    "java.format.onType.enabled": true,
+    "java.jdt.ls.java.home": "/home/calvin/.sdkman/candidates/java/current",
+    "java.compile.nullAnalysis.mode": "automatic",
+    "editor.formatOnSave": false,
+    "editor.formatOnPaste": false,
+    "editor.formatOnType": false,
+    "[java]": {
+        "editor.formatOnSave": false,
+        "editor.formatOnPaste": false,
+        "editor.formatOnType": false
+    },
+    "java.saveActions.organizeImports": false,
+    "java.completion.importOrder": [],
+    "java.sources.organizeImports.starThreshold": 999,
+    "java.sources.organizeImports.staticStarThreshold": 999
+}

@@ -162,6 +162,13 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                                 requestTracking.requestBuilder.substring(headersEnd+4));
                         return;
                     }
+                    if (requestTracking.contentLength - requestTracking.bodyBytesRead == 1) {
+                        this.process(requestTracking.method,
+                                requestTracking.accept,
+                                requestTracking.uri,
+                                requestTracking.requestBuilder.substring(headersEnd+4));
+                        return;
+                    }
 
                     // java http client may be miscalculating content length
                     // if it is a well-formed JSON, then it is safe to proceed
