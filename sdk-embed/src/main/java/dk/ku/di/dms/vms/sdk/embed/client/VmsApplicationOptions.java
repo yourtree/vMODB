@@ -44,12 +44,12 @@ public final class VmsApplicationOptions {
 
         System.out.println("Properties: \n" + properties.toString());
 
-        int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size"));
-        int soBufferSize = Integer.parseInt(properties.getProperty("so_buffer_size"));
-        int networkSendTimeout = Integer.parseInt(properties.getProperty("network_send_timeout"));
-        int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size"));
-        int vmsThreadPoolSize = Integer.parseInt(properties.getProperty("vms_thread_pool_size"));
-        int numVmsWorkers = Integer.parseInt(properties.getProperty("num_vms_workers"));
+        int networkBufferSize = Integer.parseInt(properties.getProperty("network_buffer_size", "0"));
+        int soBufferSize = Integer.parseInt(properties.getProperty("so_buffer_size", "0"));
+        int networkSendTimeout = Integer.parseInt(properties.getProperty("network_send_timeout", "0"));
+        int networkThreadPoolSize = Integer.parseInt(properties.getProperty("network_thread_pool_size", "1"));
+        int vmsThreadPoolSize = Integer.parseInt(properties.getProperty("vms_thread_pool_size", "1"));
+        int numVmsWorkers = Integer.parseInt(properties.getProperty("num_vms_workers", "1"));
 
         int maxSleep = 0;
         String maxSleepStr = properties.getProperty("max_sleep");
@@ -161,3 +161,4 @@ public final class VmsApplicationOptions {
         return this.maxRecords;
     }
 }
+
