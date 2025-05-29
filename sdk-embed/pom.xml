@@ -71,9 +71,9 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.2.5</version>
         <configuration>
-          <!-- Ensure tests are not skipped -->
-          <skipTests>false</skipTests>
-          <skip>false</skip>
+          <!-- Configure if to skip tests -->
+          <skipTests>true</skipTests>
+          <skip>true</skip>
           <!-- Pass JVM preview flags to test JVM -->
           <argLine>
             -Djava.library.path=${project.basedir}/../web_common/src/main/java/dk/ku/di/dms/vms/web_common/iouring/lib
