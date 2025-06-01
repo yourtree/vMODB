@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.modb.common.memory;
 
 import sun.misc.Unsafe;
-
 import java.lang.reflect.Field;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;

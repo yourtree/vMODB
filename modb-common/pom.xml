@@ -21,6 +21,13 @@
 
   <dependencies>
 
+    <!-- modb-iouring dependency for io_uring functionality -->
+    <dependency>
+      <groupId>dk.ku.di.dms.vms</groupId>
+      <artifactId>modb-iouring</artifactId>
+      <version>1.0-SNAPSHOT</version>
+    </dependency>
+
     <dependency>
       <groupId>org.lz4</groupId>
       <artifactId>lz4-java</artifactId>
@@ -39,11 +46,36 @@
       <version>${jackson.version}</version>
     </dependency>
 
+        <!-- JUnit 4 for legacy test classes -->
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.13.2</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- JUnit Jupiter for modern test annotations -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+      <version>5.10.1</version>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
+      <version>5.10.1</version>
+      <scope>test</scope>
+    </dependency>
+
     <dependency>
       <groupId>com.google.code.gson</groupId>
       <artifactId>gson</artifactId>
       <version>2.9.0</version>
     </dependency>
   </dependencies>
+
+  
 
 </project>

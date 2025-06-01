@@ -29,6 +29,12 @@
           <version>1.0-SNAPSHOT</version>
       </dependency>
 
+      <dependency>
+          <groupId>dk.ku.di.dms.vms</groupId>
+          <artifactId>modb-iouring</artifactId>
+          <version>1.0-SNAPSHOT</version>
+      </dependency>
+
   </dependencies>
 
 </project>

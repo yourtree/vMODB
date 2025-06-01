@@ -16,7 +16,6 @@ import dk.ku.di.dms.vms.modb.storage.record.OrderedRecordBuffer;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.IntegerPrimaryKeyGenerator;
 import dk.ku.di.dms.vms.modb.transaction.multiversion.index.PrimaryIndex;
-
 import java.io.File;
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -105,8 +104,12 @@ public class StorageUtils {
      */
     public static RecordBufferContext loadRecordBuffer(int maxNumberOfRecords, int recordSize, String fileName, boolean truncate){
         long sizeInBytes = (long) maxNumberOfRecords * recordSize;
+        
+        // Map file into memory first
         MemorySegment segment = mapFileIntoMemorySegment(sizeInBytes, fileName, truncate);
-        return RecordBufferContext.build(segment, fileName);
+        
+        // Use IoUring storage factory for unified IoUring support
+        return dk.ku.di.dms.vms.modb.storage.IoUringStorageFactory.createRecordBufferContext(segment, fileName, sizeInBytes);
     }
 
     public static AppendOnlyBuffer loadAppendOnlyBuffer(int maxNumberOfRecords, int recordSize, String fileName, boolean truncate){

@@ -5,7 +5,7 @@ import java.lang.foreign.MemorySegment;
 /**
  * This class encapsulates a managed {@link MemorySegment}
  */
-public sealed class RecordBufferContext permits AppendOnlyBuffer {
+public sealed class RecordBufferContext permits AppendOnlyBuffer, IoUringRecordBufferContext {
 
     // just to avoid many method calls, since this value does not change
     public final long address;
