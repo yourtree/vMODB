@@ -27,6 +27,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
+import java.util.*;
+import static dk.ku.di.dms.vms.modb.common.constraint.ConstraintConstants.*;
+import static java.lang.System.Logger.Level.INFO;
+import static java.lang.System.Logger.Level.WARNING;
+
 /**
  * A consistent view over an index.
  * A wrapper that envelops the original index

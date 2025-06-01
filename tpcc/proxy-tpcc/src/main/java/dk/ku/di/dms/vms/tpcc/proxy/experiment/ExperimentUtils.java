@@ -25,6 +25,8 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
+import static java.lang.System.Logger.Level.INFO;
+
 public final class ExperimentUtils {
 
     private static final System.Logger LOGGER = System.getLogger(ExperimentUtils.class.getName());
