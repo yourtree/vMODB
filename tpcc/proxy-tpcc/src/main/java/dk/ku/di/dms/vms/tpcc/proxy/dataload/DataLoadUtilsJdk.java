@@ -4,12 +4,24 @@ import dk.ku.di.dms.vms.modb.common.utils.ConfigUtils;
 import dk.ku.di.dms.vms.modb.index.unique.UniqueHashBufferIndex;
 import dk.ku.di.dms.vms.sdk.embed.entity.EntityHandler;
 import dk.ku.di.dms.vms.tpcc.proxy.infra.TPCcConstants;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -60,17 +72,18 @@ public final class DataLoadUtilsJdk {
 
     public static void ingestData(Map<String, QueueTableIterator> tableInputMap) {
 //        releaseAllConnections();
-        int numCpus = Runtime.getRuntime().availableProcessors();
-        ExecutorService threadPool = Executors.newFixedThreadPool(numCpus);
-        BlockingQueue<Future<Void>> completionQueue = new ArrayBlockingQueue<>(numCpus);
+        // Use single thread to avoid overloading io_uring's single-threaded event loop
+        int numWorkers = 1; // Changed from Runtime.getRuntime().availableProcessors()
+        ExecutorService threadPool = Executors.newFixedThreadPool(numWorkers);
+        BlockingQueue<Future<Void>> completionQueue = new ArrayBlockingQueue<>(numWorkers);
         CompletionService<Void> service = new ExecutorCompletionService<>(threadPool, completionQueue);
-        LOGGER.log(INFO, "Table ingestion starting...");
+        LOGGER.log(INFO, "Table ingestion starting with " + numWorkers + " worker(s)...");
         long init = System.currentTimeMillis();
-        for (int i = 0; i < numCpus; i++) {
+        for (int i = 0; i < numWorkers; i++) {
             service.submit(new IngestionWorker(tableInputMap), null);
         }
         try {
-            for (int i = 0; i < numCpus; i++) {
+            for (int i = 0; i < numWorkers; i++) {
                 completionQueue.take();
             }
         } catch(InterruptedException e){
@@ -79,6 +92,7 @@ public final class DataLoadUtilsJdk {
         } finally{
             long end = System.currentTimeMillis();
             LOGGER.log(INFO, "Table ingestion finished in " + (end - init) + "ms");
+            threadPool.shutdown();
         }
     }
 
@@ -128,7 +142,7 @@ public final class DataLoadUtilsJdk {
                     actualTable = table.getKey().contains("customer") ? "customer" : actualTable;
 
 //                    if(actualTable.contains("customer")){
-//                        System.out.println("HEEEEERERERERE");
+//                        System.out.println("HEEEEERERERE");
 //                    }
 
                     String vms = TPCcConstants.TABLE_TO_VMS_MAP.get(actualTable);
@@ -137,6 +151,7 @@ public final class DataLoadUtilsJdk {
 
                     HttpClient client = HttpClient.newBuilder()
                             .version(HttpClient.Version.HTTP_1_1)
+                            .connectTimeout(java.time.Duration.ofSeconds(300))
                             .build();
                     // MinimalHttpClient client_ = HTTP_CLIENT_SUPPLIER.apply(actualTable);
 
@@ -144,6 +159,9 @@ public final class DataLoadUtilsJdk {
                     String entity;
                     int count = 0;
                     LOGGER.log(INFO, "Thread "+Thread.currentThread().threadId()+" starting with table "+table.getKey());
+                    if (table.getKey().contains("item")) {
+                        LOGGER.log(INFO, "Starting to send item data to " + host + ":" + port);
+                    }
                     List<String> errors = new ArrayList<>();
                     while ((entity = queue.poll()) != null) {
 
@@ -151,6 +169,7 @@ public final class DataLoadUtilsJdk {
                                 .uri(URI.create("http://"+host+":"+port+"/"+actualTable))
                                 //.POST(HttpRequest.BodyPublishers.ofString(entity))
                                 .POST(HttpRequest.BodyPublishers.ofByteArray(entity.getBytes(StandardCharsets.UTF_8)))
+                                //.timeout(java.time.Duration.ofSeconds(30))
                                 .build();
 
                         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());

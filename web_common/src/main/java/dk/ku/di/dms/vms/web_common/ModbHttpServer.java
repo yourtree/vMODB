@@ -3,15 +3,23 @@ package dk.ku.di.dms.vms.web_common;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryManager;
 import dk.ku.di.dms.vms.modb.common.memory.MemoryUtils;
 import dk.ku.di.dms.vms.modb.common.runnable.StoppableRunnable;
+import dk.ku.di.dms.vms.web_common.ModbHttpServer.HttpReadCompletionHandler;
+import dk.ku.di.dms.vms.web_common.ModbHttpServer.HttpReadCompletionHandler.RequestTracking;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
 import static java.lang.System.Logger.Level.ERROR;
@@ -29,6 +37,33 @@ public abstract class ModbHttpServer extends StoppableRunnable {
     protected static final List<Consumer<Long>> BATCH_COMMIT_CONSUMERS = new CopyOnWriteArrayList<>();
 
     private static final Set<Future<?>> TRACKED_FUTURES = ConcurrentHashMap.newKeySet();
+
+    // Pool of small buffers for OK responses (for io_uring)
+    private static final ConcurrentLinkedDeque<ByteBuffer> OK_RESPONSE_BUFFER_POOL = new ConcurrentLinkedDeque<>();
+    static {
+        // Pre-allocate some buffers
+        for (int i = 0; i < 100; i++) {
+            ByteBuffer buffer = ByteBuffer.allocateDirect(40); // OK response is 38 bytes
+            OK_RESPONSE_BUFFER_POOL.offer(buffer);
+        }
+    }
+    
+    private static ByteBuffer borrowOkResponseBuffer() {
+        ByteBuffer buffer = OK_RESPONSE_BUFFER_POOL.poll();
+        if (buffer == null) {
+            // Create new one if pool is empty
+            buffer = ByteBuffer.allocateDirect(40);
+        }
+        buffer.clear();
+        return buffer;
+    }
+    
+    private static void returnOkResponseBuffer(ByteBuffer buffer) {
+        if (buffer != null && OK_RESPONSE_BUFFER_POOL.size() < 200) {
+            buffer.clear();
+            OK_RESPONSE_BUFFER_POOL.offer(buffer);
+        }
+    }
 
     static {
         // register client as a batch commit consumer
@@ -93,8 +128,6 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                     "Connection: keep-alive\r\n\r\n";
         }
 
-        private static final byte[] OK_RESPONSE_BYTES = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
-
         private static final byte[] ERROR_RESPONSE_BYTES =
                 ("HTTP/1.1 400 Bad Request\r\n"
                 + "Content-Type: text/plain\r\n"
@@ -126,6 +159,8 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                         + "Connection: close\r\n"
                         + "\r\n"
                         + "Object requested was not found").getBytes(StandardCharsets.UTF_8);
+
+        private static final byte[] OK_RESPONSE_BYTES = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
         public void parse(RequestTracking requestTracking){
             this.readBuffer.rewind();
@@ -194,6 +229,8 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                             String accept,
                             String uri,
                             String body){
+            System.err.printf("[ModbHttpServer] Processing request: %s %s (accept: %s, body length: %d)%n", 
+                httpMethod, uri, accept, body != null ? body.length() : 0);
             try {
                 switch (httpMethod){
                     case "GET" -> {
@@ -264,28 +301,99 @@ public abstract class ModbHttpServer extends StoppableRunnable {
                             return;
                         }
                         this.httpHandler.post(uri, body);
-                        if(this.writeBuffer.remaining() < OK_RESPONSE_BYTES.length){
-                            LOGGER.log(WARNING, "Write buffer has no sufficient space. Did you forget to clean it up?");
-                            writeBuffer.clear();
+                        
+                        // Check if it's io_uring channel by class name to avoid hard dependency
+                        if (this.connectionMetadata.channel.getClass().getName().contains("IoUring")) {
+                            // For io_uring, use pooled buffer to avoid conflicts
+                            ByteBuffer responseBuffer = borrowOkResponseBuffer();
+                            responseBuffer.put(OK_RESPONSE_BYTES);
+                            responseBuffer.flip();
+                            
+                            this.connectionMetadata.channel.write(responseBuffer, responseBuffer, new CompletionHandler<Integer, ByteBuffer>() {
+                                @Override
+                                public void completed(Integer result, ByteBuffer buffer) {
+                                    if(buffer.hasRemaining()) {
+                                        connectionMetadata.channel.write(buffer, buffer, this);
+                                        return;
+                                    }
+                                    returnOkResponseBuffer(buffer);
+                                }
+                                @Override
+                                public void failed(Throwable exc, ByteBuffer buffer) {
+                                    returnOkResponseBuffer(buffer);
+                                }
+                            });
+                        } else {
+                            // For standard NIO, use shared buffer
+                            if(this.writeBuffer.remaining() < OK_RESPONSE_BYTES.length){
+                                LOGGER.log(WARNING, "Write buffer has no sufficient space. Did you forget to clean it up?");
+                                writeBuffer.clear();
+                            }
+                            this.writeBuffer.put(OK_RESPONSE_BYTES);
+                            this.writeBuffer.flip();
+                            this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
                         }
-                        this.writeBuffer.put(OK_RESPONSE_BYTES);
-                        this.writeBuffer.flip();
-                        this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
                     }
                     case "PATCH" -> {
                         if(uri.contains("reset")) {
                             cancelBackgroundTasks();
                         }
                         this.httpHandler.patch(uri, body);
-                        this.writeBuffer.put(OK_RESPONSE_BYTES);
-                        this.writeBuffer.flip();
-                        this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
+                        
+                        // Check if it's io_uring channel
+                        if (this.connectionMetadata.channel.getClass().getName().contains("IoUring")) {
+                            ByteBuffer responseBuffer = borrowOkResponseBuffer();
+                            responseBuffer.put(OK_RESPONSE_BYTES);
+                            responseBuffer.flip();
+                            
+                            this.connectionMetadata.channel.write(responseBuffer, responseBuffer, new CompletionHandler<Integer, ByteBuffer>() {
+                                @Override
+                                public void completed(Integer result, ByteBuffer buffer) {
+                                    if(buffer.hasRemaining()) {
+                                        connectionMetadata.channel.write(buffer, buffer, this);
+                                        return;
+                                    }
+                                    returnOkResponseBuffer(buffer);
+                                }
+                                @Override
+                                public void failed(Throwable exc, ByteBuffer buffer) {
+                                    returnOkResponseBuffer(buffer);
+                                }
+                            });
+                        } else {
+                            this.writeBuffer.put(OK_RESPONSE_BYTES);
+                            this.writeBuffer.flip();
+                            this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
+                        }
                     }
                     case "PUT" -> {
                         this.httpHandler.put(uri, body);
-                        this.writeBuffer.put(OK_RESPONSE_BYTES);
-                        this.writeBuffer.flip();
-                        this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
+                        
+                        // Check if it's io_uring channel
+                        if (this.connectionMetadata.channel.getClass().getName().contains("IoUring")) {
+                            ByteBuffer responseBuffer = borrowOkResponseBuffer();
+                            responseBuffer.put(OK_RESPONSE_BYTES);
+                            responseBuffer.flip();
+                            
+                            this.connectionMetadata.channel.write(responseBuffer, responseBuffer, new CompletionHandler<Integer, ByteBuffer>() {
+                                @Override
+                                public void completed(Integer result, ByteBuffer buffer) {
+                                    if(buffer.hasRemaining()) {
+                                        connectionMetadata.channel.write(buffer, buffer, this);
+                                        return;
+                                    }
+                                    returnOkResponseBuffer(buffer);
+                                }
+                                @Override
+                                public void failed(Throwable exc, ByteBuffer buffer) {
+                                    returnOkResponseBuffer(buffer);
+                                }
+                            });
+                        } else {
+                            this.writeBuffer.put(OK_RESPONSE_BYTES);
+                            this.writeBuffer.flip();
+                            this.connectionMetadata.channel.write(this.writeBuffer, null, defaultWriteCH);
+                        }
                     }
                 }
                 this.readBuffer.clear();
@@ -370,6 +478,7 @@ public abstract class ModbHttpServer extends StoppableRunnable {
         @Override
         public void failed(Throwable exc, RequestTracking requestTracking) {
             LOGGER.log(ERROR, "Error captured: \n"+exc);
+            exc.printStackTrace();
             try {
                 this.connectionMetadata.channel.close();
             } catch (Exception ignored){}

@@ -22,6 +22,8 @@ import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import dk.ku.di.dms.vms.web_common.ModbHttpServer;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.channel.JdkAsyncChannel;
+import dk.ku.di.dms.vms.web_common.iouring.IoUringServerSocketChannel;
+import dk.ku.di.dms.vms.web_common.iouring.IoUringChannelGroup;
 import dk.ku.di.dms.vms.web_common.meta.ConnectionMetadata;
 
 import java.io.IOException;
@@ -51,9 +53,9 @@ public final class VmsEventHandler extends ModbHttpServer {
     
     /** SERVER SOCKET **/
     // other VMSs may want to connect in order to send events
-    private final AsynchronousServerSocketChannel serverSocket;
+    private final IoUringServerSocketChannel serverSocket;
 
-    private final AsynchronousChannelGroup group;
+    private final IoUringChannelGroup group;
 
     /** INTERNAL CHANNELS **/
     private final VmsEmbedInternalChannels vmsInternalChannels;
@@ -169,14 +171,14 @@ public final class VmsEventHandler extends ModbHttpServer {
         // network and executor
         if(options.networkThreadPoolSize > 0){
             // at least two, one for acceptor and one for new events
-            this.group = AsynchronousChannelGroup.withFixedThreadPool(
+            this.group = IoUringChannelGroup.withFixedThreadPool(
                     options.networkThreadPoolSize,
                     Thread.ofPlatform().name("vms-network-thread").factory()
             );
-            this.serverSocket = AsynchronousServerSocketChannel.open(this.group);
+            this.serverSocket = IoUringServerSocketChannel.open(this.group);
         } else {
             this.group = null;
-            this.serverSocket = AsynchronousServerSocketChannel.open(null);
+            this.serverSocket = IoUringServerSocketChannel.open(null);
         }
         this.serverSocket.bind(me.asInetSocketAddress());
 
