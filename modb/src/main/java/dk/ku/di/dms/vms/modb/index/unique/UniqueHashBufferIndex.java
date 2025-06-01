@@ -12,6 +12,7 @@ import dk.ku.di.dms.vms.modb.index.interfaces.ReadWriteIndex;
 import dk.ku.di.dms.vms.modb.storage.iterator.IRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.KeyRecordIterator;
 import dk.ku.di.dms.vms.modb.storage.iterator.unique.RecordIterator;
+import dk.ku.di.dms.vms.modb.storage.record.IoUringRecordBufferContext;
 import dk.ku.di.dms.vms.modb.storage.record.RecordBufferContext;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -293,7 +294,14 @@ public class UniqueHashBufferIndex extends ReadWriteIndex<IKey> implements ReadW
 
     @Override
     public void flush() {
-        this.recordBufferCtx.force();
+        // Check if we're using IoUring-enhanced storage and delegate to the appropriate method
+        if (this.recordBufferCtx instanceof IoUringRecordBufferContext ioUringContext) {
+            // Use IoUring-specific force method for enhanced asynchronous performance
+            ioUringContext.forceWithIoUring();
+        } else {
+            // Fallback to standard force method for compatibility
+            this.recordBufferCtx.force();
+        }
     }
 
 }

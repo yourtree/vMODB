@@ -6,9 +6,9 @@ import dk.ku.di.dms.vms.coordinator.transaction.TransactionDAG;
 import dk.ku.di.dms.vms.coordinator.transaction.TransactionInput;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.IdentifiableNode;
 import dk.ku.di.dms.vms.tpcc.common.events.NewOrderWareIn;
+import dk.ku.di.dms.vms.tpcc.proxy.experiment.ExperimentUtils.ExperimentStats;
 import dk.ku.di.dms.vms.tpcc.proxy.workload.WorkloadUtils;
 import dk.ku.di.dms.vms.web_common.IHttpHandler;
-
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -16,11 +16,14 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
-
-import static java.lang.System.Logger.Level.INFO;
 
 public final class ExperimentUtils {
 
@@ -158,6 +161,8 @@ public final class ExperimentUtils {
     }
 
     public static Coordinator loadCoordinator(Properties properties) {
+        dk.ku.di.dms.vms.modb.common.config.IoUringBootstrap.enableLoggingOnly();
+        
         Map<String, TransactionDAG> transactionMap = new HashMap<>();
         TransactionDAG newOrderDag = TransactionBootstrap.name("new_order")
                 .input("a", "warehouse", "new-order-ware-in")
