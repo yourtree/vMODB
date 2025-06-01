@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
-
 import static java.lang.System.Logger.Level.INFO;
 
 public final class ExperimentUtils {
@@ -32,8 +31,19 @@ public final class ExperimentUtils {
     private static final System.Logger LOGGER = System.getLogger(ExperimentUtils.class.getName());
 
     private static boolean CONSUMER_REGISTERED = false;
+    
+    // io_uring batch optimization configuration
+    private static final boolean ENABLE_IOURING_BATCHING = Boolean.parseBoolean(
+        System.getProperty("vMODB.iouring.enableBatching", "true"));
+    private static final int IOURING_BATCH_SIZE = Integer.parseInt(
+        System.getProperty("vMODB.iouring.maxBatchSize", "32"));
+    private static final boolean ENABLE_ASYNC_CHECKPOINT = Boolean.parseBoolean(
+        System.getProperty("vMODB.checkpoint.iouring", "true"));
 
     public static ExperimentStats runExperiment(Coordinator coordinator, List<Iterator<NewOrderWareIn>> input, int runTime, int warmUp) {
+
+        // Configure io_uring optimizations
+        configureIoUringOptimizations();
 
         // provide a consumer to avoid depending on the coordinator
         Function<NewOrderWareIn, Long> func = newOrderInputBuilder(coordinator);
@@ -47,6 +57,12 @@ public final class ExperimentUtils {
 
         int newRuntime = runTime + warmUp;
 
+        LOGGER.log(INFO, "Starting TPC-C experiment with io_uring optimizations:");
+        LOGGER.log(INFO, "- Batching enabled: " + ENABLE_IOURING_BATCHING);
+        LOGGER.log(INFO, "- Batch size: " + IOURING_BATCH_SIZE);
+        LOGGER.log(INFO, "- Async checkpoint: " + ENABLE_ASYNC_CHECKPOINT);
+
+        long experimentStartTime = System.currentTimeMillis();
         WorkloadUtils.WorkloadStats workloadStats = WorkloadUtils.submitWorkload(input, newRuntime, func);
 
         // avoid submitting after experiment termination
@@ -81,13 +97,19 @@ public final class ExperimentUtils {
         double percentile_90 = PercentileCalculator.calculatePercentile(allLatencies, 0.90);
         long txPerSec = numCompleted / (runTime / 1000);
 
-        System.out.println("Average latency: "+ average);
-        System.out.println("Latency at 50th percentile: "+ percentile_50);
-        System.out.println("Latency at 75th percentile: "+ percentile_75);
-        System.out.println("Latency at 90th percentile: "+ percentile_90);
+        long experimentDuration = System.currentTimeMillis() - experimentStartTime;
+
+        System.out.println("=== TPC-C Experiment Results (with io_uring optimizations) ===");
+        System.out.println("Experiment duration: " + experimentDuration + "ms");
+        System.out.println("Average latency: "+ average + "ms");
+        System.out.println("Latency at 50th percentile: "+ percentile_50 + "ms");
+        System.out.println("Latency at 75th percentile: "+ percentile_75 + "ms");
+        System.out.println("Latency at 90th percentile: "+ percentile_90 + "ms");
         System.out.println("Number of completed transactions (with warm up): "+ numCompletedWithWarmUp);
         System.out.println("Number of completed transactions: "+ numCompleted);
         System.out.println("Transactions per second: "+txPerSec);
+        System.out.println("io_uring batching: " + (ENABLE_IOURING_BATCHING ? "ENABLED" : "DISABLED"));
+        System.out.println("Async checkpoint: " + (ENABLE_ASYNC_CHECKPOINT ? "ENABLED" : "DISABLED"));
         System.out.println();
 
         resetBatchToFinishedTsMap();
@@ -194,6 +216,50 @@ public final class ExperimentUtils {
         starterVMSs.putIfAbsent(inventoryAddress.identifier, inventoryAddress);
         starterVMSs.putIfAbsent(orderAddress.identifier, orderAddress);
         return starterVMSs;
+    }
+
+    /**
+     * Configure io_uring related system properties to ensure optimizations take effect
+     * Optimized for maximum performance with minimal overhead
+     */
+    private static void configureIoUringOptimizations() {
+        // Enable io_uring logging batch processing
+        if (ENABLE_IOURING_BATCHING) {
+            System.setProperty("vMODB.iouring.enableBatching", "true");
+            System.setProperty("vMODB.iouring.maxBatchSize", String.valueOf(IOURING_BATCH_SIZE));
+            LOGGER.log(INFO, "Enabled io_uring batching with batch size: " + IOURING_BATCH_SIZE);
+        }
+        
+        // Enable asynchronous checkpoint
+        if (ENABLE_ASYNC_CHECKPOINT) {
+            System.setProperty("vMODB.checkpoint.iouring", "true");
+            LOGGER.log(INFO, "Enabled async checkpoint with io_uring");
+        }
+        
+        // Set logging type to io_uring (if not set)
+        String loggingType = System.getProperty("logging_type");
+        if (loggingType == null || loggingType.equals("default")) {
+            System.setProperty("logging_type", "iouring");
+            LOGGER.log(INFO, "Set logging type to io_uring");
+        }
+        
+        // Set storage backend to io_uring (if not set)
+        String storageBackend = System.getProperty("storage_backend");
+        if (storageBackend == null || storageBackend.equals("default")) {
+            System.setProperty("storage_backend", "iouring");
+            LOGGER.log(INFO, "Set storage backend to io_uring");
+        }
+        
+        // Performance optimizations to reduce overhead
+        System.setProperty("vMODB.iouring.reduceAsyncOverhead", "true");
+        System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", 
+            String.valueOf(Math.max(1, Runtime.getRuntime().availableProcessors() / 2)));
+        
+        // Reduce logging verbosity for performance testing
+        if (!Boolean.parseBoolean(System.getProperty("vMODB.debug.enableVerboseLogging", "false"))) {
+            System.setProperty("java.util.logging.SimpleFormatter.format", 
+                "%1$tY-%1$tm-%1$td %1$tH:%1$tM:%1$tS %4$s %2$s %5$s%6$s%n");
+        }
     }
 
 }

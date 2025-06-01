@@ -106,10 +106,9 @@ public class CompressedIoUringLoggingHandler implements ILoggingHandler {
         }
         
         try {
-            // Queue fsync operation for data integrity
+            // Synchronous fsync to guarantee data integrity
+            // Force must wait for fsync completion to maintain semantic contract
             ioUring.queueFsync(ioUringFile, false);
-            
-            // Execute the fsync
             ioUring.execute();
             
         } catch (Exception e) {

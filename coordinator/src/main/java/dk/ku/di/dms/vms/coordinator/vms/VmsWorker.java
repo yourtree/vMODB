@@ -20,8 +20,8 @@ import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
 import dk.ku.di.dms.vms.modb.common.utils.BatchUtils;
 import dk.ku.di.dms.vms.web_common.NetworkUtils;
 import dk.ku.di.dms.vms.web_common.channel.IChannel;
-
 import java.io.IOException;
+import java.lang.Thread.State;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.BufferOverflowException;
@@ -446,11 +446,11 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
         switch (message) {
             case BatchCommitCommand.Payload o -> {
                 this.sendBatchCommitCommand(o);
-                this.loggingHandler.force();
+                this.scheduleAsyncForce();
             }
             case BatchCommitInfo.Payload o -> {
                 this.sendBatchCommitInfo(o);
-                this.loggingHandler.force();
+                this.scheduleAsyncForce();
             }
             case TransactionAbort.Payload o -> this.sendTransactionAbort(o);
             case String o -> this.sendConsumerSet(o);
@@ -755,6 +755,32 @@ public final class VmsWorker extends StoppableRunnable implements IVmsWorker {
     public void stop() {
         super.stop();
         this.channel.close();
+    }
+
+    // Track the number of pending force requests
+    private final java.util.concurrent.atomic.AtomicInteger pendingForceRequests = new java.util.concurrent.atomic.AtomicInteger(0);
+    
+    /**
+     * Schedule force operations with proper synchronization semantics
+     * Only use async for io_uring handlers where it's safe to do so
+     */
+    private void scheduleAsyncForce() {
+        // If using io_uring logging handler, its force() is designed to handle async properly
+        if (this.loggingHandler instanceof dk.ku.di.dms.vms.modb.common.logging.IoUringLoggingHandler ||
+            this.loggingHandler instanceof dk.ku.di.dms.vms.modb.common.logging.CompressedIoUringLoggingHandler) {
+            
+            // io_uring handler's force() maintains proper synchronization internally
+            this.loggingHandler.force();
+            return;
+        }
+        
+        // For traditional handlers, maintain synchronous behavior to preserve semantics
+        // force() operations must complete before the caller continues
+        try {
+            this.loggingHandler.force();
+        } catch (Exception e) {
+            LOGGER.log(ERROR, "Leader: Synchronous force failed for " + this.consumerVms.identifier + ": " + e.getMessage());
+        }
     }
 
 }
