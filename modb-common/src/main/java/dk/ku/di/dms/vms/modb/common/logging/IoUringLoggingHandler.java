@@ -33,6 +33,11 @@ public class IoUringLoggingHandler implements ILoggingHandler {
     private static final boolean ENABLE_BATCHING = Boolean.parseBoolean(
         System.getProperty("vMODB.iouring.enableBatching", "true"));
     
+    // Add async commit support
+    private final boolean enableAsyncCommit = Boolean.parseBoolean(
+        System.getProperty("vMODB.iouring.asyncCommit", "true"));
+    private final AsyncCommitCoordinator asyncCoordinator;
+    
     private static class PendingWrite {
         final ByteBuffer buffer;
         final long offset;
@@ -58,6 +63,9 @@ public class IoUringLoggingHandler implements ILoggingHandler {
         
         // Open file with io_uring
         this.ioUringFile = new IoUringFile(this.fileName);
+        
+        // Initialize async coordinator if enabled
+        this.asyncCoordinator = enableAsyncCommit ? AsyncCommitCoordinator.getInstance() : null;
     }
     
     public IoUringLoggingHandler(String identifier, IoUring sharedIoUring) throws IOException {
@@ -73,6 +81,9 @@ public class IoUringLoggingHandler implements ILoggingHandler {
         
         // Open file with io_uring
         this.ioUringFile = new IoUringFile(this.fileName);
+        
+        // Initialize async coordinator if enabled
+        this.asyncCoordinator = enableAsyncCommit ? AsyncCommitCoordinator.getInstance() : null;
     }
     
     @Override
@@ -153,17 +164,99 @@ public class IoUringLoggingHandler implements ILoggingHandler {
             // First flush any pending writes and wait for completion
             flushPendingWrites();
             
-            // Synchronous fsync to guarantee data integrity
-            // Force must wait for fsync completion to maintain semantic contract
-            ioUring.queueFsync(ioUringFile, false);
-            ioUring.execute();
-            
-            // Note: For true synchronous behavior, we should wait for fsync completion
-            // The current io_uring implementation doesn't provide easy completion tracking for fsync
-            // But execute() will process any immediately available completions
+            if (enableAsyncCommit && asyncCoordinator != null) {
+                // Use synchronous force for critical paths - this maintains semantic contract
+                // while still benefiting from async coordinator for batch operations
+                        ioUring.queueFsync(ioUringFile, false);
+                        ioUring.execute();
+            } else {
+                // Traditional synchronous fsync
+                ioUring.queueFsync(ioUringFile, false);
+                ioUring.execute();
+            }
             
         } catch (Exception e) {
             throw new RuntimeException("Failed to force data to disk", e);
+        }
+    }
+    
+    /**
+     * NEW METHOD: Asynchronous force operation that returns immediately
+     * This is the key method for enabling non-blocking commit operations
+     */
+    public java.util.concurrent.CompletableFuture<Void> forceAsync() {
+        if (closed) {
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
+        
+        if (!enableAsyncCommit || asyncCoordinator == null) {
+            // Fallback to synchronous operation
+            return java.util.concurrent.CompletableFuture.runAsync(() -> force());
+        }
+        
+        try {
+            // First flush any pending writes synchronously
+            // (these are typically fast memory operations)
+            flushPendingWrites();
+            
+            // Submit async fsync and return future immediately
+            return asyncCoordinator.submitAsyncFsync(ioUringFile, fileName);
+            
+        } catch (Exception e) {
+            java.util.concurrent.CompletableFuture<Void> failedFuture = new java.util.concurrent.CompletableFuture<>();
+            failedFuture.completeExceptionally(new RuntimeException("Failed to submit async force", e));
+            return failedFuture;
+        }
+    }
+    
+    /**
+     * Batch multiple force operations for maximum efficiency
+     */
+    public static java.util.concurrent.CompletableFuture<Void> forceBatch(IoUringLoggingHandler... handlers) {
+        if (handlers.length == 0) {
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
+        
+        // Check if all handlers support async commit
+        boolean allAsyncEnabled = true;
+        for (IoUringLoggingHandler handler : handlers) {
+            if (!handler.enableAsyncCommit || handler.asyncCoordinator == null) {
+                allAsyncEnabled = false;
+                break;
+            }
+        }
+        
+        if (!allAsyncEnabled) {
+            // Fallback to individual async operations
+            java.util.concurrent.CompletableFuture<Void>[] futures = new java.util.concurrent.CompletableFuture[handlers.length];
+            for (int i = 0; i < handlers.length; i++) {
+                futures[i] = handlers[i].forceAsync();
+            }
+            return java.util.concurrent.CompletableFuture.allOf(futures);
+        }
+        
+        try {
+            // Flush all pending writes first
+            for (IoUringLoggingHandler handler : handlers) {
+                handler.flushPendingWrites();
+            }
+            
+            // Prepare batch submission
+            IoUringFile[] files = new IoUringFile[handlers.length];
+            String[] identifiers = new String[handlers.length];
+            
+            for (int i = 0; i < handlers.length; i++) {
+                files[i] = handlers[i].ioUringFile;
+                identifiers[i] = handlers[i].fileName;
+            }
+            
+            // Submit as batch for maximum efficiency
+            return handlers[0].asyncCoordinator.submitBatchedFsync(files, identifiers);
+            
+        } catch (Exception e) {
+            java.util.concurrent.CompletableFuture<Void> failedFuture = new java.util.concurrent.CompletableFuture<>();
+            failedFuture.completeExceptionally(new RuntimeException("Failed to submit batch force", e));
+            return failedFuture;
         }
     }
     

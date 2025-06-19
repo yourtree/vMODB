@@ -67,6 +67,8 @@
             <arg>java.base/jdk.internal.misc=ALL-UNNAMED</arg>
             <arg>--add-opens</arg>
             <arg>java.base/jdk.internal.misc=ALL-UNNAMED</arg>
+            <arg>--add-opens</arg>
+            <arg>java.base/jdk.internal.util=ALL-UNNAMED</arg>
             <arg>-parameters</arg>
           </compilerArgs>
         </configuration>
@@ -103,6 +105,7 @@
             --enable-preview
             --add-exports java.base/jdk.internal.misc=ALL-UNNAMED
             --add-opens java.base/jdk.internal.misc=ALL-UNNAMED
+            --add-opens java.base/jdk.internal.util=ALL-UNNAMED
           </argLine>
         </configuration>
       </plugin>
